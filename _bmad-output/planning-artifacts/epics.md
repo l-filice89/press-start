@@ -303,6 +303,11 @@ So that every later story ships on a proven, one-command path to production.
 **When** CI runs
 **Then** Biome (lint+format), `tsc`, and Vitest via `@cloudflare/vitest-pool-workers` all execute and must pass (AR-23, AR-26)
 
+**Given** the toolchain
+**When** `package.json` is created
+**Then** it exposes `lint` (Biome), `typecheck` (`tsc --noEmit`), and `test` (Vitest workers pool) scripts
+**And** CI, the local dev flow, and the bmad-loop `[verify]` gate all invoke these **same** scripts, so local / CI / loop checks can never drift (AR-23, AR-26)
+
 **Given** a merge to `main`
 **When** CD runs
 **Then** `wrangler d1 migrations apply` runs before `wrangler deploy`
