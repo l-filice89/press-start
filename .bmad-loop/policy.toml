@@ -17,7 +17,12 @@ cache_read_weight = 0.1      # cache reads bill at ~0.1x input on all vendors; 1
 
 [verify]
 # Deterministic gates run by the orchestrator after a clean review, before commit.
-commands = []                # e.g. ["pytest -q", "ruff check ."]
+# Mirrors CI (AR-23/AR-26): Biome v2 + tsc + Vitest (workers pool), invoked via the
+# same package.json scripts Story 1.1 defines — so local / CI / loop never drift.
+# SAFE to have active: Story 1.1 (scaffold, done by hand) creates these scripts
+# before the loop's first run (Story 1.2+). If you ever run the loop INCLUDING 1.1,
+# blank this first — verify can't gate the story that creates the tooling.
+commands = ["bun run lint", "bun run typecheck", "bun run test"]
 
 [notify]
 desktop = true               # notify-send, best-effort
@@ -87,10 +92,10 @@ clean_tmp = true             # let engine plugins clean their /tmp scratch on fi
 [scm]
 # Source-control isolation + merge-back. Defaults reproduce today's behavior:
 # work happens in place on the checked-out branch, with no branches.
-isolation = "none"           # none | worktree
+isolation = "worktree"       # none | worktree  -> per-story worktree keeps feat/epic-1/scaffolding pristine
 branch_per = "story"         # story | run (worktree mode only; "run" forces delete_branch = false)
 target_branch = ""           # "" = the branch checked out at run start
-merge_strategy = "merge"     # ff | merge | squash (worktree mode merges the unit branch into target locally)
+merge_strategy = "squash"    # ff | merge | squash -> one clean commit per story on the target branch
 delete_branch = true         # delete the unit branch after a successful merge
 keep_failed = true           # keep a failed unit's worktree+branch for inspection
 rollback_on_failure = false  # in-place (isolation="none") recovery after a failed attempt. false = never touch the tree; pause with manual recovery steps. true = auto-revert the attempt's tracked changes + remove only the untracked files this run created (WARNING: discards the attempt's uncommitted work; never a blanket git clean). Governs unattended/stopped attempts only: a resolved escalation's re-drive always auto-recovers regardless (reverts the failed source, keeps the corrected spec). Prefer isolation="worktree" to avoid touching your main checkout.
@@ -107,6 +112,10 @@ max_parallel = 1             # units in flight at once (parallel fan-out unbuilt
 # (claude -> .mcp.json/.claude/settings.json, codex -> .codex/config.toml, etc.)
 # into the worktree; worktree_seed adds extra project-specific gitignored paths.
 seed_adapter_defaults = true # seed each loaded adapter's default gitignored configs into worktrees
+# Bun/Cloudflare note: a fresh worktree has committed files only — no node_modules,
+# no gitignored secrets. The dev session runs `bun install` itself; add gitignored
+# runtime files here ONCE THEY EXIST so verify/dev can reach them, e.g.:
+#   worktree_seed = [".dev.vars", ".env"]
 worktree_seed = []           # extra gitignored files to copy into each worktree, on top of adapter defaults
 
 [plugins]
