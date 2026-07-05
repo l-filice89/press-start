@@ -1,0 +1,142 @@
+<meta charset="utf-8">
+<title>Add-by-name & stragglers — PRESS START</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;900&family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ font-family:Inter,system-ui,sans-serif; background:#05090f; color:#eafaff; padding:30px clamp(16px,4vw,48px) 90px;
+        background-image:radial-gradient(120% 90% at 50% -8%, rgba(18,80,120,.18), transparent 55%); }
+  h1{ font-size:21px; font-weight:700; }
+  .lede{ color:#6d8ba0; font-size:13.5px; margin-top:8px; max-width:80ch; line-height:1.55; } .lede b{ color:#cfe6f2; }
+  code{ font-family:"JetBrains Mono",monospace; color:#5fe3ff; font-size:12px; }
+  .cap{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:#5fe3ff; margin:32px 0 6px; }
+  .sub{ color:#5f7d92; font-size:12px; margin-bottom:16px; max-width:74ch; line-height:1.5; }
+  .wm{ font-family:Orbitron; font-weight:900; } .wm .s{ color:#ff5ca8; }
+  .flow{ display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
+  .arrow{ color:#2f6d8a; font-size:22px; flex:none; }
+  .step{ font-family:"JetBrains Mono",monospace; font-size:9px; letter-spacing:.1em; color:#4d7f98; text-transform:uppercase; margin-bottom:8px; }
+
+  .card{ width:310px; border:1px solid rgba(53,224,255,.28); border-radius:16px; background:#0a1120; overflow:hidden; box-shadow:0 0 26px rgba(53,224,255,.1); }
+  .mh{ padding:14px 16px 11px; border-bottom:1px solid #12283a; display:flex; align-items:center; gap:9px; }
+  .mh h4{ font-family:Orbitron; font-weight:700; font-size:13px; } .mh .x{ margin-left:auto; color:#4d7f98; }
+  .mb{ padding:14px 16px; }
+
+  /* search dropdown */
+  .searchbar{ height:40px; border-radius:999px; border:1px solid rgba(53,224,255,.6); background:rgba(6,12,20,.9); display:flex; align-items:center; gap:9px; padding:0 15px; color:#eafaff; font-size:13px; box-shadow:0 0 18px rgba(53,224,255,.2); }
+  .sr{ display:flex; align-items:center; gap:10px; padding:10px 4px; border-bottom:1px solid #10202e; font-size:12px; }
+  .sr .th{ width:28px; height:37px; border-radius:5px; flex:none; } .sr small{ display:block; color:#5f7d92; font-size:10px; margin-top:2px; }
+  .sr .addrow{ color:#5fe3ff; font-family:Orbitron; font-weight:700; font-size:12px; }
+
+  /* preview form */
+  .prev-hero{ display:flex; gap:13px; }
+  .prev-hero .cov{ width:80px; height:107px; border-radius:8px; flex:none; }
+  .field{ margin-top:14px; } .field .lb{ font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:#5fe3ff; margin-bottom:6px; }
+  .inp{ background:rgba(6,12,20,.7); border:1px solid #1c3346; border-radius:8px; padding:8px 11px; font-size:13px; color:#eafaff; font-family:Orbitron; font-weight:600; }
+  .inp.name{ width:100%; }
+  .tags{ display:flex; flex-wrap:wrap; gap:6px; } .tg{ font-size:11px; padding:4px 9px; border-radius:999px; background:rgba(53,224,255,.1); color:#8fd0e6; border:1px solid rgba(53,224,255,.28); } .tg.add{ border-style:dashed; color:#5fe3ff; }
+  .rowline{ display:flex; gap:10px; } .rowline .field{ flex:1; }
+  .toggle{ display:flex; align-items:center; gap:8px; font-size:12px; color:#cfe6f2; }
+  .sw{ width:38px; height:22px; border-radius:999px; background:#1c3346; position:relative; } .sw::after{ content:""; position:absolute; width:16px; height:16px; border-radius:50%; background:#6d8ba0; top:3px; left:3px; transition:.2s; }
+  .sw.on{ background:#12b3ff; } .sw.on::after{ left:19px; background:#04121b; }
+  .hint{ font-size:11px; color:#5f7d92; margin-top:6px; }
+  .mf{ display:flex; gap:9px; padding:13px 16px; border-top:1px solid #12283a; }
+  .btn{ flex:1; padding:10px; border-radius:10px; font-family:Rajdhani; font-weight:700; font-size:13px; text-align:center; cursor:pointer; letter-spacing:.03em; }
+  .btn.pri{ background:linear-gradient(150deg,#12b3ff,#0070cc); color:#04121b; } .btn.ghost{ background:rgba(255,255,255,.05); color:#aab9c9; border:1px solid rgba(255,255,255,.12); }
+
+  /* stragglers list */
+  .strag{ display:flex; align-items:center; gap:11px; padding:11px 0; border-bottom:1px solid #10202e; font-size:12.5px; }
+  .strag .raw{ font-family:"JetBrains Mono",monospace; color:#ffce9a; } .strag small{ display:block; color:#5f7d92; font-size:10px; margin-top:2px; font-family:Inter; }
+  .strag .go{ margin-left:auto; font-size:11px; color:#5fe3ff; white-space:nowrap; font-weight:600; }
+  .banner{ display:flex; align-items:center; gap:11px; padding:12px 15px; border-radius:12px; font-size:12.5px; background:rgba(255,157,46,.12); border:1px solid rgba(255,157,46,.4); color:#ffce9a; }
+  .banner .go{ margin-left:auto; color:#ffb254; font-weight:700; white-space:nowrap; }
+  .matchpick{ background:rgba(53,224,255,.06); border:1px solid rgba(53,224,255,.3); border-radius:10px; padding:9px 11px; display:flex; align-items:center; gap:10px; font-size:12px; }
+  .matchpick .th{ width:26px; height:34px; border-radius:5px; } .matchpick .ok{ margin-left:auto; color:#8fe6a8; font-weight:700; font-size:11px; }
+</style>
+
+<h1>Two flows: adding a game, and fixing stragglers</h1>
+<p class="lede">Both are "get the right game into the system." <b>Add</b> is the phone hero moment; <b>stragglers</b> is the import cleanup the banner points at. On mobile these modals become full-screen sheets; shown here as panels.</p>
+
+<!-- ADD FLOW -->
+<div class="cap">Add-by-name — the "saw a game on my phone" payoff</div>
+<div class="sub">You already typed in the persistent search bar. No match in your library → the <code>＋ Add</code> row. Tap it → preview with games-DB data pre-filled, <b>everything editable, nothing saved until Save</b> (FR-41). Defaults: not owned (= wishlisted), status Not started (FR-43).</div>
+<div class="flow">
+  <div>
+    <div class="step">1 · search, no library match</div>
+    <div class="card"><div class="mb" style="padding:12px;">
+      <div class="searchbar">⌕ Hades II|</div>
+      <div style="margin-top:10px;">
+        <div class="sr" style="opacity:.6;"><div class="th" style="background:linear-gradient(150deg,#3a2410,#160d05)"></div><div>Hades<small>in your library — Platinum 🏆</small></div></div>
+        <div class="sr" style="border-bottom:none;background:rgba(53,224,255,.06);border-radius:8px;padding:9px;"><div class="th" style="background:rgba(53,224,255,.12);border:1px dashed rgba(53,224,255,.5);display:flex;align-items:center;justify-content:center;color:#5fe3ff;">＋</div><div><span class="addrow">＋ Add "Hades II"</span><small>search the games database →</small></div></div>
+      </div>
+    </div></div>
+  </div>
+  <div class="arrow">→</div>
+  <div>
+    <div class="step">2 · preview → save</div>
+    <div class="card">
+      <div class="mh"><div class="wm" style="font-size:12px;">ADD <span class="s">GAME</span></div><h4 style="margin-left:2px;">Review &amp; save</h4><span class="x">✕</span></div>
+      <div class="mb">
+        <div class="prev-hero">
+          <div class="cov" style="background:linear-gradient(150deg,#3a1030,#12061a)"></div>
+          <div style="flex:1;"><div class="field" style="margin-top:0;"><div class="lb">Name</div><input class="inp name" value="Hades II"></div>
+          <div class="field"><div class="lb">Release</div><span class="inp mono" style="font-family:'JetBrains Mono';display:inline-block;">2025·09·25</span></div></div>
+        </div>
+        <div class="field"><div class="lb">Genres <span style="color:#5f7d92">· from games DB</span></div><div class="tags"><span class="tg">Roguelike</span><span class="tg">Action</span><span class="tg add">＋ edit</span></div></div>
+        <div class="field"><div class="lb">On save</div>
+          <div class="toggle" style="margin-bottom:8px;"><span class="sw"></span> Owned <span style="color:#5f7d92">— off = adds to wishlist</span></div>
+          <div class="toggle"><span class="mono" style="font-family:'JetBrains Mono';font-size:11px;color:#8fb0c4;">STATUS</span> <span class="tg" style="color:#8fa6ba;border-color:rgba(255,255,255,.14);background:rgba(255,255,255,.04)">Not started</span></div>
+        </div>
+      </div>
+      <div class="mf"><span class="btn ghost">Cancel</span><span class="btn pri">＋ Add to wishlist</span></div>
+    </div>
+  </div>
+</div>
+<p class="lede"><b>Fallback:</b> if the games DB is unreachable, the preview offers <code>Add by name only</code> — it saves a minimal entry and drops it into the <b>stragglers</b> list to enrich later (FR-41). And search that matches an existing game opens its detail instead of duplicating (FR-42).</p>
+
+<!-- STRAGGLERS FLOW -->
+<div class="cap" style="margin-top:38px;">Stragglers — resolve the import leftovers</div>
+<div class="sub">The banner points here. Import lands everything it can; unmatched/ambiguous titles wait as stragglers (FR-28). Resolving = search the games DB, pick the right match; the straggler's Notion data (status, dates) carries onto the matched game, permanently (FR-29).</div>
+<div class="flow">
+  <div>
+    <div class="step">1 · banner</div>
+    <div class="banner" style="width:310px;">⚑ <span><b>3 games couldn't be matched</b></span><span class="go">Resolve →</span></div>
+  </div>
+  <div class="arrow">→</div>
+  <div>
+    <div class="step">2 · stragglers list</div>
+    <div class="card">
+      <div class="mh"><div class="wm" style="font-size:12px;">STRAG<span class="s">GLERS</span></div><h4 style="margin-left:2px;">3 to resolve</h4><span class="x">✕</span></div>
+      <div class="mb">
+        <div class="strag"><div><span class="raw">Rythm Doctor</span><small>from Notion · Playing · started 2025-11</small></div><span class="go">Match →</span></div>
+        <div class="strag"><div><span class="raw">FF7 Rebirth (dbl)</span><small>from Notion · Completed</small></div><span class="go">Match →</span></div>
+        <div class="strag" style="border-bottom:none;"><div><span class="raw">Stray?</span><small>ambiguous — 2 candidates</small></div><span class="go">Match →</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="arrow">→</div>
+  <div>
+    <div class="step">3 · match by search</div>
+    <div class="card">
+      <div class="mh"><h4>Match "Rythm Doctor"</h4><span class="x">✕</span></div>
+      <div class="mb">
+        <div class="searchbar" style="height:36px;font-size:12px;">⌕ Rhythm Doctor|</div>
+        <div style="margin-top:11px;">
+          <div class="matchpick"><div class="th" style="background:linear-gradient(150deg,#2a1240,#0e0618)"></div><div><b>Rhythm Doctor</b><small style="display:block;color:#5f7d92;font-size:10px;">2021 · Rhythm · Indie</small></div><span class="ok">✓ this one</span></div>
+          <div class="hint">Your Notion data (Playing · started 2025-11) moves onto this game. Permanent.</div>
+        </div>
+      </div>
+      <div class="mf"><span class="btn ghost">Add as new instead</span><span class="btn pri">Confirm match</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- PROSE-SPEC the simple ones -->
+<div class="cap" style="margin-top:38px;">The simple ones — composed from patterns we've built</div>
+<div class="lede" style="max-width:82ch;">
+  <p style="margin-bottom:10px;"><b>Sync library / PS+ Extra check</b> — FAB action → inline progress bar (FAB shows a spinner) → <b>summary modal</b> (counts + needs-attention) → residue into the banner. No new surface.</p>
+  <p style="margin-bottom:10px;"><b>Settings</b> (FAB → gear) — a sheet/modal with: the <b>PlayStation session-cookie</b> field (paste-from-DevTools, with the <code>COOKIE_HELP</code> steps inline; on 401/403 the banner routes here), the <b>FAB position</b> toggle (right/left handedness), and app info. Export CSV stays a FAB action, not here.</p>
+  <p><b>Magic-link login</b> (first run only) — one screen: the PRESS START wordmark, an email field, <b>Send magic link</b> → "Check your email" confirmation. No password, ever. Better-auth (FR-47).</p>
+</div>
+
+<p class="lede" style="margin-top:24px;">That closes every surface in the IA. Tell me what to tweak on Add or Stragglers — or if the prose-spec'd trio needs its own mock.</p>

@@ -1,0 +1,146 @@
+<meta charset="utf-8">
+<title>State & feedback patterns — PRESS START</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;900&family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ font-family:Inter,system-ui,sans-serif; background:#05090f; color:#eafaff; padding:30px clamp(16px,4vw,48px) 90px;
+        background-image:radial-gradient(120% 90% at 50% -8%, rgba(18,80,120,.18), transparent 55%); }
+  h1{ font-size:21px; font-weight:700; }
+  .lede{ color:#6d8ba0; font-size:13.5px; margin-top:8px; max-width:80ch; line-height:1.55; }
+  .lede b{ color:#cfe6f2; } code{ font-family:"JetBrains Mono",monospace; color:#5fe3ff; font-size:12px; }
+  .wm{ font-family:Orbitron; font-weight:900; } .wm .s{ color:#ff5ca8; }
+  .cap{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:#5fe3ff; margin:32px 0 6px; }
+  .sub{ color:#5f7d92; font-size:12px; margin-bottom:14px; max-width:70ch; line-height:1.5; }
+  .grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:18px; }
+  .panel{ border:1px solid #12283a; border-radius:16px; background:#070d15; padding:18px; position:relative; overflow:hidden; }
+  .pt{ font-family:Orbitron; font-weight:700; font-size:12px; letter-spacing:.03em; margin-bottom:3px; }
+  .pd{ font-size:11px; color:#5f7d92; margin-bottom:14px; }
+  .mono{ font-family:"JetBrains Mono",monospace; }
+
+  /* toast */
+  .toast{ display:flex; align-items:center; gap:10px; padding:11px 14px; border-radius:12px; background:rgba(10,20,32,.96); border:1px solid rgba(53,224,255,.3); margin-bottom:9px; box-shadow:0 8px 24px rgba(0,0,0,.4); font-size:12.5px; }
+  .toast .i{ width:22px; height:22px; border-radius:7px; display:flex; align-items:center; justify-content:center; font-size:12px; flex:none; }
+  .toast .x{ margin-left:auto; color:#4d7f98; font-size:12px; }
+  .t-play .i{ background:rgba(255,46,136,.2); color:#ff8bc2; } .t-play b{ color:#ff8bc2; }
+  .t-add .i{ background:rgba(53,224,255,.2); color:#7fecff; }
+  .t-ok .i{ background:rgba(120,220,150,.18); color:#8fe6a8; }
+  .bar-under{ height:2px; background:linear-gradient(90deg,#12b3ff,transparent); border-radius:2px; margin-top:3px; }
+
+  /* summary modal */
+  .modal{ border:1px solid rgba(53,224,255,.35); border-radius:16px; background:#0a1120; box-shadow:0 0 34px rgba(53,224,255,.12); overflow:hidden; }
+  .modal .mh{ padding:16px 18px 12px; border-bottom:1px solid #12283a; display:flex; align-items:center; gap:10px; }
+  .modal .mh .wm{ font-size:13px; } .modal .mh h4{ font-family:Orbitron; font-weight:700; font-size:14px; }
+  .modal .mb{ padding:14px 18px; }
+  .statline{ display:flex; align-items:center; gap:10px; padding:8px 0; font-size:13px; border-bottom:1px solid #0e1c28; }
+  .statline .n{ font-family:"JetBrains Mono",monospace; font-weight:700; font-size:15px; width:34px; }
+  .statline.add .n{ color:#8fe6a8; } .statline.own .n{ color:#5fe3ff; } .statline.skip .n{ color:#6d8ba0; } .statline.warn .n{ color:#ffb254; }
+  .statline .lb{ color:#aab9c9; } .statline.warn{ border-bottom:none; }
+  .modal .mf{ display:flex; gap:9px; padding:14px 18px; }
+  .btn{ flex:1; padding:10px; border-radius:10px; font-family:Rajdhani; font-weight:700; font-size:13px; letter-spacing:.03em; cursor:pointer; text-align:center; }
+  .btn.ghost{ background:rgba(255,255,255,.05); color:#aab9c9; border:1px solid rgba(255,255,255,.12); }
+  .btn.warn{ background:rgba(255,157,46,.16); color:#ffb254; border:1px solid rgba(255,157,46,.45); }
+
+  /* banner recap */
+  .banner{ display:flex; align-items:center; gap:11px; padding:12px 15px; border-radius:12px; font-size:12.5px; margin-bottom:9px; }
+  .banner .go{ margin-left:auto; font-weight:700; white-space:nowrap; }
+  .b-strag{ background:rgba(255,157,46,.12); border:1px solid rgba(255,157,46,.4); color:#ffce9a; } .b-strag .go{ color:#ffb254; }
+  .b-cookie{ background:rgba(255,46,136,.1); border:1px solid rgba(255,46,136,.4); color:#ffb3d4; } .b-cookie .go{ color:#ff8bc2; }
+  .b-psfail{ background:rgba(120,150,180,.12); border:1px solid rgba(120,150,180,.4); color:#c3d3e0; } .b-psfail .go{ color:#9fd0e6; }
+
+  /* loading skeleton */
+  .skel-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+  .skel{ aspect-ratio:3/4; border-radius:9px; background:linear-gradient(100deg,#0c1622 30%,#122436 50%,#0c1622 70%); background-size:200% 100%; animation:sh 1.3s linear infinite; }
+  @keyframes sh{ from{ background-position:200% 0; } to{ background-position:-200% 0; } }
+  .prog{ margin-top:12px; }
+  .prog .lab{ display:flex; justify-content:space-between; font-family:"JetBrains Mono",monospace; font-size:10px; color:#6d8ba0; margin-bottom:6px; }
+  .prog .track{ height:6px; border-radius:3px; background:#0e1c28; overflow:hidden; } .prog .fill{ height:100%; width:68%; background:linear-gradient(90deg,#0070cc,#35e0ff); box-shadow:0 0 12px rgba(53,224,255,.5); }
+
+  /* empty */
+  .empty{ text-align:center; padding:26px 18px; }
+  .empty .big{ font-family:Orbitron; font-weight:900; font-size:15px; letter-spacing:.06em; color:#3d5f74; }
+  .empty .msg{ font-size:13px; color:#8fb0c4; margin-top:10px; line-height:1.5; }
+  .empty .act{ display:inline-flex; gap:8px; margin-top:16px; }
+  .ebtn{ font-family:Rajdhani; font-weight:700; font-size:13px; padding:8px 15px; border-radius:9px; }
+  .ebtn.pri{ background:linear-gradient(150deg,#12b3ff,#0070cc); color:#04121b; } .ebtn.sec{ background:rgba(255,255,255,.05); color:#aab9c9; border:1px solid rgba(255,255,255,.14); }
+</style>
+
+<h1>How PRESS START talks back — the four channels</h1>
+<p class="lede"><b>Toast</b> for good news that passes, <b>summary modal</b> for reports on things you triggered, <b>attention banner</b> for things that need you (persists), <b>loading</b> for work in flight. One rule: a triggered op resolves into a summary modal, and anything needing action also seeds the banner so it survives the dismiss.</p>
+
+<!-- TOASTS -->
+<div class="cap">1 · Toasts — transient, non-blocking, auto-dismiss (~3s)</div>
+<div class="sub">Fire on quick shelf actions. Never demand a click. Bottom of screen, stack, fade.</div>
+<div class="grid">
+  <div class="panel">
+    <div class="pt">Everyday confirmations</div><div class="pd">status change, ownership, add, milestone</div>
+    <div class="toast t-play"><span class="i">◆</span><span>Now playing: <b>Returnal</b></span><span class="x">✕</span></div>
+    <div class="toast t-add"><span class="i">＋</span><span>Added <b style="color:#cfe6f2">Astro Bot</b> to your wishlist</span><span class="x">✕</span></div>
+    <div class="toast t-ok"><span class="i">🏆</span><span>Platinum logged — <b style="color:#cfe6f2">Elden Ring</b></span><span class="x">✕</span></div>
+    <div class="bar-under"></div>
+  </div>
+  <div class="panel">
+    <div class="pt">With one-tap undo</div><div class="pd">reversible actions carry an undo for a few seconds</div>
+    <div class="toast t-ok"><span class="i" style="background:rgba(120,150,180,.18);color:#c3d3e0">⤺</span><span>Marked <b style="color:#cfe6f2">Sifu</b> as Dropped</span><span class="x" style="color:#5fe3ff;font-weight:700;">UNDO</span></div>
+    <div class="pd" style="margin-top:12px;">Undo matters most where a mis-tap hides a game (Dropped) or flips ownership off. Milestones stay behind the confirm modal, so no undo needed there.</div>
+  </div>
+</div>
+
+<!-- SUMMARY MODAL -->
+<div class="cap">2 · Summary modal — the report after Sync / Import / PS+ check</div>
+<div class="sub">You tapped it, so it earns a full readout (FR-37). Counts up top, needs-attention flagged, and a button that jumps straight to the problem.</div>
+<div class="grid">
+  <div class="panel" style="background:transparent;border:none;padding:0;">
+    <div class="modal">
+      <div class="mh"><div class="wm">SYNC <span class="s">DONE</span></div><h4 style="margin-left:2px;">Library synced</h4><span class="mono" style="margin-left:auto;font-size:9px;color:#5f7d92;">2026·07·05 12:41</span></div>
+      <div class="mb">
+        <div class="statline add"><span class="n">+4</span><span class="lb">new games added</span></div>
+        <div class="statline own"><span class="n">2</span><span class="lb">now marked owned (bought since last sync)</span></div>
+        <div class="statline skip"><span class="n">12</span><span class="lb">membership entries skipped <span style="color:#5f7d92">(PS+ ≠ owned)</span></span></div>
+        <div class="statline warn"><span class="n">⚠1</span><span class="lb">needs attention — a cover/ID conflict</span></div>
+      </div>
+      <div class="mf"><span class="btn ghost">Done</span><span class="btn warn">Resolve the 1 issue →</span></div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="pt">The rule in action</div><div class="pd">why a modal <i>and</i> a banner</div>
+    <div class="lede" style="margin-top:0;font-size:12.5px;">You read the summary and hit <b>Done</b>. The good news is gone — but that <b style="color:#ffb254">⚠ 1 needs attention</b> doesn't vanish: it drops into the <b>attention banner</b> under the header, waiting, until you resolve it. Nothing that needs you is ever one dismissed-modal away from being forgotten.</div>
+    <div class="banner b-strag" style="margin-top:16px;">⚠ <span>1 synced game needs attention</span><span class="go">Resolve →</span></div>
+  </div>
+</div>
+
+<!-- BANNER -->
+<div class="cap">3 · Attention banner — persistent, under the header</div>
+<div class="sub">The home for anything that needs action. Stays until cleared. This is also where the PRD's "failures surface, never silently retry" lives.</div>
+<div class="panel">
+  <div class="banner b-strag">⚑ <span><b>3 games couldn't be matched</b> during import</span><span class="go">Resolve stragglers →</span></div>
+  <div class="banner b-cookie">🔑 <span><b>PlayStation sync needs a new cookie</b> — the last one expired</span><span class="go">Fix in Settings →</span></div>
+  <div class="banner b-psfail">◈ <span><b>PS+ Extra check didn't run</b> — the scheduled refresh failed</span><span class="go">Retry →</span></div>
+  <div class="pd" style="margin-top:12px;">Stacks if several are active. Each self-clears when its condition resolves (last straggler matched, new cookie saved, refresh succeeds).</div>
+</div>
+
+<!-- LOADING + EMPTY -->
+<div class="cap">4 · Loading &amp; empty states</div>
+<div class="grid">
+  <div class="panel">
+    <div class="pt">First load — skeleton</div><div class="pd">cover-shaped shimmer while the shelf hydrates</div>
+    <div class="skel-grid"><div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
+  </div>
+  <div class="panel">
+    <div class="pt">Long op — inline progress</div><div class="pd">sync / PS+ check running</div>
+    <div class="prog"><div class="lab"><span>SYNCING LIBRARY…</span><span>120 / 175</span></div><div class="track"><div class="fill"></div></div></div>
+    <div class="prog" style="margin-top:18px;"><div class="lab"><span>CHECKING PS+ EXTRA…</span><span>—</span></div><div class="track"><div class="fill" style="width:34%;"></div></div></div>
+    <div class="pd" style="margin-top:14px;">Runs in place; the FAB action shows a spinner. Resolves into a summary modal.</div>
+  </div>
+  <div class="panel">
+    <div class="pt">No matches</div><div class="pd">filters exclude everything</div>
+    <div class="empty"><div class="big">NO MATCH</div><div class="msg">Nothing fits that filter combo.<br>Loosen a filter to see more.</div><div class="act"><span class="ebtn pri">Clear filters</span></div></div>
+  </div>
+  <div class="panel">
+    <div class="pt">Empty library</div><div class="pd">fresh / edge case</div>
+    <div class="empty"><div class="big">INSERT GAMES</div><div class="msg">Your shelf is empty.<br>Sync your library or add a game to begin.</div><div class="act"><span class="ebtn pri">Sync library</span><span class="ebtn sec">＋ Add a game</span></div></div>
+  </div>
+</div>
+
+<p class="lede" style="margin-top:28px;">Personality is dialled to <b>light</b> — arcade flavour in the empty-state headers (<code>NO MATCH</code>, <code>INSERT GAMES</code>) but the copy stays helpful, never cute-at-the-expense-of-clear. Tell me if you want it louder (more arcade voice), quieter (plain), or if any channel's job feels wrong.</p>

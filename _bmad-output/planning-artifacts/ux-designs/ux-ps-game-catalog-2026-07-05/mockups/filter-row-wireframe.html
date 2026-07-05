@@ -1,0 +1,158 @@
+<meta charset="utf-8">
+<title>Filter row — PRESS START</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;900&family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ font-family:Inter,system-ui,sans-serif; background:#05090f; color:#eafaff; padding:30px clamp(16px,4vw,48px) 90px;
+        background-image:radial-gradient(120% 90% at 50% -8%, rgba(18,80,120,.18), transparent 55%); }
+  h1{ font-size:21px; font-weight:700; }
+  .lede{ color:#6d8ba0; font-size:13.5px; margin-top:8px; max-width:82ch; line-height:1.55; }
+  .lede b{ color:#cfe6f2; }
+  code{ font-family:"JetBrains Mono",monospace; color:#5fe3ff; font-size:12px; }
+  .cap{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:#5fe3ff; margin:30px 0 12px; }
+  .wm{ font-family:Orbitron; font-weight:900; } .wm .s{ color:#ff5ca8; }
+
+  /* generic controls */
+  .glabel{ font-size:9px; letter-spacing:.14em; text-transform:uppercase; color:#4d7f98; margin-right:4px; }
+  .dd{ font-family:Rajdhani; font-weight:600; font-size:13px; padding:7px 12px; border-radius:9px; background:rgba(10,20,32,.8); border:1px solid rgba(53,224,255,.22); color:#cfe6f2; display:inline-flex; align-items:center; gap:8px; }
+  .dd .cnt{ font-family:"JetBrains Mono",monospace; font-size:10px; background:#12b3ff; color:#04121b; padding:1px 6px; border-radius:999px; }
+  .dd .car{ color:#4d7f98; font-size:11px; }
+  .pill{ font-family:Orbitron; font-weight:600; font-size:10px; letter-spacing:.04em; padding:6px 12px; border-radius:999px; cursor:pointer;
+         background:rgba(255,255,255,.04); border:1px solid rgba(53,224,255,.2); color:#8fb0c4; }
+  .pill.on{ background:#12b3ff; color:#04121b; border-color:#12b3ff; box-shadow:0 0 14px rgba(53,224,255,.5); }
+  .pill.reveal{ border-style:dashed; border-color:rgba(214,230,245,.35); color:#aebccb; }
+  .pill.reveal.on{ background:rgba(214,230,245,.9); color:#0a1120; border-style:solid; box-shadow:0 0 12px rgba(214,230,245,.4); }
+  .sep{ width:1px; align-self:stretch; background:#12283a; margin:2px 4px; }
+
+  .frame{ border:1px solid #12283a; border-radius:16px; overflow:hidden; background:#070d15; }
+  .fhead{ display:flex; align-items:center; gap:14px; padding:14px 18px; border-bottom:1px solid #0e1c28; }
+  .fhead .wm{ font-size:18px; } .fhead .rd{ margin-left:auto; font-family:"JetBrains Mono",monospace; font-size:9px; color:#5f7d92; letter-spacing:.08em; }
+
+  .bar{ display:flex; align-items:center; gap:8px; padding:13px 18px; flex-wrap:wrap; }
+  .summary{ padding:0 18px 14px; }
+  .stext{ font-size:13px; color:#9fd0e6; } .stext b{ color:#fff; } .stext .or{ color:#5fe3ff; font-weight:600; } .stext .and{ color:#ff8bc2; font-weight:600; }
+  .scount{ font-family:"JetBrains Mono",monospace; font-size:11px; color:#5f7d92; margin-left:8px; }
+  .clear{ font-size:11px; color:#5fe3ff; cursor:pointer; margin-left:10px; }
+
+  .mc{ aspect-ratio:3/4; border-radius:8px; position:relative; }
+  .mc .d{ position:absolute; left:5px; bottom:5px; width:7px; height:7px; border-radius:50%; }
+
+  .two{ display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start; }
+  @media(max-width:900px){ .two{ grid-template-columns:1fr; } }
+
+  /* phone */
+  .phone{ width:330px; border-radius:32px; border:1px solid #1c3346; background:#060b12; overflow:hidden; box-shadow:0 0 0 6px #0b1420,0 22px 56px rgba(0,0,0,.5); position:relative; }
+  .ph-top{ display:flex; align-items:center; gap:10px; padding:15px 16px 12px; }
+  .ph-top .wm{ font-size:15px; } .ph-top .rd{ margin-left:auto; font-family:"JetBrains Mono",monospace; font-size:8px; color:#5f7d92; }
+  .filterbtn{ display:flex; align-items:center; gap:8px; margin:0 16px 12px; padding:10px 14px; border-radius:11px; background:rgba(18,60,90,.35); border:1px solid rgba(53,224,255,.35); color:#cfe6f2; font-family:Rajdhani; font-weight:700; font-size:14px; letter-spacing:.03em; }
+  .filterbtn .bd{ margin-left:auto; font-family:"JetBrains Mono",monospace; font-size:10px; background:#12b3ff; color:#04121b; padding:1px 7px; border-radius:999px; }
+  .ph-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:10px; padding:0 16px 16px; }
+  .ph-grid .mc{ }
+  .ph-search{ margin:0 16px 16px; height:38px; border-radius:999px; border:1px solid rgba(53,224,255,.3); background:rgba(6,12,20,.8); display:flex; align-items:center; padding:0 14px; color:#5f7d92; font-size:12px; }
+
+  /* bottom sheet */
+  .sheetwrap{ position:relative; }
+  .sheet{ position:absolute; left:0; right:0; bottom:0; background:#0a121c; border-top:1px solid rgba(53,224,255,.3); border-radius:20px 20px 32px 32px; padding:8px 18px 20px; box-shadow:0 -10px 40px rgba(0,0,0,.5); }
+  .grab{ width:38px; height:4px; border-radius:2px; background:#2a3f52; margin:6px auto 14px; }
+  .sh-h{ display:flex; align-items:center; margin-bottom:4px; } .sh-h h3{ font-family:Orbitron; font-weight:700; font-size:14px; } .sh-h .clr{ margin-left:auto; font-size:12px; color:#5fe3ff; }
+  .sect{ margin-top:16px; } .sect .st{ font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:#5fe3ff; margin-bottom:9px; display:flex; align-items:center; gap:7px; }
+  .sect .st .logic{ font-family:"JetBrains Mono",monospace; font-size:8.5px; color:#5f7d92; letter-spacing:.05em; border:1px solid #1c3346; padding:1px 6px; border-radius:5px; text-transform:none; }
+  .chips{ display:flex; flex-wrap:wrap; gap:7px; }
+  .sh-summary{ margin-top:18px; padding:12px 14px; border-radius:11px; background:rgba(18,60,90,.22); border:1px solid rgba(53,224,255,.22); font-size:12.5px; color:#9fd0e6; line-height:1.5; }
+  .sh-cta{ margin-top:16px; width:100%; padding:13px; border-radius:12px; border:none; background:linear-gradient(150deg,#12b3ff,#0070cc); color:#04121b; font-family:Rajdhani; font-weight:700; font-size:15px; letter-spacing:.03em; }
+</style>
+
+<h1>The filter row & the plain-English summary</h1>
+<p class="lede">The PRD's logic is <b>OR within a group, AND across groups</b>. Rather than make you decode that, the bar <b>narrates itself</b>: a live sentence tells you exactly what the shelf is showing. Cyan words are OR-choices, <span style="color:#ff8bc2">pink</span> words are AND-narrowing. State pills that are hidden-by-default (<code>Completed · Platinum · Dropped</code>) use a <b>dashed</b> outline — they <i>reveal</i> a hidden slice; the solid cyan flag pills <i>narrow</i> what's shown.</p>
+
+<!-- DESKTOP -->
+<div class="cap">Desktop — default (no filters = your backlog)</div>
+<div class="frame">
+  <div class="fhead"><div class="wm">PRESS <span class="s">START</span></div><div class="rd">175 GAMES · 52 OWNED · PS+ AS OF 2026·07·03</div></div>
+  <div class="bar">
+    <span class="glabel">State</span><span class="dd">All live statuses <span class="car">▾</span></span>
+    <span class="glabel">Genre</span><span class="dd">Any genre <span class="car">▾</span></span>
+    <span class="sep"></span>
+    <span class="pill">Owned</span><span class="pill">Wishlisted</span><span class="pill">Released</span><span class="pill">Playable now</span>
+    <span class="sep"></span>
+    <span class="pill reveal">＋ Completed</span><span class="pill reveal">＋ Platinum</span><span class="pill reveal">＋ Dropped</span>
+  </div>
+  <div class="summary"><span class="stext" style="color:#6d8ba0;">Showing your <b style="color:#cfe6f2">backlog</b> — everything you haven't finished or dropped.</span><span class="scount">148 games</span></div>
+</div>
+
+<!-- DESKTOP active -->
+<div class="cap">Desktop — filters active (watch the sentence)</div>
+<div class="frame">
+  <div class="fhead"><div class="wm">PRESS <span class="s">START</span></div><div class="rd">175 GAMES · 52 OWNED · PS+ AS OF 2026·07·03</div></div>
+  <div class="bar">
+    <span class="glabel">State</span><span class="dd">Playing <span class="cnt">1</span><span class="car">▾</span></span>
+    <span class="glabel">Genre</span><span class="dd">RPG, Action <span class="cnt">2</span><span class="car">▾</span></span>
+    <span class="sep"></span>
+    <span class="pill on">Owned</span><span class="pill">Wishlisted</span><span class="pill">Released</span><span class="pill on">Playable now</span>
+    <span class="sep"></span>
+    <span class="pill reveal">＋ Completed</span><span class="pill reveal">＋ Platinum</span><span class="pill reveal">＋ Dropped</span>
+  </div>
+  <div class="summary">
+    <span class="stext">Showing <b>owned</b> <span class="and">and</span> <b>playable now</b> games you're <b>playing</b>, in <b>RPG</b> <span class="or">or</span> <b>Action</b>.</span>
+    <span class="scount">3 games</span><span class="clear">✕ clear all</span>
+  </div>
+</div>
+<p class="lede">Reads left to right like a thought. <span class="or">or</span> = pick more within a group (widens); <span class="and">and</span> = stack another group (narrows). You never see the words "OR/AND-group" — you just read the result.</p>
+
+<!-- MOBILE -->
+<div class="cap" style="margin-top:36px;">Mobile — one Filters button, full power in a sheet</div>
+<div class="two">
+  <div>
+    <div class="phone">
+      <div class="ph-top"><div class="wm">PRESS <span class="s">START</span></div><div class="rd">148 SHOWN</div></div>
+      <div class="filterbtn">⚑ Filters <span style="font-weight:500;color:#7f9db0;font-size:12px;">· backlog</span> <span class="bd">0</span></div>
+      <div class="ph-grid">
+        <div class="mc" style="background:linear-gradient(150deg,#48123c,#12061a)"><span class="d" style="background:#ff5ca8;box-shadow:0 0 7px #ff2e88"></span></div>
+        <div class="mc" style="background:linear-gradient(150deg,#0e4468,#07161f)"><span class="d" style="background:#5fe3ff;box-shadow:0 0 7px #12b3ff"></span></div>
+        <div class="mc" style="background:linear-gradient(150deg,#1c2833,#0a1016)"><span class="d" style="background:#3d5566"></span></div>
+        <div class="mc" style="background:linear-gradient(150deg,#2a2438,#0e0c16)"><span class="d" style="background:#8fb0c4"></span></div>
+      </div>
+      <div class="ph-search">⌕ &nbsp;Search or add a game…</div>
+    </div>
+    <p class="lede" style="margin-top:14px;">Closed: a clean shelf, one button. The badge shows how many filters are active (0 = your backlog). The label whispers the current view (“· backlog”).</p>
+  </div>
+
+  <div>
+    <div class="phone sheetwrap" style="height:640px;">
+      <div class="ph-top"><div class="wm">PRESS <span class="s">START</span></div><div class="rd">3 SHOWN</div></div>
+      <div style="filter:blur(1px);opacity:.4;"><div class="ph-grid">
+        <div class="mc" style="background:linear-gradient(150deg,#48123c,#12061a)"></div><div class="mc" style="background:linear-gradient(150deg,#0e4468,#07161f)"></div>
+      </div></div>
+      <div class="sheet">
+        <div class="grab"></div>
+        <div class="sh-h"><h3>Filters</h3><span class="clr">Clear all</span></div>
+
+        <div class="sect"><div class="st">State <span class="logic">any of — OR</span></div>
+          <div class="chips"><span class="pill">Not started</span><span class="pill on">Playing</span><span class="pill">Up next</span><span class="pill">Paused</span></div>
+        </div>
+
+        <div class="sect"><div class="st">Genre <span class="logic">any of — OR</span></div>
+          <div class="chips"><span class="pill on">RPG</span><span class="pill on">Action</span><span class="pill">Roguelike</span><span class="pill">Platformer</span><span class="dd" style="font-size:11px;padding:6px 10px;">+38 more <span class="car">▾</span></span></div>
+        </div>
+
+        <div class="sect"><div class="st">Only show <span class="logic">all of — AND</span></div>
+          <div class="chips"><span class="pill on">Owned</span><span class="pill">Wishlisted</span><span class="pill">Released</span><span class="pill on">Playable now</span></div>
+        </div>
+
+        <div class="sect"><div class="st">Reveal hidden <span class="logic">adds into view</span></div>
+          <div class="chips"><span class="pill reveal">＋ Completed</span><span class="pill reveal">＋ Platinum</span><span class="pill reveal">＋ Dropped</span></div>
+        </div>
+
+        <div class="sh-summary">Showing <b style="color:#fff">owned</b> <span style="color:#ff8bc2">and</span> <b style="color:#fff">playable-now</b> games you're <b style="color:#fff">playing</b>, in <b style="color:#fff">RPG</b> <span style="color:#5fe3ff">or</span> <b style="color:#fff">Action</b>.</div>
+        <button class="sh-cta">Show 3 games</button>
+      </div>
+    </div>
+    <p class="lede" style="margin-top:14px;">Open: grouped sections, each labelled with its logic (<code>OR</code>/<code>AND</code>), the same live sentence, and a big “Show N games” that closes the sheet. Active pills glow (FR-22).</p>
+  </div>
+</div>
+
+<p class="lede" style="margin-top:28px;">
+  Because you're “not sure yet”: State + Genre default to friendly labels (“All live statuses”, “Any genre”), the reveal pills sit quietly dashed until needed, and the sentence teaches you the model by just… telling you. If you later find you only ever tap two things, we promote those to always-visible and bury the rest — easy change.
+</p>

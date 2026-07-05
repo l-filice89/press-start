@@ -1,0 +1,283 @@
+<meta charset="utf-8">
+<title>Card + flip — interactive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;900&family=Rajdhani:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ font-family:Inter,system-ui,sans-serif; background:#05090f; color:#eafaff; padding:30px clamp(16px,4vw,48px) 100px;
+        background-image:radial-gradient(120% 90% at 50% -8%, rgba(18,80,120,.2), transparent 55%),
+        linear-gradient(rgba(53,224,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(53,224,255,.03) 1px,transparent 1px);
+        background-size:auto,30px 30px,30px 30px; }
+  h1{ font-size:21px; font-weight:700; }
+  .lede{ color:#6d8ba0; font-size:13.5px; margin-top:8px; max-width:80ch; line-height:1.55; }
+  .lede b{ color:#cfe6f2; }
+  code{ font-family:"JetBrains Mono",monospace; color:#5fe3ff; font-size:12px; }
+  .wm{ font-family:Orbitron; font-weight:900; } .wm .s{ color:#ff5ca8; }
+  .cap{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:#5fe3ff; margin:30px 0 12px; }
+  .try{ display:inline-block; font-family:"JetBrains Mono",monospace; font-size:11px; color:#04121b; background:#5fe3ff; padding:4px 10px; border-radius:6px; margin-left:8px; }
+
+  /* ---------- shelf ---------- */
+  .shelf{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:16px; margin-top:6px; }
+  .card{ position:relative; border-radius:12px; }
+  .cover{ aspect-ratio:3/4; border-radius:12px; position:relative; overflow:hidden; cursor:pointer; display:flex; align-items:flex-end;
+          font-family:Orbitron; font-weight:700; color:#fff; box-shadow:0 6px 18px rgba(0,0,0,.4); transition:transform .18s, box-shadow .18s; }
+  .cover:hover{ transform:translateY(-3px); box-shadow:0 10px 26px rgba(53,224,255,.18); }
+  .cover .art{ position:absolute; inset:0; }
+  .cover .grad{ position:absolute; inset:0; z-index:1; background:linear-gradient(transparent 55%, rgba(0,0,0,.7)); }
+  .cname{ font-family:Orbitron; font-weight:700; font-size:12.5px; line-height:1.15; color:#eafaff; padding:0;
+          white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .info{ margin-top:9px; padding:0 2px; }
+  .inforow{ display:flex; align-items:center; gap:8px; margin-top:7px; min-width:0; }
+
+  /* front quick-controls */
+  .owned{ position:absolute; top:8px; right:8px; z-index:3; width:26px; height:26px; border-radius:8px; cursor:pointer;
+          display:flex; align-items:center; justify-content:center; font-size:13px; backdrop-filter:blur(6px);
+          background:rgba(6,12,20,.6); border:1px solid rgba(255,255,255,.18); color:#8fa6ba; transition:.15s; }
+  .owned.on{ background:rgba(53,224,255,.22); border-color:rgba(53,224,255,.6); color:#5fe3ff; box-shadow:0 0 12px rgba(53,224,255,.4); }
+  .flags{ position:absolute; top:8px; left:8px; z-index:3; display:flex; gap:4px; }
+  .flag{ width:22px; height:22px; border-radius:7px; font-size:10px; display:flex; align-items:center; justify-content:center;
+         background:rgba(6,12,20,.6); backdrop-filter:blur(6px); border:1px solid rgba(255,255,255,.14); color:#cfe6f2; }
+  .statuspill{ cursor:pointer; font-family:Orbitron; font-weight:600; font-size:9.5px; flex:none;
+               letter-spacing:.04em; padding:4px 10px; border-radius:999px; display:inline-flex; align-items:center; gap:5px; transition:.15s; }
+  .statuspill:hover{ filter:brightness(1.2); }
+  .sp-play{ background:rgba(255,46,136,.2); color:#ff8bc2; border:1px solid rgba(255,46,136,.6); box-shadow:0 0 12px rgba(255,46,136,.4); }
+  .sp-next{ background:rgba(53,224,255,.16); color:#7fecff; border:1px solid rgba(53,224,255,.55); }
+  .sp-plat{ background:rgba(214,230,245,.16); color:#eaf3fb; border:1px solid rgba(214,230,245,.55); box-shadow:0 0 10px rgba(214,230,245,.3); }
+  .sp-paused{ background:rgba(120,150,180,.16); color:#aebfd0; border:1px solid rgba(120,150,180,.45); }
+  .sp-none{ background:rgba(255,255,255,.06); color:#8fa6ba; border:1px solid rgba(255,255,255,.14); }
+  .genres{ font-size:9.5px; color:#5f7d92; margin-top:8px; padding:0; font-family:"JetBrains Mono",monospace; letter-spacing:.02em; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  /* status popover — single global element, JS-positioned against the pill */
+  .pop{ position:fixed; z-index:70; width:198px; background:rgba(8,14,22,.98); border:1px solid rgba(53,224,255,.3);
+        border-radius:12px; padding:6px; box-shadow:0 12px 34px rgba(0,0,0,.6),0 0 22px rgba(53,224,255,.12); display:none; }
+  .pop .row{ display:flex; align-items:center; gap:9px; padding:8px 9px; border-radius:8px; font-size:12px; cursor:pointer; color:#cfe6f2; }
+  .pop .row:hover{ background:rgba(53,224,255,.08); }
+  .pop .row .dot{ width:9px; height:9px; border-radius:50%; flex:none; }
+  .pop .row.sel{ background:rgba(53,224,255,.1); }
+  .pop .row.sel::after{ content:"✓"; margin-left:auto; color:#5fe3ff; }
+  .pop .sep{ height:1px; background:#12283a; margin:5px 4px; }
+  .pop .ms{ font-family:Rajdhani; font-weight:600; letter-spacing:.02em; }
+
+  /* ---------- detail overlay (flip-grow) ---------- */
+  .scrim{ position:fixed; inset:0; z-index:100; background:rgba(2,5,9,.72); backdrop-filter:blur(5px); display:none; opacity:0; transition:opacity .3s; }
+  .scrim.show{ display:block; opacity:1; }
+  .detailwrap{ position:fixed; z-index:101; inset:0; display:none; align-items:center; justify-content:center; padding:24px; pointer-events:none; }
+  .detailwrap.show{ display:flex; }
+  .flip{ width:min(760px,94vw); max-height:92vh; pointer-events:auto; }
+  .flip.opening{ animation:flipgrow .6s cubic-bezier(.22,.7,.2,1) both; }
+  @keyframes flipgrow{
+    0%   { transform:perspective(1400px) rotateY(88deg) scale(.32); opacity:0; }
+    38%  { transform:perspective(1400px) rotateY(88deg) scale(.32); opacity:.85; }
+    62%  { transform:perspective(1400px) rotateY(0deg)  scale(.36); opacity:1; }
+    100% { transform:perspective(1400px) rotateY(0deg)  scale(1); }
+  }
+  .flip.closing{ animation:flipclose .3s ease-in both; }
+  @keyframes flipclose{ from{ transform:scale(1); opacity:1; } to{ transform:scale(.3); opacity:0; } }
+  .back{ background:#080e16; border:1px solid rgba(53,224,255,.28); border-radius:20px; overflow:hidden;
+         box-shadow:0 0 44px rgba(53,224,255,.14); display:grid; grid-template-columns:230px 1fr; }
+  .back .hero{ position:relative; }
+  .back .hero .art{ position:absolute; inset:0; } .back .hero .grad{ position:absolute; inset:0; background:linear-gradient(120deg,transparent,rgba(8,14,22,.6)); }
+  .back .body{ padding:22px 24px; overflow-y:auto; }
+  .back h2{ font-family:Orbitron; font-weight:700; font-size:20px; letter-spacing:.02em; }
+  .back .gsub{ font-family:"JetBrains Mono",monospace; font-size:10px; color:#5f7d92; margin-top:6px; letter-spacing:.05em; }
+  .field{ margin-top:18px; } .field .lb{ font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:#5fe3ff; margin-bottom:8px; }
+  .segs{ display:flex; flex-wrap:wrap; gap:6px; }
+  .seg{ font-family:Rajdhani; font-weight:600; font-size:12px; padding:5px 11px; border-radius:8px; cursor:pointer; border:1px solid rgba(255,255,255,.1); color:#8fa6ba; }
+  .seg.on{ background:rgba(53,224,255,.16); color:#7fecff; border-color:rgba(53,224,255,.55); box-shadow:0 0 10px rgba(53,224,255,.2); }
+  .mrow{ display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid #14283a; border-radius:10px; margin-top:8px; cursor:pointer; }
+  .mrow.done{ border-color:rgba(214,230,245,.4); background:rgba(214,230,245,.06); }
+  .mrow .mdate{ margin-left:auto; font-family:"JetBrains Mono",monospace; font-size:11px; color:#9ff2ff; }
+  .dates{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .dcell{ border:1px solid #14283a; border-radius:9px; padding:8px 10px; } .dcell .k{ font-size:9px; color:#5f7d92; letter-spacing:.08em; } .dcell .v{ font-family:"JetBrains Mono",monospace; font-size:12px; color:#cfe6f2; margin-top:3px; }
+  .tags2{ display:flex; flex-wrap:wrap; gap:6px; } .tag2{ font-size:11px; padding:4px 9px; border-radius:999px; background:rgba(53,224,255,.08); color:#8fd0e6; border:1px solid rgba(53,224,255,.25); }
+  .closeb{ position:absolute; top:14px; right:16px; z-index:5; width:32px; height:32px; border-radius:9px; background:rgba(6,12,20,.7); border:1px solid rgba(255,255,255,.16); color:#cfe6f2; cursor:pointer; font-size:15px; }
+
+  /* confirm modal */
+  .confirm{ position:fixed; z-index:200; inset:0; display:none; align-items:center; justify-content:center; background:rgba(2,5,9,.7); backdrop-filter:blur(4px); }
+  .confirm.show{ display:flex; }
+  .cbox{ width:min(400px,92vw); background:#0a1120; border:1px solid rgba(214,230,245,.35); border-radius:16px; padding:24px; text-align:center; box-shadow:0 0 40px rgba(214,230,245,.15); }
+  .cbox .ico{ font-size:34px; } .cbox h3{ font-family:Orbitron; font-weight:700; font-size:16px; margin-top:10px; } .cbox p{ color:#9db2c4; font-size:13px; margin-top:8px; line-height:1.5; }
+  .cbtns{ display:flex; gap:10px; margin-top:20px; } .cbtns button{ flex:1; padding:11px; border-radius:10px; font-family:Rajdhani; font-weight:700; font-size:14px; letter-spacing:.03em; cursor:pointer; border:none; }
+  .cbtns .no{ background:rgba(255,255,255,.06); color:#aab9c9; border:1px solid rgba(255,255,255,.12); }
+  .cbtns .yes{ background:linear-gradient(150deg,#eef6ff,#cdd9ea); color:#0a1120; }
+
+  /* ---------- device toggle ---------- */
+  .devbar{ display:flex; gap:8px; margin-top:16px; }
+  .devbtn{ font-family:Rajdhani; font-weight:700; font-size:13px; letter-spacing:.04em; padding:8px 16px; border-radius:9px; cursor:pointer;
+           background:rgba(255,255,255,.05); border:1px solid rgba(53,224,255,.25); color:#8fb0c4; }
+  .devbtn.on{ background:rgba(53,224,255,.16); color:#7fecff; border-color:rgba(53,224,255,.6); box-shadow:0 0 12px rgba(53,224,255,.25); }
+
+  /* ---------- MOBILE MODE ---------- */
+  #stage.m{ max-width:412px; margin:14px auto 0; border:1px solid #1c3346; border-radius:34px; padding:16px 12px 30px;
+            background:#060b12; box-shadow:0 0 0 6px #0b1420, 0 26px 64px rgba(0,0,0,.55);
+            background-image:linear-gradient(rgba(53,224,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(53,224,255,.045) 1px,transparent 1px); background-size:26px 26px; }
+  #stage.m .shelf{ grid-template-columns:repeat(2,1fr); gap:12px; }
+  #stage.m .genres{ display:none; }              /* lean: drop genres, keep name + pill */
+  #stage.m .owned{ width:24px; height:24px; font-size:12px; }
+
+  /* full-screen detail (mobile) */
+  .flip.full{ width:100vw !important; height:100vh; max-height:100vh; position:fixed; inset:0; }
+  .flip.full .back{ grid-template-columns:1fr; border-radius:0; height:100vh; grid-template-rows:170px 1fr; }
+  .flip.full .hero{ min-height:170px; }
+  .flip.full .body{ max-height:none; }
+</style>
+
+<h1>The card & the flip <span class="try">interactive — click things</span></h1>
+<p class="lede">Real theme. <b>Tap the status pill</b> (below each cover) to change status inline — no flip. <b>Tap the owned toggle</b> (top-right of the cover). In the popover, <b>tap a milestone</b> to see the confirm gate. <b>Tap the cover art</b> to flip-and-grow into the detail. Everything your "bare minimum on the front" list asked for, reachable without leaving the shelf.</p>
+
+<div class="devbar">
+  <div class="devbtn on" id="dev-d" onclick="setDevice(false)">🖥 Desktop — dense</div>
+  <div class="devbtn" id="dev-m" onclick="setDevice(true)">📱 Mobile — lean</div>
+</div>
+<div class="cap" id="stagecap">Desktop — dense: full status pill, name + genres below the cover</div>
+<div id="stage"><div class="shelf" id="shelf"></div></div>
+
+<p class="lede" style="margin-top:22px;"><b>What changes on mobile:</b> same card, leaner — a 2-up grid, genres drop (name + status pill stay below the cover), and the flip grows to <b>true full-screen</b>. Same interactions, less chrome. Toggle above to compare.</p>
+
+<!-- overlay -->
+<div class="scrim" id="scrim"></div>
+<div class="detailwrap" id="detailwrap">
+  <div class="flip" id="flip">
+    <div class="back" id="back"></div>
+  </div>
+</div>
+
+<!-- global status popover -->
+<div class="pop" id="gpop"></div>
+
+<!-- confirm -->
+<div class="confirm" id="confirm">
+  <div class="cbox">
+    <div class="ico" id="cico">🏆</div>
+    <h3 id="ctitle">Mark Platinum achieved?</h3>
+    <p id="ctext">This logs the date and can't be undone by a normal status change — only edited here in detail. Fat-finger protection, as promised.</p>
+    <div class="cbtns"><button class="no" onclick="closeConfirm()">Cancel</button><button class="yes" onclick="confirmYes()">Yes, log it</button></div>
+  </div>
+</div>
+
+<script>
+const GAMES = [
+  {t:"Returnal", g:"Roguelike · Shooter", art:"linear-gradient(150deg,#48123c,#12061a)", status:"playing", owned:true, ext:true, plat:false, comp:false},
+  {t:"Stellar Blade", g:"Action · Sci-fi", art:"linear-gradient(150deg,#0e4468,#07161f)", status:"next", owned:true, ext:false, plat:false, comp:false},
+  {t:"Elden Ring", g:"Action RPG · Open world", art:"linear-gradient(150deg,#26333f,#0c141b)", status:null, owned:true, ext:false, plat:true, comp:true},
+  {t:"Astro Bot", g:"Platformer", art:"linear-gradient(150deg,#1c2833,#0a1016)", status:"none", owned:false, ext:true, plat:false, comp:false},
+  {t:"Cyberpunk 2077", g:"RPG · Open world", art:"linear-gradient(150deg,#2a2438,#0e0c16)", status:"paused", owned:true, ext:false, plat:false, comp:false},
+  {t:"Balatro", g:"Roguelike · Cards", art:"linear-gradient(150deg,#173a2e,#0a1a14)", status:"playing", owned:true, ext:true, plat:false, comp:false},
+];
+const STATUSES = [
+  {k:"none", label:"Not started", dot:"#3d5566"},
+  {k:"next", label:"Up next", dot:"#5fe3ff"},
+  {k:"playing", label:"Playing", dot:"#ff5ca8"},
+  {k:"paused", label:"Paused", dot:"#8fb0c4"},
+  {k:"dropped", label:"Dropped", dot:"#6b5563"},
+];
+function effLabel(g){ if(g.status && g.status!=="none"){ return STATUSES.find(s=>s.k===g.status);} if(g.plat) return {k:"plat",label:"Platinum",dot:"#d6e6f5"}; if(g.comp) return {k:"comp",label:"Completed",dot:"#d6e6f5"}; return STATUSES.find(s=>s.k==="none"); }
+function pillClass(g){ const e=effLabel(g); if(e.k==="playing")return"sp-play"; if(e.k==="next")return"sp-next"; if(e.k==="plat"||e.k==="comp")return"sp-plat"; if(e.k==="paused")return"sp-paused"; return"sp-none"; }
+
+const shelf=document.getElementById('shelf');
+function render(){
+  shelf.innerHTML="";
+  GAMES.forEach((g,i)=>{
+    const e=effLabel(g);
+    const c=document.createElement('div'); c.className="card";
+    c.innerHTML=`
+      <div class="cover" onclick="openDetail(${i})">
+        <div class="art" style="background:${g.art}"></div><div class="grad"></div>
+        <div class="flags">${g.ext?'<div class="flag" title="In PS+ Extra">◈</div>':''}${g.plat?'<div class="flag" title="Platinum achieved" style="color:#eaf3fb;border-color:rgba(214,230,245,.55);box-shadow:0 0 10px rgba(214,230,245,.3)">🏆</div>':(g.comp?'<div class="flag" title="Story completed" style="color:#d6e6f5;border-color:rgba(214,230,245,.4)">✓</div>':'')}</div>
+        <div class="owned ${g.owned?'on':''}" title="Owned" onclick="event.stopPropagation();toggleOwned(${i})">${g.owned?'✓':'＋'}</div>
+      </div>
+      <div class="info">
+        <div class="cname" title="${g.t}">${g.t}</div>
+        <div class="inforow">
+          <div class="statuspill ${pillClass(g)}" onclick="event.stopPropagation();togglePop(${i},event)"><span style="width:7px;height:7px;border-radius:50%;background:${e.dot}"></span>${e.label.toUpperCase()}</div>
+        </div>
+        <div class="genres">${g.g}</div>
+      </div>`;
+    shelf.appendChild(c);
+  });
+}
+function toggleOwned(i){ GAMES[i].owned=!GAMES[i].owned; render(); }
+let openPop=null;
+const gpop=document.getElementById('gpop');
+function togglePop(i,ev){
+  const pill=ev.currentTarget;
+  if(openPop===i){ hidePop(); return; }
+  openPop=i; const g=GAMES[i];
+  gpop.innerHTML = STATUSES.map(s=>`<div class="row ${g.status===s.k?'sel':''}" onclick="setStatus(${i},'${s.k}')"><span class="dot" style="background:${s.dot}"></span>${s.label}</div>`).join('')
+    + `<div class="sep"></div>`
+    + `<div class="row ms ${g.comp?'sel':''}" onclick="askMilestone(${i},'comp')"><span class="dot" style="background:#d6e6f5"></span>✓ Story completed</div>`
+    + `<div class="row ms ${g.plat?'sel':''}" onclick="askMilestone(${i},'plat')"><span class="dot" style="background:#d6e6f5"></span>🏆 Platinum achieved</div>`;
+  gpop.style.display='block';
+  const r=pill.getBoundingClientRect(), ph=gpop.offsetHeight, pw=gpop.offsetWidth;
+  let top=r.top-ph-8; if(top<8) top=r.bottom+8;
+  let left=r.left; if(left+pw>window.innerWidth-8) left=window.innerWidth-pw-8; if(left<8) left=8;
+  gpop.style.top=top+'px'; gpop.style.left=left+'px';
+}
+function hidePop(){ openPop=null; gpop.style.display='none'; }
+function setStatus(i,k){ GAMES[i].status=k; hidePop(); render(); }
+document.addEventListener('click',e=>{ if(!e.target.closest('.statuspill')&&!e.target.closest('#gpop')){ hidePop(); }});
+window.addEventListener('scroll',hidePop,true); window.addEventListener('resize',hidePop);
+
+/* confirm */
+let pending=null;
+function askMilestone(i,which){
+  const g=GAMES[i];
+  if((which==='plat'&&g.plat)||(which==='comp'&&g.comp)){ /* toggling off, no confirm */ if(which==='plat')g.plat=false; else g.comp=false; hidePop(); render(); return; }
+  hidePop(); pending={i,which};
+  document.getElementById('cico').textContent = which==='plat'?'🏆':'✓';
+  document.getElementById('ctitle').textContent = which==='plat'?'Mark Platinum achieved?':'Mark Story completed?';
+  document.getElementById('confirm').classList.add('show');
+}
+function closeConfirm(){ document.getElementById('confirm').classList.remove('show'); pending=null; }
+function confirmYes(){ if(pending){ const g=GAMES[pending.i]; if(pending.which==='plat')g.plat=true; else g.comp=true; if(g.status==='none')g.status=null; } closeConfirm(); hidePop(); render(); }
+
+/* detail flip-grow */
+function openDetail(i){
+  hidePop();
+  const g=GAMES[i]; const e=effLabel(g);
+  document.getElementById('back').innerHTML=`
+    <button class="closeb" onclick="closeDetail()">✕</button>
+    <div class="hero"><div class="art" style="background:${g.art}"></div><div class="grad"></div></div>
+    <div class="body">
+      <h2>${g.t}</h2>
+      <div class="gsub">${g.owned?'OWNED':'WISHLISTED'}${g.ext?' · IN PS+ EXTRA':''} · RELEASED 2023</div>
+      <div class="field"><div class="lb">Play status</div><div class="segs">
+        ${STATUSES.map(s=>`<span class="seg ${g.status===s.k?'on':''}">${s.label}</span>`).join('')}
+      </div></div>
+      <div class="field"><div class="lb">Milestones</div>
+        <div class="mrow ${g.comp?'done':''}">✓ Story completed ${g.comp?'<span class="mdate">2024·02·11</span>':'<span class="mdate" style="color:#5f7d92">— tap to log</span>'}</div>
+        <div class="mrow ${g.plat?'done':''}">🏆 Platinum achieved ${g.plat?'<span class="mdate">2024·03·02</span>':'<span class="mdate" style="color:#5f7d92">— tap to log</span>'}</div>
+      </div>
+      <div class="field"><div class="lb">Lifecycle</div><div class="dates">
+        <div class="dcell"><div class="k">WISHLISTED</div><div class="v">2023·09·01</div></div>
+        <div class="dcell"><div class="k">BOUGHT</div><div class="v">2023·11·20</div></div>
+        <div class="dcell"><div class="k">STARTED</div><div class="v">2024·01·04</div></div>
+        <div class="dcell"><div class="k">COMPLETED</div><div class="v">${g.comp?'2024·02·11':'—'}</div></div>
+      </div></div>
+      <div class="field"><div class="lb">Genres</div><div class="tags2">${g.g.split(' · ').map(x=>`<span class="tag2">${x}</span>`).join('')}<span class="tag2" style="border-style:dashed;color:#5fe3ff">＋ edit</span></div></div>
+      ${!g.owned?'<div class="field"><div class="lb">Wishlist</div><a style="color:#5fe3ff;font-size:13px;text-decoration:none">↗ View on PS Store</a></div>':''}
+    </div>`;
+  document.getElementById('scrim').classList.add('show');
+  document.getElementById('detailwrap').classList.add('show');
+  const f=document.getElementById('flip'); f.classList.remove('closing','opening'); f.classList.toggle('full',isMobile); void f.offsetWidth; f.classList.add('opening');
+}
+let isMobile=false;
+function setDevice(m){
+  isMobile=m;
+  document.getElementById('stage').classList.toggle('m',m);
+  document.getElementById('dev-d').classList.toggle('on',!m);
+  document.getElementById('dev-m').classList.toggle('on',m);
+  document.getElementById('stagecap').textContent = m
+    ? 'Mobile — lean: status pill + name below the cover, genres hidden, 2-up grid, detail is full-screen'
+    : 'Desktop — dense: status pill + name + genres below the cover';
+  hidePop();
+}
+function closeDetail(){
+  const f=document.getElementById('flip'); f.classList.remove('opening'); f.classList.add('closing');
+  document.getElementById('scrim').classList.remove('show');
+  setTimeout(()=>{ document.getElementById('detailwrap').classList.remove('show'); },300);
+}
+document.getElementById('scrim').addEventListener('click',closeDetail);
+render();
+</script>

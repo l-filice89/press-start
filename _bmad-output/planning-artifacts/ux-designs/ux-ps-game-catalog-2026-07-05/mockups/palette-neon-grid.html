@@ -1,0 +1,157 @@
+<meta charset="utf-8">
+<title>Neon Grid — the merged child</title>
+<style>
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        background:#04070b; color:#eafaff; padding:32px clamp(16px,4vw,56px) 80px; }
+  h1.page{ font-size:22px; font-weight:700; letter-spacing:-.01em; }
+  p.lede{ color:#6d8ba0; font-size:14px; margin-top:8px; max-width:74ch; line-height:1.55; }
+  code{ font-family:ui-monospace,monospace; font-size:12px; color:#5fe3ff; }
+  .legend{ display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; }
+  .lg{ display:flex; align-items:center; gap:7px; font-size:11px; color:#8fb0c4; padding:5px 10px; border-radius:8px; background:rgba(255,255,255,.02); border:1px solid rgba(53,224,255,.1); }
+  .dot{ width:10px; height:10px; border-radius:50%; }
+
+  .variant{ margin-top:30px; border-radius:20px; overflow:hidden; border:1px solid #10202e; }
+  .vhd{ padding:16px 20px; display:flex; align-items:baseline; gap:12px; border-bottom:1px solid #0e1c28; }
+  .vhd h2{ font-size:17px; font-weight:700; }
+  .vhd .r{ font-size:12px; color:#6d8ba0; }
+  .vhd .tag{ margin-left:auto; font-size:10px; letter-spacing:.1em; text-transform:uppercase; padding:4px 9px; border-radius:999px; }
+
+  /* shelf */
+  .stage{ padding:22px 20px 24px; position:relative; }
+  .shelf{ display:grid; grid-template-columns:repeat(auto-fill,minmax(128px,1fr)); gap:14px; position:relative; z-index:1; }
+  .gcard{ border-radius:13px; overflow:hidden; position:relative; transition:.2s; }
+  .cover{ aspect-ratio:3/4; display:flex; align-items:flex-end; padding:10px; font-size:13px; font-weight:700; line-height:1.15; color:#fff; text-shadow:0 1px 8px rgba(0,0,0,.85); }
+  .meta{ padding:8px 9px 11px; }
+  .tags{ font-size:9.5px; color:#5b7a8f; margin-bottom:7px; letter-spacing:.02em; }
+  .pill{ display:inline-flex; align-items:center; gap:4px; font-size:9.5px; font-weight:600; padding:3px 8px; border-radius:999px; }
+  .flagrow{ position:absolute; top:8px; right:8px; display:flex; gap:4px; z-index:2; }
+  .flag{ width:22px; height:22px; border-radius:7px; display:flex; align-items:center; justify-content:center; font-size:11px; backdrop-filter:blur(6px); }
+
+  .barrow{ display:flex; flex-wrap:wrap; gap:7px; align-items:center; margin-top:22px; position:relative; z-index:1; }
+  .fpill{ font-size:11px; padding:6px 12px; border-radius:999px; }
+  .search{ margin-left:auto; font-size:12px; padding:7px 14px; border-radius:999px; color:#6d8ba0; }
+</style>
+
+<h1 class="page">Neon Grid — <span style="color:#5fe3ff;">#2 Cyan Circuit</span> × <span style="color:#ff6cae;">#4 Grid Runner</span></h1>
+<p class="lede">Cool electric-cyan base does all the everyday work (legible across a wall of covers). A faint Tron grid lives in the void. Hot <code style="color:#ff6cae;">#ff2e88</code> magenta is held in reserve for the one state that's rare and hot — <b>Playing</b> — so your 1–3 active games burn like embers in a cool library. Two intensities below: same palette, different loudness. Tell me where to land.</p>
+
+<div class="legend">
+  <span class="lg"><span class="dot" style="background:#ff5ca8;box-shadow:0 0 8px #ff2e88;"></span> Magenta = <b style="color:#ff8bc2;">Playing now</b> (rare)</span>
+  <span class="lg"><span class="dot" style="background:#35e0ff;box-shadow:0 0 8px #12b3ff;"></span> Cyan = selection / focus / Up next / filters</span>
+  <span class="lg"><span class="dot" style="background:#d6e6f5;"></span> Silver = Platinum (earned)</span>
+  <span class="lg"><span class="dot" style="background:#3d556680;"></span> Grey = Not started / dormant</span>
+</div>
+
+<!-- ============ VARIANT A — TUNED ============ -->
+<div class="variant" style="background:
+     linear-gradient(#04070b,#04070b) padding-box;">
+  <div class="vhd">
+    <h2>A · Neon Grid</h2><span class="r">the tuned merge — grid whispers, glow is seasoning</span>
+    <span class="tag" style="background:rgba(53,224,255,.12);color:#5fe3ff;">recommended</span>
+  </div>
+  <div class="stage" style="background:
+        radial-gradient(120% 90% at 50% -20%, rgba(18,60,90,.35), transparent 60%),
+        linear-gradient(rgba(53,224,255,.028) 1px, transparent 1px) 0 0/100% 34px,
+        linear-gradient(90deg, rgba(53,224,255,.028) 1px, transparent 1px) 0 0/34px 100%,
+        #060b11;">
+    <div class="shelf">
+      <!-- Playing = magenta ember -->
+      <div class="gcard" style="background:#0b1622;border:1px solid #163043;box-shadow:0 0 22px rgba(255,46,136,.14);">
+        <div class="cover" style="background:linear-gradient(150deg,#3a1030,#0f0616);">Returnal</div>
+        <div class="flagrow"><div class="flag" style="background:rgba(255,46,136,.22);color:#ff8bc2;">▸</div></div>
+        <div class="meta"><div class="tags">Roguelike · Shooter</div>
+          <span class="pill" style="background:rgba(255,46,136,.16);color:#ff7ab8;border:1px solid rgba(255,46,136,.5);box-shadow:0 0 12px rgba(255,46,136,.4);">◆ Playing</span></div>
+      </div>
+      <!-- Up next = cyan -->
+      <div class="gcard" style="background:#0b1622;border:1px solid #163043;">
+        <div class="cover" style="background:linear-gradient(150deg,#123a52,#07161f);">Stellar Blade</div>
+        <div class="flagrow"><div class="flag" style="background:rgba(53,224,255,.16);color:#7fecff;">◈</div></div>
+        <div class="meta"><div class="tags">Action · Sci-fi</div>
+          <span class="pill" style="background:rgba(53,224,255,.13);color:#5fe3ff;border:1px solid rgba(53,224,255,.42);">▸ Up next</span></div>
+      </div>
+      <!-- Platinum = silver -->
+      <div class="gcard" style="background:#0b1622;border:1px solid #163043;">
+        <div class="cover" style="background:linear-gradient(150deg,#26333f,#0c141b);">Elden Ring</div>
+        <div class="meta"><div class="tags">Action RPG · Open world</div>
+          <span class="pill" style="background:rgba(214,230,245,.12);color:#d6e6f5;border:1px solid rgba(214,230,245,.38);box-shadow:0 0 9px rgba(214,230,245,.18);">🏆 Platinum</span></div>
+      </div>
+      <!-- Not started = grey -->
+      <div class="gcard" style="background:#0b1622;border:1px solid #14232f;">
+        <div class="cover" style="background:linear-gradient(150deg,#1c2833,#0a1016);opacity:.9;">Astro Bot</div>
+        <div class="flagrow"><div class="flag" style="background:rgba(53,224,255,.12);color:#6cc6e6;">+</div></div>
+        <div class="meta"><div class="tags">Platformer</div>
+          <span class="pill" style="background:rgba(255,255,255,.04);color:#6f8296;border:1px solid rgba(255,255,255,.08);">Not started</span></div>
+      </div>
+      <!-- Paused = dim steel -->
+      <div class="gcard" style="background:#0b1622;border:1px solid #14232f;">
+        <div class="cover" style="background:linear-gradient(150deg,#2a2438,#0e0c16);opacity:.92;">Cyberpunk 2077</div>
+        <div class="meta"><div class="tags">RPG · Open world</div>
+          <span class="pill" style="background:rgba(90,120,150,.14);color:#9db4c8;border:1px solid rgba(90,120,150,.32);">❚❚ Paused</span></div>
+      </div>
+    </div>
+    <div class="barrow">
+      <span class="fpill" style="background:#12b3ff;color:#04121b;font-weight:700;box-shadow:0 0 14px rgba(53,224,255,.5);">Owned</span>
+      <span class="fpill" style="background:rgba(255,255,255,.04);color:#7f95a8;border:1px solid rgba(53,224,255,.16);">Wishlisted</span>
+      <span class="fpill" style="background:rgba(255,255,255,.04);color:#7f95a8;border:1px solid rgba(53,224,255,.16);">Playable now</span>
+      <span class="fpill" style="background:rgba(255,255,255,.04);color:#7f95a8;border:1px solid rgba(53,224,255,.16);">Released</span>
+      <span class="search" style="border:1px solid rgba(53,224,255,.2);background:rgba(6,12,18,.6);">⌕  search the whole library…</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============ VARIANT B — OVERDRIVE ============ -->
+<div class="variant" style="background:#04070b;">
+  <div class="vhd">
+    <h2>B · Overdrive</h2><span class="r">louder — grid visible, glows bloom, magenta pushes harder</span>
+    <span class="tag" style="background:rgba(255,46,136,.14);color:#ff8bc2;">max arcade</span>
+  </div>
+  <div class="stage" style="background:
+        radial-gradient(130% 100% at 50% -10%, rgba(120,20,90,.28), transparent 55%),
+        radial-gradient(90% 70% at 50% -20%, rgba(18,80,120,.4), transparent 60%),
+        linear-gradient(rgba(53,224,255,.06) 1px, transparent 1px) 0 0/100% 30px,
+        linear-gradient(90deg, rgba(53,224,255,.06) 1px, transparent 1px) 0 0/30px 100%,
+        #05090f;">
+    <div class="shelf">
+      <div class="gcard" style="background:#0d0a1a;border:1px solid rgba(255,46,136,.35);box-shadow:0 0 34px rgba(255,46,136,.28);">
+        <div class="cover" style="background:linear-gradient(150deg,#48123c,#12061a);">Returnal</div>
+        <div class="flagrow"><div class="flag" style="background:rgba(255,46,136,.3);color:#ff9fce;">▸</div></div>
+        <div class="meta"><div class="tags" style="color:#a06f8e;">Roguelike · Shooter</div>
+          <span class="pill" style="background:rgba(255,46,136,.22);color:#ff8bc2;border:1px solid rgba(255,46,136,.7);box-shadow:0 0 18px rgba(255,46,136,.65);">◆ Playing</span></div>
+      </div>
+      <div class="gcard" style="background:#0a1424;border:1px solid rgba(53,224,255,.3);box-shadow:0 0 20px rgba(53,224,255,.15);">
+        <div class="cover" style="background:linear-gradient(150deg,#0e4468,#07161f);">Stellar Blade</div>
+        <div class="flagrow"><div class="flag" style="background:rgba(53,224,255,.24);color:#9ff2ff;">◈</div></div>
+        <div class="meta"><div class="tags" style="color:#4d8299;">Action · Sci-fi</div>
+          <span class="pill" style="background:rgba(53,224,255,.2);color:#7fecff;border:1px solid rgba(53,224,255,.65);box-shadow:0 0 14px rgba(53,224,255,.4);">▸ Up next</span></div>
+      </div>
+      <div class="gcard" style="background:#0a1424;border:1px solid rgba(214,230,245,.28);box-shadow:0 0 16px rgba(214,230,245,.14);">
+        <div class="cover" style="background:linear-gradient(150deg,#2b3946,#0c141b);">Elden Ring</div>
+        <div class="meta"><div class="tags" style="color:#4d8299;">Action RPG · Open world</div>
+          <span class="pill" style="background:rgba(214,230,245,.18);color:#eaf3fb;border:1px solid rgba(214,230,245,.6);box-shadow:0 0 14px rgba(214,230,245,.35);">🏆 Platinum</span></div>
+      </div>
+      <div class="gcard" style="background:#0a1424;border:1px solid #163043;">
+        <div class="cover" style="background:linear-gradient(150deg,#1c2833,#0a1016);">Astro Bot</div>
+        <div class="flagrow"><div class="flag" style="background:rgba(53,224,255,.18);color:#7fecff;">+</div></div>
+        <div class="meta"><div class="tags" style="color:#4d8299;">Platformer</div>
+          <span class="pill" style="background:rgba(255,255,255,.05);color:#7f95a8;border:1px solid rgba(255,255,255,.1);">Not started</span></div>
+      </div>
+      <div class="gcard" style="background:#0a1424;border:1px solid #163043;">
+        <div class="cover" style="background:linear-gradient(150deg,#2a2438,#0e0c16);">Cyberpunk 2077</div>
+        <div class="meta"><div class="tags" style="color:#4d8299;">RPG · Open world</div>
+          <span class="pill" style="background:rgba(90,130,165,.2);color:#b3cadd;border:1px solid rgba(90,130,165,.5);">❚❚ Paused</span></div>
+      </div>
+    </div>
+    <div class="barrow">
+      <span class="fpill" style="background:#12b3ff;color:#04121b;font-weight:700;box-shadow:0 0 20px rgba(53,224,255,.7);">Owned</span>
+      <span class="fpill" style="background:rgba(53,224,255,.06);color:#8fc9e6;border:1px solid rgba(53,224,255,.35);">Wishlisted</span>
+      <span class="fpill" style="background:rgba(53,224,255,.06);color:#8fc9e6;border:1px solid rgba(53,224,255,.35);">Playable now</span>
+      <span class="fpill" style="background:rgba(53,224,255,.06);color:#8fc9e6;border:1px solid rgba(53,224,255,.35);">Released</span>
+      <span class="search" style="border:1px solid rgba(53,224,255,.4);background:rgba(6,12,18,.7);box-shadow:inset 0 0 12px rgba(53,224,255,.12);">⌕  search the whole library…</span>
+    </div>
+  </div>
+</div>
+
+<p class="lede" style="margin-top:30px;">
+  Same hexes in both — <code>#12b3ff</code> electric blue, <code>#35e0ff</code> cyan glow, <code>#ff2e88</code> magenta, <code>#d6e6f5</code> platinum, on a <code>#05090f</code> void. <b>A</b> treats glow as seasoning and keeps the grid a whisper; <b>B</b> turns everything up toward the arcade cabinet. The real answer is probably a dial between them — tell me "A", "B", or "somewhere at X%".
+</p>
