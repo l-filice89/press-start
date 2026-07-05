@@ -26,9 +26,9 @@ _This file contains critical rules and patterns that AI agents must follow when 
 
 ## Technology Stack & Versions
 
-- **Target app (decided, not yet built):** **Bun** runtime — React frontend + Bun TypeScript backend. **Database: SQLite-flavored is a preference, not a constraint** (product brief 2026-07-05): the app must be hosted on a free tier with the app stateless and data managed externally, and *free hosting outranks SQLite* — architecture picks the DB (candidates: Turso/libSQL, Cloudflare D1, Neon/Supabase Postgres). SSR remains an open question for the architecture step; default recommendation is a React SPA served by the Bun backend.
+- **Target app (architecture decided 2026-07-05 — see `ARCHITECTURE-SPINE.md`):** **Cloudflare** single-vendor stack — one Worker (workerd/V8, TypeScript) serves a **React SPA** (Vite, Workers Static Assets) + a Hono JSON API; **Cloudflare D1** (SQLite) via binding; **Cron Triggers** for scheduled work. **Bun is demoted to a local dev toolchain only** (package manager, test runner, out-of-band scripts) — it is NOT the deployed runtime (AD-2). Runtime code must not use Bun-only APIs (`bun:sqlite`, Bun globals). SSR resolved: SPA, not SSR.
 - **Python 3.11 scripts are legacy/bootstrap-only** (`export_ps_catalog.py`, `update_ps_catalog.py`) — used to seed the database, then frozen. New functionality goes in Bun TS, never in Python.
-- **No test framework, linter, or formatter configured yet** — to be chosen at architecture time, not assumed.
+- **Test/lint/format decided (2026-07-05):** Vitest + `@cloudflare/vitest-pool-workers` for tests; **Biome** for lint+format. Other pinned tools: Drizzle ORM 0.45.x (D1), Hono, Zod, TanStack Query, better-auth (magic link), IGDB (games DB). See `ARCHITECTURE-SPINE.md` Stack table.
 
 ## Critical Implementation Rules
 
@@ -67,7 +67,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 
 - **Git repo is initialized but has zero commits and no remote yet.** Before the first commit: (1) scrub the hardcoded `SESSION_COOKIE` value from `export_ps_catalog.py`, (2) extend `.gitignore` with the SQLite DB file, `node_modules/`, and `.env`. Nothing has leaked yet — keep it that way.
 - The SQLite database file is **never committed** (contains the session cookie + personal library data).
-- React/Bun conventions (component structure, state management, testing, SSR-or-not) are **deliberately not defined here** — they'll be set by `bmad-architecture` and must not be invented ad hoc.
+- React/Cloudflare-Worker conventions (paradigm, boundaries, state model invariants, testing, SSR-or-not) are now **set by `ARCHITECTURE-SPINE.md`** (2026-07-05) — follow its ADs; do not invent conventions ad hoc.
 
 ### Critical Don't-Miss Rules
 
