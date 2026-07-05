@@ -1,0 +1,199 @@
+<meta charset="utf-8">
+<title>IA shell — PRESS START</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ font-family:Inter,system-ui,sans-serif; background:#05090f; color:#eafaff; padding:32px clamp(16px,4vw,48px) 90px;
+        background-image:radial-gradient(120% 90% at 50% -8%, rgba(18,80,120,.22), transparent 55%); }
+  h1.page{ font-size:21px; font-weight:700; }
+  .lede{ color:#6d8ba0; font-size:13.5px; margin-top:8px; max-width:78ch; line-height:1.55; }
+  code{ font-family:"JetBrains Mono",monospace; font-size:12px; color:#5fe3ff; }
+  .wm{ font-family:Orbitron; font-weight:900; letter-spacing:.03em; }
+  .wm .s{ color:#ff5ca8; }
+
+  .stage{ display:flex; gap:34px; margin-top:28px; flex-wrap:wrap; align-items:flex-start; }
+  .col{ }
+  .caption{ font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:#5fe3ff; margin-bottom:12px; }
+
+  /* ---------- phone ---------- */
+  .phone{ width:300px; height:600px; border-radius:34px; border:1px solid #1c3346; background:#060b12; position:relative; overflow:hidden;
+          background-image:linear-gradient(rgba(53,224,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(53,224,255,.04) 1px,transparent 1px); background-size:26px 26px; box-shadow:0 0 0 6px #0b1420, 0 24px 60px rgba(0,0,0,.5); }
+  .topbar{ padding:16px 16px 10px; display:flex; align-items:center; justify-content:space-between; }
+  .topbar .wm{ font-size:16px; }
+  .ps{ font-size:8px; font-family:"JetBrains Mono",monospace; color:#5f7d92; letter-spacing:.1em; }
+  .filters{ display:flex; gap:6px; padding:0 14px 12px; flex-wrap:wrap; }
+  .fp{ font-size:9px; padding:4px 9px; border-radius:999px; font-family:Orbitron; font-weight:600; letter-spacing:.03em; }
+  .fp.on{ background:#12b3ff; color:#04121b; box-shadow:0 0 12px rgba(53,224,255,.5); }
+  .fp.off{ background:rgba(255,255,255,.04); color:#7f95a8; border:1px solid rgba(53,224,255,.22); }
+  .grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:9px; padding:0 14px; }
+  .cover{ aspect-ratio:3/4; border-radius:8px; position:relative; display:flex; align-items:flex-end; padding:5px; font-size:8px; font-weight:700; color:#fff; font-family:Orbitron; line-height:1.05; text-shadow:0 1px 4px #000; }
+  .cover .st{ position:absolute; top:4px; left:4px; width:7px; height:7px; border-radius:50%; }
+  .st.play{ background:#ff5ca8; box-shadow:0 0 7px #ff2e88; }
+  .st.next{ background:#5fe3ff; box-shadow:0 0 7px #12b3ff; }
+  .st.plat{ background:#d6e6f5; box-shadow:0 0 6px #d6e6f5; }
+  .st.grey{ background:#3d5566; }
+
+  /* persistent search - bottom */
+  .searchbar{ position:absolute; left:14px; right:70px; bottom:18px; height:42px; border-radius:999px; border:1px solid rgba(53,224,255,.35);
+              background:rgba(6,12,20,.9); display:flex; align-items:center; gap:8px; padding:0 15px; color:#6d8ba0; font-size:12px; box-shadow:0 0 18px rgba(53,224,255,.14); backdrop-filter:blur(4px); }
+  /* FAB */
+  .fab{ position:absolute; right:16px; bottom:16px; width:46px; height:46px; border-radius:16px; background:linear-gradient(150deg,#12b3ff,#0070cc);
+        display:flex; align-items:center; justify-content:center; font-size:22px; color:#04121b; font-weight:700; box-shadow:0 0 22px rgba(53,224,255,.55); }
+
+  /* FAB drawer (in second phone) */
+  .drawer{ position:absolute; right:16px; bottom:70px; display:flex; flex-direction:column; gap:9px; align-items:flex-end; }
+  .di{ display:flex; align-items:center; gap:9px; }
+  .di .lbl2{ font-size:9px; font-family:Orbitron; font-weight:600; background:rgba(6,12,20,.9); padding:4px 8px; border-radius:7px; border:1px solid #1c3346; color:#cfe6f2; letter-spacing:.03em; white-space:nowrap; }
+  .di .ic{ width:40px; height:40px; border-radius:13px; background:rgba(10,20,32,.95); border:1px solid rgba(53,224,255,.3); display:flex; align-items:center; justify-content:center; font-size:16px; box-shadow:0 0 12px rgba(53,224,255,.18); }
+  .di .ic.badge::after{ content:"3"; position:absolute; margin:-26px 0 0 22px; font-size:8px; font-family:"JetBrains Mono",monospace; background:#ff2e88; color:#fff; width:14px; height:14px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 0 8px #ff2e88; }
+  .scrim{ position:absolute; inset:0; background:rgba(2,5,9,.55); backdrop-filter:blur(2px); }
+
+  /* search-as-add dropdown (third phone) */
+  .sheet{ position:absolute; left:12px; right:12px; bottom:70px; background:rgba(8,14,22,.98); border:1px solid rgba(53,224,255,.3); border-radius:16px; overflow:hidden; box-shadow:0 0 30px rgba(53,224,255,.15); }
+  .sr{ display:flex; align-items:center; gap:9px; padding:10px 13px; border-bottom:1px solid #10202e; font-size:11px; }
+  .sr .th{ width:26px; height:34px; border-radius:5px; flex:none; }
+  .sr .add{ color:#5fe3ff; font-family:Orbitron; font-weight:700; font-size:11px; }
+  .sr small{ display:block; color:#5f7d92; font-size:9px; margin-top:2px; }
+
+  /* ---------- desktop ---------- */
+  .desk{ flex:1; min-width:340px; border:1px solid #1c3346; border-radius:16px; overflow:hidden; background:#060b12;
+         background-image:linear-gradient(rgba(53,224,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(53,224,255,.035) 1px,transparent 1px); background-size:30px 30px; box-shadow:0 20px 50px rgba(0,0,0,.45); }
+  .dtop{ display:flex; align-items:center; gap:16px; padding:16px 20px; border-bottom:1px solid #0e1c28; }
+  .dtop .wm{ font-size:20px; }
+  .dsearch{ flex:1; max-width:360px; height:38px; border-radius:999px; border:1px solid rgba(53,224,255,.32); background:rgba(6,12,20,.7); display:flex; align-items:center; gap:8px; padding:0 15px; color:#6d8ba0; font-size:12px; }
+  .dtag{ margin-left:auto; font-family:"JetBrains Mono",monospace; font-size:9px; color:#5f7d92; letter-spacing:.08em; }
+  .dfilters{ display:flex; gap:7px; padding:12px 20px; flex-wrap:wrap; border-bottom:1px solid #0e1c28; }
+  .dgrid{ display:grid; grid-template-columns:repeat(5,1fr); gap:12px; padding:16px 20px; }
+  /* desktop FAB w/ text drawer */
+  .dfab{ position:relative; }
+  .ddrawer{ position:absolute; right:20px; bottom:18px; display:flex; flex-direction:column; gap:8px; align-items:stretch; width:172px; }
+  .ddi{ display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:11px; background:rgba(10,20,32,.96); border:1px solid rgba(53,224,255,.26); font-size:12px; color:#cfe6f2; }
+  .ddi .ic{ font-size:15px; }
+  .ddi .bd{ margin-left:auto; font-family:"JetBrains Mono",monospace; font-size:9px; background:#ff2e88; color:#fff; padding:1px 6px; border-radius:999px; box-shadow:0 0 8px #ff2e88; }
+  .dfabbtn{ position:absolute; right:20px; bottom:18px; }
+
+  .note{ margin-top:12px; font-size:11.5px; color:#5f7d92; line-height:1.5; max-width:640px; }
+  .key{ display:flex; gap:16px; flex-wrap:wrap; margin-top:18px; font-size:11px; color:#8fb0c4; }
+  .key span{ display:flex; align-items:center; gap:6px; }
+  .kd{ width:9px; height:9px; border-radius:50%; }
+</style>
+
+<h1 class="page">The shell — where everything lives</h1>
+<p class="lede">Mid-fidelity, real theme, structure not final layout. The whole app is <b>one screen</b>: the shelf, a persistent search bar, and a FAB. Two homes for actions — <b class="wm" style="font-size:13px;">SEARCH</b> is your zero-hop "find or add," the <b>FAB drawer</b> holds the rare chores. Three phone states show the flow; desktop shows the icons+text drawer.</p>
+
+<div class="key">
+  <span><span class="kd" style="background:#ff5ca8;box-shadow:0 0 6px #ff2e88;"></span>Playing</span>
+  <span><span class="kd" style="background:#5fe3ff;box-shadow:0 0 6px #12b3ff;"></span>Up next</span>
+  <span><span class="kd" style="background:#d6e6f5;"></span>Platinum</span>
+  <span><span class="kd" style="background:#3d5566;"></span>Not started</span>
+</div>
+
+<div class="stage">
+
+  <!-- PHONE 1: home -->
+  <div class="col">
+    <div class="caption">1 · Home — shelf + search + FAB</div>
+    <div class="phone">
+      <div class="topbar"><div class="wm">PRESS <span class="s">START</span></div><div class="ps">175 · 52 OWNED</div></div>
+      <div class="filters">
+        <span class="fp on">PLAYING</span><span class="fp off">UP NEXT</span><span class="fp off">OWNED</span><span class="fp off">PLAYABLE</span>
+      </div>
+      <div class="grid">
+        <div class="cover" style="background:linear-gradient(150deg,#48123c,#12061a);box-shadow:0 0 14px rgba(255,46,136,.2);"><span class="st play"></span>Returnal</div>
+        <div class="cover" style="background:linear-gradient(150deg,#0e4468,#07161f);"><span class="st next"></span>Stellar</div>
+        <div class="cover" style="background:linear-gradient(150deg,#26333f,#0c141b);"><span class="st plat"></span>Elden</div>
+        <div class="cover" style="background:linear-gradient(150deg,#1c2833,#0a1016);"><span class="st grey"></span>Astro</div>
+        <div class="cover" style="background:linear-gradient(150deg,#2a2438,#0e0c16);"><span class="st grey"></span>Cyber</div>
+        <div class="cover" style="background:linear-gradient(150deg,#123049,#0a1622);"><span class="st next"></span>GoW</div>
+        <div class="cover" style="background:linear-gradient(150deg,#2a2320,#14100d);"><span class="st grey"></span>Hades</div>
+        <div class="cover" style="background:linear-gradient(150deg,#173a2e,#0a1a14);"><span class="st play"></span>Balatro</div>
+        <div class="cover" style="background:linear-gradient(150deg,#3a2410,#160d05);"><span class="st grey"></span>Sifu</div>
+      </div>
+      <div class="searchbar">⌕ &nbsp;Search or add a game…</div>
+      <div class="fab">＋</div>
+    </div>
+    <div class="note">Search bar always sits under your thumb. FAB is the chores menu — deliberately <i>not</i> where Add lives.</div>
+  </div>
+
+  <!-- PHONE 2: FAB drawer open -->
+  <div class="col">
+    <div class="caption">2 · FAB tapped — chores drawer</div>
+    <div class="phone">
+      <div class="topbar"><div class="wm">PRESS <span class="s">START</span></div><div class="ps">175 · 52 OWNED</div></div>
+      <div class="filters"><span class="fp on">PLAYING</span><span class="fp off">UP NEXT</span><span class="fp off">OWNED</span><span class="fp off">PLAYABLE</span></div>
+      <div class="grid" style="opacity:.5;">
+        <div class="cover" style="background:linear-gradient(150deg,#48123c,#12061a);">Returnal</div>
+        <div class="cover" style="background:linear-gradient(150deg,#0e4468,#07161f);">Stellar</div>
+        <div class="cover" style="background:linear-gradient(150deg,#26333f,#0c141b);">Elden</div>
+        <div class="cover" style="background:linear-gradient(150deg,#1c2833,#0a1016);">Astro</div>
+        <div class="cover" style="background:linear-gradient(150deg,#2a2438,#0e0c16);">Cyber</div>
+        <div class="cover" style="background:linear-gradient(150deg,#123049,#0a1622);">GoW</div>
+      </div>
+      <div class="scrim"></div>
+      <div class="drawer">
+        <div class="di"><span class="lbl2">Sync library</span><span class="ic">⟳</span></div>
+        <div class="di"><span class="lbl2">Check PS+ Extra</span><span class="ic">◈</span></div>
+        <div class="di"><span class="lbl2">Stragglers</span><span class="ic badge" style="position:relative;">⚑</span></div>
+        <div class="di"><span class="lbl2">Export CSV</span><span class="ic">⭳</span></div>
+        <div class="di"><span class="lbl2">Settings</span><span class="ic">⚙</span></div>
+      </div>
+      <div class="fab" style="background:linear-gradient(150deg,#0a1424,#0a1424);border:1px solid rgba(53,224,255,.5);color:#5fe3ff;">✕</div>
+    </div>
+    <div class="note">Icons only. Each opens a <b>modal</b>. Stragglers carries a magenta count badge when import left leftovers.</div>
+  </div>
+
+  <!-- PHONE 3: search-as-add -->
+  <div class="col">
+    <div class="caption">3 · Typing in search = find OR add</div>
+    <div class="phone">
+      <div class="topbar"><div class="wm">PRESS <span class="s">START</span></div><div class="ps">175 · 52 OWNED</div></div>
+      <div class="scrim" style="background:rgba(2,5,9,.4);"></div>
+      <div class="sheet">
+        <div class="sr"><div class="th" style="background:linear-gradient(150deg,#1c2833,#0a1016);"></div><div><b>Astro Bot</b><small style="color:#5fe3ff;">● in your library — Not started</small></div></div>
+        <div class="sr"><div class="th" style="background:linear-gradient(150deg,#123a52,#07161f);"></div><div>Astro's Playroom<small>in your library — Platinum 🏆</small></div></div>
+        <div class="sr" style="border-bottom:none;background:rgba(53,224,255,.06);"><div class="th" style="background:rgba(53,224,255,.12);border:1px dashed rgba(53,224,255,.5);display:flex;align-items:center;justify-content:center;color:#5fe3ff;">＋</div><div><span class="add">＋ Add "Astro Bot Rescue Mission"</span><small>search the games database →</small></div></div>
+      </div>
+      <div class="searchbar" style="border-color:rgba(53,224,255,.6);color:#eafaff;box-shadow:0 0 22px rgba(53,224,255,.25);">⌕ &nbsp;Astro Bot|</div>
+      <div class="fab">＋</div>
+    </div>
+    <div class="note">Existing games jump to their detail (FR-42). No match → <b>＋ Add</b> row opens the preview→Save modal. Zero FAB hops.</div>
+  </div>
+
+</div>
+
+<!-- DESKTOP -->
+<div class="caption" style="margin-top:36px;">Desktop — same shell, drawer gains labels</div>
+<div class="desk dfab">
+  <div class="dtop">
+    <div class="wm">PRESS <span class="s">START</span></div>
+    <div class="dsearch">⌕ &nbsp;Search or add a game…</div>
+    <div class="dtag">PS+ CATALOG AS OF 2026·07·03</div>
+  </div>
+  <div class="dfilters">
+    <span class="fp on">PLAYING</span><span class="fp off">UP NEXT</span><span class="fp off">PAUSED</span><span class="fp off">NOT STARTED</span>
+    <span class="fp off" style="margin-left:8px;">OWNED</span><span class="fp off">WISHLISTED</span><span class="fp off">PLAYABLE NOW</span>
+  </div>
+  <div class="dgrid">
+    <div class="cover" style="aspect-ratio:3/4;background:linear-gradient(150deg,#48123c,#12061a);box-shadow:0 0 16px rgba(255,46,136,.2);"><span class="st play"></span>Returnal</div>
+    <div class="cover" style="aspect-ratio:3/4;background:linear-gradient(150deg,#0e4468,#07161f);"><span class="st next"></span>Stellar Blade</div>
+    <div class="cover" style="aspect-ratio:3/4;background:linear-gradient(150deg,#26333f,#0c141b);"><span class="st plat"></span>Elden Ring</div>
+    <div class="cover" style="aspect-ratio:3/4;background:linear-gradient(150deg,#1c2833,#0a1016);"><span class="st grey"></span>Astro Bot</div>
+    <div class="cover" style="aspect-ratio:3/4;background:linear-gradient(150deg,#2a2438,#0e0c16);"><span class="st grey"></span>Cyberpunk</div>
+  </div>
+  <!-- desktop drawer open, with labels -->
+  <div class="ddrawer">
+    <div class="ddi"><span class="ic">⟳</span> Sync library</div>
+    <div class="ddi"><span class="ic">◈</span> Check PS+ Extra</div>
+    <div class="ddi"><span class="ic">⚑</span> Stragglers <span class="bd">3</span></div>
+    <div class="ddi"><span class="ic">⭳</span> Export CSV</div>
+    <div class="ddi"><span class="ic">⚙</span> Settings</div>
+  </div>
+  <div class="fab dfabbtn" style="background:linear-gradient(150deg,#0a1424,#0a1424);border:1px solid rgba(53,224,255,.5);color:#5fe3ff;">✕</div>
+</div>
+<div class="note">Same structure, more room: the drawer shows icons + text, search sits top-left, the <code>PS+ as of…</code> readout rides the header.</div>
+
+<p class="lede" style="margin-top:26px;">
+  <b>The call is yours:</b> keep Add <i>only</i> in search (fastest, my rec), keep it <i>only</i> in the FAB drawer (your original — one consistent menu for everything), or <b>both</b> (search for speed + a redundant "＋ Add game" in the drawer for discoverability). Also worth a gut-check: FAB bottom-<b>right</b> as drawn, or bottom-left? And do the drawer chores feel complete — Sync · PS+ · Stragglers · Export · Settings — or is something missing?
+</p>
