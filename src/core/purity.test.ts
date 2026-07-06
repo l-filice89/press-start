@@ -25,9 +25,24 @@ const BANNED_PATTERNS: { label: string; pattern: RegExp }[] = [
 		label: 'an import from a providers/ module',
 		pattern: /from\s+['"][^'"]*\bproviders\//,
 	},
+	{
+		label:
+			'a dynamic import()/require() of drizzle-orm, repositories/, or providers/',
+		pattern:
+			/(?:import|require)\s*\(\s*['"][^'"]*(?:drizzle-orm|\/repositories\/|\/providers\/)/,
+	},
 	{ label: 'a global fetch() call', pattern: /(?<![.\w])fetch\s*\(/ },
+	{ label: 'a fetch() call via globalThis', pattern: /globalThis\.fetch\s*\(/ },
 	{ label: 'a D1Database type reference', pattern: /\bD1Database\b/ },
 	{ label: 'a D1 binding read via env.DB', pattern: /\benv\.DB\b/ },
+	{
+		label: 'a D1 binding read via env[\'DB\']/env["DB"]',
+		pattern: /\benv\s*\[\s*['"]DB['"]\s*\]/,
+	},
+	{
+		label: 'a destructured DB binding off env/c.env',
+		pattern: /\{\s*(?:[^}]*,\s*)?DB\s*(?:,[^}]*)?\}\s*=\s*(?:c\.)?env\b/,
+	},
 ];
 
 function listCoreSourceFiles(dir: string): string[] {

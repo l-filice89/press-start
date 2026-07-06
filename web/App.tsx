@@ -48,7 +48,8 @@ function App() {
 							onClick={() => {
 								fetch('/api/health')
 									.then((res) => res.json())
-									.then((data: { status: string }) => setHealth(data.status));
+									.then((data: { status: string }) => setHealth(data.status))
+									.catch(() => setHealth('error'));
 							}}
 							aria-label="check API health"
 						>

@@ -17,6 +17,8 @@ import sys
 
 from export_ps_catalog import (
     CSV_COLUMNS,
+    MISSING_COOKIE_HELP,
+    SESSION_COOKIE,
     dedupe_games,
     fetch_all_games,
     to_csv_row,
@@ -24,6 +26,9 @@ from export_ps_catalog import (
 
 
 def main() -> None:
+    if not SESSION_COOKIE:
+        raise SystemExit(MISSING_COOKIE_HELP)
+
     csv_path = sys.argv[1] if len(sys.argv) > 1 else "ps_catalog.csv"
 
     if not os.path.exists(csv_path):

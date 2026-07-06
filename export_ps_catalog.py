@@ -20,9 +20,7 @@ import urllib.request
 # literal in version control going forward.)
 SESSION_COOKIE = os.environ.get("PSN_SESSION_COOKIE", "")
 
-COOKIE_HELP = """\
-WARNING: PlayStation rejected the request (HTTP {code}) — your session cookie
-has most likely expired. To refresh it:
+_COOKIE_INSTRUCTIONS = """\
   1. Log in at https://library.playstation.com
   2. Open DevTools (F12) > Application > Cookies > https://library.playstation.com
   3. Copy the value of the `pdccws_p` cookie
@@ -31,15 +29,14 @@ has most likely expired. To refresh it:
        $env:PSN_SESSION_COOKIE = "<value>"   # PowerShell\
 """
 
-MISSING_COOKIE_HELP = """\
-ERROR: PSN_SESSION_COOKIE is not set. To obtain it:
-  1. Log in at https://library.playstation.com
-  2. Open DevTools (F12) > Application > Cookies > https://library.playstation.com
-  3. Copy the value of the `pdccws_p` cookie
-  4. Set it as the PSN_SESSION_COOKIE environment variable, e.g.:
-       export PSN_SESSION_COOKIE="<value>"   # macOS/Linux
-       $env:PSN_SESSION_COOKIE = "<value>"   # PowerShell\
-"""
+COOKIE_HELP = (
+    "WARNING: PlayStation rejected the request (HTTP {code}) — your session "
+    f"cookie has most likely expired. To refresh it:\n{_COOKIE_INSTRUCTIONS}"
+)
+
+MISSING_COOKIE_HELP = (
+    f"ERROR: PSN_SESSION_COOKIE is not set. To obtain it:\n{_COOKIE_INSTRUCTIONS}"
+)
 
 API_URL = "https://web.np.playstation.com/api/graphql/v1/op"
 OPERATION = "getPurchasedGameList"

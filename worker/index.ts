@@ -15,6 +15,15 @@ const app = new Hono<{ Bindings: Env }>();
 
 app.route('/api', apiRoutes);
 
+// `app.route()` only merges apiRoutes' own registered paths into this
+// router — an unmatched path under /api/* (wrong method, unknown route)
+// does NOT fall through to apiRoutes' own notFound handler, it falls
+// through to the next handler registered here. Without this catch-all,
+// that would be the ASSETS fallback below, silently returning index.html
+// (or throwing, since ASSETS isn't bound in the test environment) for a
+// request that should always resolve to JSON.
+app.all('/api/*', (c) => c.json({ error: 'not found' }, 404));
+
 app.all('*', (c) => c.env.ASSETS.fetch(c.req.raw));
 
 export default app;
