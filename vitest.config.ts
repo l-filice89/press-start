@@ -1,0 +1,41 @@
+import {
+	cloudflareTest,
+	readD1Migrations,
+} from '@cloudflare/vitest-pool-workers';
+import { defineConfig } from 'vitest/config';
+
+/**
+ * D1 migrations are read here (Node.js context, at config time) and handed
+ * to the "workers" project's tests via `provide`/`inject`, so integration
+ * tests can apply them to the in-test D1 binding with `applyD1Migrations()`
+ * from `cloudflare:test` (see `test/integration/health.test.ts`). This keeps
+ * the test D1 schema-current with `migrations/` without ever migrating at
+ * Worker startup (AD-16).
+ */
+const migrations = await readD1Migrations('./migrations');
+
+export default defineConfig({
+	test: {
+		projects: [
+			{
+				test: {
+					name: 'unit',
+					environment: 'node',
+					include: ['src/core/**/*.test.ts'],
+				},
+			},
+			{
+				plugins: [
+					cloudflareTest({
+						wrangler: { configPath: './wrangler.jsonc' },
+					}),
+				],
+				test: {
+					name: 'workers',
+					include: ['test/integration/**/*.test.ts'],
+					provide: { migrations },
+				},
+			},
+		],
+	},
+});

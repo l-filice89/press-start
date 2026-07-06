@@ -1,0 +1,11 @@
+import { Hono } from 'hono';
+import { healthRoute } from './health';
+
+/**
+ * Aggregates every Hono route module under `/api/*`. The Worker composition
+ * root (`worker/index.ts`) mounts this ahead of the static-asset/SPA
+ * fallback, so `/api/*` always resolves to JSON, never `index.html`.
+ */
+export const apiRoutes = new Hono<{ Bindings: Env }>();
+
+apiRoutes.route('/', healthRoute);
