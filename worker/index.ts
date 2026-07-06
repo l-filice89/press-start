@@ -1,0 +1,20 @@
+import { Hono } from 'hono';
+import { apiRoutes } from '../src/routes';
+
+/**
+ * The Worker is the composition root (AD-1): one deploy serves both the
+ * React SPA (Workers Static Assets) and the Hono JSON API.
+ *
+ * `/api/*` is mounted ahead of the static-asset fallback, so it always
+ * resolves to JSON — never `index.html`. Everything else falls through to
+ * `env.ASSETS.fetch()`, which serves the built SPA and, per
+ * `wrangler.jsonc`'s `assets.not_found_handling: "single-page-application"`,
+ * serves `index.html` for any deep client route that isn't a real asset file.
+ */
+const app = new Hono<{ Bindings: Env }>();
+
+app.route('/api', apiRoutes);
+
+app.all('*', (c) => c.env.ASSETS.fetch(c.req.raw));
+
+export default app;

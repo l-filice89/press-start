@@ -9,11 +9,16 @@ below for how to obtain/refresh it.
 
 import csv
 import json
+import os
 import sys
 import urllib.parse
 import urllib.request
 
-SESSION_COOKIE = "s%3AlTpZpBSCuSvAzB919pUrX6ipO4a723EU.pi%2FVHQqQ1InYRpbmeyt3CK0B6ZGQZpTYChUjkHhpFqU"
+# Read from the environment — never hardcode a session cookie in source.
+# (The value is a short-lived, self-expiring PS session cookie that PS
+# rotates regularly, not a durable secret — but it still shouldn't be a
+# literal in version control going forward.)
+SESSION_COOKIE = os.environ.get("PSN_SESSION_COOKIE", "")
 
 COOKIE_HELP = """\
 WARNING: PlayStation rejected the request (HTTP {code}) — your session cookie
@@ -21,7 +26,19 @@ has most likely expired. To refresh it:
   1. Log in at https://library.playstation.com
   2. Open DevTools (F12) > Application > Cookies > https://library.playstation.com
   3. Copy the value of the `pdccws_p` cookie
-  4. Paste it into SESSION_COOKIE at the top of export_ps_catalog.py\
+  4. Set it as the PSN_SESSION_COOKIE environment variable, e.g.:
+       export PSN_SESSION_COOKIE="<value>"   # macOS/Linux
+       $env:PSN_SESSION_COOKIE = "<value>"   # PowerShell\
+"""
+
+MISSING_COOKIE_HELP = """\
+ERROR: PSN_SESSION_COOKIE is not set. To obtain it:
+  1. Log in at https://library.playstation.com
+  2. Open DevTools (F12) > Application > Cookies > https://library.playstation.com
+  3. Copy the value of the `pdccws_p` cookie
+  4. Set it as the PSN_SESSION_COOKIE environment variable, e.g.:
+       export PSN_SESSION_COOKIE="<value>"   # macOS/Linux
+       $env:PSN_SESSION_COOKIE = "<value>"   # PowerShell\
 """
 
 API_URL = "https://web.np.playstation.com/api/graphql/v1/op"
@@ -131,6 +148,9 @@ def to_csv_row(game: dict) -> dict:
 
 
 def main() -> None:
+    if not SESSION_COOKIE:
+        raise SystemExit(MISSING_COOKIE_HELP)
+
     output_path = sys.argv[1] if len(sys.argv) > 1 else "ps_catalog.csv"
 
     # No dedupe here: PS4/PS5 collapsing belongs to the importer (PRD FR-27),

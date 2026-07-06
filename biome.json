@@ -1,0 +1,76 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.5.2/schema.json",
+	"vcs": {
+		"enabled": true,
+		"clientKind": "git",
+		"useIgnoreFile": true
+	},
+	"files": {
+		"ignoreUnknown": false,
+		"includes": [
+			"src/**",
+			"web/**",
+			"worker/**",
+			"test/**",
+			"*.json",
+			"*.jsonc",
+			"*.ts",
+			"!**/worker-configuration.d.ts",
+			"!migrations/meta",
+			"!web/assets"
+		]
+	},
+	"formatter": {
+		"enabled": true,
+		"indentStyle": "tab"
+	},
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"preset": "recommended"
+		}
+	},
+	"javascript": {
+		"formatter": {
+			"quoteStyle": "single"
+		}
+	},
+	"assist": {
+		"enabled": true,
+		"actions": {
+			"source": {
+				"organizeImports": "on"
+			}
+		}
+	},
+	"overrides": [
+		{
+			"includes": ["src/core/**"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"patterns": [
+									{
+										"group": ["drizzle-orm", "drizzle-orm/**"],
+										"message": "core/ is I/O-free (AD-3): no drizzle-orm imports."
+									},
+									{
+										"group": ["**/repositories/**", "**/repositories"],
+										"message": "core/ is I/O-free (AD-3): no repositories/ imports — that's the persistence seam (AD-4)."
+									},
+									{
+										"group": ["**/providers/**", "**/providers"],
+										"message": "core/ is I/O-free (AD-3): no providers/ imports — that's the external-I/O seam (AD-5)."
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		}
+	]
+}
