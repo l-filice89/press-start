@@ -2,8 +2,9 @@
 title: 'Deployable project scaffold & CI/CD'
 type: 'feature'
 created: '2026-07-06'
-status: 'in-review'
+status: 'done'
 baseline_revision: '031869a00308ddaafcdfa44d0f867abed6e22e68'
+final_revision: '30ea85e4ff54220762f2c9e9dd1034d78cb09acb'
 review_loop_iteration: 0
 followup_review_recommended: true
 context: ['{project-root}/_bmad-output/implementation-artifacts/1-1-deployable-project-scaffold-ci-cd.md', '{project-root}/.bmad-loop/policy.toml']
