@@ -28,6 +28,15 @@ export default defineConfig({
 				plugins: [
 					cloudflareTest({
 						wrangler: { configPath: './wrangler.jsonc' },
+						miniflare: {
+							// Test-only secret: production/dev get BETTER_AUTH_SECRET
+							// from Wrangler secrets / `.dev.vars`, which don't exist in
+							// the test environment (CI has no `.dev.vars`).
+							bindings: {
+								BETTER_AUTH_SECRET:
+									'vitest-only-better-auth-secret-0123456789abcdef',
+							},
+						},
 					}),
 				],
 				test: {

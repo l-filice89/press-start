@@ -1,0 +1,15 @@
+# Local dev secrets — copy to `.dev.vars` (gitignored) and fill in.
+# Production equivalents are Wrangler secrets:
+#   bunx wrangler secret put BETTER_AUTH_SECRET
+#   bunx wrangler secret put RESEND_API_KEY   (optional — without it the
+#                                              magic link is logged to the
+#                                              worker console instead)
+# NOTE: `bun run cf-typegen` reads `.dev.vars` when generating
+# `worker-configuration.d.ts`, so keep both keys present locally (an empty
+# RESEND_API_KEY is fine) or the Env secret types will be dropped.
+
+# Any long random string; sign/encrypt session material.
+BETTER_AUTH_SECRET=""
+
+# Resend API key; leave empty to use the console email fallback in dev.
+RESEND_API_KEY=""
