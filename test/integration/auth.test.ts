@@ -198,7 +198,7 @@ describe('magic-link auth & user scoping (integration, real workerd + local D1)'
 		expect(me.status).toBe(401);
 	});
 
-	it('creates only the tables auth needs — no sharing/roles/tenancy (AR-13)', async () => {
+	it('adds no sharing/roles/tenancy tables — only auth + the Story 1.4 domain model (AR-13)', async () => {
 		const { results } = await env.DB.prepare(
 			`SELECT name FROM sqlite_master
 			 WHERE type = 'table'
@@ -207,8 +207,17 @@ describe('magic-link auth & user scoping (integration, real workerd + local D1)'
 			   AND name != 'd1_migrations'
 			 ORDER BY name`,
 		).all<{ name: string }>();
+		// auth's four tables, plus Story 1.4's six domain tables and the
+		// Story 1.1 `meta` placeholder — and nothing else (no roles/sharing,
+		// no later-epic `setting`).
 		expect(results.map((row) => row.name)).toEqual([
 			'account',
+			'external_link',
+			'game',
+			'game_genre',
+			'game_tracking',
+			'genre',
+			'import_straggler',
 			'meta',
 			'session',
 			'user',

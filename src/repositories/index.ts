@@ -4,3 +4,7 @@
  * Real domain repositories land in Story 1.4+.
  */
 export * from './db';
+export * from './games';
+export * from './genres';
+export * from './stragglers';
+export * from './tracking';
