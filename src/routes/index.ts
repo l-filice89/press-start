@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { authRoute, meRoute } from './auth';
 import { healthRoute } from './health';
 
 /**
@@ -9,3 +10,5 @@ import { healthRoute } from './health';
 export const apiRoutes = new Hono<{ Bindings: Env }>();
 
 apiRoutes.route('/', healthRoute);
+apiRoutes.route('/', authRoute);
+apiRoutes.route('/', meRoute);

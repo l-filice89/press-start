@@ -1,6 +1,6 @@
 /**
- * External-I/O seam (AD-5): every third-party call (PSN, IGDB) goes through a
- * provider adapter here, and only here. Placeholder for Story 1.1 — real
- * providers (`psn/`, `igdb/`) land in Story 1.2+.
+ * External-I/O seam (AD-5): every third-party call (PSN, IGDB, email) goes
+ * through a provider adapter here, and only here. Real game-data providers
+ * (`psn/`, `igdb/`) land in later epics.
  */
-export {};
+export * from './email';

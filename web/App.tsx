@@ -4,13 +4,72 @@ import heroImg from './assets/hero.png';
 import reactLogo from './assets/react.svg';
 import viteLogo from './assets/vite.svg';
 import './App.css';
+import { authClient } from './auth-client';
+import Login from './Login';
 
+/**
+ * Session gate (FR-47): unauthenticated visitors see only the login screen —
+ * none of the app content below renders without a session. The authenticated
+ * view is still Story 1.1's scaffold placeholder; the real shelf is Story
+ * 1.7, and the sign-out control moves into Settings with Story 1.5's shell.
+ */
 function App() {
+	const { data: session, isPending } = authClient.useSession();
+
+	if (isPending) {
+		// Minimal session-check placeholder; the skeleton loader is Story 1.5.
+		return (
+			<p aria-busy="true" style={{ textAlign: 'center', padding: '2rem' }}>
+				Loading…
+			</p>
+		);
+	}
+
+	if (!session) {
+		return <Login />;
+	}
+
+	return <AuthenticatedApp email={session.user.email} />;
+}
+
+function AuthenticatedApp({ email }: { email: string }) {
 	const [count, setCount] = useState(0);
 	const [health, setHealth] = useState('unknown');
+	const [signOutFailed, setSignOutFailed] = useState(false);
+
+	async function onSignOut() {
+		setSignOutFailed(false);
+		try {
+			const result = await authClient.signOut();
+			if (result.error) {
+				setSignOutFailed(true);
+			}
+		} catch {
+			setSignOutFailed(true);
+		}
+	}
 
 	return (
 		<>
+			<header
+				style={{
+					display: 'flex',
+					justifyContent: 'flex-end',
+					alignItems: 'center',
+					gap: '1rem',
+					padding: '0.75rem 1rem',
+				}}
+			>
+				{signOutFailed && (
+					<span role="alert" style={{ color: '#ff6b81' }}>
+						Sign-out failed — try again.
+					</span>
+				)}
+				<span>{email}</span>
+				<button type="button" className="counter" onClick={onSignOut}>
+					Sign out
+				</button>
+			</header>
 			<section id="center">
 				<div className="hero">
 					<img src={heroImg} className="base" width="170" height="179" alt="" />
