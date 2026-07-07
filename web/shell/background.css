@@ -1,0 +1,42 @@
+/**
+ * Fixed decorative backdrop. Layer order (bottom → top):
+ *   1. void base color
+ *   2. blue→magenta radial wash (subtle)
+ *   3. faint Tron light-grid (::before), masked to fade toward the edges
+ * Glow as a whisper — never so loud the shelf screams (DESIGN.md Do/Don't).
+ */
+.app-background {
+	position: fixed;
+	inset: 0;
+	z-index: var(--z-background);
+	pointer-events: none;
+	background-color: var(--color-void);
+	background-image:
+		radial-gradient(
+			120% 80% at 20% 0%,
+			rgba(0, 112, 204, 0.18),
+			transparent 60%
+		),
+		radial-gradient(
+			120% 90% at 90% 100%,
+			rgba(255, 46, 136, 0.1),
+			transparent 55%
+		);
+}
+
+/* Tron grid — thin cyan hairlines, faded via a radial mask. */
+.app-background::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background-image:
+		linear-gradient(rgba(53, 224, 255, 0.06) 1px, transparent 1px),
+		linear-gradient(90deg, rgba(53, 224, 255, 0.06) 1px, transparent 1px);
+	background-size: 44px 44px;
+	-webkit-mask-image: radial-gradient(
+		100% 80% at 50% 30%,
+		#000 40%,
+		transparent 85%
+	);
+	mask-image: radial-gradient(100% 80% at 50% 30%, #000 40%, transparent 85%);
+}

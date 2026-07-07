@@ -2,6 +2,7 @@ import {
 	cloudflareTest,
 	readD1Migrations,
 } from '@cloudflare/vitest-pool-workers';
+import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
 
 /**
@@ -43,6 +44,18 @@ export default defineConfig({
 					name: 'workers',
 					include: ['test/integration/**/*.test.ts'],
 					provide: { migrations },
+				},
+			},
+			{
+				// The React SPA (web/) has no Worker/D1 dependency — it renders in a
+				// DOM, so it gets its own jsdom project with @testing-library. This
+				// is the pattern all later UI stories (cards, filters, detail) reuse.
+				plugins: [react()],
+				test: {
+					name: 'web',
+					environment: 'jsdom',
+					include: ['web/**/*.test.tsx'],
+					setupFiles: ['./web/test-setup.ts'],
 				},
 			},
 		],

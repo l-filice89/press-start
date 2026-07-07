@@ -1,0 +1,105 @@
+.app-header {
+	position: sticky;
+	top: 0;
+	z-index: var(--z-header);
+	display: flex;
+	align-items: center;
+	gap: var(--space-4);
+	padding: var(--space-3) var(--space-4);
+	background: color-mix(in srgb, var(--color-void) 82%, transparent);
+	backdrop-filter: blur(8px);
+	border-bottom: 1px solid var(--color-border-hairline);
+}
+
+.app-header__brand {
+	flex: 0 0 auto;
+}
+
+/* Desktop: search sits header-left (right after the wordmark), flexible. */
+.app-header__search {
+	flex: 1 1 auto;
+	max-width: 420px;
+}
+
+.app-header__search-input {
+	width: 100%;
+	padding: var(--space-2) var(--space-4);
+	font-family: var(--font-body);
+	font-size: 14px;
+	color: var(--text-body);
+	background: var(--color-surface);
+	border: 1px solid rgba(53, 224, 255, 0.35);
+	border-radius: var(--radius-pill);
+}
+.app-header__search-input::placeholder {
+	color: var(--text-meta);
+}
+.app-header__search-input:disabled {
+	opacity: 0.7;
+}
+
+.app-header__meta {
+	flex: 0 0 auto;
+	margin-left: auto;
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+}
+
+.app-header__readout {
+	font-family: var(--font-mono);
+	font-size: 11px;
+	letter-spacing: 0.06em;
+	color: var(--text-meta);
+}
+.app-header__readout-compact {
+	display: none;
+}
+
+.app-header__error {
+	font-family: var(--font-body);
+	font-size: 12px;
+	color: var(--color-heat-magenta-ink);
+}
+
+.app-header__signout {
+	padding: var(--space-2) var(--space-4);
+	font-family: var(--font-ui);
+	font-weight: 700;
+	font-size: 13px;
+	color: var(--color-accent-electric);
+	background: transparent;
+	border: 1px solid var(--color-accent-electric);
+	border-radius: var(--radius-pill);
+	cursor: pointer;
+}
+.app-header__signout:hover {
+	background: rgba(18, 179, 255, 0.12);
+}
+
+/* ---- Phone deltas (UX-DR26/DR27) ---- */
+@media (max-width: 600px) {
+	.app-header {
+		gap: var(--space-3);
+		/* leave room for the bottom-pinned search bar */
+		padding-bottom: var(--space-3);
+	}
+
+	/* Search leaves the header and pins to the bottom of the viewport. */
+	.app-header__search {
+		position: fixed;
+		left: var(--space-3);
+		right: var(--space-3);
+		bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+		max-width: none;
+		z-index: var(--z-header);
+	}
+
+	/* Compact readout swaps in for the full timestamp. */
+	.app-header__readout-full {
+		display: none;
+	}
+	.app-header__readout-compact {
+		display: inline;
+	}
+}

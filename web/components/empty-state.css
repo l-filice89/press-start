@@ -1,0 +1,45 @@
+.empty-state {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: var(--space-3);
+	text-align: center;
+	padding: var(--space-6) var(--space-4);
+	min-height: 40vh;
+}
+
+.empty-state__headline {
+	font-family: var(--font-display);
+	font-weight: 700;
+	font-size: clamp(20px, 4vw, 32px);
+	letter-spacing: 0.08em;
+	color: var(--color-accent-glow);
+	text-shadow: 0 0 18px rgba(53, 224, 255, 0.4);
+}
+
+.empty-state__subtext {
+	font-family: var(--font-body);
+	color: var(--text-meta);
+	max-width: 34ch;
+}
+
+.empty-state__actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-3);
+	justify-content: center;
+	margin-top: var(--space-2);
+}
+
+.empty-state__action {
+	padding: var(--space-2) var(--space-5);
+	border-radius: var(--radius-pill);
+	border: 1px solid var(--color-accent-electric);
+	background: rgba(18, 179, 255, 0.12);
+	color: var(--color-accent-electric);
+	font-family: var(--font-ui);
+	font-weight: 700;
+	font-size: 14px;
+	cursor: pointer;
+}

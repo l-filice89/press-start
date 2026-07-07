@@ -1,0 +1,23 @@
+.app-shell {
+	position: relative;
+	z-index: var(--z-content);
+	min-height: 100svh;
+	display: flex;
+	flex-direction: column;
+}
+
+.app-shell__main {
+	flex: 1 1 auto;
+	width: 100%;
+	max-width: 1400px;
+	margin: 0 auto;
+	padding: var(--space-5) var(--space-4);
+}
+
+/* Phone: tighter padding + room for the bottom-pinned search bar. */
+@media (max-width: 600px) {
+	.app-shell__main {
+		padding: var(--space-4) var(--space-3);
+		padding-bottom: calc(var(--space-6) + var(--hit-target));
+	}
+}

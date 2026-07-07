@@ -1,10 +1,13 @@
 import { type FormEvent, useState } from 'react';
 import { authClient } from './auth-client';
+import { Background } from './shell/Background';
+import { Wordmark } from './shell/Wordmark';
+import './login.css';
 
 /**
  * Magic-link login screen (FR-47): the only thing an unauthenticated visitor
- * sees. Functional-minimal on purpose — the PRESS START design system lands
- * with Story 1.5's app shell.
+ * sees. Now dressed in the PRESS START design system (Story 1.5) — the wordmark
+ * over the void, tokened form. Auth logic is unchanged.
  *
  * A failed link verification (expired/used token) redirects back here as
  * `/?error=...` (better-auth's error callback), surfaced as the initial
@@ -65,63 +68,53 @@ function Login() {
 	}
 
 	return (
-		<section
-			style={{
-				display: 'flex',
-				flexDirection: 'column',
-				alignItems: 'center',
-				justifyContent: 'center',
-				minHeight: '100vh',
-				gap: '1rem',
-				padding: '1rem',
-				textAlign: 'center',
-			}}
-		>
-			<h1>PRESS START</h1>
-			{phase === 'sent' ? (
-				<>
-					<p>Check your email — a sign-in link is on its way.</p>
-					<p>You can close this tab; the link signs you in directly.</p>
-				</>
-			) : (
-				<form
-					onSubmit={onSubmit}
-					style={{
-						display: 'flex',
-						flexDirection: 'column',
-						gap: '0.75rem',
-						width: 'min(20rem, 100%)',
-					}}
-				>
-					<label htmlFor="login-email">
-						Sign in with a magic link — no password
-					</label>
-					<input
-						id="login-email"
-						type="email"
-						required
-						autoComplete="email"
-						placeholder="you@example.com"
-						value={email}
-						onChange={(event) => setEmail(event.target.value)}
-						disabled={phase === 'sending'}
-						style={{ padding: '0.6rem', fontSize: '1rem' }}
-					/>
-					<button
-						type="submit"
-						className="counter"
-						disabled={phase === 'sending'}
-					>
-						{phase === 'sending' ? 'Sending…' : 'Email me a sign-in link'}
-					</button>
-				</form>
-			)}
-			{error && (
-				<p role="alert" style={{ color: '#ff6b81' }}>
-					{error}
-				</p>
-			)}
-		</section>
+		<>
+			<Background />
+			<main className="login">
+				<div className="login__card">
+					<Wordmark variant="hero" showTagline />
+
+					{phase === 'sent' ? (
+						<div className="login__sent">
+							<p>Check your email — a sign-in link is on its way.</p>
+							<p className="login__hint">
+								You can close this tab; the link signs you in directly.
+							</p>
+						</div>
+					) : (
+						<form className="login__form" onSubmit={onSubmit}>
+							<label className="login__label" htmlFor="login-email">
+								Sign in with a magic link — no password
+							</label>
+							<input
+								id="login-email"
+								className="login__input"
+								type="email"
+								required
+								autoComplete="email"
+								placeholder="you@example.com"
+								value={email}
+								onChange={(event) => setEmail(event.target.value)}
+								disabled={phase === 'sending'}
+							/>
+							<button
+								type="submit"
+								className="login__submit tap-target"
+								disabled={phase === 'sending'}
+							>
+								{phase === 'sending' ? 'Sending…' : 'Email me a sign-in link'}
+							</button>
+						</form>
+					)}
+
+					{error && (
+						<p role="alert" className="login__error">
+							{error}
+						</p>
+					)}
+				</div>
+			</main>
+		</>
 	);
 }
 

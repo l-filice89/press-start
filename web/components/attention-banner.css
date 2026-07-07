@@ -1,0 +1,61 @@
+/**
+ * Persistent needs-action banner. Tone carries meaning but is never the ONLY
+ * signal — the message text always states the condition (no color-alone). Ink
+ * is light-on-translucent-tint, never white-on-neon (UX-DR22).
+ */
+.attention-banner {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+	width: 100%;
+	padding: var(--space-3) var(--space-4);
+	font-family: var(--font-ui);
+	font-size: 14px;
+	font-weight: 500;
+	color: var(--text-body);
+	border-bottom: 1px solid var(--color-border-hairline);
+}
+
+.attention-banner__message {
+	flex: 1 1 auto;
+}
+
+.attention-banner__action {
+	flex: 0 0 auto;
+	padding: var(--space-2) var(--space-4);
+	border-radius: var(--radius-pill);
+	border: 1px solid currentColor;
+	background: transparent;
+	color: inherit;
+	font-family: var(--font-ui);
+	font-weight: 700;
+	font-size: 13px;
+	cursor: pointer;
+}
+
+/* Amber — stragglers / general attention. */
+.attention-banner--stragglers {
+	background: rgba(255, 178, 84, 0.14);
+	border-bottom-color: rgba(255, 178, 84, 0.4);
+}
+.attention-banner--stragglers .attention-banner__action {
+	color: var(--color-warn-amber);
+}
+
+/* Magenta — expired PSN cookie. */
+.attention-banner--expired-cookie {
+	background: rgba(255, 46, 136, 0.14);
+	border-bottom-color: rgba(255, 46, 136, 0.4);
+}
+.attention-banner--expired-cookie .attention-banner__action {
+	color: var(--color-heat-magenta-ink);
+}
+
+/* Steel — failed refresh. */
+.attention-banner--failed-refresh {
+	background: rgba(143, 176, 196, 0.12);
+	border-bottom-color: rgba(143, 176, 196, 0.35);
+}
+.attention-banner--failed-refresh .attention-banner__action {
+	color: var(--color-text-secondary);
+}

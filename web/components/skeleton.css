@@ -1,0 +1,65 @@
+/* Cover-shaped shimmer: surface → lighter sweep (DESIGN.md Skeleton). */
+.skeleton {
+	position: relative;
+	overflow: hidden;
+	background: var(--color-surface);
+	border-radius: var(--radius-md);
+}
+
+.skeleton--cover {
+	aspect-ratio: 3 / 4;
+	width: 100%;
+}
+
+.skeleton--text {
+	height: 0.9em;
+	width: 60%;
+	border-radius: var(--radius-sm);
+}
+
+.skeleton--block {
+	width: 100%;
+	height: 100%;
+}
+
+.skeleton::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	transform: translateX(-100%);
+	background: linear-gradient(
+		90deg,
+		transparent,
+		rgba(53, 224, 255, 0.08),
+		transparent
+	);
+	animation: skeleton-sweep 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-sweep {
+	100% {
+		transform: translateX(100%);
+	}
+}
+
+/* Reduced motion (UX-DR24): static placeholder, no sweep. */
+@media (prefers-reduced-motion: reduce) {
+	.skeleton::after {
+		animation: none;
+		display: none;
+	}
+}
+
+.skeleton-grid {
+	display: grid;
+	gap: var(--space-3);
+	grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+
+/* Phone: leaner 2-up grid (UX-DR26 responsive delta). */
+@media (max-width: 600px) {
+	.skeleton-grid {
+		grid-template-columns: repeat(2, 1fr);
+		gap: var(--space-2);
+	}
+}

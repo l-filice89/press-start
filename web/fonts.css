@@ -1,0 +1,26 @@
+/**
+ * Self-hosted type faces (NFR-3: nothing external on render; PWA-precacheable).
+ * Only the weights the design system actually uses are imported — see
+ * DESIGN.md.Typography for the job of each face. Vite resolves these bare
+ * `@import`s from node_modules and inlines the @font-face + woff2 assets.
+ *
+ * The static faces are pinned to the `latin` subset — this app is English-only,
+ * so shipping cyrillic/greek/devanagari/vietnamese woff2s is pure waste. The
+ * variable faces below have no per-subset import; their non-latin subsets stay
+ * lazy via `unicode-range` at render, and `vite.config.ts` workbox `globIgnores`
+ * keeps those same subset woff2 out of the install-time PWA precache (NFR-3).
+ */
+
+/* Orbitron (display): pills/labels 600, section headings 700, wordmark 900. */
+@import "@fontsource/orbitron/latin-600.css";
+@import "@fontsource/orbitron/latin-700.css";
+@import "@fontsource/orbitron/latin-900.css";
+
+/* Rajdhani (condensed UI labels): buttons, segmented controls, dropdowns. */
+@import "@fontsource/rajdhani/latin-500.css";
+@import "@fontsource/rajdhani/latin-600.css";
+@import "@fontsource/rajdhani/latin-700.css";
+
+/* Inter (body/forms) + JetBrains Mono (numerals/dates/tagline) — variable. */
+@import "@fontsource-variable/inter/index.css";
+@import "@fontsource-variable/jetbrains-mono/index.css";
