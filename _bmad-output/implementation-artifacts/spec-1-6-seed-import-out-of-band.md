@@ -2,8 +2,9 @@
 title: 'Seed import (out-of-band)'
 type: 'feature'
 created: '2026-07-07'
-status: 'in-review'
+status: 'done'
 baseline_revision: 'f69c4650a30cea47511cad2a508c3cb633802776'
+final_revision: '58d237f5759309db6ba4143b37f33c4889a12ba0'
 review_loop_iteration: 0
 followup_review_recommended: false
 context: ['{project-root}/_bmad-output/implementation-artifacts/epic-1-context.md']
