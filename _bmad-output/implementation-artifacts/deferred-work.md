@@ -36,7 +36,8 @@ resolution: resolved by sweep bundle dw-shelf-grid-aria-row-regrouping
 origin: migrated from legacy ledger ("Deferred from: code review (2026-07-08)"), 2026-07-08
 location: .github/dependabot.yml (does not exist)
 reason: A pinned SHA plus its trailing version comment (`# v4.3.1`) can silently drift apart over time with no automated nudge to update either. Pinning `actions/checkout` and `oven-sh/setup-bun` to commit SHAs hardens supply-chain trust only if the pins get refreshed; without a bot, they rot unnoticed.
-status: open
+status: done 2026-07-08
+resolution: resolved by sweep bundle dw-ci-dependabot-config
 
 ### DW-6: Two ACs added to Story 6.3 in epics.md have no thematic fit with that story's scope
 

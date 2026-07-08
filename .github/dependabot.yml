@@ -1,0 +1,9 @@
+version: 2
+updates:
+  # Keep the SHA-pinned actions in ci.yml / deploy.yml (and their trailing
+  # `# vX.Y.Z` comments) current. Dependabot walks every file under
+  # .github/workflows/ from the repo root, so directory "/" covers both.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
