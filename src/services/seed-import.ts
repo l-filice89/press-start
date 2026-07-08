@@ -33,7 +33,8 @@ export interface SeedSummary {
 	tracked: number;
 	genresLinked: number;
 	stragglers: number;
-	skippedMembership: number;
+	/** PSN "web app" entries excluded from the import (e.g. IGN/Multiplayer.it companion apps). */
+	skippedWebApp: number;
 	/** Games created without an IGDB match (name-only, PS-owned). */
 	unenriched: number;
 }
@@ -72,7 +73,7 @@ export async function runSeedImport({
 		tracked: 0,
 		genresLinked: 0,
 		stragglers: 0,
-		skippedMembership: plan.skippedMembership,
+		skippedWebApp: plan.skippedWebApp,
 		unenriched: 0,
 	};
 
@@ -139,6 +140,7 @@ export async function runSeedImport({
 				coverUrl: candidate.psCoverUrl ?? enrichment?.coverUrl ?? null,
 				storeUrl: candidate.psStoreUrl ?? null,
 				unenriched,
+				psPlusExtra: candidate.psPlusExtra,
 			});
 			gameId = created.id;
 			summary.gamesCreated++;

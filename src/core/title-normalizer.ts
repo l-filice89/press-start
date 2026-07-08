@@ -53,20 +53,59 @@ const APOSTROPHE_PATTERN = /[‘’ʼ´`]/g;
 
 const LEADING_ARTICLE_PATTERN = /^(?:a|an|the)\s+/i;
 
+// A trailing sequel number written as a Roman numeral (e.g. "Alan Wake II")
+// must fold to the same key as its Arabic-digit spelling ("Alan Wake 2") —
+// cross-source titles disagree on which they use. Deliberately excludes bare
+// "I"/"X": both collide with real words/franchise letters (the pronoun "I",
+// "Mega Man X" as a proper name rather than "Mega Man 10"), so only the
+// unambiguous II-IX cluster is folded. Longest-first so "viii" isn't cut
+// short by an earlier partial alternative like "vi".
+const ROMAN_NUMERAL_TO_ARABIC: Record<string, string> = {
+	viii: '8',
+	vii: '7',
+	iii: '3',
+	vi: '6',
+	iv: '4',
+	ix: '9',
+	ii: '2',
+	v: '5',
+};
+const TRAILING_ROMAN_NUMERAL_PATTERN = new RegExp(
+	`\\s(${Object.keys(ROMAN_NUMERAL_TO_ARABIC).join('|')})\\s*$`,
+	'i',
+);
+
 /**
  * AD-9: the single implementation of the shared cross-source title match
  * key. Strips trademark glyphs, folds apostrophe variants, a curated
  * edition-suffix list, PS4/PS5 platform tags (so both platform releases
- * collapse to one key), and a single leading article, then case/whitespace-
- * folds.
+ * collapse to one key), diacritics, a trailing Roman-numeral sequel number,
+ * and a single leading article, then case/whitespace-folds.
  */
 export function normalizeTitle(rawTitle: string): string {
 	let title = rawTitle.replace(TRADEMARK_GLYPH_PATTERN, '');
 	title = title.replace(APOSTROPHE_PATTERN, "'");
 	title = title.replace(PLATFORM_TAG_PATTERN, ' ');
 	title = title.replace(EDITION_SUFFIX_PATTERN, '');
+	// Fold diacritics (e.g. "Yōtei" / "Yotei") after NFD-decomposing each
+	// accented character into base letter + combining mark, then dropping
+	// the marks (Unicode combining-diacriticals block) — cross-source titles
+	// disagree on whether they're kept.
+	const COMBINING_MARK_MIN = 0x0300;
+	const COMBINING_MARK_MAX = 0x036f;
+	title = Array.from(title.normalize('NFD'))
+		.filter((ch) => {
+			const code = ch.codePointAt(0) ?? 0;
+			return code < COMBINING_MARK_MIN || code > COMBINING_MARK_MAX;
+		})
+		.join('');
 	title = title.toLowerCase().trim().replace(/\s+/g, ' ');
 	title = title.replace(LEADING_ARTICLE_PATTERN, '');
+	title = title.replace(
+		TRAILING_ROMAN_NUMERAL_PATTERN,
+		(_, numeral: string) =>
+			` ${ROMAN_NUMERAL_TO_ARABIC[numeral.toLowerCase()]}`,
+	);
 	// Leftover separator punctuation (e.g. a trailing `:`/`-`/`,`) can remain
 	// once a suffix is stripped from mid-pipeline; clean it up last.
 	title = title.replace(/[\s:,\-–—]+$/, '').trim();

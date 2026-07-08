@@ -70,7 +70,10 @@ export function createIgdbProvider(config: IgdbConfig): IgdbProvider {
 
 	return {
 		async enrich(title) {
-			const query = title.replace(/["\\]/g, ' ').trim();
+			// Trademark glyphs break IGDB's own search matching outright (a
+			// query containing "®" returned zero results live, even for an
+			// exact, unambiguous title) — strip them same as quotes/backslashes.
+			const query = title.replace(/["\\™®©]/g, ' ').trim();
 			if (!query) return null;
 			await throttle();
 
@@ -81,7 +84,11 @@ export function createIgdbProvider(config: IgdbConfig): IgdbProvider {
 					Authorization: `Bearer ${config.accessToken}`,
 					Accept: 'application/json',
 				},
-				body: `search "${query}"; fields name, first_release_date, cover.image_id, genres.name; limit 15;`,
+				// 50, not IGDB's default 15 (verified live): a base game (e.g.
+				// "Genshin Impact") can rank behind dozens of same-named
+				// DLC/event entries, dropping out of a shorter candidate list
+				// entirely and leaving a real, released game unenriched.
+				body: `search "${query}"; fields name, first_release_date, cover.image_id, genres.name; limit 50;`,
 				signal: AbortSignal.timeout(IGDB_TIMEOUT_MS),
 			});
 

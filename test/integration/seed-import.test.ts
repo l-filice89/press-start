@@ -88,7 +88,7 @@ describe('runSeedImport (integration, real workerd + local D1)', () => {
 		userId = await seedUser(USER_EMAIL);
 	});
 
-	it('excludes PS+ claims (counted), imports NONE rows as owned digital', async () => {
+	it('imports a PS+ claim as owned digital too, flagged ps_plus_extra (never excluded)', async () => {
 		const ps = csv(PS_HEADER, [
 			{
 				name: 'Owned One',
@@ -118,18 +118,25 @@ describe('runSeedImport (integration, real workerd + local D1)', () => {
 			notionCsv: csv(NOTION_HEADER, []),
 			userEmail: USER_EMAIL,
 		});
-		expect(summary.skippedMembership).toBe(1);
-		expect(summary.gamesCreated).toBe(1);
+		expect(summary.gamesCreated).toBe(2);
 
 		const owned = await findGameByExternalLink(db(), 'PSN', 'OWN1');
 		expect(owned?.title).toBe('Owned One');
 		expect(owned?.coverUrl).toBe('https://ps/1.png'); // PS cover kept over IGDB null
-		expect(await findGameByExternalLink(db(), 'PSN', 'CLM1')).toBeUndefined();
+		expect(owned?.psPlusExtra).toBe(false);
 
-		const tracking = await getTracking(db(), userId, must(owned).id);
-		expect(tracking?.owned).toBe(true);
-		expect(tracking?.ownershipType).toBe('digital');
-		expect(tracking?.playStatus).toBe('Not started');
+		const claimed = await findGameByExternalLink(db(), 'PSN', 'CLM1');
+		expect(claimed?.title).toBe('Claimed One');
+		expect(claimed?.psPlusExtra).toBe(true);
+
+		const ownedTracking = await getTracking(db(), userId, must(owned).id);
+		expect(ownedTracking?.owned).toBe(true);
+		expect(ownedTracking?.ownershipType).toBe('digital');
+		expect(ownedTracking?.playStatus).toBe('Not started');
+
+		const claimedTracking = await getTracking(db(), userId, must(claimed).id);
+		expect(claimedTracking?.owned).toBe(true);
+		expect(claimedTracking?.ownershipType).toBe('digital');
 	});
 
 	it('collapses PS4+PS5 to one game with both title_ids linked', async () => {
