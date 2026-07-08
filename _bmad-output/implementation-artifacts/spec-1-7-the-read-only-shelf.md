@@ -2,10 +2,11 @@
 title: 'The read-only shelf'
 type: 'feature'
 created: '2026-07-08'
-status: 'in-review'
+status: 'done'
 review_loop_iteration: 0
 followup_review_recommended: false
 baseline_revision: '765e4ac0a9720300dd22c0caef114387e808759f'
+final_revision: '25a383ac4002bb20303e3bd0d5182e7c046e7500'
 context: ['{project-root}/_bmad-output/implementation-artifacts/epic-1-context.md']
 warnings: ['oversized']
 ---
