@@ -10,6 +10,7 @@ import {
 	linkGameGenre,
 	listExternalLinks,
 	listGenresForGame,
+	listGenresForGames,
 	listStragglers,
 	listTrackingForUser,
 	upsertGenre,
@@ -134,6 +135,26 @@ describe('catalog + tracking repositories (integration, real workerd + local D1)
 		const genres = await listGenresForGame(db(), game.id);
 		expect(genres).toHaveLength(1);
 		expect(genres[0].name).toBe('Roguelike');
+	});
+
+	it("looks up genres for many games without tripping D1's bound-parameter limit", async () => {
+		const genre = await upsertGenre(db(), 'Chunk Test Genre');
+		const games = await Promise.all(
+			Array.from({ length: 250 }, (_, i) =>
+				insertGame(db(), {
+					title: `Chunk Test Game ${i}`,
+					titleNormalized: `chunk test game ${i}`,
+				}),
+			),
+		);
+		await Promise.all(games.map((g) => linkGameGenre(db(), g.id, genre.id)));
+
+		const rows = await listGenresForGames(
+			db(),
+			games.map((g) => g.id),
+		);
+		expect(rows).toHaveLength(250);
+		expect(rows.every((r) => r.name === 'Chunk Test Genre')).toBe(true);
 	});
 
 	it('scopes tracking per user — two users, two rows (AD-13/17)', async () => {

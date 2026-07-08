@@ -9,7 +9,12 @@
 	"compatibility_date": "2026-07-06",
 	"assets": {
 		"binding": "ASSETS",
-		"not_found_handling": "single-page-application"
+		"not_found_handling": "single-page-application",
+		// Without this, Workers Assets serves the SPA shell for any top-level
+		// browser navigation under /api/* (Sec-Fetch-Dest: document) before the
+		// Worker ever runs — breaking the magic-link verify GET clicked from an
+		// email, which never reaches src/routes/auth.ts at all.
+		"run_worker_first": ["/api/*"]
 	},
 	"observability": {
 		"enabled": true

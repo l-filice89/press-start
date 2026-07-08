@@ -32,19 +32,32 @@ export async function listGenresForGame(db: Db, gameId: string) {
 }
 
 /**
- * Genres for many games in one query (the shelf bakes ~344 games' genres at
- * once — a per-game query would be N+1). Returns flat `{ gameId, name }` rows
- * for the service to group. An empty id list short-circuits (drizzle's
- * `inArray([])` would otherwise emit an always-false clause / warn).
+ * Genres for many games (the shelf bakes a whole library's genres at once — a
+ * per-game query would be N+1). Returns flat `{ gameId, name }` rows for the
+ * service to group. An empty id list short-circuits (drizzle's `inArray([])`
+ * would otherwise emit an always-false clause / warn).
+ *
+ * D1/SQLite caps bound parameters per statement well under a real library's
+ * size (hit at 181 games), so the id list is chunked into multiple queries
+ * rather than one `inArray` with hundreds of params.
  */
+const GENRE_LOOKUP_CHUNK_SIZE = 100;
+
 export async function listGenresForGames(
 	db: Db,
 	gameIds: readonly string[],
 ): Promise<{ gameId: string; name: string }[]> {
 	if (gameIds.length === 0) return [];
-	return db
-		.select({ gameId: gameGenre.gameId, name: genre.name })
-		.from(gameGenre)
-		.innerJoin(genre, eq(gameGenre.genreId, genre.id))
-		.where(inArray(gameGenre.gameId, [...gameIds]));
+	const rows: { gameId: string; name: string }[] = [];
+	for (let i = 0; i < gameIds.length; i += GENRE_LOOKUP_CHUNK_SIZE) {
+		const chunk = gameIds.slice(i, i + GENRE_LOOKUP_CHUNK_SIZE);
+		rows.push(
+			...(await db
+				.select({ gameId: gameGenre.gameId, name: genre.name })
+				.from(gameGenre)
+				.innerJoin(genre, eq(gameGenre.genreId, genre.id))
+				.where(inArray(gameGenre.gameId, chunk))),
+		);
+	}
+	return rows;
 }
