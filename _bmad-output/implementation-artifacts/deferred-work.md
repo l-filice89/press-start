@@ -5,7 +5,8 @@
 origin: migrated from legacy ledger (source_spec spec-1-1-deployable-project-scaffold-ci-cd.md), 2026-07-08
 location: worker/index.ts (ASSETS.fetch fallback) / wrangler.jsonc test env
 reason: `vitest-pool-workers` has no working `ASSETS` binding without a real assets directory wired into `wrangler.jsonc` — adding a request through `worker/index.ts`'s `ASSETS.fetch` fallback throws `TypeError: Cannot read properties of undefined (reading 'fetch')` in the test environment. Wiring a real directory in for tests risks disturbing the `@cloudflare/vite-plugin`'s own build-time assets config used by the already-verified production deploy. The scenario is confirmed working by hand (local `vite dev` + live production curl at `https://ps-game-catalog.l-filice-89.workers.dev`), just not by an automated regression test.
-status: open
+status: done 2026-07-08
+resolution: resolved by sweep bundle dw-shelf-deep-link-test-coverage
 
 ### DW-2: GitHub Actions in ci.yml/deploy.yml are pinned to floating major-version tags rather than commit SHAs
 
