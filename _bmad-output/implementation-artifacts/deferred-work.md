@@ -22,6 +22,7 @@ origin: migrated from legacy ledger (source_spec spec-1-7-the-read-only-shelf.md
 location: web/shelf/api.ts, web/shelf/Shelf.tsx
 reason: `web/shelf/api.ts` throws on any non-OK status and `Shelf.tsx` maps every error to the same "couldn't load" message; "Refresh" won't re-authenticate. This story stopped the pointless 3× retry (query client skips 4xx), but a proper re-auth redirect is an app-wide auth-UX concern (better-auth session lifecycle), out of scope for the read-only shelf. Should be handled once, centrally, when the authed-navigation shell is built out.
 status: open
+decision: 2026-07-08 Build central 401 re-auth — On a 401 from an authed query, clear/refetch the better-auth session so App.tsx's existing gate renders <Login/> (route to sign-in). Wire it once centrally (react-query global onError or a shared fetch wrapper in api.ts) rather than per-component, keeping the shelf's generic message only for genuine non-auth failures.
 
 ### DW-4: Shelf card grid is a single ARIA row while arrow-key nav moves in 2-D by column count
 
