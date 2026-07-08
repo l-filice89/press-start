@@ -5,5 +5,6 @@ export * from './effective-state';
 export * from './igdb-match';
 export * from './notion-status';
 export * from './seed-reconcile';
+export * from './shelf';
 export * from './title-normalizer';
 export * from './types';

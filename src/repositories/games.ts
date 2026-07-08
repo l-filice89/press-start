@@ -9,6 +9,7 @@ import {
 	type EXTERNAL_LINK_SOURCES,
 	externalLink,
 	game,
+	gameTracking,
 } from '../schema/catalog';
 import type { Db } from './db';
 
@@ -81,4 +82,52 @@ export async function addExternalLink(
 /** Every external link for a game. */
 export async function listExternalLinks(db: Db, gameId: string) {
 	return db.select().from(externalLink).where(eq(externalLink.gameId, gameId));
+}
+
+/**
+ * A game joined with one user's tracking row — the row shape the shelf/search
+ * services bake into a card DTO.
+ */
+export type LibraryRow = {
+	id: string;
+	title: string;
+	releaseDate: string | null;
+	coverUrl: string | null;
+	storeUrl: string | null;
+	psPlusExtra: boolean;
+	unenriched: boolean;
+	playStatus: (typeof gameTracking.$inferSelect)['playStatus'];
+	completedOn: string | null;
+	platinumOn: string | null;
+	owned: boolean;
+};
+
+/**
+ * The signed-in user's whole library: every game they track, with the tracking
+ * columns the shelf needs (AD-13 user scope). Deliberately NOT ordered by
+ * `play_status` — shelf ordering derives from the `core/` effective-state
+ * function (AD-7), never SQL. The join is via `game_tracking` so a game with no
+ * tracking row for this user is absent (the library is what the user tracks).
+ */
+export async function listLibraryForUser(
+	db: Db,
+	userId: string,
+): Promise<LibraryRow[]> {
+	return db
+		.select({
+			id: game.id,
+			title: game.title,
+			releaseDate: game.releaseDate,
+			coverUrl: game.coverUrl,
+			storeUrl: game.storeUrl,
+			psPlusExtra: game.psPlusExtra,
+			unenriched: game.unenriched,
+			playStatus: gameTracking.playStatus,
+			completedOn: gameTracking.completedOn,
+			platinumOn: gameTracking.platinumOn,
+			owned: gameTracking.owned,
+		})
+		.from(gameTracking)
+		.innerJoin(game, eq(gameTracking.gameId, game.id))
+		.where(eq(gameTracking.userId, userId));
 }

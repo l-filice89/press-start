@@ -5,3 +5,4 @@
  */
 export * from './auth';
 export * from './seed-import';
+export * from './shelf';
