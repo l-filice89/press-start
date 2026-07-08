@@ -28,7 +28,8 @@ status: open
 origin: migrated from legacy ledger (source_spec spec-1-7-the-read-only-shelf.md), 2026-07-08
 location: web/shelf/Shelf.tsx
 reason: The card grid is a single ARIA `role="row"` holding all gridcells, while arrow-key nav moves in 2-D by measured column count — so assistive tech announces a 1×N structure that doesn't match the visual/navigational rows. `Shelf.tsx` renders every card in one `.shelf__row`; Up/Down move by `columnCount()`. Reading-order (Left/Right) traversal — the stated a11y-floor invariant — is fully satisfied, so this is a refinement, not a floor break. A faithful fix needs DOM rows that track the responsive `auto-fill` column count (which changes with viewport), a non-trivial layout/ARIA problem better solved deliberately than patched inline.
-status: open
+status: done 2026-07-08
+resolution: resolved by sweep bundle dw-shelf-grid-aria-row-regrouping
 
 ### DW-5: No Dependabot/Renovate config keeps the new SHA pins in ci.yml/deploy.yml current
 
@@ -59,3 +60,7 @@ origin: migrated from legacy ledger ("Deferred from: code review (2026-07-08)"),
 location: _bmad-output/planning-artifacts/epics.md
 reason: Every other AC in the file ends with a bracketed requirement reference (e.g. `FR-49, AR-25`, `UX-DR10`); the two new ACs cite only "deferred from Story 1.7" in prose, breaking the document's own traceability convention.
 status: open
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-dw-shelf-grid-aria-row-regrouping.md`
+  summary: Shelf resize that changes the auto-fill column count remounts the focused card (row `div`s keyed by index; a card moves to a different parent when re-chunked), dropping browser focus.
+  evidence: React reconciles keyed children per parent — moving a `game.id`-keyed `Card` from one index-keyed `role="row"` div to another forces unmount+remount, so a card holding keyboard focus loses it and its `cardRefs` entry resets during a viewport resize crossing a column boundary. Roving-tabindex/reading-order invariants still hold, but active keyboard focus is lost mid-resize. Inherent to the mandated `display:contents` row grouping; not trivially fixable without restructuring the ARIA grouping.

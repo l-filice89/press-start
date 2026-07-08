@@ -39,6 +39,30 @@ export function Shelf() {
 
 const PAGE_SIZE = 48;
 
+/**
+ * Count of columns from a resolved `grid-template-columns` value. The resolved
+ * value is space-separated track sizes ("150px 150px …"); "none" or an
+ * unresolved `repeat()`/`minmax()` (jsdom, no layout engine) falls back to 1.
+ */
+export function countColumns(template: string): number {
+	if (!template || template.includes('(')) return 1;
+	return Math.max(1, template.split(' ').filter(Boolean).length);
+}
+
+/**
+ * Partition items into contiguous reading-order rows of `columnCount`. A count
+ * below 1 collapses to one item per row. Used to give the ARIA grid faithful
+ * `role="row"` groups that match the visual column count.
+ */
+export function chunkIntoRows<T>(items: T[], columnCount: number): T[][] {
+	const cols = Math.max(1, columnCount);
+	const rows: T[][] = [];
+	for (let i = 0; i < items.length; i += cols) {
+		rows.push(items.slice(i, i + cols));
+	}
+	return rows;
+}
+
 /** The card grid with roving-tabindex keyboard nav + progressive rendering. */
 function ShelfGrid({ games }: { games: ShelfGame[] }) {
 	// jsdom (tests) has no IntersectionObserver — render everything there so the
@@ -48,7 +72,9 @@ function ShelfGrid({ games }: { games: ShelfGame[] }) {
 	const visible = supportsObserver ? progressive.visible : games;
 
 	const [focusedIndex, setFocusedIndex] = useState(0);
+	const [columnCount, setColumnCount] = useState(1);
 	const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
+	const gridRef = useRef<HTMLDivElement | null>(null);
 	const sentinelRef = useRef<HTMLDivElement | null>(null);
 	// Only steal focus after a keyboard move — never on mount or refetch.
 	const pendingFocus = useRef(false);
@@ -84,20 +110,20 @@ function ShelfGrid({ games }: { games: ShelfGame[] }) {
 		return () => observer.disconnect();
 	}, [supportsObserver, progressive.hasMore, progressive.showMore]);
 
-	// Number of cards per visual row, from layout; falls back to 1 when layout
-	// is unavailable (e.g. jsdom), collapsing Up/Down to prev/next.
-	const columnCount = useCallback(() => {
-		const els = cardRefs.current.filter(Boolean) as HTMLDivElement[];
-		if (els.length === 0) return 1;
-		const firstTop = els[0].getBoundingClientRect().top;
-		let cols = 0;
-		for (const el of els) {
-			// Tolerance, not strict equality: sub-pixel layout rounding can make
-			// same-row cards report slightly different tops.
-			if (Math.abs(el.getBoundingClientRect().top - firstTop) < 1) cols++;
-			else break;
-		}
-		return Math.max(1, cols);
+	// Number of cards per visual row, measured from the resolved grid template
+	// and re-measured on resize. Falls back to 1 when layout is unavailable
+	// (e.g. jsdom / no ResizeObserver), collapsing Up/Down to prev/next and
+	// giving each gridcell its own row.
+	useEffect(() => {
+		const grid = gridRef.current;
+		if (!grid || typeof ResizeObserver === 'undefined') return;
+		const measure = () => {
+			setColumnCount(countColumns(getComputedStyle(grid).gridTemplateColumns));
+		};
+		measure();
+		const observer = new ResizeObserver(measure);
+		observer.observe(grid);
+		return () => observer.disconnect();
 	}, []);
 
 	const moveFocus = useCallback(
@@ -116,7 +142,7 @@ function ShelfGrid({ games }: { games: ShelfGame[] }) {
 
 	const onCardKeyDown = useCallback(
 		(index: number) => (e: React.KeyboardEvent<HTMLDivElement>) => {
-			const cols = columnCount();
+			const cols = columnCount;
 			switch (e.key) {
 				case 'ArrowRight':
 					moveFocus(index + 1);
@@ -144,31 +170,47 @@ function ShelfGrid({ games }: { games: ShelfGame[] }) {
 		[columnCount, moveFocus, games.length],
 	);
 
+	// One clamped column width for both chunking and flat-index math, so the
+	// DOM index can never diverge from the row grouping.
+	const cols = Math.max(1, columnCount);
+	const rows = chunkIntoRows(visible, cols);
+
 	return (
 		<div className="shelf">
 			{/* biome-ignore lint/a11y/useSemanticElements: an ARIA grid of cards (not
 			    a data table) is the correct pattern for the roving-focus shelf. */}
 			<div
+				ref={gridRef}
 				className="shelf__grid"
 				role="grid"
 				aria-label="Your game shelf"
 				data-testid="shelf-grid"
 			>
-				{/* biome-ignore lint/a11y/useSemanticElements: ARIA grid row, not a table row */}
-				{/* biome-ignore lint/a11y/useFocusableInteractive: the row is a structural container; focus lives on its gridcells */}
-				<div role="row" className="shelf__row">
-					{visible.map((game, index) => (
-						<Card
-							key={game.id}
-							game={game}
-							tabIndex={index === focusedIndex ? 0 : -1}
-							cardRef={(el) => {
-								cardRefs.current[index] = el;
-							}}
-							onKeyDown={onCardKeyDown(index)}
-						/>
-					))}
-				</div>
+				{rows.map((rowGames, rowIndex) => (
+					/* biome-ignore lint/a11y/useSemanticElements: ARIA grid row, not a table row */
+					/* biome-ignore lint/a11y/useFocusableInteractive: the row is a structural container (display:contents); focus lives on its gridcells */
+					<div
+						// biome-ignore lint/suspicious/noArrayIndexKey: rows are positional buckets over a stable-ordered list, not identity-bearing items
+						key={rowIndex}
+						role="row"
+						className="shelf__row"
+					>
+						{rowGames.map((game, colIndex) => {
+							const index = rowIndex * cols + colIndex;
+							return (
+								<Card
+									key={game.id}
+									game={game}
+									tabIndex={index === focusedIndex ? 0 : -1}
+									cardRef={(el) => {
+										cardRefs.current[index] = el;
+									}}
+									onKeyDown={onCardKeyDown(index)}
+								/>
+							);
+						})}
+					</div>
+				))}
 			</div>
 			{supportsObserver && progressive.hasMore && (
 				<div ref={sentinelRef} className="shelf__sentinel" aria-hidden="true" />

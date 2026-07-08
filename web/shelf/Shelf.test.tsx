@@ -1,10 +1,10 @@
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ShelfGame } from './api';
-import { Shelf } from './Shelf';
+import { chunkIntoRows, countColumns, Shelf } from './Shelf';
 
 function card(
 	id: string,
@@ -96,6 +96,19 @@ describe('Shelf', () => {
 		expect(cards[0]).toHaveFocus();
 	});
 
+	it('nests gridcells in role="row" groups under one role="grid" (not a flat 1×N row)', async () => {
+		mockFetch([card('a', 'Apex'), card('b', 'Bolt'), card('c', 'Cyan')]);
+		renderShelf();
+		const grid = await screen.findByRole('grid');
+		// jsdom has no layout engine / ResizeObserver, so columnCount falls back
+		// to 1 → one gridcell per row (an N×1 grid, never a single 1×N row).
+		const rows = within(grid).getAllByRole('row');
+		expect(rows).toHaveLength(3);
+		for (const row of rows) {
+			expect(within(row).getAllByRole('gridcell')).toHaveLength(1);
+		}
+	});
+
 	it('shows an alert if the shelf fails to load', async () => {
 		vi.stubGlobal(
 			'fetch',
@@ -103,5 +116,31 @@ describe('Shelf', () => {
 		);
 		renderShelf();
 		expect(await screen.findByRole('alert')).toBeInTheDocument();
+	});
+});
+
+describe('countColumns', () => {
+	it('counts resolved track sizes', () => {
+		expect(countColumns('150px 150px 150px')).toBe(3);
+	});
+
+	it('falls back to 1 for unresolved templates (jsdom / none)', () => {
+		expect(countColumns('repeat(auto-fill, minmax(150px, 1fr))')).toBe(1);
+		expect(countColumns('none')).toBe(1);
+		expect(countColumns('')).toBe(1);
+	});
+});
+
+describe('chunkIntoRows', () => {
+	it('partitions items into contiguous reading-order rows', () => {
+		expect(chunkIntoRows([0, 1, 2, 3, 4], 2)).toEqual([[0, 1], [2, 3], [4]]);
+	});
+
+	it('treats a column count below 1 as one item per row', () => {
+		expect(chunkIntoRows([0, 1, 2], 0)).toEqual([[0], [1], [2]]);
+	});
+
+	it('returns no rows for an empty list', () => {
+		expect(chunkIntoRows([], 3)).toEqual([]);
 	});
 });
