@@ -42,6 +42,7 @@ origin: migrated from legacy ledger ("Deferred from: code review (2026-07-08)"),
 location: _bmad-output/planning-artifacts/epics.md (Story 6.3)
 reason: The two ACs added to Story 6.3 ("Chores — CSV export & settings") — 401 re-auth redirect and shelf-grid ARIA row regrouping — were placed there only because it was a convenient existing "chores" bucket, not because of deliberate epic planning. Story 6.3 is about CSV export and app settings; a centralized session-auth redirect and a shelf-grid ARIA/DOM-structure rework are unrelated concerns bolted onto its AC list with no new story id or rationale.
 status: open
+decision: 2026-07-08 Relocate to a dedicated story — Remove the two ACs from Story 6.3 and create a dedicated home (a new story or an app-hardening story) for the centralized re-auth redirect (DW-3) and shelf-grid ARIA regrouping (DW-4), each carrying proper FR/AR/UX-DR requirement references and explicit cross-references to their deferred-work ids. Fixes DW-6, DW-7, and DW-8 together.
 
 ### DW-7: The two new Story 6.3 ACs duplicate deferred-work.md entries verbatim with no cross-reference
 
