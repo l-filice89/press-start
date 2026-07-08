@@ -17,3 +17,17 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-7-the-read-only-shelf.md`
   summary: The card grid is a single ARIA `role="row"` holding all gridcells, while arrow-key nav moves in 2-D by measured column count — so assistive tech announces a 1×N structure that doesn't match the visual/navigational rows.
   evidence: `web/shelf/Shelf.tsx` renders every card in one `.shelf__row`; Up/Down move by `columnCount()`. Reading-order (Left/Right) traversal — the stated a11y-floor invariant — is fully satisfied, so this is a refinement, not a floor break. A faithful fix needs DOM rows that track the responsive `auto-fill` column count (which changes with viewport), a non-trivial layout/ARIA problem better solved deliberately than patched inline.
+
+## Deferred from: code review (2026-07-08)
+
+- summary: No Dependabot/Renovate config keeps the new SHA pins in `ci.yml`/`deploy.yml` current — a pinned SHA plus its trailing version comment (`# v4.3.1`) can silently drift apart over time with no automated nudge to update either.
+  evidence: `.github/dependabot.yml` does not exist. Pinning `actions/checkout` and `oven-sh/setup-bun` to commit SHAs (this review's own diff) hardens supply-chain trust only if the pins get refreshed; without a bot, they rot unnoticed.
+
+- summary: The two ACs just added to Story 6.3 ("Chores — CSV export & settings") in `epics.md` — 401 re-auth redirect and shelf-grid ARIA row regrouping — have no thematic fit with that story's scope and were placed there only because it was a convenient existing "chores" bucket, not because of deliberate epic planning.
+  evidence: `_bmad-output/planning-artifacts/epics.md` Story 6.3 is about CSV export and app settings; a centralized session-auth redirect and a shelf-grid ARIA/DOM-structure rework are unrelated concerns bolted onto its AC list with no new story id or rationale for the placement.
+
+- summary: Those same two new ACs duplicate the wording of two existing `deferred-work.md` entries (the Story 1.7 401-error and ARIA-grid items above) almost verbatim, with no cross-reference between the two files — future edits to one won't propagate to the other.
+  evidence: Compare `epics.md`'s new "Given a 401 from an expired session..." and "Given the shelf card grid on any viewport..." ACs to this file's Story-1.7 entries above.
+
+- summary: The two new ACs cite no FR/AR/UX-DR requirement id, unlike every other AC in `epics.md`, breaking the document's own traceability convention.
+  evidence: Every other AC in the file ends with a bracketed requirement reference (e.g. `FR-49, AR-25`, `UX-DR10`); the two new ACs cite only "deferred from Story 1.7" in prose.
