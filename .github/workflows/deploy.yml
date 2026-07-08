@@ -88,7 +88,7 @@ jobs:
       # "secret missing in prod" failure mode: every /api/auth/* route throws
       # a uniform 500 if BETTER_AUTH_SECRET isn't set, even for a routes that
       # don't touch a session (see createAuth in services/auth.ts).
-      - name: Verify deploy (GET /api/health, GET /api/auth/session)
+      - name: Verify deploy (GET /api/health, GET /api/auth/get-session)
         run: |
           status=$(curl -s -o /tmp/health.json -w "%{http_code}" "${{ steps.deploy.outputs.url }}/api/health")
           echo "HTTP $status: $(cat /tmp/health.json)"
@@ -97,9 +97,9 @@ jobs:
             exit 1
           fi
 
-          auth_status=$(curl -s -o /tmp/auth.json -w "%{http_code}" "${{ steps.deploy.outputs.url }}/api/auth/session")
+          auth_status=$(curl -s -o /tmp/auth.json -w "%{http_code}" "${{ steps.deploy.outputs.url }}/api/auth/get-session")
           echo "HTTP $auth_status: $(cat /tmp/auth.json)"
           if [ "$auth_status" != "200" ]; then
-            echo "Deployed Worker's /api/auth/session did not return 200 — auth secrets likely missing" >&2
+            echo "Deployed Worker's /api/auth/get-session did not return 200 — auth secrets likely missing" >&2
             exit 1
           fi
