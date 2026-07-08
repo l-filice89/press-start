@@ -1,5 +1,5 @@
 # generated: 2026-07-06
-# last_updated: 2026-07-07
+# last_updated: 2026-07-08
 # project: ps-game-catalog
 # project_key: NOKEY
 # tracking_system: file-system
@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-06
-last_updated: 2026-07-07
+last_updated: 2026-07-08
 project: ps-game-catalog
 project_key: NOKEY
 tracking_system: file-system
@@ -55,7 +55,7 @@ development_status:
   1-3-sign-in-with-a-magic-link-auth-user-scoping: done
   1-4-catalog-tracking-data-model-repositories: done
   1-5-design-system-responsive-pwa-app-shell: done
-  1-6-seed-import-out-of-band: backlog
+  1-6-seed-import-out-of-band: done
   1-7-the-read-only-shelf: backlog
   epic-1-retrospective: optional
 
