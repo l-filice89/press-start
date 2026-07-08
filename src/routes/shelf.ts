@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { EFFECTIVE_STATES } from '../core';
+import { EFFECTIVE_STATES, PLAY_STATUSES } from '../core';
 import { createDb } from '../repositories/db';
 import { getShelf, searchLibrary } from '../services';
 import { type AuthVariables, requireAuth } from './auth';
@@ -18,6 +18,7 @@ const shelfGameSchema = z.object({
 	title: z.string(),
 	coverUrl: z.string().nullable(),
 	storeUrl: z.string().nullable(),
+	playStatus: z.enum(PLAY_STATUSES).nullable(),
 	effectiveState: z.enum(EFFECTIVE_STATES),
 	owned: z.boolean(),
 	released: z.boolean(),

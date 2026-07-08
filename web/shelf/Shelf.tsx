@@ -142,6 +142,26 @@ function ShelfGrid({ games }: { games: ShelfGame[] }) {
 
 	const onCardKeyDown = useCallback(
 		(index: number) => (e: React.KeyboardEvent<HTMLDivElement>) => {
+			// Keys pressed inside a cell's widgets (the status pill, its popover)
+			// belong to that widget — an ArrowDown in the status menu must not also
+			// move grid focus. Only the gridcell itself navigates the grid.
+			if (e.target !== e.currentTarget) return;
+
+			// The ARIA-grid "enter widget mode" step: Enter moves focus from the
+			// focused cell into its status pill, which Escape hands back. Matched on
+			// the class, not a `data-testid` — a test hook must not be what keyboard
+			// navigation depends on.
+			if (e.key === 'Enter') {
+				const pill = e.currentTarget.querySelector<HTMLElement>(
+					'.status-popover__pill',
+				);
+				if (pill) {
+					e.preventDefault();
+					pill.focus();
+				}
+				return;
+			}
+
 			const cols = columnCount;
 			switch (e.key) {
 				case 'ArrowRight':

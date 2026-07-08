@@ -11,6 +11,7 @@ import {
 	type EffectiveState,
 	isDefaultShelfVisible,
 	orderShelf,
+	type PlayStatus,
 } from '../core';
 import {
 	type LibraryRow,
@@ -20,16 +21,20 @@ import {
 import type { Db } from '../repositories/db';
 
 /**
- * The read-only card contract, baked server-side. `effectiveState` drove the
- * ordering and feeds the pill; `hasCompleted`/`hasPlatinum` are carried apart
- * from `effectiveState` so a live (`Playing`) card can still show a milestone
- * badge. Derived flags (`released`/`wishlisted`) come from `core/` (AD-8).
+ * The card contract, baked server-side. `effectiveState` drove the ordering and
+ * feeds the pill; `hasCompleted`/`hasPlatinum` are carried apart from
+ * `effectiveState` so a live (`Playing`) card can still show a milestone badge.
+ * The raw `playStatus` rides along too: a replayed game reads `Playing` while
+ * carrying `completed_on`, so the status popover cannot derive which row is
+ * checked from `effectiveState` alone. Derived flags (`released`/`wishlisted`)
+ * come from `core/` (AD-8).
  */
 export interface ShelfGame {
 	id: string;
 	title: string;
 	coverUrl: string | null;
 	storeUrl: string | null;
+	playStatus: PlayStatus | null;
 	effectiveState: EffectiveState;
 	owned: boolean;
 	released: boolean;
@@ -59,6 +64,7 @@ function bakeCard(row: LibraryRow, genres: string[]): ShelfGame {
 		title: row.title,
 		coverUrl: row.coverUrl,
 		storeUrl: row.storeUrl,
+		playStatus: row.playStatus,
 		effectiveState,
 		owned: row.owned,
 		released,

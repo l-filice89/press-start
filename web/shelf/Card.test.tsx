@@ -1,5 +1,7 @@
 import '@testing-library/jest-dom/vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { describe, expect, it } from 'vitest';
 import type { ShelfGame } from './api';
 import { Card } from './Card';
@@ -10,6 +12,7 @@ function game(overrides: Partial<ShelfGame> = {}): ShelfGame {
 		title: 'Bloodborne',
 		coverUrl: 'https://cdn.example/bb.jpg',
 		storeUrl: null,
+		playStatus: 'Not started',
 		effectiveState: 'Not started',
 		owned: true,
 		released: true,
@@ -23,8 +26,16 @@ function game(overrides: Partial<ShelfGame> = {}): ShelfGame {
 	};
 }
 
+/** The card's status pill is a mutation-bearing widget, so it needs a client. */
+function Providers({ children }: { children: ReactNode }) {
+	const client = new QueryClient({
+		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+	});
+	return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+}
+
 function renderCard(g: ShelfGame) {
-	return render(<Card game={g} tabIndex={0} />);
+	return render(<Card game={g} tabIndex={0} />, { wrapper: Providers });
 }
 
 describe('Card', () => {

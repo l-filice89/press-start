@@ -16,6 +16,7 @@ function card(
 		title,
 		coverUrl: null,
 		storeUrl: null,
+		playStatus: 'Not started',
 		effectiveState: 'Not started',
 		owned: true,
 		released: true,

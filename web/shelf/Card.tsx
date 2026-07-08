@@ -1,10 +1,11 @@
 import { type KeyboardEvent, useState } from 'react';
 import type { ShelfGame } from './api';
-import { StatePill } from './StatePill';
+import { StatusPopover } from './StatusPopover';
 import './card.css';
 
 /**
- * A single shelf card (read-only in this epic — no flip, no edit). Cover-forward
+ * A single shelf card. The cover is still read-only (the flip lands in Story
+ * 2.3); the status pill is now the interactive status menu. Cover-forward
  * (3:4), a top-left flag cluster, and an info strip below. Every visual signal
  * has an accessible text equivalent (flag glyphs are `aria-hidden` with a
  * visually-hidden label beside them), and the whole card is a single roving tab
@@ -98,7 +99,7 @@ export function Card({
 					{game.title}
 				</p>
 				<div className="card__meta">
-					<StatePill state={game.effectiveState} />
+					<StatusPopover game={game} />
 					{game.owned && <span className="card__owned">OWNED</span>}
 				</div>
 				{game.genres.length > 0 && (

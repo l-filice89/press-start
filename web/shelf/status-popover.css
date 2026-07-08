@@ -1,0 +1,69 @@
+/* The status pill as a menu button + its anchored popover (Story 2.1). The pill
+   keeps StatePill's compact look; `tap-target` supplies the >=44px hit area. */
+
+.status-popover {
+	position: relative;
+	display: inline-flex;
+}
+
+/* The pill must stay visually compact, so it takes the `tap-expander` route to
+   its >=44px hit area (an invisible ::before overlay) rather than `tap-target`,
+   which would inflate the pill itself and stretch the card's info strip. */
+.status-popover__pill {
+	padding: 0;
+	border: 0;
+	background: none;
+	cursor: pointer;
+}
+
+.status-popover__pill > .state-pill {
+	position: relative;
+	z-index: 1;
+}
+
+.status-popover__menu {
+	position: absolute;
+	top: calc(100% + var(--space-2));
+	left: 0;
+	z-index: 20;
+	display: flex;
+	flex-direction: column;
+	min-width: 11rem;
+	padding: var(--space-2);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface-raised);
+	box-shadow: 0 0 26px
+		color-mix(in srgb, var(--color-accent-glow) 22%, transparent);
+}
+
+.status-popover__item {
+	display: flex;
+	align-items: center;
+	padding: var(--space-2) var(--space-3);
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: none;
+	color: var(--color-text-primary);
+	font: inherit;
+	font-family: var(--font-ui);
+	text-align: left;
+	cursor: pointer;
+}
+
+.status-popover__item:hover,
+.status-popover__item:focus-visible {
+	background: color-mix(in srgb, var(--color-accent-electric) 16%, transparent);
+}
+
+.status-popover__item[aria-checked="true"]::before {
+	content: "▸";
+	margin-right: var(--space-2);
+	color: var(--color-accent-glow);
+}
+
+.status-popover__item[aria-checked="false"]::before {
+	content: "";
+	margin-right: var(--space-2);
+	width: 1ch;
+}

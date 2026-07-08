@@ -12,6 +12,7 @@ function card(id: string, title: string): ShelfGame {
 		title,
 		coverUrl: null,
 		storeUrl: null,
+		playStatus: 'Not started',
 		effectiveState: 'Not started',
 		owned: true,
 		released: true,

@@ -10,16 +10,21 @@ import { z } from 'zod';
  * here, not a silent mismatch.
  */
 
-const EFFECTIVE_STATES = [
+export const PLAY_STATUSES = [
 	'Not started',
 	'Up next',
 	'Playing',
 	'Paused',
 	'Dropped',
+] as const;
+
+const EFFECTIVE_STATES = [
+	...PLAY_STATUSES,
 	'Platinum achieved',
 	'Story completed',
 ] as const;
 
+export type PlayStatus = (typeof PLAY_STATUSES)[number];
 export type EffectiveState = (typeof EFFECTIVE_STATES)[number];
 
 export const shelfGameSchema = z.object({
@@ -27,6 +32,7 @@ export const shelfGameSchema = z.object({
 	title: z.string(),
 	coverUrl: z.string().nullable(),
 	storeUrl: z.string().nullable(),
+	playStatus: z.enum(PLAY_STATUSES).nullable(),
 	effectiveState: z.enum(EFFECTIVE_STATES),
 	owned: z.boolean(),
 	released: z.boolean(),
@@ -44,24 +50,51 @@ const shelfResponseSchema = z.object({
 	games: z.array(shelfGameSchema),
 });
 
-async function fetchGames(
-	url: string,
-	signal?: AbortSignal,
-): Promise<ShelfGame[]> {
+/**
+ * Same-origin JSON call: the better-auth session cookie rides along
+ * automatically. A non-OK response throws an error carrying its HTTP `status`,
+ * which is what lets the query client skip pointless retries on a 4xx and route
+ * a 401 back to sign-in.
+ */
+async function callApi(url: string, init?: RequestInit): Promise<unknown> {
 	const response = await fetch(url, {
-		// Same-origin: the better-auth session cookie rides along automatically.
 		credentials: 'same-origin',
-		headers: { accept: 'application/json' },
-		signal,
+		...init,
+		headers: { accept: 'application/json', ...init?.headers },
 	});
 	if (!response.ok) {
-		// Carry the status so the query client can skip pointless retries on a
-		// 4xx (e.g. an expired session → 401 shouldn't be retried three times).
 		const error = new Error(`Request failed (${response.status})`);
 		(error as Error & { status?: number }).status = response.status;
 		throw error;
 	}
-	return shelfResponseSchema.parse(await response.json()).games;
+	return response.json();
+}
+
+async function fetchGames(
+	url: string,
+	signal?: AbortSignal,
+): Promise<ShelfGame[]> {
+	return shelfResponseSchema.parse(await callApi(url, { signal })).games;
+}
+
+const playStatusResponseSchema = z.object({
+	effectiveState: z.enum(EFFECTIVE_STATES),
+});
+
+/** Apply a play status to one game (Story 2.1). Resolves to its new effective state. */
+export async function changePlayStatus(
+	gameId: string,
+	playStatus: PlayStatus,
+): Promise<EffectiveState> {
+	const body = await callApi(
+		`/api/games/${encodeURIComponent(gameId)}/play-status`,
+		{
+			method: 'PATCH',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ playStatus }),
+		},
+	);
+	return playStatusResponseSchema.parse(body).effectiveState;
 }
 
 /** The default backlog shelf (server-ordered, hidden states removed). */

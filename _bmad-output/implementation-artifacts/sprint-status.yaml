@@ -61,7 +61,7 @@ development_status:
 
   # Epic 2: Track Your Games
   epic-2: backlog
-  2-1-change-play-status-from-the-shelf: backlog
+  2-1-change-play-status-from-the-shelf: done
   2-2-log-completion-milestones-confirm-gated: backlog
   2-3-flip-a-card-to-its-detail-view: backlog
   2-4-edit-ownership-and-lifecycle-dates-in-detail: backlog

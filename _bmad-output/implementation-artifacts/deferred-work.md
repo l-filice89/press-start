@@ -76,3 +76,15 @@ decision: 2026-07-08 Add requirement refs — Add bracketed FR/AR/UX-DR requirem
 - source_spec: `_bmad-output/implementation-artifacts/spec-dw-3-central-401-reauth-redirect.md`
   summary: An auth-state transition swaps the authenticated shell for `<Login />` with no focus management and no live-region announcement, so a keyboard or screen-reader user is silently dropped at the document start.
   evidence: `web/App.tsx`'s session gate re-renders a different subtree when `session` becomes `null` (on a 401 re-auth redirect, and equally on an explicit sign-out — so this predates the 401 work). React unmounts the focused element and focus falls back to `document.body`; nothing moves focus into the Login form or announces the change. Both entry points into `<Login />` share the gate, so a single focus/announcement fix at the gate covers them.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-1-change-play-status-from-the-shelf.md`
+  summary: Marking a game `Dropped` unmounts its card on the shelf refetch, dropping keyboard focus to `document.body` — including focus needed to reach the toast's UNDO.
+  evidence: `StatusPopover.select()` calls `close()`, which refocuses the pill; the mutation then invalidates `['shelf']`, the server filters the Dropped game out (FR-4), and React unmounts the card that owns the pill. Same defect class as DW-4 (shelf-grid focus on re-chunk) and the auth-gate focus item — a deliberate focus-restoration strategy for cards leaving the shelf, not an inline patch.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-1-change-play-status-from-the-shelf.md`
+  summary: The `Dropped` toast offers no UNDO when the game's previous play status was null (status cleared by a completion milestone).
+  evidence: `StatusPopover.select()` gates the undo on `next === 'Dropped' && previous`, and `previous` is `game.playStatus`, which is null for any game whose status was auto-cleared by a milestone (FR-2). Restoring that state means writing `play_status = null`, which Story 2.1's route deliberately cannot express (it accepts only the five play statuses; clearing goes through the FR-3/AD-12 invariant guard in Story 2.2/2.3). Unreachable on the default shelf today — milestone games are hidden (FR-17) — but reachable as soon as Epic 3's state-reveal pills or Story 2.3's detail panel render those cards. Fix alongside the milestone write path.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-1-change-play-status-from-the-shelf.md`
+  summary: Lifecycle dates are stamped from the Worker's UTC clock, so an evening status change west of Greenwich records tomorrow's date, permanently.
+  evidence: `src/routes/tracking.ts` computes `today` as `new Date().toISOString().slice(0, 10)`. `started_on` is write-once through automatic flows and explicitly unreconstructable (FR-44/FR-45, AD-11), so a wrong value never self-corrects. No PRD, architecture, or UX document picks a timezone policy, and the same choice binds `completed_on`/`platinum_on` (Story 2.2) and `bought_on` (Story 2.4) — an app-wide decision (store the user's zone in `SETTING`? stamp client-side?) rather than a per-route patch.

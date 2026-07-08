@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
-import { QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { QueryClientProvider, useMutation } from '@tanstack/react-query';
+import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const EMAIL = 'player@example.com';
@@ -124,5 +124,39 @@ describe('createQueryClient — central 401 re-auth', () => {
 		).not.toBeInTheDocument();
 		// The invariant, not just the UI: a non-401 never touches the session.
 		expect(sessionCallCount()).toBe(sessionCallsBeforeError);
+	});
+
+	// Story 2.1 adds the app's first mutation (the play-status PATCH). A 401 from
+	// a *write* must route to sign-in exactly as a 401 from a read does, and must
+	// not burn retries doing it.
+	it('applies the same 401 re-auth and 4xx no-retry policy to mutations', async () => {
+		const unauthorized = Object.assign(new Error('Request failed (401)'), {
+			status: 401,
+		});
+		const mutationFn = vi.fn(() => Promise.reject(unauthorized));
+
+		function Writer() {
+			const { mutate } = useMutation({ mutationFn });
+			return (
+				<button type="button" onClick={() => mutate()}>
+					write
+				</button>
+			);
+		}
+
+		render(
+			<QueryClientProvider client={createQueryClient()}>
+				<Writer />
+			</QueryClientProvider>,
+		);
+		const sessionCallsBefore = sessionCallCount();
+		screen.getByRole('button', { name: 'write' }).click();
+
+		// The 401 re-auth: the session is refetched, which is what renders <Login/>
+		// under App.tsx's gate. And the 4xx is a dead end — exactly one attempt.
+		await waitFor(() =>
+			expect(sessionCallCount()).toBeGreaterThan(sessionCallsBefore),
+		);
+		expect(mutationFn).toHaveBeenCalledTimes(1);
 	});
 });
