@@ -34,8 +34,8 @@ function notion(
 const find = (plan: ReturnType<typeof buildSeedPlan>, norm: string) =>
 	plan.candidates.find((c) => c.normalizedTitle === norm);
 
-describe('buildSeedPlan — membership exclusion (FR-26)', () => {
-	it('excludes PS+ claim entries, counts them, and never creates them', () => {
+describe('buildSeedPlan — PS+ claims import like purchases', () => {
+	it('imports a PS+ claim as owned and playable, flagged psPlusExtra (never excluded)', () => {
 		const plan = buildSeedPlan({
 			psRows: [
 				ps({ name: 'Owned Game', title_id: 'A' }),
@@ -43,13 +43,18 @@ describe('buildSeedPlan — membership exclusion (FR-26)', () => {
 			],
 			notionRows: [],
 		});
-		expect(plan.skippedMembership).toBe(1);
-		expect(plan.candidates).toHaveLength(1);
-		expect(find(plan, 'owned game')).toBeDefined();
-		expect(find(plan, 'claimed game')).toBeUndefined();
+		expect(plan.candidates).toHaveLength(2);
+		expect(find(plan, 'owned game')).toMatchObject({
+			owned: true,
+			psPlusExtra: false,
+		});
+		expect(find(plan, 'claimed game')).toMatchObject({
+			owned: true,
+			psPlusExtra: true,
+		});
 	});
 
-	it('keeps a title owned when at least one PS row is NONE despite a claim sibling', () => {
+	it('flags psPlusExtra false when at least one linked PS row is a genuine purchase', () => {
 		const plan = buildSeedPlan({
 			psRows: [
 				ps({
@@ -67,10 +72,30 @@ describe('buildSeedPlan — membership exclusion (FR-26)', () => {
 			],
 			notionRows: [],
 		});
-		expect(plan.skippedMembership).toBe(1);
 		const c = find(plan, 'dual');
 		expect(c?.owned).toBe(true);
-		expect(c?.psLinks).toEqual(['PPSA']); // only the non-excluded row links
+		expect(c?.psPlusExtra).toBe(false); // the PS5 row is a real purchase
+		expect(c?.psLinks.sort()).toEqual(['CUSA', 'PPSA']); // both link, neither excluded
+	});
+});
+
+describe('buildSeedPlan — PSN web-app exclusion', () => {
+	it('excludes a WEBMAF companion-app entry (e.g. IGN/Multiplayer.it), counts it, and never creates it', () => {
+		const plan = buildSeedPlan({
+			psRows: [
+				ps({ name: 'Owned Game', title_id: 'A' }),
+				ps({
+					name: 'Multiplayer.it',
+					title_id: 'B',
+					entitlement_id: 'EP4462-CUSA00454_00-WEBMAF00000MULTI',
+				}),
+			],
+			notionRows: [],
+		});
+		expect(plan.skippedWebApp).toBe(1);
+		expect(plan.candidates).toHaveLength(1);
+		expect(find(plan, 'owned game')).toBeDefined();
+		expect(find(plan, 'multiplayer.it')).toBeUndefined();
 	});
 });
 

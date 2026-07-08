@@ -134,7 +134,7 @@ async function main(): Promise<void> {
 	console.log(`  genre links:         ${summary.genresLinked}`);
 	console.log(`  unenriched (name-only): ${summary.unenriched}`);
 	console.log(`  stragglers:          ${summary.stragglers}`);
-	console.log(`  PS+ claims skipped:  ${summary.skippedMembership}`);
+	console.log(`  web-app entries skipped: ${summary.skippedWebApp}`);
 }
 
 main().catch((error) => {

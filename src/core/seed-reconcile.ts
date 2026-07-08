@@ -1,9 +1,12 @@
 /**
- * Pure seed reconciliation (Story 1.6, FR-26/27/30). I/O-free (AD-3):
- * given the two parsed CSVs it produces an import *plan* — the games to
- * create (with their PS links, ownership, and Notion-derived tracking) and
- * the stragglers to record — but performs no enrichment or DB writes (those
- * are the service's job). Title matching is the single `core/` normalizer
+ * Pure seed reconciliation (Story 1.6, FR-27/30). I/O-free (AD-3): given the
+ * two parsed CSVs it produces an import *plan* — the games to create (with
+ * their PS links, ownership, and Notion-derived tracking) and the stragglers
+ * to record — but performs no enrichment or DB writes (those are the
+ * service's job). Every PS row that's a real game imports and tracks as
+ * owned, whether purchased or claimed via a PS+ membership tier (it's
+ * genuinely playable either way) — only PSN "web app" companion entries are
+ * excluded, never a claim. Title matching is the single `core/` normalizer
  * (AD-9); genres/covers/release dates are NOT decided here (IGDB, in the
  * service).
  */
@@ -29,6 +32,8 @@ export interface GameCandidate {
 	psStoreUrl: string | null;
 	owned: boolean;
 	ownershipType: OwnershipType | null;
+	/** Claimed via a PS+ membership tier (Essentials/Extra/Premium) rather than purchased outright. */
+	psPlusExtra: boolean;
 	playStatus: PlayStatus | null;
 	completedOn: string | null;
 	startedOn: string | null;
@@ -45,8 +50,8 @@ export interface StragglerRow {
 export interface SeedPlan {
 	candidates: GameCandidate[];
 	stragglers: StragglerRow[];
-	/** PS+ claim rows excluded from the import (FR-26, reported in the summary). */
-	skippedMembership: number;
+	/** PSN "web app" entries excluded from the import (e.g. IGN/Multiplayer.it companion apps — not games). */
+	skippedWebApp: number;
 }
 
 export interface SeedInput {
@@ -55,12 +60,27 @@ export interface SeedInput {
 }
 
 /**
- * A PS row is membership-sourced (a PS+ claim, excluded) when its `membership`
- * column is a non-empty value other than `NONE`. `NONE` = purchased/owned.
+ * A PS row is membership-sourced (claimed via a PS+ tier, not purchased) when
+ * its `membership` column is a non-empty value other than `NONE`. The export
+ * carries no tier granularity (Essentials vs. Extra/Premium share the same
+ * `PS_PLUS` value) — every membership-sourced game still imports and tracks
+ * as owned (it's genuinely playable), just flagged `psPlusExtra` so it's
+ * identifiable as a claim rather than a purchase.
  */
 function isMembershipSourced(membership: string): boolean {
 	const value = membership.trim().toUpperCase();
 	return value !== '' && value !== 'NONE';
+}
+
+/**
+ * A PS row is a "web app" entitlement — a browser-wrapper companion app
+ * (e.g. IGN, Multiplayer.it) rather than a game — when its product or
+ * entitlement id carries Sony's `WEBMAF` marker.
+ */
+function isWebAppEntitlement(row: Record<string, string>): boolean {
+	const marker =
+		`${row.product_id ?? ''} ${row.entitlement_id ?? ''}`.toUpperCase();
+	return marker.includes('WEBMAF');
 }
 
 function firstNonEmpty(...values: (string | undefined)[]): string | null {
@@ -74,13 +94,13 @@ function firstNonEmpty(...values: (string | undefined)[]): string | null {
 export function buildSeedPlan({ psRows, notionRows }: SeedInput): SeedPlan {
 	const byNorm = new Map<string, GameCandidate>();
 	const stragglers: StragglerRow[] = [];
-	let skippedMembership = 0;
+	let skippedWebApp = 0;
 
 	// --- PS side: group non-excluded rows by normalized title (PS4/PS5 → one) ---
 	const psGroups = new Map<string, Record<string, string>[]>();
 	for (const row of psRows) {
-		if (isMembershipSourced(row.membership ?? '')) {
-			skippedMembership++;
+		if (isWebAppEntitlement(row)) {
+			skippedWebApp++;
 			continue;
 		}
 		const norm = normalizeTitle(row.name ?? '');
@@ -106,6 +126,7 @@ export function buildSeedPlan({ psRows, notionRows }: SeedInput): SeedPlan {
 			psStoreUrl: firstNonEmpty(ps5?.store_url, rows[0].store_url),
 			owned: true,
 			ownershipType: 'digital',
+			psPlusExtra: rows.every((r) => isMembershipSourced(r.membership ?? '')),
 			playStatus: 'Not started',
 			completedOn: null,
 			startedOn: null,
@@ -172,6 +193,7 @@ export function buildSeedPlan({ psRows, notionRows }: SeedInput): SeedPlan {
 				psStoreUrl: null,
 				owned: notionOwned,
 				ownershipType: notionOwned ? 'physical' : null,
+				psPlusExtra: false,
 				playStatus: status.playStatus,
 				completedOn,
 				startedOn,
@@ -184,6 +206,6 @@ export function buildSeedPlan({ psRows, notionRows }: SeedInput): SeedPlan {
 	return {
 		candidates: [...byNorm.values()],
 		stragglers,
-		skippedMembership,
+		skippedWebApp,
 	};
 }
