@@ -21,7 +21,8 @@ resolution: already resolved: Actions are now pinned to commit SHAs — .github/
 origin: migrated from legacy ledger (source_spec spec-1-7-the-read-only-shelf.md), 2026-07-08
 location: web/shelf/api.ts, web/shelf/Shelf.tsx
 reason: `web/shelf/api.ts` throws on any non-OK status and `Shelf.tsx` maps every error to the same "couldn't load" message; "Refresh" won't re-authenticate. This story stopped the pointless 3× retry (query client skips 4xx), but a proper re-auth redirect is an app-wide auth-UX concern (better-auth session lifecycle), out of scope for the read-only shelf. Should be handled once, centrally, when the authed-navigation shell is built out.
-status: open
+status: done 2026-07-09
+resolution: resolved by sweep bundle dw-central-401-reauth-redirect
 decision: 2026-07-08 Build central 401 re-auth — On a 401 from an authed query, clear/refetch the better-auth session so App.tsx's existing gate renders <Login/> (route to sign-in). Wire it once centrally (react-query global onError or a shared fetch wrapper in api.ts) rather than per-component, keeping the shelf's generic message only for genuine non-auth failures.
 
 ### DW-4: Shelf card grid is a single ARIA row while arrow-key nav moves in 2-D by column count
@@ -68,3 +69,7 @@ decision: 2026-07-08 Add requirement refs — Add bracketed FR/AR/UX-DR requirem
 - source_spec: `_bmad-output/implementation-artifacts/spec-dw-shelf-grid-aria-row-regrouping.md`
   summary: Shelf resize that changes the auto-fill column count remounts the focused card (row `div`s keyed by index; a card moves to a different parent when re-chunked), dropping browser focus.
   evidence: React reconciles keyed children per parent — moving a `game.id`-keyed `Card` from one index-keyed `role="row"` div to another forces unmount+remount, so a card holding keyboard focus loses it and its `cardRefs` entry resets during a viewport resize crossing a column boundary. Roving-tabindex/reading-order invariants still hold, but active keyboard focus is lost mid-resize. Inherent to the mandated `display:contents` row grouping; not trivially fixable without restructuring the ARIA grouping.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-dw-3-central-401-reauth-redirect.md`
+  summary: An auth-state transition swaps the authenticated shell for `<Login />` with no focus management and no live-region announcement, so a keyboard or screen-reader user is silently dropped at the document start.
+  evidence: `web/App.tsx`'s session gate re-renders a different subtree when `session` becomes `null` (on a 401 re-auth redirect, and equally on an explicit sign-out — so this predates the 401 work). React unmounts the focused element and focus falls back to `document.body`; nothing moves focus into the Login form or announces the change. Both entry points into `<Login />` share the gate, so a single focus/announcement fix at the gate covers them.
