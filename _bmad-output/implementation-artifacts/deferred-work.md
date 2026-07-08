@@ -12,7 +12,8 @@ status: open
 origin: migrated from legacy ledger (source_spec spec-1-1-deployable-project-scaffold-ci-cd.md), 2026-07-08
 location: .github/workflows/ci.yml, .github/workflows/deploy.yml
 reason: Actions like `actions/checkout@v4` and `oven-sh/setup-bun@v2` use floating major-version tags. Standard supply-chain hardening practice for public/production repos — a compromised or buggy release of a major-tag-pinned action could silently affect CI/CD. Low urgency for a private, solo-maintained repo today; worth doing before the repo goes public.
-status: open
+status: done 2026-07-08
+resolution: already resolved: Actions are now pinned to commit SHAs — .github/workflows/ci.yml:16 `actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1` and :19 `oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0`; same in deploy.yml:33/:36. Fixed in commit bb1425c 'chore: pin CI actions to commit SHAs; triage epic 1 deferred work'.
 
 ### DW-3: A 401 from an expired session on the shelf shows a generic error rather than routing to sign-in
 
