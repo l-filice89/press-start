@@ -8,3 +8,4 @@ export * from './games';
 export * from './genres';
 export * from './stragglers';
 export * from './tracking';
+export * from './users';

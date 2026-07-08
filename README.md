@@ -111,6 +111,32 @@ deploy:
   `production` GitHub Environment so an optional manual-approval gate can be
   layered on top.
 
+## One-time seed import (Story 1.6)
+
+`bun run seed` (`scripts/seed-import.ts`) is a **one-time, out-of-band** job
+that loads the real library into D1: it reads the two committed exports
+(`ps_catalog.csv` + `Gaming list …_all.csv`), enriches every game from IGDB
+(cover, genres, release date), and writes games / tracking / genres / links /
+stragglers through the shared Drizzle schema + repositories. It has **no UI or
+Worker surface** and is not run in CI (it needs live IGDB + remote-D1
+credentials). The reconciliation, status mapping, and reconciliation-vs-
+straggler decisions are pure `core/` functions with full unit + integration
+coverage; this script is only the I/O wiring.
+
+Run it after you have signed in once (so your `user` row exists):
+
+```sh
+cp .env.example .env      # fill in IGDB + Cloudflare D1 HTTP creds + SEED_USER_EMAIL
+bun run seed
+```
+
+It prints a summary (games created, tracking rows, genre links, name-only
+`unenriched` games, stragglers, and PS+ claims skipped). Key rules it enforces:
+membership-sourced PS+ claims are excluded (never owned), PS4/PS5 collapse to
+one PS5 game, Notion status maps onto the app's state model, genres come
+**only** from IGDB, and anything unresolvable becomes a straggler — never a
+guessed row. Re-running is idempotent (games resolve by external link).
+
 ## Legacy scripts
 
 `export_ps_catalog.py` and `update_ps_catalog.py` are frozen Python bootstrap
