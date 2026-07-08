@@ -982,10 +982,4 @@ So that my data has a second copy and the app fits my hand.
 **When** it opens
 **Then** I can sign out and view About/Help (FR-47 session)
 
-**Given** a 401 from an expired session on any authed page
-**When** the request fails
-**Then** the app redirects to sign-in instead of showing a generic load error (deferred from Story 1.7 — `web/shelf/api.ts` / `Shelf.tsx` currently show a generic error with no re-auth path; needs a centralized redirect, not a per-surface patch)
-
-**Given** the shelf card grid on any viewport
-**When** the responsive column count changes
-**Then** the grid's ARIA rows are regrouped to match the visual column count, so assistive tech announces the true N×M structure instead of a flat 1×N (deferred from Story 1.7 — `web/shelf/Shelf.tsx` renders one `role="row"` for all cards; reading-order nav already works, this is an ARIA-structure refinement)
+> **Delivered ahead of Epic 6:** the centralized 401 re-auth redirect (DW-3) and the shelf-grid ARIA row regrouping (DW-4) shipped as deferred-work bundles and were removed from this story's ACs. Story 6.3 is scoped to CSV export and settings.

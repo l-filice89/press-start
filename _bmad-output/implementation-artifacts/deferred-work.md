@@ -46,7 +46,8 @@ resolution: resolved by sweep bundle dw-ci-dependabot-config
 origin: migrated from legacy ledger ("Deferred from: code review (2026-07-08)"), 2026-07-08
 location: _bmad-output/planning-artifacts/epics.md (Story 6.3)
 reason: The two ACs added to Story 6.3 ("Chores — CSV export & settings") — 401 re-auth redirect and shelf-grid ARIA row regrouping — were placed there only because it was a convenient existing "chores" bucket, not because of deliberate epic planning. Story 6.3 is about CSV export and app settings; a centralized session-auth redirect and a shelf-grid ARIA/DOM-structure rework are unrelated concerns bolted onto its AC list with no new story id or rationale.
-status: open
+status: done 2026-07-09
+resolution: resolved by sweep bundle dw-decision-dw-6
 decision: 2026-07-08 Relocate to a dedicated story — Remove the two ACs from Story 6.3 and create a dedicated home (a new story or an app-hardening story) for the centralized re-auth redirect (DW-3) and shelf-grid ARIA regrouping (DW-4), each carrying proper FR/AR/UX-DR requirement references and explicit cross-references to their deferred-work ids. Fixes DW-6, DW-7, and DW-8 together.
 decision: 2026-07-08 Relocate to a dedicated story — Remove the two ACs from Story 6.3 and create a dedicated home (a new story or an app-hardening story) for the centralized re-auth redirect (DW-3) and shelf-grid ARIA regrouping (DW-4), each carrying proper FR/AR/UX-DR requirement references and explicit cross-references to their deferred-work ids. Fixes DW-6, DW-7, and DW-8 together.
 
@@ -55,7 +56,8 @@ decision: 2026-07-08 Relocate to a dedicated story — Remove the two ACs from S
 origin: migrated from legacy ledger ("Deferred from: code review (2026-07-08)"), 2026-07-08
 location: _bmad-output/planning-artifacts/epics.md, _bmad-output/implementation-artifacts/deferred-work.md
 reason: The two new ACs (the "Given a 401 from an expired session..." and "Given the shelf card grid on any viewport..." ACs) duplicate the wording of two existing deferred-work.md entries (the Story 1.7 401-error item DW-3 and ARIA-grid item DW-4) almost verbatim, with no cross-reference between the two files — future edits to one won't propagate to the other.
-status: open
+status: done 2026-07-09
+resolution: resolved by sweep bundle dw-decision-dw-6
 decision: 2026-07-08 Add cross-references — When the two ACs are relocated or kept, add explicit bidirectional cross-references linking the epics.md ACs to deferred-work ids DW-3 and DW-4 so edits stay in sync. Executed as part of the DW-6 resolution.
 
 ### DW-8: The two new Story 6.3 ACs cite no FR/AR/UX-DR requirement id, breaking epics.md traceability
@@ -63,7 +65,8 @@ decision: 2026-07-08 Add cross-references — When the two ACs are relocated or 
 origin: migrated from legacy ledger ("Deferred from: code review (2026-07-08)"), 2026-07-08
 location: _bmad-output/planning-artifacts/epics.md
 reason: Every other AC in the file ends with a bracketed requirement reference (e.g. `FR-49, AR-25`, `UX-DR10`); the two new ACs cite only "deferred from Story 1.7" in prose, breaking the document's own traceability convention.
-status: open
+status: done 2026-07-09
+resolution: resolved by sweep bundle dw-decision-dw-6
 decision: 2026-07-08 Add requirement refs — Add bracketed FR/AR/UX-DR requirement references to the two ACs (or their relocated home) to restore epics.md traceability. Executed as part of the DW-6 resolution.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-dw-shelf-grid-aria-row-regrouping.md`
