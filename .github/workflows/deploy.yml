@@ -71,14 +71,35 @@ jobs:
           fi
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
+      # GitHub Actions secrets and Cloudflare Worker secrets are separate
+      # stores — `wrangler deploy` never syncs one into the other. Push them
+      # explicitly on every deploy (idempotent: `secret put` overwrites).
+      # RESEND_API_KEY is optional (empty falls back to the console email
+      # provider); BETTER_AUTH_SECRET is required or every /api/auth/* route
+      # throws (services/auth.ts fails loud on purpose — AD-14).
+      - name: Sync auth secrets to the Worker
+        run: |
+          echo "${{ secrets.BETTER_AUTH_SECRET }}" | bunx wrangler secret put BETTER_AUTH_SECRET
+          echo "${{ secrets.RESEND_API_KEY }}" | bunx wrangler secret put RESEND_API_KEY
+
       # A successful `wrangler deploy` only means the upload succeeded, not
       # that the Worker actually serves traffic correctly — smoke-test it
-      # before calling the pipeline green.
-      - name: Verify deploy (GET /api/health)
+      # before calling the pipeline green. The auth check catches exactly the
+      # "secret missing in prod" failure mode: every /api/auth/* route throws
+      # a uniform 500 if BETTER_AUTH_SECRET isn't set, even for a routes that
+      # don't touch a session (see createAuth in services/auth.ts).
+      - name: Verify deploy (GET /api/health, GET /api/auth/session)
         run: |
           status=$(curl -s -o /tmp/health.json -w "%{http_code}" "${{ steps.deploy.outputs.url }}/api/health")
           echo "HTTP $status: $(cat /tmp/health.json)"
           if [ "$status" != "200" ]; then
             echo "Deployed Worker's /api/health did not return 200" >&2
+            exit 1
+          fi
+
+          auth_status=$(curl -s -o /tmp/auth.json -w "%{http_code}" "${{ steps.deploy.outputs.url }}/api/auth/session")
+          echo "HTTP $auth_status: $(cat /tmp/auth.json)"
+          if [ "$auth_status" != "200" ]; then
+            echo "Deployed Worker's /api/auth/session did not return 200 — auth secrets likely missing" >&2
             exit 1
           fi
