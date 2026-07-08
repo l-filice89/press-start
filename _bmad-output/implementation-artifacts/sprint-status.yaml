@@ -57,7 +57,7 @@ development_status:
   1-5-design-system-responsive-pwa-app-shell: done
   1-6-seed-import-out-of-band: done
   1-7-the-read-only-shelf: done
-  epic-1-retrospective: optional
+  epic-1-retrospective: done
 
   # Epic 2: Track Your Games
   epic-2: backlog
@@ -95,3 +95,21 @@ development_status:
   6-2-name-only-fallback-straggler-resolution: backlog
   6-3-chores-csv-export-settings: backlog
   epic-6-retrospective: optional
+
+action_items:
+  - epic: 1
+    action: "Wire a hazard-named-AC-gets-a-hazard-named-test rule into the bmad-loop dev/review gate"
+    owner: "Murat + Winston"
+    status: done
+  - epic: 1
+    action: "Close the loop on followup_review_recommended: true so a story cannot reach done with it unresolved"
+    owner: "Amelia"
+    status: done
+  - epic: 1
+    action: "Sync GitHub Actions secrets (BETTER_AUTH_SECRET, RESEND_API_KEY) to the Cloudflare Worker on every deploy, and smoke-test the real auth endpoint"
+    owner: "Amelia / Luca"
+    status: done
+  - epic: 1
+    action: "Run Epic 2 as a fully unattended bmad-loop epic with zero human interaction"
+    owner: "Luca"
+    status: open

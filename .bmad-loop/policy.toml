@@ -40,7 +40,12 @@ enabled = true
 #                    and flags this when its changes warrant an independent pass).
 #   "always"      -> run the second-opinion review on every story.
 # The loop is bounded by limits.max_review_cycles either way.
-trigger = "recommended"
+# Epic 1 retro (2026-07-08): "recommended" was already active during Story 1.5,
+# whose dev pass DID flag followup_review_recommended: true, and the follow-up
+# session still missed the routing hazard named in Story 1.1's own AC — a
+# review-quality gap, not a wiring gap. "always" removes reliance on the dev
+# pass's own self-assessment of whether a second opinion is warranted.
+trigger = "always"
 
 [adapter]
 name = "claude"              # claude | codex | gemini | <custom .bmad-loop/profiles/*.toml>
