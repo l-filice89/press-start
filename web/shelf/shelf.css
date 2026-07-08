@@ -1,0 +1,36 @@
+/**
+ * The shelf grid. Auto-fill dense grid on desktop (~150px min track), 2-up on
+ * phone. Tokens-only. The grid itself carries no gap-driven layout beyond the
+ * token spacing scale.
+ */
+
+.shelf {
+	width: 100%;
+}
+
+.shelf__row {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+	gap: var(--space-4);
+	align-items: start;
+}
+
+/* Phone: lean 2-up grid, tighter gaps. */
+@media (max-width: 600px) {
+	.shelf__row {
+		grid-template-columns: repeat(2, 1fr);
+		gap: var(--space-3);
+	}
+}
+
+.shelf__sentinel {
+	width: 100%;
+	height: 1px;
+}
+
+.shelf__error {
+	color: var(--color-warn-amber);
+	font-family: var(--font-body);
+	padding: var(--space-5) 0;
+	text-align: center;
+}

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Wordmark } from './Wordmark';
 import './header.css';
 
@@ -7,19 +8,21 @@ import './header.css';
  * a library readout slot (full "PS+ CATALOG AS OF …" desktop / compact count
  * phone), and the sign-out control.
  *
- * Search + readout are placeholders in this shell — there's no library data
- * until the seed (1.6) and no search until 1.7. The search field is rendered
- * disabled (not a dead action) purely to establish its design + responsive
- * placement; sign-out is the one live control (preserves FR-47).
+ * The readout stays a placeholder — the `PS+ CATALOG AS OF …` date is Epic 5.
+ * The search slot renders whatever `search` node the shell passes (Story 1.7's
+ * live combobox); with no node it falls back to a disabled placeholder so the
+ * slot's design/placement still holds. Sign-out is the FR-47 live control.
  */
 export function Header({
 	email,
 	onSignOut,
 	signOutFailed = false,
+	search,
 }: {
 	email: string;
 	onSignOut: () => void;
 	signOutFailed?: boolean;
+	search?: ReactNode;
 }) {
 	return (
 		<header className="app-header">
@@ -27,16 +30,16 @@ export function Header({
 				<Wordmark variant="compact" showTagline />
 			</div>
 
-			{/* Search slot — 1.7 replaces this disabled placeholder with the real
-			    find-or-add combobox. */}
 			<div className="app-header__search">
-				<input
-					type="search"
-					className="app-header__search-input"
-					placeholder="Find or add a game"
-					aria-label="Search your library (available once your shelf is set up)"
-					disabled
-				/>
+				{search ?? (
+					<input
+						type="search"
+						className="app-header__search-input"
+						placeholder="Find or add a game"
+						aria-label="Search your library (available once your shelf is set up)"
+						disabled
+					/>
+				)}
 			</div>
 
 			<div className="app-header__meta">

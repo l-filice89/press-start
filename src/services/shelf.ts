@@ -1,0 +1,128 @@
+/**
+ * Shelf + search orchestration (AD-6). The only place that reads the library
+ * through `repositories/` (AD-4) and derives state through `core/` (AD-7/AD-8)
+ * to bake the fully-resolved card DTO the SPA renders. No third-party fetch is
+ * possible here — covers/store links come only from persisted `game` rows
+ * (NFR-3). Every read is user-scoped (AD-13).
+ */
+import {
+	computeDerivedStates,
+	computeEffectiveState,
+	type EffectiveState,
+	isDefaultShelfVisible,
+	orderShelf,
+} from '../core';
+import {
+	type LibraryRow,
+	listGenresForGames,
+	listLibraryForUser,
+} from '../repositories';
+import type { Db } from '../repositories/db';
+
+/**
+ * The read-only card contract, baked server-side. `effectiveState` drove the
+ * ordering and feeds the pill; `hasCompleted`/`hasPlatinum` are carried apart
+ * from `effectiveState` so a live (`Playing`) card can still show a milestone
+ * badge. Derived flags (`released`/`wishlisted`) come from `core/` (AD-8).
+ */
+export interface ShelfGame {
+	id: string;
+	title: string;
+	coverUrl: string | null;
+	storeUrl: string | null;
+	effectiveState: EffectiveState;
+	owned: boolean;
+	released: boolean;
+	wishlisted: boolean;
+	psPlusExtra: boolean;
+	hasCompleted: boolean;
+	hasPlatinum: boolean;
+	releaseDate: string | null;
+	genres: string[];
+}
+
+function bakeCard(row: LibraryRow, genres: string[]): ShelfGame {
+	const effectiveState = computeEffectiveState({
+		playStatus: row.playStatus,
+		completedOn: row.completedOn,
+		platinumOn: row.platinumOn,
+	});
+	const { released, wishlisted } = computeDerivedStates({
+		owned: row.owned,
+		releaseDate: row.releaseDate,
+		// True per-region PS+ Extra membership is Epic 5; `playableNow` is not
+		// consumed by the read-only shelf, so the catalog flag is enough here.
+		inPsPlusExtraCatalog: row.psPlusExtra,
+	});
+	return {
+		id: row.id,
+		title: row.title,
+		coverUrl: row.coverUrl,
+		storeUrl: row.storeUrl,
+		effectiveState,
+		owned: row.owned,
+		released,
+		wishlisted,
+		psPlusExtra: row.psPlusExtra,
+		hasCompleted: row.completedOn != null,
+		hasPlatinum: row.platinumOn != null,
+		releaseDate: row.releaseDate,
+		genres,
+	};
+}
+
+/**
+ * The user's whole library as baked cards (unordered, unfiltered). Reads the
+ * tracking-joined rows and their genres in two queries, then groups + derives.
+ */
+export async function loadLibrary(
+	db: Db,
+	userId: string,
+): Promise<ShelfGame[]> {
+	const rows = await listLibraryForUser(db, userId);
+	const genreRows = await listGenresForGames(
+		db,
+		rows.map((r) => r.id),
+	);
+	const genresByGame = new Map<string, string[]>();
+	for (const { gameId, name } of genreRows) {
+		const existing = genresByGame.get(gameId);
+		if (existing) existing.push(name);
+		else genresByGame.set(gameId, [name]);
+	}
+	return rows.map((row) => bakeCard(row, genresByGame.get(row.id) ?? []));
+}
+
+/**
+ * The default backlog shelf: live-play-status games only (Completed/Platinum/
+ * Dropped hidden), ordered Playing→Paused→Up next→Not started, alphabetical
+ * within each group — the whole sorted set materialized here (AD-7), never a
+ * SQL `ORDER BY play_status`.
+ */
+export async function getShelf(db: Db, userId: string): Promise<ShelfGame[]> {
+	const library = await loadLibrary(db, userId);
+	return orderShelf(
+		library.filter((g) => isDefaultShelfVisible(g.effectiveState)),
+	);
+}
+
+/**
+ * The dedicated whole-library search (FR-19) — a separate path from `getShelf`,
+ * NOT a filter over the shelf result. Matches every game by case-insensitive
+ * substring on the display title, ignoring active filters and hidden states.
+ * Blank query → no results (the SPA falls back to the shelf).
+ */
+export async function searchLibrary(
+	db: Db,
+	userId: string,
+	query: string,
+): Promise<ShelfGame[]> {
+	const needle = query.trim().toLowerCase();
+	if (needle === '') return [];
+	const library = await loadLibrary(db, userId);
+	return library
+		.filter((g) => g.title.toLowerCase().includes(needle))
+		.sort((a, b) =>
+			a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }),
+		);
+}

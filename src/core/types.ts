@@ -21,7 +21,16 @@ export const PLAY_STATUSES = [
 
 export type PlayStatus = (typeof PLAY_STATUSES)[number];
 
-export type EffectiveState =
-	| PlayStatus
-	| 'Platinum achieved'
-	| 'Story completed';
+/**
+ * The full effective-state vocabulary (a play status, or a completion
+ * milestone when no status is set). A runtime tuple (not just a type) so
+ * boundary schemas — e.g. the shelf route's Zod response — key their enum off
+ * this single source rather than re-listing the values (AD-3/AD-7).
+ */
+export const EFFECTIVE_STATES = [
+	...PLAY_STATUSES,
+	'Platinum achieved',
+	'Story completed',
+] as const;
+
+export type EffectiveState = (typeof EFFECTIVE_STATES)[number];
