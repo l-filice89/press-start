@@ -1,0 +1,84 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+# Two rapid merges to main must not race wrangler d1 migrations apply /
+# wrangler deploy against the same production D1 database — queue instead
+# of running concurrently, and never cancel a deploy mid-flight.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Verify, migrate, then deploy
+    runs-on: ubuntu-latest
+    # Optional manual-approval gate: configure this as a Protected Environment
+    # (Settings > Environments > production > required reviewers) so
+    # destructive migrations can be paused before they run. The workflow step
+    # order below is what actually enforces "migrations before deploy"; the
+    # environment gate is an extra human checkpoint on top of that.
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+
+      - name: Install dependencies (frozen lockfile)
+        run: bun install --frozen-lockfile
+
+      # A push straight to main (or a merge that skipped/raced CI) must not
+      # deploy broken or unlinted code — re-run the same gate CI runs.
+      - name: Lint (Biome)
+        run: bun run lint
+
+      - name: Typecheck (tsc)
+        run: bun run typecheck
+
+      - name: Test (Vitest, workers pool)
+        run: bun run test
+
+      - name: Build (Vite + Worker)
+        run: bun run build
+
+      # AD-16: migrations always run before deploy, never at Worker startup.
+      # If this step fails, the job stops here and the deploy step below
+      # never runs.
+      - name: Apply D1 migrations (remote)
+        run: bunx wrangler d1 migrations apply ps-game-catalog --remote
+
+      - name: Deploy Worker
+        id: deploy
+        run: |
+          bunx wrangler deploy | tee /tmp/deploy.log
+          url=$(grep -oE 'https://[^ ]+\.workers\.dev' /tmp/deploy.log | head -n1)
+          if [ -z "$url" ]; then
+            echo "Could not find the deployed URL in wrangler's output" >&2
+            exit 1
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      # A successful `wrangler deploy` only means the upload succeeded, not
+      # that the Worker actually serves traffic correctly — smoke-test it
+      # before calling the pipeline green.
+      - name: Verify deploy (GET /api/health)
+        run: |
+          status=$(curl -s -o /tmp/health.json -w "%{http_code}" "${{ steps.deploy.outputs.url }}/api/health")
+          echo "HTTP $status: $(cat /tmp/health.json)"
+          if [ "$status" != "200" ]; then
+            echo "Deployed Worker's /api/health did not return 200" >&2
+            exit 1
+          fi

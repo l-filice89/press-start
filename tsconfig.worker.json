@@ -1,0 +1,28 @@
+{
+	"compilerOptions": {
+		"tsBuildInfoFile": "./node_modules/.tmp/tsconfig.worker.tsbuildinfo",
+		"target": "es2023",
+		"lib": ["ES2023"],
+		"types": ["./worker-configuration.d.ts", "vite/client", "node"],
+		"skipLibCheck": true,
+
+		/* Bundler mode — worker/ and src/ are bundled by the Cloudflare Vite
+		 * plugin, not run directly by Node, so this intentionally does NOT
+		 * extend tsconfig.node.json's `nodenext` module resolution (that would
+		 * require explicit `.js` extensions on every relative import). */
+		"module": "esnext",
+		"moduleResolution": "bundler",
+		"allowImportingTsExtensions": true,
+		"verbatimModuleSyntax": true,
+		"moduleDetection": "force",
+		"noEmit": true,
+		"strict": true,
+
+		/* Linting */
+		"noUnusedLocals": true,
+		"noUnusedParameters": true,
+		"erasableSyntaxOnly": true,
+		"noFallthroughCasesInSwitch": true
+	},
+	"include": ["worker", "src", "test"]
+}

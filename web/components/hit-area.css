@@ -1,0 +1,35 @@
+/**
+ * Reusable ≥44×44 hit-area pattern (UX-DR25). Compact controls keep their
+ * small visual look but carry a full touch/hit target, decoupled from size.
+ *
+ * `.tap-target` — guarantees the element itself is at least 44×44 (use when
+ * the control can grow with padding, e.g. buttons).
+ *
+ * `.tap-expander` — for controls that must stay visually tiny (icon toggles,
+ * flag icons, popover rows): centers the small visual and projects an
+ * invisible ≥44px hit area via a `::before` overlay that captures the pointer.
+ * The visual child should sit above it (`position: relative; z-index: 1`).
+ */
+.tap-target {
+	min-width: var(--hit-target);
+	min-height: var(--hit-target);
+}
+
+.tap-expander {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.tap-expander::before {
+	content: "";
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	min-width: var(--hit-target);
+	min-height: var(--hit-target);
+	width: 100%;
+	height: 100%;
+}

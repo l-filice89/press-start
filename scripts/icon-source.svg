@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="10" result="b" />
+      <feMerge>
+        <feMergeNode in="b" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <radialGradient id="wash" cx="30%" cy="20%" r="90%">
+      <stop offset="0%" stop-color="#0070cc" stop-opacity="0.35" />
+      <stop offset="60%" stop-color="#05090f" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <!-- Void tile (full-bleed for maskable safety). -->
+  <rect width="512" height="512" fill="#05090f" />
+  <rect width="512" height="512" fill="url(#wash)" />
+
+  <!-- Faint Tron grid. -->
+  <g stroke="#35e0ff" stroke-opacity="0.10" stroke-width="1">
+    <path d="M0 128H512M0 256H512M0 384H512" />
+    <path d="M128 0V512M256 0V512M384 0V512" />
+  </g>
+
+  <!-- Neon play triangle (content kept within the ~66% maskable safe zone). -->
+  <g filter="url(#glow)">
+    <path d="M196 168 L196 344 L336 256 Z" fill="#12b3ff" />
+    <!-- Blinking-cursor bar in reserved heat magenta. -->
+    <rect x="352" y="168" width="26" height="176" rx="6" fill="#ff2e88" />
+  </g>
+</svg>

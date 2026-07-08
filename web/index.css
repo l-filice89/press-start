@@ -1,0 +1,98 @@
+/**
+ * Global base + reset for the PRESS START shell. Dark-only, tokens-only.
+ * Font faces load via fonts.css; every value here references tokens.css.
+ */
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html {
+	/* Dark-only: never advertise a light scheme to the UA. */
+	color-scheme: dark;
+	-webkit-text-size-adjust: 100%;
+}
+
+body {
+	margin: 0;
+	min-height: 100svh;
+	background: var(--bg-app);
+	color: var(--text-body);
+	font: 400 13px / 1.5 var(--font-body);
+	font-synthesis: none;
+	text-rendering: optimizeLegibility;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+	min-height: 100svh;
+	isolation: isolate; /* own stacking context for the shell z-scale */
+}
+
+h1,
+h2,
+h3 {
+	font-family: var(--font-display);
+	font-weight: 700;
+	line-height: 1.15;
+	margin: 0;
+	color: var(--text-body);
+}
+
+p {
+	margin: 0;
+}
+
+a {
+	color: var(--color-accent-electric);
+	text-decoration: none;
+}
+a:hover {
+	text-decoration: underline;
+}
+
+button {
+	font-family: var(--font-ui);
+	color: inherit;
+}
+
+code,
+kbd,
+samp {
+	font-family: var(--font-mono);
+}
+
+/**
+ * Focus floor (UX-DR19/DR20): a distinct, always-on outline — never conveyed
+ * by glow-intensity alone. The glow is additive seasoning, not the signal.
+ */
+:focus-visible {
+	outline: 2px solid var(--color-accent-electric);
+	outline-offset: 2px;
+	/* No border-radius here: the offset outline already reads as distinct, and
+	 * setting a radius would override pill controls' own shape on focus. Each
+	 * control keeps its native radius. */
+}
+
+/**
+ * Reduced-motion floor (UX-DR24): drop pulses/shimmer/blink and long
+ * transitions to near-instant. Static neon stays; motion is what's cut.
+ * Component styles gate their own animations on this query too.
+ */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		/* biome-ignore-start lint/complexity/noImportantStyles: the reduced-motion
+		 * floor must override component-level animation/transition shorthands,
+		 * which carry higher selector specificity than this universal reset. */
+		animation-duration: 0.001ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.001ms !important;
+		scroll-behavior: auto !important;
+		/* biome-ignore-end lint/complexity/noImportantStyles: end reduced-motion */
+	}
+}

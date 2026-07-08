@@ -1,0 +1,13 @@
+# Team override for bmad-dev-auto.
+# Why: bmad-loop has no background-completion re-invocation. In run
+# 20260706-210617-8ef7 every dev attempt on stories 1-3 and 1-4 delegated
+# step-03 implementation to a background subagent and ended its turn to wait;
+# the orchestrator saw a result-less Stop, exhausted its nudge budget, and
+# killed the session while the subagent was still building. This fact keeps
+# dev sessions working in the foreground so the orchestrator can track them.
+
+[workflow]
+
+persistent_facts = [
+  "ORCHESTRATION CONSTRAINT (bmad-loop): perform ALL work — especially step-03 implementation — in the main session, in the foreground. NEVER delegate work to background agents or subagents, and never end your turn to wait on a background process. The bmad-loop orchestrator cannot detect background-agent completion; it will treat the idle session as stalled and kill it, discarding the in-flight work.",
+]

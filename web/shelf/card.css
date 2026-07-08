@@ -1,0 +1,151 @@
+/**
+ * The read-only shelf card. Cover-forward (3:4), glow/tone elevation (never
+ * drop-shadow), Orbitron single-line title. Tokens-only.
+ */
+
+/* Visually-hidden but screen-reader-available (flag labels). */
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+.card {
+	display: flex;
+	flex-direction: column;
+	background: var(--color-surface);
+	border: 1px solid var(--color-border-soft);
+	border-radius: var(--radius-md);
+	overflow: hidden;
+	transition: border-color var(--motion-fast) var(--ease-standard);
+}
+
+.card:hover {
+	border-color: var(--color-border-hairline);
+}
+
+/* The one reserved heat: a soft magenta bloom on the Playing card. */
+.card--playing {
+	border-color: var(--color-heat-magenta);
+	box-shadow: var(--glow-playing);
+}
+
+.card__cover {
+	position: relative;
+	aspect-ratio: 3 / 4;
+	background: var(--color-surface-raised);
+}
+
+.card__cover-img {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.card__cover-fallback {
+	display: grid;
+	place-items: center;
+	width: 100%;
+	height: 100%;
+	color: var(--color-state-dormant);
+}
+
+.card__cover-fallback-mark {
+	font-family: var(--font-display);
+	font-size: 2rem;
+}
+
+/* Top-left flag cluster. */
+.card__flags {
+	position: absolute;
+	top: var(--space-2);
+	left: var(--space-2);
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-1);
+}
+
+.card__flag {
+	display: inline-flex;
+	align-items: center;
+	padding: 2px var(--space-2);
+	border-radius: var(--radius-pill);
+	font-family: var(--font-mono);
+	font-size: 10px;
+	line-height: 1.4;
+	background: rgba(5, 9, 15, 0.72);
+	color: var(--color-text-primary);
+	backdrop-filter: blur(2px);
+}
+
+.card__flag--ps-extra {
+	color: var(--color-accent-glow);
+}
+
+.card__flag--release {
+	color: var(--color-warn-amber);
+	font-weight: 600;
+	letter-spacing: 0.04em;
+}
+
+.card__flag--milestone {
+	color: var(--color-milestone-silver);
+}
+
+.card__info {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-1);
+	padding: var(--space-2) var(--space-3) var(--space-3);
+}
+
+.card__title {
+	font-family: var(--font-display);
+	font-weight: 600;
+	font-size: 12.5px;
+	color: var(--color-text-primary);
+	/* Single line, ellipsis — Orbitron titles never wrap (UX typography). */
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.card__meta {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	flex-wrap: wrap;
+}
+
+.card__owned {
+	font-family: var(--font-mono);
+	font-size: 9px;
+	letter-spacing: 0.06em;
+	color: var(--color-text-muted);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-pill);
+	padding: 1px var(--space-2);
+}
+
+.card__genres {
+	font-family: var(--font-body);
+	font-size: 11px;
+	color: var(--color-text-muted);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* Genres are desktop-only (UX Responsive deltas). */
+@media (max-width: 600px) {
+	.card__genres {
+		display: none;
+	}
+}

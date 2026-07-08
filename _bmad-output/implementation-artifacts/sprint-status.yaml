@@ -1,0 +1,97 @@
+# generated: 2026-07-06
+# last_updated: 2026-07-08
+# project: ps-game-catalog
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# Action Item Status:
+#   - open: Committed during a retrospective, not yet addressed
+#   - in-progress: Actively being worked on
+#   - done: Completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+# - Retrospective appends its action items to action_items; sprint-status surfaces open ones
+
+generated: 2026-07-06
+last_updated: 2026-07-08
+project: ps-game-catalog
+project_key: NOKEY
+tracking_system: file-system
+story_location: "{project-root}/_bmad-output/implementation-artifacts"
+
+development_status:
+  # Epic 1: Foundation & the Seeded Shelf
+  epic-1: done
+  1-1-deployable-project-scaffold-ci-cd: done
+  1-2-domain-core-state-computation-title-normalization: done
+  1-3-sign-in-with-a-magic-link-auth-user-scoping: done
+  1-4-catalog-tracking-data-model-repositories: done
+  1-5-design-system-responsive-pwa-app-shell: done
+  1-6-seed-import-out-of-band: done
+  1-7-the-read-only-shelf: done
+  epic-1-retrospective: optional
+
+  # Epic 2: Track Your Games
+  epic-2: backlog
+  2-1-change-play-status-from-the-shelf: backlog
+  2-2-log-completion-milestones-confirm-gated: backlog
+  2-3-flip-a-card-to-its-detail-view: backlog
+  2-4-edit-ownership-and-lifecycle-dates-in-detail: backlog
+  2-5-edit-genres-in-detail: backlog
+  epic-2-retrospective: optional
+
+  # Epic 3: Filter & Focus the Backlog
+  epic-3: backlog
+  3-1-filter-the-shelf-by-state-and-genre: backlog
+  3-2-flag-pills-and-state-reveal-pills: backlog
+  3-3-live-filter-summary-empty-state-responsive-filters: backlog
+  epic-3-retrospective: optional
+
+  # Epic 4: Fill the Library from PlayStation (Sync)
+  epic-4: backlog
+  4-1-psn-provider-session-cookie-settings: backlog
+  4-2-sync-the-playstation-library-append-only: backlog
+  4-3-sync-summary-needs-attention: backlog
+  epic-4-retrospective: optional
+
+  # Epic 5: Know What's Playable — PS+ Extra Awareness
+  epic-5: backlog
+  5-1-region-setting-ps-extra-check-button: backlog
+  5-2-scheduled-monthly-refresh-cron-trigger: backlog
+  5-3-ps-catalog-as-of-date-timestamp: backlog
+  epic-5-retrospective: optional
+
+  # Epic 6: Add at the Moment of Discovery + Chores
+  epic-6: backlog
+  6-1-add-a-game-by-name-the-wishlist-moment: backlog
+  6-2-name-only-fallback-straggler-resolution: backlog
+  6-3-chores-csv-export-settings: backlog
+  epic-6-retrospective: optional

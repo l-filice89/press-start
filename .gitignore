@@ -1,2 +1,39 @@
-.bmad-loop/runs/
-.bmad-loop/cache/
+# bmad-loop: ignore transient state (worktrees, run logs, huge run-archive
+# tarballs) but keep the run policy + hook versioned.
+.bmad-loop/*
+!.bmad-loop/policy.toml
+!.bmad-loop/bmad_loop_hook.py
+
+# Node / Bun
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Wrangler / D1 local state (never commit the local D1 sqlite file)
+.wrangler/
+*.sqlite
+*.sqlite3
+
+# Secrets — never committed; provided via Wrangler secrets / GH Actions secrets
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+
+# Python (legacy bootstrap scripts)
+__pycache__/
+*.pyc
+.venv/
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*

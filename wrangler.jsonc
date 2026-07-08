@@ -1,0 +1,67 @@
+/**
+ * For more details on how to configure Wrangler, refer to:
+ * https://developers.cloudflare.com/workers/wrangler/configuration/
+ */
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "ps-game-catalog",
+	"main": "worker/index.ts",
+	"compatibility_date": "2026-07-06",
+	"assets": {
+		"binding": "ASSETS",
+		"not_found_handling": "single-page-application",
+		// Without this, Workers Assets serves the SPA shell for any top-level
+		// browser navigation under /api/* (Sec-Fetch-Dest: document) before the
+		// Worker ever runs — breaking the magic-link verify GET clicked from an
+		// email, which never reaches src/routes/auth.ts at all.
+		"run_worker_first": ["/api/*"]
+	},
+	"observability": {
+		"enabled": true
+	},
+	"upload_source_maps": true,
+	"compatibility_flags": ["nodejs_compat"],
+	/**
+	 * D1 database binding.
+	 */
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "ps-game-catalog",
+			"database_id": "948f9dc7-498a-4bda-9467-f92b3405313c",
+			"migrations_dir": "migrations"
+		}
+	],
+	/**
+	 * Non-secret auth config (FR-47/FR-48). Secrets (BETTER_AUTH_SECRET,
+	 * RESEND_API_KEY) are Wrangler secrets in production and `.dev.vars`
+	 * locally — never here.
+	 */
+	"vars": {
+		"AUTH_ALLOWED_EMAIL": "l.filice.89@gmail.com",
+		"AUTH_EMAIL_FROM": "PRESS START <onboarding@resend.dev>"
+	}
+	/**
+	 * Smart Placement
+	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
+	 */
+	// "placement": {  "mode": "smart" }
+	/**
+	 * Bindings
+	 * Bindings allow your Worker to interact with resources on the Cloudflare Developer Platform, including
+	 * databases, object storage, AI inference, real-time communication and more.
+	 * https://developers.cloudflare.com/workers/runtime-apis/bindings/
+	 */
+	/**
+	 * Environment Variables
+	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
+	 * Note: Use secrets to store sensitive data.
+	 * https://developers.cloudflare.com/workers/configuration/secrets/
+	 */
+	// "vars": {  "MY_VARIABLE": "production_value" }
+	/**
+	 * Service Bindings (communicate between multiple Workers)
+	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
+	 */
+	// "services": [  {   "binding": "MY_SERVICE",   "service": "my-service"  } ]
+}

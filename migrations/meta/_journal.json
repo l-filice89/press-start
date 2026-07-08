@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1783341431200,
+      "tag": "0000_even_kitty_pryde",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1783426849212,
+      "tag": "0001_spooky_frog_thor",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1783429761385,
+      "tag": "0002_icy_deathstrike",
+      "breakpoints": true
+    }
+  ]
+}

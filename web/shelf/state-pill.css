@@ -1,0 +1,48 @@
+/**
+ * Effective-state pill. Translucent tint + light/dark ink per state; never
+ * white-on-neon (accessibility floor). The label is the signal; color is
+ * seasoning. Tokens-only.
+ */
+
+.state-pill {
+	display: inline-flex;
+	align-items: center;
+	padding: 2px var(--space-2);
+	border-radius: var(--radius-pill);
+	font-family: var(--font-display);
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	white-space: nowrap;
+}
+
+.state-pill--playing {
+	background: rgba(255, 46, 136, 0.16);
+	color: var(--color-heat-magenta-ink);
+}
+
+.state-pill--up-next {
+	background: rgba(18, 179, 255, 0.16);
+	color: var(--color-accent-electric);
+}
+
+.state-pill--paused {
+	background: rgba(143, 176, 196, 0.16);
+	color: var(--color-text-secondary);
+}
+
+.state-pill--not-started {
+	background: rgba(61, 85, 102, 0.28);
+	color: var(--color-text-secondary);
+}
+
+.state-pill--dropped {
+	background: rgba(61, 85, 102, 0.28);
+	color: var(--color-text-muted);
+}
+
+.state-pill--milestone {
+	background: rgba(214, 230, 245, 0.16);
+	color: var(--color-milestone-silver);
+}
