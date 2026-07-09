@@ -22,7 +22,7 @@ warnings: ['oversized']
 ## Boundaries & Constraints
 
 **Always:**
-- **Ordering derives from the single `core/` effective-state function (AD-7).** A new pure `core/shelf.ts` consumes `computeEffectiveState` to filter the default view and order it Playing→Paused→Up next→Not started, alphabetical within each group. No consumer re-derives state; there is **never a raw SQL `ORDER BY play_status`** — the sorted set is materialized in the Worker (`services/`) at v1's ~344-game scale, not keyset-paged (AD-7, FR-17/18/19).
+- **Ordering derives from the single `core/` effective-state function (AD-7).** A new pure `core/shelf.ts` consumes `computeEffectiveState` to filter the default view and order it Playing→Paused→Up next→Not started, owned-then-alphabetical within each group (ownership tier 2026-07-09). No consumer re-derives state; there is **never a raw SQL `ORDER BY play_status`** — the sorted set is materialized in the Worker (`services/`) at v1's ~344-game scale, not keyset-paged (AD-7, FR-17/18/19).
 - **Default shelf hides non-live states (FR-4/17).** Only games whose effective state is one of the four live play statuses show; `Story completed` / `Platinum achieved` / `Dropped` are hidden from the default view. The library = games with a `game_tracking` row for the signed-in user.
 - **Search is a dedicated whole-library query (FR-19, UX-DR16), separate from the filtered-shelf query** — not a client filter over the rendered shelf. It matches every game by title (case-insensitive substring on the display title), **ignoring active filters and hidden states**, and returns the same card DTO.
 - **Two seams honored (AD-4/AD-7).** All D1 access goes through `repositories/`; all state derivation goes through `core/`. `services/shelf.ts` is the only new place that touches repositories + core together. Routes stay thin: `requireAuth` + Zod-validate the response (AR-26), scoped to `c.get('userId')` (AD-13).
@@ -45,7 +45,7 @@ warnings: ['oversized']
 
 | Scenario | Input / State | Expected Output / Behavior | Error Handling |
 |----------|--------------|---------------------------|----------------|
-| Default shelf ordering | User tracks games across all four live statuses + a Completed + a Dropped | Only live games returned, ordered Playing→Paused→Up next→Not started, alphabetical within each group; Completed & Dropped absent | No error |
+| Default shelf ordering | User tracks games across all four live statuses + a Completed + a Dropped | Only live games returned, ordered Playing→Paused→Up next→Not started, owned-then-alphabetical within each group; Completed & Dropped absent | No error |
 | Effective-state via milestone | Tracking `play_status=null`, `completed_on` set | Effective state `Story completed` → hidden from default shelf | No error |
 | Playing + prior completion | Tracking `play_status='Playing'`, `completed_on` set | Shown on shelf (effective `Playing`); card still shows ✓ milestone badge | No error |
 | Search whole-library | Query `q` matching a Dropped/Completed/wishlist title | Match returned (ignores hidden states & filters); same DTO shape | No error |
@@ -105,7 +105,7 @@ warnings: ['oversized']
 
 **Acceptance Criteria:**
 - Given seeded games, when the shelf loads, then a responsive cover-forward grid renders cards with cover art, Orbitron-ellipsis name, effective-state pill, owned indicator, and flag icons (PS+ Extra, release-state, milestone), with genres shown on desktop only (FR-15, FR-8, UX-DR6/DR26)
-- Given the default view with no filters, when the shelf renders, then only live-play-status games show (Completed/Platinum/Dropped hidden), ordered Playing→Paused→Up next→Not started, alphabetical within each group, with ordering derived from the single `core/` effective-state function — never a raw `ORDER BY play_status` (FR-17/18, FR-4, AD-7)
+- Given the default view with no filters, when the shelf renders, then only live-play-status games show (Completed/Platinum/Dropped hidden), ordered Playing→Paused→Up next→Not started, owned-then-alphabetical within each group, with ordering derived from the single `core/` effective-state function — never a raw `ORDER BY play_status` (FR-17/18, FR-4, AD-7)
 - Given a large library, when scrolling, then the shelf renders progressively over the effective-state-sorted set materialized in the Worker/client, not a SQL cursor (FR-19, FR-8, AD-7)
 - Given the persistent search bar, when typing a title, then a dedicated whole-library query — separate from the filtered-shelf query — matches every game ignoring active filters and hidden states, and matches are listed (FR-19, UX-DR16)
 - Given first load or an empty library, when the shelf renders, then cover-shaped skeletons show while pending and an empty library shows `INSERT GAMES` (no dead Sync/Add CTAs) (UX-DR12/17/18)

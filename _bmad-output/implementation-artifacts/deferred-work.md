@@ -112,3 +112,7 @@ decision: 2026-07-08 Add requirement refs — Add bracketed FR/AR/UX-DR requirem
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-5-edit-genres-in-detail.md`
   summary: Case-insensitive genre dedup is check-then-insert in the service; the `genre.name` unique constraint is case-sensitive, so two concurrent adds of case-variants ("Action"/"action") can still mint the near-duplicate FR-24 forbids.
   evidence: `src/services/genres.ts` (`findGenreByNameInsensitive` → `upsertGenre`) with `src/schema/catalog.ts` `genre.name` `unique()` on BINARY collation. Fix is a `lower(name)` (or COLLATE NOCASE) unique index via a migration — same untransacted-write-seam family as the 2.4 deferral; single-user exposure only.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-shelf-order-owned-tier.md`
+  summary: Decide whether the FR-18 ownership tier also applies to Epic 3 filtered/reveal-pill shelf views (they flow through the same orderShelf), and document it in the Epic 3 spec.
+  evidence: orderShelf is the single ordering seam (AD-7); any future filtered view silently inherits owned-first with no artifact stating whether that is intended.

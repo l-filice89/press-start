@@ -30,9 +30,10 @@ export function isDefaultShelfVisible(state: EffectiveState): boolean {
 	return SHELF_STATE_ORDER.includes(state);
 }
 
-/** The minimal shape shelf ordering needs — anything carrying its effective state + title. */
+/** The minimal shape shelf ordering needs — effective state + ownership + title. */
 export interface ShelfSortable {
 	effectiveState: EffectiveState;
+	owned: boolean;
 	title: string;
 }
 
@@ -47,13 +48,16 @@ function shelfRank(state: EffectiveState): number {
 }
 
 /**
- * Comparator over the shelf: by state priority, then alphabetical by title
- * within a state group. Case-insensitive, locale-aware title compare so
- * `apex` and `Apex` sort together.
+ * Comparator over the shelf: by state priority, then owned before wishlisted
+ * (`wishlisted = !owned` — this tier is ownership, NOT `playableNow`: an owned
+ * pre-order still sorts first, an un-owned PS+-catalog game still sinks),
+ * then alphabetical by title. Case-insensitive, locale-aware title compare so
+ * `apex` and `Apex` sort together. (FR-18, ownership tier 2026-07-09.)
  */
 export function compareShelf(a: ShelfSortable, b: ShelfSortable): number {
 	const byState = shelfRank(a.effectiveState) - shelfRank(b.effectiveState);
 	if (byState !== 0) return byState;
+	if (a.owned !== b.owned) return a.owned ? -1 : 1;
 	return a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
 }
 

@@ -117,9 +117,9 @@ export async function loadLibrary(
 
 /**
  * The default backlog shelf: live-play-status games only (Completed/Platinum/
- * Dropped hidden), ordered Playing→Paused→Up next→Not started, alphabetical
- * within each group — the whole sorted set materialized here (AD-7), never a
- * SQL `ORDER BY play_status`.
+ * Dropped hidden), ordered Playing→Paused→Up next→Not started, owned before
+ * un-owned, alphabetical within each group — the whole sorted set materialized
+ * here (AD-7), never a SQL `ORDER BY play_status`.
  */
 export async function getShelf(db: Db, userId: string): Promise<ShelfGame[]> {
 	const library = await loadLibrary(db, userId);
@@ -132,7 +132,9 @@ export async function getShelf(db: Db, userId: string): Promise<ShelfGame[]> {
  * The dedicated whole-library search (FR-19) — a separate path from `getShelf`,
  * NOT a filter over the shelf result. Matches every game by case-insensitive
  * substring on the display title, ignoring active filters and hidden states.
- * Blank query → no results (the SPA falls back to the shelf).
+ * Plain alphabetical on purpose — the shelf's state/ownership tiers (FR-18)
+ * do NOT apply here. Blank query → no results (the SPA falls back to the
+ * shelf).
  */
 export async function searchLibrary(
 	db: Db,
