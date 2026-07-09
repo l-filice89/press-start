@@ -100,6 +100,7 @@ decision: 2026-07-08 Add requirement refs — Add bracketed FR/AR/UX-DR requirem
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-4-edit-ownership-and-lifecycle-dates-in-detail.md`
   summary: Every tracking write is an untransacted read-decide-write (`getTracking` → core → `upsertTracking`), so concurrent PATCHes can interleave — double-stamping write-once `bought_on`, persisting a type on an un-owned row, or breaking the completion invariant via a status-clear racing a milestone-date-clear; the "deleted underneath us" comment on the post-upsert guard is also wrong (the upsert is insert-or-update and always returns a row — a concurrent delete is silently resurrected, not 404'd).
   evidence: `src/services/tracking.ts` (all four write functions, pattern established in 2.1) and `src/repositories/tracking.ts:30` (`onConflictDoUpdate` + `returning()`). D1 has no interactive transactions from Drizzle here; a fix is conditional UPDATEs (`WHERE bought_on IS NULL`, invariant re-checked in SQL) — a seam-wide change, not a per-route patch. Single-user app today, so exposure is one person's own racing tabs.
+  decision: 2026-07-09 Fix now — promoted by the Epic 2 retro; Luca triages and schedules the fix post-retro (conditional UPDATEs enforcing write-once/invariants in SQL).
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-4-edit-ownership-and-lifecycle-dates-in-detail.md`
   summary: Toast UNDO callbacks (`Dropped` status since 2.1, un-own in 2.4) call the raw mutation directly, bypassing the in-flight pending guard every other entry point gets, so an UNDO can interleave with a pending write on the same game.
@@ -112,6 +113,7 @@ decision: 2026-07-08 Add requirement refs — Add bracketed FR/AR/UX-DR requirem
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-5-edit-genres-in-detail.md`
   summary: Case-insensitive genre dedup is check-then-insert in the service; the `genre.name` unique constraint is case-sensitive, so two concurrent adds of case-variants ("Action"/"action") can still mint the near-duplicate FR-24 forbids.
   evidence: `src/services/genres.ts` (`findGenreByNameInsensitive` → `upsertGenre`) with `src/schema/catalog.ts` `genre.name` `unique()` on BINARY collation. Fix is a `lower(name)` (or COLLATE NOCASE) unique index via a migration — same untransacted-write-seam family as the 2.4 deferral; single-user exposure only.
+  decision: 2026-07-09 Fix now — promoted by the Epic 2 retro; Luca triages and schedules the fix post-retro (NOCASE unique index migration).
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-shelf-order-owned-tier.md`
   summary: Decide whether the FR-18 ownership tier also applies to Epic 3 filtered/reveal-pill shelf views (they flow through the same orderShelf), and document it in the Epic 3 spec.
