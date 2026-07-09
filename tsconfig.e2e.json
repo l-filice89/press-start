@@ -1,0 +1,27 @@
+{
+	"compilerOptions": {
+		"tsBuildInfoFile": "./node_modules/.tmp/tsconfig.e2e.tsbuildinfo",
+		"target": "es2023",
+		"lib": ["ES2023", "DOM"],
+		"types": ["node"],
+		"skipLibCheck": true,
+
+		/* Playwright transpiles specs itself with bundler-style resolution;
+		   nodenext breaks @seontechnologies/playwright-utils' extensionless
+		   type imports, so this project intentionally differs from
+		   tsconfig.node.json. */
+		"module": "esnext",
+		"moduleResolution": "bundler",
+		"verbatimModuleSyntax": true,
+		"moduleDetection": "force",
+		"noEmit": true,
+
+		/* Linting */
+		"noUnusedLocals": true,
+		"noUnusedParameters": true,
+		"erasableSyntaxOnly": true,
+		"noFallthroughCasesInSwitch": true,
+		"strict": true
+	},
+	"include": ["playwright.config.ts", "playwright/**/*.ts"]
+}

@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-06
-last_updated: 2026-07-09
+last_updated: 2026-07-10
 project: ps-game-catalog
 project_key: NOKEY
 tracking_system: file-system
@@ -67,6 +67,14 @@ development_status:
   2-4-edit-ownership-and-lifecycle-dates-in-detail: done
   2-5-edit-genres-in-detail: done
   epic-2-retrospective: done
+
+  # Epic 2.5: Playwright Foundation — Trust Every Click
+  epic-2-5: backlog
+  2-5-1-playwright-framework-auth-smoke-test: backlog
+  2-5-2-backfill-epic-1-e2e-flows: backlog
+  2-5-3-backfill-epic-2-e2e-flows: backlog
+  2-5-4-standing-rule-every-ui-ac-ships-with-a-playwright-test: backlog
+  epic-2-5-retrospective: optional
 
   # Epic 3: Filter & Focus the Backlog
   epic-3: backlog

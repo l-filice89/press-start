@@ -40,6 +40,36 @@
 	"vars": {
 		"AUTH_ALLOWED_EMAIL": "l.filice.89@gmail.com",
 		"AUTH_EMAIL_FROM": "PRESS START <onboarding@resend.dev>"
+	},
+	/**
+	 * Playwright e2e environment (Epic 2.5 TR-1), selected via CLOUDFLARE_ENV=e2e.
+	 * Named envs don't inherit vars/d1/assets, so they're redefined here:
+	 * - distinct database_id → isolated local D1 state under .wrangler/state
+	 *   (tests never touch the dev database)
+	 * - secrets come from `.dev.vars.e2e`, which has NO RESEND_API_KEY, so the
+	 *   console email provider is guaranteed and magic links land in stdout
+	 * This env is local-only; `wrangler deploy` (no --env) never uses it.
+	 */
+	"env": {
+		"e2e": {
+			"assets": {
+				"binding": "ASSETS",
+				"not_found_handling": "single-page-application",
+				"run_worker_first": ["/api/*"]
+			},
+			"d1_databases": [
+				{
+					"binding": "DB",
+					"database_name": "ps-game-catalog-e2e",
+					"database_id": "00000000-e2e0-4000-8000-000000000e2e",
+					"migrations_dir": "migrations"
+				}
+			],
+			"vars": {
+				"AUTH_ALLOWED_EMAIL": "e2e@press-start.local",
+				"AUTH_EMAIL_FROM": ""
+			}
+		}
 	}
 	/**
 	 * Smart Placement
