@@ -37,3 +37,4 @@ __pycache__/
 # Logs
 *.log
 npm-debug.log*
+*.stackdump
