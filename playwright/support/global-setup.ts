@@ -1,7 +1,16 @@
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { request } from '@playwright/test';
-import { BASE_URL, E2E_EMAIL, E2E_PORT, PID_FILE, STORAGE_STATE } from './server';
+import { resetDb, seedBaseline } from './helpers/d1';
+import {
+	BASE_URL,
+	E2E_EMAIL,
+	E2E_PORT,
+	MAGIC_LINK_RE,
+	PID_FILE,
+	SERVER_LOG,
+	STORAGE_STATE,
+} from './server';
 
 /**
  * Boots the real app (vite dev + Worker + isolated e2e D1) and signs in once
@@ -32,6 +41,10 @@ export default async function globalSetup() {
 		{ stdio: 'inherit' },
 	);
 
+	// Reset to the identical zero state every run (TR-1: deterministic,
+	// resettable) — the e2e D1 persists under .wrangler across runs.
+	resetDb();
+
 	// Spawn the dev server ourselves (not Playwright's webServer): we must
 	// read its stdout to capture the magic link.
 	const child = spawn('bun', ['x', 'vite', 'dev', '--port', String(E2E_PORT), '--strictPort'], {
@@ -40,12 +53,13 @@ export default async function globalSetup() {
 		detached: process.platform !== 'win32', // POSIX: own process group so teardown can kill the tree
 	});
 	let output = '';
-	child.stdout.on('data', (d: Buffer) => {
+	writeFileSync(SERVER_LOG, ''); // fresh log; specs tail this for magic links
+	const capture = (d: Buffer) => {
 		output += d.toString();
-	});
-	child.stderr.on('data', (d: Buffer) => {
-		output += d.toString();
-	});
+		appendFileSync(SERVER_LOG, d);
+	};
+	child.stdout.on('data', capture);
+	child.stderr.on('data', capture);
 	writeFileSync(PID_FILE, String(child.pid));
 
 	try {
@@ -68,7 +82,7 @@ export default async function globalSetup() {
 		}
 
 		const link = await waitFor(
-			() => output.match(/\[auth\] magic link for \S+: (\S+)/)?.[1],
+			() => output.match(MAGIC_LINK_RE)?.[1],
 			'magic link in server stdout (is the console email provider active?)',
 			15_000,
 		);
@@ -81,6 +95,9 @@ export default async function globalSetup() {
 		if (!me.ok()) {
 			throw new Error(`session not established: /api/me returned ${me.status()}`);
 		}
+
+		// Baseline fixture rides the user row the sign-in just created.
+		seedBaseline();
 
 		mkdirSync('playwright/.auth', { recursive: true });
 		await api.storageState({ path: STORAGE_STATE });

@@ -1,7 +1,11 @@
 name: CI
 
+# push is scoped to main so a PR head SHA gets exactly ONE "CI OK" check run
+# — otherwise the push-event run (which legitimately skips burn-in) races the
+# pull_request run for the same required-check name in branch protection.
 on:
   push:
+    branches: [main]
   pull_request:
 
 # Superseded pushes to the same branch cancel the older run — no point
@@ -136,7 +140,9 @@ jobs:
         if: steps.changed.outputs.specs != ''
         run: |
           # ponytail: --repeat-each replaces the classic bash burn-in loop; bump to 10 if flakes slip through
-          bunx playwright test ${{ steps.changed.outputs.specs }} --repeat-each 5 --retries 0
+          # --workers 1: repeats of one spec must not run concurrently — the
+          # auth-journey repeats would steal each other's single-use magic links
+          bunx playwright test ${{ steps.changed.outputs.specs }} --repeat-each 5 --retries 0 --workers 1
 
       - name: Upload burn-in failure artifacts
         if: failure()
@@ -147,3 +153,32 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 7
+
+  # Single merge gate (AR-23): branch protection needs exactly one required
+  # check — point it at "CI OK". Fails if any upstream job failed or was
+  # cancelled; burn-in may legitimately skip (push events, no changed specs).
+  ci-ok:
+    name: CI OK
+    runs-on: ubuntu-latest
+    needs: [quality-gate, e2e, e2e-burn-in]
+    if: always()
+    steps:
+      - name: Verify all gates passed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        # Iterates every `needs` entry so a job added to `needs` can never be
+        # forgotten here. Only e2e-burn-in may skip (push events / no changed
+        # specs); a skipped required job is a failure, not a pass.
+        run: |
+          echo "$RESULTS"
+          failed=0
+          for job in $(echo "$RESULTS" | jq -r 'keys[]'); do
+            result=$(echo "$RESULTS" | jq -r ".\"$job\".result")
+            if [ "$result" = "success" ] || { [ "$job" = "e2e-burn-in" ] && [ "$result" = "skipped" ]; }; then
+              echo "$job: $result (ok)"
+            else
+              echo "::error::$job result: $result"
+              failed=1
+            fi
+          done
+          exit $failed

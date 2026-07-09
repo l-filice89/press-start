@@ -130,3 +130,6 @@ decision: 2026-07-08 Add requirement refs — Add bracketed FR/AR/UX-DR requirem
 - source_spec: `_bmad-output/implementation-artifacts/spec-platinum-only-auto-hide.md`
   summary: A detail panel opened from search on an already-hidden game (Dropped, or milestone-only) auto-closes on any milestone log because `onHidden` keys off the returned state being in `HIDDEN_STATES`, even when the write never changed the card's visibility.
   evidence: `web/shelf/useTrackingMutations.ts` milestone `onSuccess` — logging `completed` on a Dropped or platinum-first game returns `Dropped`/`Platinum achieved`, firing `onHidden` though the game was hidden before and after. Pre-existing (the old auto-clear path behaved the same); fix is comparing visibility before/after rather than testing the new state alone.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-5-1-playwright-framework-auth-smoke-test.md`
+  summary: CI burn-in job interpolates git-diff-derived spec filenames directly into a shell command (`bunx playwright test ${{ steps.changed.outputs.specs }}`).
+  evidence: Pre-existing from dae7d7f but now merge-relevant via the ci-ok gate; a hostile filename under playwright/e2e/ would be shell-interpolated. Mitigated today by pull_request read-only fork tokens and a single-maintainer repo.

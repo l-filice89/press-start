@@ -15,8 +15,19 @@ bun x playwright show-report             # last HTML report
 
 No setup beyond `bun install` (+ `bun x playwright install chromium` once).
 The suite owns its server: global-setup applies migrations to the e2e D1,
-spawns `vite dev` on **port 5175**, and tears it down afterwards. Your own
+**resets it to the identical zero state, seeds the baseline fixture**, spawns
+`vite dev` on **port 5175**, and tears it down afterwards. Your own
 `bun run dev` on 5173 is untouched, as is your dev database.
+
+## Baseline fixture (deterministic, resettable)
+
+Every run starts identical: `resetDb()` wipes all app + auth tables, then
+`seedBaseline()` inserts `BASELINE_GAMES` (three fixed games — *Baseline
+Alpha/Beta/Gamma*, statuses Playing / Up next / Not started, all in the
+default visible shelf set). Specs may rely on these rows and **must not
+mutate or delete them** — seed your own via `createGame()` for anything else.
+`auth-journey.spec.ts` asserts the baseline is exact, so residue from a
+missing reset fails the suite.
 
 ## Auth (magic link, zero real emails)
 
@@ -25,7 +36,14 @@ console email provider. Global-setup requests a magic link for
 `e2e@press-start.local`, captures the URL from the server's stdout, visits it,
 and saves the session to `playwright/.auth/user.json` — every test starts
 already signed in. This is why the server is spawned by global-setup instead
-of Playwright's `webServer` (stdout would be unreachable).
+of Playwright's `webServer` (stdout would be unreachable). Server output is
+also mirrored to `playwright/.server.log` so specs can capture links too.
+
+The exception is `e2e/auth-journey.spec.ts`: it starts signed out
+(`storageState: { cookies: [], origins: [] }`) and drives the whole journey
+through the UI — login gate → request link → follow the captured link →
+baseline games on the shelf. That's the story-2.5.1 smoke proof; everything
+else stays on the fast pre-authed path.
 
 ## Architecture
 
@@ -63,9 +81,12 @@ test('shows expired-cookie banner', { annotation: [{ type: 'skipNetworkMonitorin
 ## CI
 
 `playwright.config.ts` is CI-aware: 2 retries, JUnit + HTML reporters,
-trace/screenshot/video retained on failure. The job needs Bun + `bun x
-playwright install --with-deps chromium`, then `bun run test:e2e`. (CI wiring
-lands with the Epic 2.5 stories / `bmad-testarch-ci`.)
+trace/screenshot/video retained on failure. `.github/workflows/ci.yml` runs
+the same `bun run test:e2e` on every push/PR (plus a 5x burn-in of changed
+specs on PRs) and funnels everything into one **CI OK** gate job — point
+branch protection's single required check at `CI OK` so a red e2e blocks
+merge. Setting that branch-protection rule is a one-time manual repo-admin
+step.
 
 ## Troubleshooting
 
@@ -74,9 +95,10 @@ lands with the Epic 2.5 stories / `bmad-testarch-ci`.)
   The captured server output is printed on failure.
 - **Port 5175 busy** → a previous run leaked; kill it (`taskkill /pid <pid> /T /F`)
   or set `BASE_URL` to another port.
-- **Stale/corrupt e2e data** → the e2e D1 lives under `.wrangler/state/v3/d1`
-  (database id `00000000-e2e0-…`); delete that database's folder and rerun —
-  global-setup re-applies migrations.
+- **Stale/corrupt e2e data** → normally impossible: global-setup resets all
+  tables every run. If the file itself is corrupt, the e2e D1 lives under
+  `.wrangler/state/v3/d1` (database id `00000000-e2e0-…`); delete that
+  database's folder and rerun — global-setup re-applies migrations.
 - **Debugging a failure** → `bun x playwright show-trace test-results/<test>/trace.zip`.
 
 ## References
