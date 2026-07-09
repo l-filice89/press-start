@@ -173,6 +173,48 @@ export async function editDates(
 	return playStatusResponseSchema.parse(body).effectiveState;
 }
 
+const genresResponseSchema = z.object({ genres: z.array(z.string()) });
+
+/**
+ * Tag a game with a genre by name (Story 2.5, FR-24/FR-25). A name not yet in
+ * the vocabulary auto-creates the genre row server-side (case-insensitive
+ * reuse). Resolves to the game's updated genre list.
+ */
+export async function addGenre(
+	gameId: string,
+	name: string,
+): Promise<string[]> {
+	const body = await callApi(
+		`/api/games/${encodeURIComponent(gameId)}/genres`,
+		{
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ name }),
+		},
+	);
+	return genresResponseSchema.parse(body).genres;
+}
+
+/** Untag a game (idempotent server-side). Resolves to the updated list. */
+export async function removeGenre(
+	gameId: string,
+	name: string,
+): Promise<string[]> {
+	const body = await callApi(
+		`/api/games/${encodeURIComponent(gameId)}/genres/${encodeURIComponent(name)}`,
+		{ method: 'DELETE' },
+	);
+	return genresResponseSchema.parse(body).genres;
+}
+
+/** The whole genre vocabulary, sorted — feeds the add input's suggestions. */
+export async function fetchGenreVocabulary(
+	signal?: AbortSignal,
+): Promise<string[]> {
+	const body = await callApi('/api/genres', { signal });
+	return genresResponseSchema.parse(body).genres;
+}
+
 /** The default backlog shelf (server-ordered, hidden states removed). */
 export function fetchShelf(signal?: AbortSignal): Promise<ShelfGame[]> {
 	return fetchGames('/api/shelf', signal);

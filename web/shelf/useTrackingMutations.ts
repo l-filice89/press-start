@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import { useToast } from '../components/Toast';
 import {
+	addGenre,
 	changeOwnership,
 	changePlayStatus,
 	type DateEdits,
@@ -11,6 +12,7 @@ import {
 	type Milestone,
 	type OwnershipType,
 	type PlayStatus,
+	removeGenre,
 	type ShelfGame,
 } from './api';
 
@@ -257,6 +259,44 @@ export function useTrackingMutations(
 		[game.title, mutateDates, datesPending, toast],
 	);
 
+	// Genre edits (Story 2.5): plain toasts — removing a genre is reversed by a
+	// trivial re-add, so no UNDO. Writes invalidate the shelf (chips + cards
+	// re-bake) and the vocabulary (an auto-created genre becomes a suggestion).
+	const genreMutation = useMutation({
+		mutationFn: (op: { kind: 'add' | 'remove'; name: string }) =>
+			op.kind === 'add'
+				? addGenre(game.id, op.name)
+				: removeGenre(game.id, op.name),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ['shelf'] });
+			queryClient.invalidateQueries({ queryKey: ['genres'] });
+		},
+		onError: () =>
+			toast({ message: `Couldn’t update ${game.title}. Try again.` }),
+	});
+	const { mutate: mutateGenre, isPending: genrePending } = genreMutation;
+
+	const editGenre = useCallback(
+		(op: { kind: 'add' | 'remove'; name: string }, onDone?: () => void) => {
+			// Same race guard as `selectStatus`, scoped to genre writes.
+			if (genrePending) {
+				toast({
+					message: `Still saving ${game.title}. Try again in a moment.`,
+				});
+				return;
+			}
+			mutateGenre(op, {
+				onSuccess: () => {
+					toast({
+						message: `${game.title} — ${op.name} ${op.kind === 'add' ? 'added' : 'removed'}`,
+					});
+					onDone?.();
+				},
+			});
+		},
+		[game.title, genrePending, mutateGenre, toast],
+	);
+
 	const cancelConfirm = useCallback(() => {
 		setConfirming(null);
 		onConfirmClose?.();
@@ -294,6 +334,7 @@ export function useTrackingMutations(
 		selectStatus,
 		setOwnership,
 		saveDates,
+		editGenre,
 		milestoneRows,
 		activateMilestoneRow,
 		confirming,

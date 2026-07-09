@@ -3,7 +3,7 @@
  * (FR-23) and auto-created on first sighting; both `upsertGenre` and
  * `linkGameGenre` are idempotent so ingest can replay safely.
  */
-import { eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { gameGenre, genre } from '../schema/catalog';
 import type { Db } from './db';
 
@@ -17,18 +17,51 @@ export async function upsertGenre(db: Db, name: string) {
 	return row;
 }
 
+/**
+ * Case-insensitive vocabulary lookup (Story 2.5): `action` finds `Action`, so
+ * a manual add reuses the IGDB row instead of minting a near-duplicate.
+ */
+export async function findGenreByNameInsensitive(db: Db, name: string) {
+	const [row] = await db
+		.select()
+		.from(genre)
+		.where(sql`lower(${genre.name}) = lower(${name})`)
+		.limit(1);
+	return row;
+}
+
+/** Untag a game. Idempotent — deleting an absent link is a no-op. */
+export async function unlinkGameGenre(db: Db, gameId: string, genreId: string) {
+	await db
+		.delete(gameGenre)
+		.where(and(eq(gameGenre.gameId, gameId), eq(gameGenre.genreId, genreId)));
+}
+
+// BINARY collation would sort `Zelda` before `action`; NOCASE keeps every
+// genre listing alphabetical regardless of the casing a name arrived with.
+const byNameNocase = sql`${genre.name} collate nocase`;
+
+/** The whole vocabulary, sorted by name. The genre row survives unlinking. */
+export async function listAllGenres(db: Db) {
+	return db
+		.select({ id: genre.id, name: genre.name })
+		.from(genre)
+		.orderBy(asc(byNameNocase));
+}
+
 /** Tag a game with a genre. Idempotent — the composite PK ignores a repeat. */
 export async function linkGameGenre(db: Db, gameId: string, genreId: string) {
 	await db.insert(gameGenre).values({ gameId, genreId }).onConflictDoNothing();
 }
 
-/** Every genre tagged on a game. */
+/** Every genre tagged on a game, sorted so chips render in a stable order. */
 export async function listGenresForGame(db: Db, gameId: string) {
 	return db
 		.select({ id: genre.id, name: genre.name })
 		.from(gameGenre)
 		.innerJoin(genre, eq(gameGenre.genreId, genre.id))
-		.where(eq(gameGenre.gameId, gameId));
+		.where(eq(gameGenre.gameId, gameId))
+		.orderBy(asc(byNameNocase));
 }
 
 /**
@@ -56,7 +89,8 @@ export async function listGenresForGames(
 				.select({ gameId: gameGenre.gameId, name: genre.name })
 				.from(gameGenre)
 				.innerJoin(genre, eq(gameGenre.genreId, genre.id))
-				.where(inArray(gameGenre.gameId, chunk))),
+				.where(inArray(gameGenre.gameId, chunk))
+				.orderBy(asc(byNameNocase))),
 		);
 	}
 	return rows;

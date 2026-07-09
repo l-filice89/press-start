@@ -63,11 +63,21 @@ function renderCard(g: ShelfGame = game()) {
 let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
-	fetchMock = vi.fn(async () => ({
-		ok: true,
-		status: 200,
-		json: async () => ({ effectiveState: 'Playing' }),
-	}));
+	// The vocabulary GET (['genres'] query, Story 2.5) fires on panel open;
+	// route it apart from the tracking writes so both parse.
+	fetchMock = vi.fn(async (url: string) =>
+		url.includes('/genres')
+			? {
+					ok: true,
+					status: 200,
+					json: async () => ({ genres: ['Action', 'Roguelite'] }),
+				}
+			: {
+					ok: true,
+					status: 200,
+					json: async () => ({ effectiveState: 'Playing' }),
+				},
+	);
 	vi.stubGlobal('fetch', fetchMock);
 });
 
@@ -76,6 +86,10 @@ afterEach(() => {
 });
 
 const cover = () => screen.getByTestId('card-cover-button');
+
+// Every fetch except the read-only vocabulary GET — write assertions count these.
+const writes = () =>
+	fetchMock.mock.calls.filter(([url]) => url !== '/api/genres');
 const panel = () => screen.getByTestId('detail-panel');
 
 async function openPanel(g: ShelfGame = game()) {
@@ -94,7 +108,7 @@ describe('DetailPanel', () => {
 		// Focus moved into the dialog on open.
 		expect(screen.getByRole('button', { name: 'Close details' })).toHaveFocus();
 		// Nothing was written by opening.
-		expect(fetchMock).not.toHaveBeenCalled();
+		expect(writes()).toHaveLength(0);
 	});
 
 	it('has an accessibly named cover trigger, out of the tab order', () => {
@@ -130,7 +144,7 @@ describe('DetailPanel', () => {
 		await user.keyboard('{Escape}');
 
 		expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-		expect(fetchMock).not.toHaveBeenCalled();
+		expect(writes()).toHaveLength(0);
 		expect(screen.getByTestId('shelf-card')).toHaveFocus();
 	});
 
@@ -147,7 +161,7 @@ describe('DetailPanel', () => {
 		await user.click(screen.getByTestId('detail-backdrop'));
 
 		expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-		expect(fetchMock).not.toHaveBeenCalled();
+		expect(writes()).toHaveLength(0);
 	});
 
 	it('shows the five statuses as a radiogroup checked off the raw play status', async () => {
@@ -176,8 +190,8 @@ describe('DetailPanel', () => {
 		const user = await openPanel();
 		await user.click(screen.getByRole('radio', { name: 'Playing' }));
 
-		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-		const [url, init] = fetchMock.mock.calls[0];
+		await waitFor(() => expect(writes()).toHaveLength(1));
+		const [url, init] = writes()[0];
 		expect(url).toBe('/api/games/g1/play-status');
 		expect(init).toMatchObject({ method: 'PATCH' });
 		expect(JSON.parse(init.body)).toEqual({ playStatus: 'Playing' });
@@ -204,8 +218,8 @@ describe('DetailPanel', () => {
 		);
 		await user.click(screen.getByRole('button', { name: 'Clear status' }));
 
-		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-		const [url, init] = fetchMock.mock.calls[0];
+		await waitFor(() => expect(writes()).toHaveLength(1));
+		const [url, init] = writes()[0];
 		expect(url).toBe('/api/games/g1/play-status');
 		expect(init).toMatchObject({ method: 'PATCH' });
 		expect(JSON.parse(init.body)).toEqual({ playStatus: null });
@@ -237,7 +251,7 @@ describe('DetailPanel', () => {
 		await user.keyboard('{ArrowLeft}');
 		expect(screen.getByRole('radio', { name: 'Dropped' })).toHaveFocus();
 		// Arrows only move focus — selection is a deliberate activation.
-		expect(fetchMock).not.toHaveBeenCalled();
+		expect(writes()).toHaveLength(0);
 	});
 
 	it('closes itself when its own write hides the card from the shelf', async () => {
@@ -293,8 +307,8 @@ describe('DetailPanel', () => {
 		// same reversible risky action as Dropped, so the toast carries UNDO.
 		const undo = await screen.findByRole('button', { name: 'Undo' });
 		await user.click(undo);
-		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-		expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
+		await waitFor(() => expect(writes()).toHaveLength(2));
+		expect(JSON.parse(writes()[1][1].body)).toEqual({
 			playStatus: 'Playing',
 		});
 	});
@@ -330,11 +344,11 @@ describe('DetailPanel', () => {
 		expect(
 			screen.getByRole('dialog', { name: /Log Story completed/ }),
 		).toBeInTheDocument();
-		expect(fetchMock).not.toHaveBeenCalled();
+		expect(writes()).toHaveLength(0);
 
 		await user.click(screen.getByRole('button', { name: 'Confirm' }));
-		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-		const [url, init] = fetchMock.mock.calls[0];
+		await waitFor(() => expect(writes()).toHaveLength(1));
+		const [url, init] = writes()[0];
 		expect(url).toBe('/api/games/g1/milestones');
 		expect(init).toMatchObject({ method: 'POST' });
 		expect(JSON.parse(init.body)).toEqual({ milestone: 'completed' });
@@ -349,7 +363,7 @@ describe('DetailPanel', () => {
 			screen.queryByRole('dialog', { name: /Log Platinum/ }),
 		).not.toBeInTheDocument();
 		expect(screen.getByRole('dialog', { name: 'Bloodborne' })).toBeVisible();
-		expect(fetchMock).not.toHaveBeenCalled();
+		expect(writes()).toHaveLength(0);
 	});
 
 	it('shows an achieved milestone disabled with its date, inert on activation', async () => {
@@ -370,7 +384,7 @@ describe('DetailPanel', () => {
 		expect(
 			screen.queryByRole('dialog', { name: /Log Platinum/ }),
 		).not.toBeInTheDocument();
-		expect(fetchMock).not.toHaveBeenCalled();
+		expect(writes()).toHaveLength(0);
 	});
 
 	it('renders the five lifecycle dates as date inputs, empty when unrecorded', async () => {
@@ -452,8 +466,8 @@ describe('DetailPanel', () => {
 			expect(toggle).toHaveAttribute('aria-pressed', 'false');
 			await user.click(toggle);
 
-			await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-			const [url, init] = fetchMock.mock.calls[0];
+			await waitFor(() => expect(writes()).toHaveLength(1));
+			const [url, init] = writes()[0];
 			expect(url).toBe('/api/games/g1/ownership');
 			expect(init).toMatchObject({ method: 'PATCH' });
 			expect(JSON.parse(init.body)).toEqual({ owned: true });
@@ -471,15 +485,15 @@ describe('DetailPanel', () => {
 			);
 			await user.click(screen.getByRole('button', { name: 'Owned' }));
 
-			await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-			expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+			await waitFor(() => expect(writes()).toHaveLength(1));
+			expect(JSON.parse(writes()[0][1].body)).toEqual({
 				owned: false,
 			});
 
 			const undo = await screen.findByRole('button', { name: 'Undo' });
 			await user.click(undo);
-			await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-			expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
+			await waitFor(() => expect(writes()).toHaveLength(2));
+			expect(JSON.parse(writes()[1][1].body)).toEqual({
 				owned: true,
 				ownershipType: 'physical',
 			});
@@ -498,8 +512,8 @@ describe('DetailPanel', () => {
 			).toHaveAttribute('aria-pressed', 'true');
 
 			await user.click(within(group).getByRole('button', { name: 'digital' }));
-			await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-			expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+			await waitFor(() => expect(writes()).toHaveLength(1));
+			expect(JSON.parse(writes()[0][1].body)).toEqual({
 				ownershipType: 'digital',
 			});
 		});
@@ -509,7 +523,7 @@ describe('DetailPanel', () => {
 				game({ owned: true, ownershipType: 'physical' }),
 			);
 			await user.click(screen.getByRole('button', { name: 'physical' }));
-			expect(fetchMock).not.toHaveBeenCalled();
+			expect(writes()).toHaveLength(0);
 		});
 
 		it('hides the type pair when the game is not owned', async () => {
@@ -529,12 +543,12 @@ describe('DetailPanel', () => {
 			// (React onChange fires per input event) — none of them may PATCH.
 			fireEvent.change(input, { target: { value: '0002-03-01' } });
 			fireEvent.change(input, { target: { value: '2024-03-01' } });
-			expect(fetchMock).not.toHaveBeenCalled();
+			expect(writes()).toHaveLength(0);
 
 			fireEvent.blur(input);
 
-			await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-			const [url, init] = fetchMock.mock.calls[0];
+			await waitFor(() => expect(writes()).toHaveLength(1));
+			const [url, init] = writes()[0];
 			expect(url).toBe('/api/games/g1/dates');
 			expect(init).toMatchObject({ method: 'PATCH' });
 			expect(JSON.parse(init.body)).toEqual({ startedOn: '2024-03-01' });
@@ -550,8 +564,8 @@ describe('DetailPanel', () => {
 			fireEvent.change(input, { target: { value: '' } });
 			fireEvent.blur(input);
 
-			await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-			expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+			await waitFor(() => expect(writes()).toHaveLength(1));
+			expect(JSON.parse(writes()[0][1].body)).toEqual({
 				boughtOn: null,
 			});
 		});
@@ -604,6 +618,89 @@ describe('DetailPanel', () => {
 			expect(
 				screen.getByRole('button', { name: 'Close details' }),
 			).toHaveFocus();
+		});
+	});
+
+	describe('genre editing (Story 2.5)', () => {
+		it('adds a genre via the input: POSTs the name and clears the input', async () => {
+			const user = await openPanel(game());
+
+			const input = screen.getByLabelText('Add genre to Bloodborne');
+			await user.type(input, 'Roguelite');
+			await user.click(screen.getByRole('button', { name: 'Add' }));
+
+			await waitFor(() => expect(writes()).toHaveLength(1));
+			const [url, init] = writes()[0];
+			expect(url).toBe('/api/games/g1/genres');
+			expect(init).toMatchObject({ method: 'POST' });
+			expect(JSON.parse(init.body)).toEqual({ name: 'Roguelite' });
+			expect(await screen.findByTestId('toast')).toHaveTextContent(
+				'Bloodborne — Roguelite added',
+			);
+			await waitFor(() => expect(input).toHaveValue(''));
+		});
+
+		it('submits on Enter inside the input', async () => {
+			const user = await openPanel(game());
+
+			await user.type(
+				screen.getByLabelText('Add genre to Bloodborne'),
+				'Action{Enter}',
+			);
+
+			await waitFor(() => expect(writes()).toHaveLength(1));
+			expect(JSON.parse(writes()[0][1].body)).toEqual({ name: 'Action' });
+		});
+
+		it('an empty input does not POST', async () => {
+			const user = await openPanel(game());
+
+			await user.click(screen.getByRole('button', { name: 'Add' }));
+
+			expect(writes()).toHaveLength(0);
+		});
+
+		it('removes a genre from its chip: DELETEs the encoded name', async () => {
+			const user = await openPanel(game({ genres: ['Open world', 'Action'] }));
+
+			await user.click(
+				screen.getByRole('button', { name: 'Remove Open world' }),
+			);
+
+			await waitFor(() => expect(writes()).toHaveLength(1));
+			const [url, init] = writes()[0];
+			expect(url).toBe('/api/games/g1/genres/Open%20world');
+			expect(init).toMatchObject({ method: 'DELETE' });
+			expect(await screen.findByTestId('toast')).toHaveTextContent(
+				'Bloodborne — Open world removed',
+			);
+		});
+
+		it('suggests the vocabulary through the datalist', async () => {
+			await openPanel(game());
+
+			const input = screen.getByLabelText('Add genre to Bloodborne');
+			const datalist = document.getElementById(
+				input.getAttribute('list') as string,
+			);
+			await waitFor(() => {
+				const options = Array.from(
+					datalist?.querySelectorAll('option') ?? [],
+				).map((o) => o.value);
+				expect(options).toEqual(['Action', 'Roguelite']);
+			});
+		});
+
+		it('offers only add and remove — no merge/rename tool (FR-25)', async () => {
+			await openPanel(game({ genres: ['Action'] }));
+
+			const section = screen
+				.getByRole('heading', { name: 'Genres' })
+				.closest('section') as HTMLElement;
+			const controls = within(section).getAllByRole('button');
+			expect(
+				controls.map((b) => b.getAttribute('aria-label') ?? b.textContent),
+			).toEqual(['Remove Action', 'Add']);
 		});
 	});
 });

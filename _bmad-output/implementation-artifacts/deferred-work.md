@@ -108,3 +108,7 @@ decision: 2026-07-08 Add requirement refs — Add bracketed FR/AR/UX-DR requirem
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-4-edit-ownership-and-lifecycle-dates-in-detail.md`
   summary: `bash.exe.stackdump` is a tracked crash-dump junk file that keeps riding into diffs as line-ending churn; delete it and gitignore `*.stackdump`.
   evidence: `git ls-files` lists it at the repo root; it re-appeared in this story's working tree as CRLF churn (reverted during review). Not this story's artifact — a one-commit cleanup.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-5-edit-genres-in-detail.md`
+  summary: Case-insensitive genre dedup is check-then-insert in the service; the `genre.name` unique constraint is case-sensitive, so two concurrent adds of case-variants ("Action"/"action") can still mint the near-duplicate FR-24 forbids.
+  evidence: `src/services/genres.ts` (`findGenreByNameInsensitive` → `upsertGenre`) with `src/schema/catalog.ts` `genre.name` `unique()` on BINARY collation. Fix is a `lower(name)` (or COLLATE NOCASE) unique index via a migration — same untransacted-write-seam family as the 2.4 deferral; single-user exposure only.

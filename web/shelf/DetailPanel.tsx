@@ -1,9 +1,11 @@
+import { useQuery } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { FOCUSABLE_SELECTOR } from '../components/focusable';
 import {
 	type DateEdits,
+	fetchGenreVocabulary,
 	OWNERSHIP_TYPES,
 	PLAY_STATUSES,
 	type ShelfGame,
@@ -71,8 +73,6 @@ function DateRow({
  * caller owns returning focus to the originating card. Full-screen <760px,
  * centered otherwise; flip-then-grow entry, cross-fade under
  * `prefers-reduced-motion`.
- *
- * Display only for ownership/dates/genres — editing those is Stories 2.4/2.5.
  */
 export function DetailPanel({
 	game,
@@ -84,11 +84,23 @@ export function DetailPanel({
 	const dialogRef = useRef<HTMLDivElement>(null);
 	const closeRef = useRef<HTMLButtonElement>(null);
 	const titleId = useId();
+	const genreListId = useId();
+
+	// The add input's draft; cleared only after a successful add.
+	const [genreDraft, setGenreDraft] = useState('');
+
+	// Vocabulary suggestions for the datalist (Story 2.5). Persisted data only
+	// (NFR-3) — the API reads D1, never IGDB. Writes invalidate ['genres'].
+	const { data: vocabulary } = useQuery({
+		queryKey: ['genres'],
+		queryFn: ({ signal }) => fetchGenreVocabulary(signal),
+	});
 
 	const {
 		selectStatus,
 		setOwnership,
 		saveDates,
+		editGenre,
 		milestoneRows,
 		activateMilestoneRow,
 		confirming,
@@ -334,9 +346,55 @@ export function DetailPanel({
 
 					<section className="detail-panel__section">
 						<h3 className="detail-panel__heading">Genres</h3>
-						<p className="detail-panel__genres">
-							{game.genres.length > 0 ? game.genres.join(' · ') : '—'}
-						</p>
+						{/* FR-25: add and remove only — no merge/rename tool in v1. */}
+						{game.genres.length > 0 && (
+							<ul className="detail-panel__genre-chips">
+								{game.genres.map((name) => (
+									<li key={name} className="detail-panel__genre-chip">
+										{name}
+										<button
+											type="button"
+											className="detail-panel__genre-remove tap-target"
+											aria-label={`Remove ${name}`}
+											onClick={() => editGenre({ kind: 'remove', name })}
+										>
+											<span aria-hidden="true">×</span>
+										</button>
+									</li>
+								))}
+							</ul>
+						)}
+						<form
+							className="detail-panel__genre-add"
+							onSubmit={(e) => {
+								e.preventDefault();
+								const name = genreDraft.trim();
+								if (!name) return;
+								editGenre({ kind: 'add', name }, () => setGenreDraft(''));
+							}}
+						>
+							<input
+								className="detail-panel__genre-input"
+								list={genreListId}
+								value={genreDraft}
+								onChange={(e) => setGenreDraft(e.target.value)}
+								aria-label={`Add genre to ${game.title}`}
+								placeholder="Add genre"
+							/>
+							{/* Native suggestions (no picker dependency); a name outside
+							    the vocabulary is still submittable — FR-24 auto-creates. */}
+							<datalist id={genreListId}>
+								{(vocabulary ?? []).map((name) => (
+									<option key={name} value={name} />
+								))}
+							</datalist>
+							<button
+								type="submit"
+								className="detail-panel__genre-submit tap-target"
+							>
+								Add
+							</button>
+						</form>
 					</section>
 
 					<section className="detail-panel__section">
