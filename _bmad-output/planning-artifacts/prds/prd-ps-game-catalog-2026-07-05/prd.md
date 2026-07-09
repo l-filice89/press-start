@@ -33,7 +33,7 @@ Everything the UI shows and filters derives from this model. The governing princ
 `Not started` · `Up next` · `Playing` · `Paused` · `Dropped`
 
 - **FR-1** — One per game. Defaults to `Not started`.
-- **FR-2** — May be **null** once a completion milestone exists (and only then). Logging a completion milestone auto-clears the status to null; the user may also clear it manually (replay ends, etc.). A replay sets it back to `Playing`.
+- **FR-2** — May be **null** once a completion milestone exists (and only then). Logging a **platinum** auto-clears the status to null; a **story completion** leaves the status untouched — play usually continues toward the platinum, so the game stays on the shelf (amended 2026-07-09; was: any milestone auto-clears). The user may also clear it manually (replay ends, etc.). A replay sets it back to `Playing`.
 - **FR-3** — **Invariant: every game always has a play status or at least one completion milestone.** The detail view refuses any edit that would leave neither (clearing the last milestone requires setting a play status first).
 - **FR-4** — `Dropped` games are hidden from the default shelf, reachable via the `Dropped` reveal pill (§3).
 

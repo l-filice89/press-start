@@ -116,3 +116,7 @@ decision: 2026-07-08 Add requirement refs — Add bracketed FR/AR/UX-DR requirem
 - source_spec: `_bmad-output/implementation-artifacts/spec-shelf-order-owned-tier.md`
   summary: Decide whether the FR-18 ownership tier also applies to Epic 3 filtered/reveal-pill shelf views (they flow through the same orderShelf), and document it in the Epic 3 spec.
   evidence: orderShelf is the single ordering seam (AD-7); any future filtered view silently inherits owned-first with no artifact stating whether that is intended.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-platinum-only-auto-hide.md`
+  summary: A detail panel opened from search on an already-hidden game (Dropped, or milestone-only) auto-closes on any milestone log because `onHidden` keys off the returned state being in `HIDDEN_STATES`, even when the write never changed the card's visibility.
+  evidence: `web/shelf/useTrackingMutations.ts` milestone `onSuccess` — logging `completed` on a Dropped or platinum-first game returns `Dropped`/`Platinum achieved`, firing `onHidden` though the game was hidden before and after. Pre-existing (the old auto-clear path behaved the same); fix is comparing visibility before/after rather than testing the new state alone.

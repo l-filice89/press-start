@@ -21,7 +21,7 @@ This document provides the complete epic and story breakdown for ps-game-catalog
 **State model — play status (§2)**
 
 - **FR-1** — Play status is one per game (`Not started` · `Up next` · `Playing` · `Paused` · `Dropped`) and defaults to `Not started`.
-- **FR-2** — Play status may be **null** only once a completion milestone exists. Logging a completion milestone auto-clears status to null; the user may also clear it manually; a replay sets it back to `Playing`.
+- **FR-2** — Play status may be **null** only once a completion milestone exists. Logging a **platinum** auto-clears status to null; a **story completion** leaves it untouched (amended 2026-07-09); the user may also clear it manually; a replay sets it back to `Playing`.
 - **FR-3** — Invariant: every game always has a play status **or** at least one completion milestone. The detail view refuses any edit that would leave neither (clearing the last milestone requires setting a play status first).
 - **FR-4** — `Dropped` games are hidden from the default shelf, reachable via the `Dropped` reveal pill.
 
@@ -203,7 +203,7 @@ _From `DESIGN.md` (visual identity) and `EXPERIENCE.md` (behavior). Both spines 
 Each FR is assigned a **primary** epic; FRs that genuinely span epics list each contributing epic.
 
 - **FR-1** — E1: play-status enum + `Not started` default, modeled and displayed on cards.
-- **FR-2** — E2: milestone logging auto-clears status to null; replay returns it to `Playing`.
+- **FR-2** — E2: platinum logging auto-clears status to null (story completion keeps it, amended 2026-07-09); replay returns it to `Playing`.
 - **FR-3** — E2: completion invariant enforced at the detail-edit boundary.
 - **FR-4** — E1 (hidden from default shelf) / E3 (`Dropped` reveal pill).
 - **FR-5** — E1 (milestone-date model + silver badge on cards) / E2 (logging).
@@ -580,7 +580,7 @@ So that the record is trustworthy and fat-finger-proof.
 **Given** I confirm
 **When** the milestone is logged
 **Then** `completed_on`/`platinum_on` is written
-**And** play status auto-clears to null via the single core milestone-write reconciliation function (FR-2, FR-5, AR-13, AR-21)
+**And** play status auto-clears to null via the single core milestone-write reconciliation function (FR-2, FR-5, AR-13, AR-21) — _amended 2026-07-09: only a platinum auto-clears; a story completion leaves the status untouched_
 
 **Given** a milestone that already has a date
 **When** I log it again

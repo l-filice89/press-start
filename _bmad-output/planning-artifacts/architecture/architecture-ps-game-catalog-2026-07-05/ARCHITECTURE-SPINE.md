@@ -197,7 +197,7 @@ flowchart LR
 
 - **Binds:** every surface that logs a completion milestone (shelf popover, detail view) — FR-2.
 - **Prevents:** the popover path auto-clearing `play_status` to null (effective "Platinum") while the detail path leaves it "Playing" — two surfaces disagreeing though both obey AD-7's *read* rule.
-- **Rule:** A single `core/` milestone-**write** reconciliation function (symmetric to AD-7's read) owns the side-effect: logging `completed_on`/`platinum_on` auto-clears `play_status` to null per FR-2. Every surface calls it; none hand-rolls the transition.
+- **Rule:** A single `core/` milestone-**write** reconciliation function (symmetric to AD-7's read) owns the side-effect: logging `platinum_on` auto-clears `play_status` to null per FR-2 (amended 2026-07-09 — logging `completed_on` leaves the status untouched). Every surface calls it; none hand-rolls the transition.
 
 ### AD-22 — "Straggler" is a defined needs-attention record [ADOPTED]
 

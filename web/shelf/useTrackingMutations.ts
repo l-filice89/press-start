@@ -109,9 +109,11 @@ export function useTrackingMutations(
 		(next: PlayStatus | null) => {
 			if (next === game.playStatus) return;
 			// A second selection while any write is in flight would race — including
-			// a milestone POST, whose server-side status auto-clear the PATCH could
-			// overwrite. Dropping it silently is the same failure the `onError`
-			// toast exists to prevent, so say so.
+			// a milestone POST, whose server-side status auto-clear (platinum) the
+			// PATCH could overwrite. Deliberately broad: a completed POST no longer
+			// touches status, but one guard for all milestone writes stays simple.
+			// Dropping it silently is the same failure the `onError` toast exists
+			// to prevent, so say so.
 			if (isPending || milestonePending) {
 				toast({
 					message: `Still saving ${game.title}. Try again in a moment.`,

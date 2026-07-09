@@ -354,6 +354,40 @@ describe('DetailPanel', () => {
 		expect(JSON.parse(init.body)).toEqual({ milestone: 'completed' });
 	});
 
+	it('stays open after logging Story completed — the status survives (FR-2 amended)', async () => {
+		// Default write mock answers { effectiveState: 'Playing' }: the completion
+		// kept the live status, so the card stays on the shelf and the panel must
+		// not auto-close.
+		const user = await openPanel(
+			game({ playStatus: 'Playing', effectiveState: 'Playing' }),
+		);
+		await user.click(screen.getByRole('button', { name: /Story completed/ }));
+		await user.click(screen.getByRole('button', { name: 'Confirm' }));
+
+		await waitFor(() => expect(writes()).toHaveLength(1));
+		expect(await screen.findByTestId('toast')).toHaveTextContent(
+			'Bloodborne — Story completed',
+		);
+		expect(screen.getByRole('dialog', { name: 'Bloodborne' })).toBeVisible();
+	});
+
+	it('closes after logging a platinum — that write hides the card', async () => {
+		fetchMock.mockResolvedValue({
+			ok: true,
+			status: 200,
+			json: async () => ({ effectiveState: 'Platinum achieved' }),
+		});
+		const user = await openPanel(
+			game({ playStatus: 'Playing', effectiveState: 'Playing' }),
+		);
+		await user.click(screen.getByRole('button', { name: /Platinum achieved/ }));
+		await user.click(screen.getByRole('button', { name: 'Confirm' }));
+
+		await waitFor(() =>
+			expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+		);
+	});
+
 	it('Escape in the confirm gate cancels it without closing the panel', async () => {
 		const user = await openPanel();
 		await user.click(screen.getByRole('button', { name: /Platinum achieved/ }));

@@ -4,18 +4,24 @@ import { MILESTONES } from './types';
 
 /**
  * The named hazards of Story 2.2, asserted directly: a milestone date is
- * write-once (`null` no-op — the first achievement stands, FR-6) and every
- * non-null patch clears `play_status` via this one function (FR-2/FR-5, AR-21).
+ * write-once (`null` no-op — the first achievement stands, FR-6), and only a
+ * platinum clears `play_status` (FR-2 amended 2026-07-09 — a story completion
+ * keeps the game on the shelf at its current status).
  */
 
 const TODAY = '2026-07-09';
 const CLEAN = { completedOn: null, platinumOn: null };
 
 describe('applyMilestone', () => {
-	it('stamps completed_on on the first story completion and clears play status', () => {
-		expect(
-			applyMilestone({ milestone: 'completed', current: CLEAN, today: TODAY }),
-		).toEqual({ completedOn: TODAY, playStatus: null });
+	it('stamps completed_on on the first story completion and leaves play status alone', () => {
+		const patch = applyMilestone({
+			milestone: 'completed',
+			current: CLEAN,
+			today: TODAY,
+		});
+		expect(patch).toEqual({ completedOn: TODAY });
+		// `playStatus` absent means "don't touch it" — the upsert drops undefined.
+		expect(patch && 'playStatus' in patch).toBe(false);
 	});
 
 	it('stamps platinum_on on the first platinum and clears play status', () => {
@@ -50,12 +56,13 @@ describe('applyMilestone', () => {
 		expect(patch && 'completedOn' in patch).toBe(false);
 	});
 
-	it.each(
-		MILESTONES,
-	)('clears play status in every non-null patch (%s)', (milestone) => {
-		expect(
-			applyMilestone({ milestone, current: CLEAN, today: TODAY }),
-		).toMatchObject({ playStatus: null });
+	it('logs completion after a platinum without touching play status', () => {
+		const patch = applyMilestone({
+			milestone: 'completed',
+			current: { completedOn: null, platinumOn: '2023-05-05' },
+			today: TODAY,
+		});
+		expect(patch).toEqual({ completedOn: TODAY });
 	});
 
 	it.each(MILESTONES)('never puts startedOn in the patch (%s)', (milestone) => {

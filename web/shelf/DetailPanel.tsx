@@ -109,10 +109,11 @@ export function DetailPanel({
 	} = useTrackingMutations(game, {
 		// After the confirm dialog resolves, focus returns into the panel.
 		onConfirmClose: () => closeRef.current?.focus(),
-		// A write that hides the card from the default shelf (Dropped, a cleared
-		// status, a logged milestone) unmounts the owning Card on refetch — close
-		// the panel deliberately instead of letting the dialog vanish under the
-		// user with focus stranded on <body>.
+		// Any write whose returned effective state is shelf-hidden (Dropped, a
+		// cleared status, a platinum — or a milestone on a status-less game)
+		// unmounts the owning Card on refetch — close the panel deliberately
+		// instead of letting the dialog vanish under the user with focus
+		// stranded on <body>.
 		onHidden: onClose,
 	});
 

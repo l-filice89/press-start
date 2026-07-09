@@ -16,7 +16,7 @@ Epic 2 turns the read-only shelf from Epic 1 into a tracker. From a card, the us
 
 ## Requirements & Constraints
 
-**State model.** Play status (`Not started` · `Up next` · `Playing` · `Paused` · `Dropped`) is the only user-set mutable state, one per game, defaulting to `Not started`. It may be null **only** once a completion milestone exists; logging a milestone auto-clears it to null, and the user may clear it manually. Setting a status back to `Playing` is a replay and leaves completion dates untouched.
+**State model.** Play status (`Not started` · `Up next` · `Playing` · `Paused` · `Dropped`) is the only user-set mutable state, one per game, defaulting to `Not started`. It may be null **only** once a completion milestone exists; logging a **platinum** auto-clears it to null, a **story completion** leaves it untouched (FR-2 amended 2026-07-09), and the user may clear it manually. Setting a status back to `Playing` is a replay and leaves completion dates untouched.
 
 **Completion invariant.** Every game always has a play status **or** at least one completion milestone. Any edit that would leave neither must be refused — clearing the last milestone requires setting a play status first.
 
@@ -40,7 +40,7 @@ Epic 2 turns the read-only shelf from Epic 1 into a tracker. From a card, the us
 
 - **Layering.** `core/` is a pure, I/O-free domain sink (no `fetch`, no D1/Drizzle). `services/` orchestrates. `repositories/` is the sole persistence path (Drizzle over D1) — no raw queries anywhere else. `routes/` are Hono handlers with Zod validation at the boundary; a typed RPC client and shared Zod schemas span SPA↔Worker. `web/` is the React SPA with TanStack Query for server state.
 - **One effective-state function.** A single `core/` function computes effective state; ordering, labels, and filters consume it and none recomputes it.
-- **One milestone-write reconciliation function.** A single `core/` function owns the "logging a milestone auto-clears play status to null" side-effect. Every surface (shelf popover, detail panel) calls it; none hand-rolls the transition. This is the write-side twin of the effective-state read function — the two surfaces must never disagree.
+- **One milestone-write reconciliation function.** A single `core/` function owns the milestone status side-effect (only a platinum auto-clears play status to null; a story completion leaves it untouched — FR-2 amended 2026-07-09). Every surface (shelf popover, detail panel) calls it; none hand-rolls the transition. This is the write-side twin of the effective-state read function — the two surfaces must never disagree.
 - **The completion invariant is enforced at the boundary** — the API refuses the edit, not just the UI. Client-side refusal alone is insufficient.
 - **Write-once dates are enforced in the write path**, not left to callers: automatic flows write each date once, and `started_on` is guarded by "no completion milestone exists".
 - **Schema ownership.** `GAME` holds shared catalog facts (title, normalized title, release date, cover URL, store URL, genres via `GAME_GENRE`, PS+ Extra catalog membership). `GAME_TRACKING` holds per-user mutable state (`play_status`, all milestone/lifecycle dates, `owned`, `ownership_type`) and is keyed **`(user_id, game_id)`** — one tracking row per user per game.

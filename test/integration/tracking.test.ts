@@ -312,17 +312,21 @@ describe('play-status writes (integration, real workerd + local D1)', () => {
 });
 
 describe('milestone writes (integration, real workerd + local D1)', () => {
-	it('stamps completed_on today and auto-clears play_status', async () => {
+	it('stamps completed_on today and keeps play_status — the game stays on the shelf', async () => {
 		const id = await addGame(userA, 'Story Done', { playStatus: 'Playing' });
+		// The live status wins the effective state (FR-2 amended 2026-07-09).
 		expect(await logMilestone(db(), userA, id, 'completed', TODAY)).toBe(
-			'Story completed',
+			'Playing',
 		);
 		const row = await getTracking(db(), userA, id);
 		expect(row?.completedOn).toBe(TODAY);
-		expect(row?.playStatus).toBeNull();
+		expect(row?.playStatus).toBe('Playing');
+		expect((await getShelf(db(), userA)).map((g) => g.title)).toContain(
+			'Story Done',
+		);
 	});
 
-	it('stamps platinum_on today and auto-clears play_status', async () => {
+	it('stamps platinum_on today and auto-clears play_status — the game leaves the shelf', async () => {
 		const id = await addGame(userA, 'Platinumed', { playStatus: 'Paused' });
 		expect(await logMilestone(db(), userA, id, 'platinum', TODAY)).toBe(
 			'Platinum achieved',
@@ -330,6 +334,28 @@ describe('milestone writes (integration, real workerd + local D1)', () => {
 		const row = await getTracking(db(), userA, id);
 		expect(row?.platinumOn).toBe(TODAY);
 		expect(row?.playStatus).toBeNull();
+		expect((await getShelf(db(), userA)).map((g) => g.title)).not.toContain(
+			'Platinumed',
+		);
+	});
+
+	it('completing a status-less platinumed game keeps it hidden — status stays null', async () => {
+		const id = await addGame(userA, 'Plat First', {
+			playStatus: null,
+			platinumOn: '2024-06-01',
+		});
+		// No live status to preserve: the milestone vocabulary still wins the
+		// effective state, so the one completed-log path that yields a hidden
+		// state stays hidden (spec matrix row 3).
+		expect(await logMilestone(db(), userA, id, 'completed', TODAY)).toBe(
+			'Platinum achieved',
+		);
+		const row = await getTracking(db(), userA, id);
+		expect(row?.completedOn).toBe(TODAY);
+		expect(row?.playStatus).toBeNull();
+		expect((await getShelf(db(), userA)).map((g) => g.title)).not.toContain(
+			'Plat First',
+		);
 	});
 
 	it('re-logging leaves the original date standing — the first achievement stands', async () => {
@@ -414,9 +440,12 @@ describe('milestone writes (integration, real workerd + local D1)', () => {
 				cookie,
 			);
 			expect(response.status).toBe(200);
-			expect(await response.json()).toEqual({
-				effectiveState: 'Story completed',
-			});
+			// Status survives a completion (FR-2 amended 2026-07-09), so it stays
+			// the effective state.
+			expect(await response.json()).toEqual({ effectiveState: 'Playing' });
+			expect((await getTracking(db(), sessionUser, id))?.playStatus).toBe(
+				'Playing',
+			);
 		});
 
 		it('answers the FR-6 no-op through the route with the standing state', async () => {
