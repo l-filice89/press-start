@@ -6,6 +6,7 @@ inputDocuments:
   - architecture/architecture-ps-game-catalog-2026-07-05/ARCHITECTURE-SPINE.md
   - ux-designs/ux-ps-game-catalog-2026-07-05/DESIGN.md
   - ux-designs/ux-ps-game-catalog-2026-07-05/EXPERIENCE.md
+  - ../implementation-artifacts/epic-2-retro-2026-07-09.md
 ---
 
 # ps-game-catalog - Epic Breakdown
@@ -155,6 +156,14 @@ _Architecture-derived implementation constraints (from `ARCHITECTURE-SPINE.md`, 
 - **AR-25** — Backup/DR: D1 Time Travel is the primary safety net; the FR-49 CSV export is the user-held second copy.
 - **AR-26** — Stack pins: Drizzle ORM 0.45.x + drizzle-kit, Hono (+ typed RPC client), Zod (shared SPA↔Worker at every boundary), TanStack Query, React + Vite + vite-plugin-pwa, better-auth (magic link), IGDB via Twitch OAuth2 client-credentials, Vitest + `@cloudflare/vitest-pool-workers`, Biome v2.
 
+### Test Requirements (Epic 2 retro, 2026-07-09)
+
+_Source: `epic-2-retro-2026-07-09.md` action items 1–3. Scoped 2026-07-09: Epic 2.5 is Playwright-only; the retro's other items live in `deferred-work.md`._
+
+- **TR-1** — Playwright e2e framework running against the real app (real Worker + D1, real browser); magic-link auth via console-captured link (console email provider — no real email sent by tests).
+- **TR-2** — Backfill: one e2e test per Epic 1+2 acceptance criterion that has a matching UI user flow.
+- **TR-3** — Standing rule wired into `_bmad/custom/bmad-dev-auto.toml` as a persistent fact (same mechanism as the hazard-test rule): every AC with a matching UI flow ships with a Playwright test.
+
 ### UX Design Requirements
 
 _From `DESIGN.md` (visual identity) and `EXPERIENCE.md` (behavior). Both spines win on conflict with any mock. Dark-only, no light theme in v1._
@@ -254,6 +263,8 @@ Each FR is assigned a **primary** epic; FRs that genuinely span epics list each 
 
 **NFR coverage:** NFR-1 → E1 (Cloudflare free-tier platform, whole app) · NFR-2 → E5 (Cron within free tier) · NFR-3 → E1 (nothing-external-on-render, structural across all read paths) · NFR-4 → E1 (feedback-channel shell) + E4/E5/E6 (surfaced per ingest op).
 
+**TR coverage (added 2026-07-09):** TR-1 → E2.5 (framework + console-link auth) · TR-2 → E2.5 (Epic 1+2 backfill) · TR-3 → E2.5 (standing rule in `_bmad/custom/bmad-dev-auto.toml`).
+
 ## Epic List
 
 ### Epic 1: Foundation & the Seeded Shelf
@@ -263,6 +274,10 @@ Luca signs in with a magic link and sees his real game library as a cover-forwar
 ### Epic 2: Track Your Games
 From the shelf, Luca changes play status in a tap and, via the flip-to-detail view, logs Story/Platinum milestones (confirm-gated), edits ownership flag + type, edits genres, and corrects lifecycle dates — with the completion invariant enforced and lifecycle dates auto-recorded write-once. Logging a status change takes seconds, not a Notion-editing session.
 **FRs covered:** FR-2, FR-3, FR-6, FR-7, FR-9 (manual), FR-11 (edit), FR-16, FR-25, FR-44 (transitions), FR-45
+
+### Epic 2.5: Playwright Foundation — Trust Every Click
+The verification gap named in the Epic 2 retro closes: a Playwright e2e tier runs the real app in a real browser (real Worker + D1, magic-link auth via console-captured link, zero real emails), every Epic 1+2 acceptance criterion with a UI flow gets a regression-pinning e2e test, and the standing rule — every future AC with a UI flow ships with a Playwright test — is wired into `bmad-dev-auto` as a persistent fact. Must complete before Epic 3.
+**TRs covered:** TR-1, TR-2, TR-3
 
 ### Epic 3: Filter & Focus the Backlog
 Luca narrows the shelf with State/Genre multiselect dropdowns, Flag pills, and reveal pills — OR within a group, AND across groups — read back by a live plain-English summary sentence, so filtering the backlog beats what Notion's views offered.
@@ -663,6 +678,96 @@ So that a bad auto-fill from import doesn't stick.
 **Given** genre editing
 **When** the detail view renders
 **Then** no merge/rename tool is offered (out of v1 scope) (FR-25)
+
+---
+
+## Epic 2.5: Playwright Foundation — Trust Every Click
+
+Added 2026-07-09 from the Epic 2 retrospective (action items 1–3). Closes the epic's named verification gap: jsdom-only UI testing (popover anchoring, portal layering, breakpoints, hit areas, focus traps untested by a real layout engine). A Playwright e2e tier drives the real app in a real browser, backfills every Epic 1+2 AC with a matching UI flow, and wires the standing every-UI-AC-ships-with-an-e2e-test rule into `bmad-dev-auto`. Must complete before Epic 3.
+
+### Story 2.5.1: Playwright framework & auth smoke test
+
+As Luca,
+I want a Playwright e2e tier that drives the real app in a real browser and signs in via the console-captured magic link,
+So that every later e2e test has a proven, email-free path through auth.
+
+**Acceptance Criteria:**
+
+**Given** a fresh clone
+**When** I run the documented e2e command
+**Then** Playwright starts the real app (real Worker + local D1, real browser) and runs the suite (TR-1)
+
+**Given** the magic-link auth flow
+**When** an e2e test signs in
+**Then** it captures the magic link from the console email provider's output and follows it — no real email is sent by any test run (TR-1)
+
+**Given** e2e tests need known data
+**When** the suite runs
+**Then** it runs against a seeded local D1 fixture, deterministic and resettable between runs (TR-1)
+
+**Given** a push or pull request
+**When** CI runs
+**Then** the Playwright suite executes as a required gate alongside Biome/`tsc`/Vitest, invoked via the same `package.json` script locally and in CI (AR-23)
+
+**Given** the smoke test
+**When** it runs
+**Then** it proves the full path: open app → magic-link sign-in → shelf renders with seeded games (TR-1)
+
+### Story 2.5.2: Backfill Epic 1 e2e flows
+
+As Luca,
+I want one e2e test per Epic 1 acceptance criterion that has a matching UI user flow,
+So that the seeded shelf's behavior is pinned by a real layout engine, not jsdom.
+
+**Acceptance Criteria:**
+
+**Given** Epic 1's stories (1.3 auth, 1.5 shell, 1.7 shelf)
+**When** the backfill is complete
+**Then** every AC with a matching UI user flow has a Playwright test (login gate, shelf render/card content, default visible set + ordering, infinite scroll, whole-library search, skeleton + empty states, keyboard grid traversal, focus outline) (TR-2)
+
+**Given** an Epic 1 AC with no UI user flow (build/CI/schema/seed-script ACs)
+**When** the backfill is complete
+**Then** it is listed as skipped with a one-line reason in the suite's coverage note (TR-2)
+
+**Given** the jsdom blind spots the retro named
+**When** Epic 1 flows are tested
+**Then** real-layout concerns (breakpoints/responsive deltas, hit areas) are exercised in at least one viewport pair (phone + desktop) (TR-2)
+
+### Story 2.5.3: Backfill Epic 2 e2e flows
+
+As Luca,
+I want one e2e test per Epic 2 acceptance criterion that has a matching UI user flow,
+So that the tracking write paths and every dialog's focus/ARIA behavior are regression-pinned.
+
+**Acceptance Criteria:**
+
+**Given** Epic 2's stories (2.1–2.5)
+**When** the backfill is complete
+**Then** every AC with a matching UI user flow has a Playwright test (status popover incl. viewport flip, Dropped UNDO toast, milestone confirm + badge, card flip → detail panel, invariant refusal, ownership toggle + UNDO, lifecycle date edit, genre edit) (TR-2)
+
+**Given** the dialog regression class from the retro (Escape scope, focus trap, portal layering, popover anchoring)
+**When** dialog flows are tested
+**Then** each dialog surface (popover, confirm modal, detail panel) has focus-trap and Escape/focus-return assertions (TR-2)
+
+**Given** an Epic 2 AC unreachable in the UI today (e.g. flows needing Epic 3 reveal pills)
+**When** the backfill is complete
+**Then** it is listed as skipped with a one-line reason in the coverage note (TR-2)
+
+### Story 2.5.4: Standing rule — every UI AC ships with a Playwright test
+
+As Luca,
+I want the e2e rule wired into the dev automation as a persistent fact,
+So that the suite grows with every future story instead of rotting.
+
+**Acceptance Criteria:**
+
+**Given** `_bmad/custom/bmad-dev-auto.toml`
+**When** the rule is wired
+**Then** a persistent fact states: every AC with a matching UI user flow ships with a Playwright test (same mechanism as the hazard-test rule) (TR-3)
+
+**Given** the next story run through `bmad-dev-auto`
+**When** its session starts
+**Then** the fact loads and binds the dev agent (TR-3)
 
 ---
 
