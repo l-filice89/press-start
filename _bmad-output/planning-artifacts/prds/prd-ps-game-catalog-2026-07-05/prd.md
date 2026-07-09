@@ -33,7 +33,7 @@ Everything the UI shows and filters derives from this model. The governing princ
 `Not started` · `Up next` · `Playing` · `Paused` · `Dropped`
 
 - **FR-1** — One per game. Defaults to `Not started`.
-- **FR-2** — May be **null** once a completion milestone exists (and only then). Logging a completion milestone auto-clears the status to null; the user may also clear it manually (replay ends, etc.). A replay sets it back to `Playing`.
+- **FR-2** — May be **null** once a completion milestone exists (and only then). Logging a **platinum** auto-clears the status to null; a **story completion** leaves the status untouched — play usually continues toward the platinum, so the game stays on the shelf (amended 2026-07-09; was: any milestone auto-clears). The user may also clear it manually (replay ends, etc.). A replay sets it back to `Playing`.
 - **FR-3** — **Invariant: every game always has a play status or at least one completion milestone.** The detail view refuses any edit that would leave neither (clearing the last milestone requires setting a play status first).
 - **FR-4** — `Dropped` games are hidden from the default shelf, reachable via the `Dropped` reveal pill (§3).
 
@@ -77,7 +77,7 @@ One screen answers "what's my gaming life right now?" — the landing page is th
 ### Default view
 
 - **FR-17** — Shows every game whose effective state is a live play status; **`Story completed`, `Platinum achieved`, and `Dropped` games are hidden by default** — the default shelf is the backlog view, the full record is one pill away.
-- **FR-18** — Default ordering: `Playing` → `Paused` → `Up next` → `Not started`; **alphabetical by name within each group**.
+- **FR-18** — Default ordering: `Playing` → `Paused` → `Up next` → `Not started`; **owned before wishlisted, then alphabetical by name, within each group** (ownership tier added 2026-07-09, Luca — surfaces ready-to-start games).
 - **FR-19** — **Infinite scroll**, with an always-visible **name search bar**. Search is a lookup, not a view: it matches against the entire library, ignoring active filters and hidden states — "did I ever finish that?" must always answer.
 
 ### Filters

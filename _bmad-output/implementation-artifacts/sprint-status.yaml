@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-06
-last_updated: 2026-07-08
+last_updated: 2026-07-09
 project: ps-game-catalog
 project_key: NOKEY
 tracking_system: file-system
@@ -60,13 +60,13 @@ development_status:
   epic-1-retrospective: done
 
   # Epic 2: Track Your Games
-  epic-2: backlog
-  2-1-change-play-status-from-the-shelf: backlog
-  2-2-log-completion-milestones-confirm-gated: backlog
-  2-3-flip-a-card-to-its-detail-view: backlog
-  2-4-edit-ownership-and-lifecycle-dates-in-detail: backlog
-  2-5-edit-genres-in-detail: backlog
-  epic-2-retrospective: optional
+  epic-2: done
+  2-1-change-play-status-from-the-shelf: done
+  2-2-log-completion-milestones-confirm-gated: done
+  2-3-flip-a-card-to-its-detail-view: done
+  2-4-edit-ownership-and-lifecycle-dates-in-detail: done
+  2-5-edit-genres-in-detail: done
+  epic-2-retrospective: done
 
   # Epic 3: Filter & Focus the Backlog
   epic-3: backlog
@@ -112,4 +112,40 @@ action_items:
   - epic: 1
     action: "Run Epic 2 as a fully unattended bmad-loop epic with zero human interaction"
     owner: "Luca"
+    status: done # via pivot: Claude Code driving bmad-dev-auto (bmad-loop/WSL retired on Windows)
+  - epic: 2
+    action: "Epic 2.5: Playwright foundation — framework + magic-link auth via console-captured link"
+    owner: "Murat + Amelia"
+    status: open
+  - epic: 2
+    action: "Epic 2.5: backfill one e2e test per Epic 1+2 AC with a matching UI user flow"
+    owner: "Amelia"
+    status: open
+  - epic: 2
+    action: "Wire standing rule into _bmad/custom/bmad-dev-auto.toml: every AC with a matching UI flow ships with a Playwright test"
+    owner: "Murat + Winston"
+    status: open
+  - epic: 2
+    action: "Stop tests emailing real magic links: force RESEND_API_KEY '' in vitest miniflare bindings + fix comment"
+    owner: "Amelia"
+    status: open
+  - epic: 2
+    action: "Document FR-18 amendment (owned tier applies to ALL shelf views, filtered included) before Story 3.1"
+    owner: "Alice + Luca"
+    status: open
+  - epic: 2
+    action: "Timezone policy: browser tz into SETTING at first login, editable in Settings, used at all date-stamp sites"
+    owner: "Winston + Amelia"
+    status: open
+  - epic: 2
+    action: "Fix untransacted read-decide-write seam via conditional UPDATEs (promoted from deferred; Luca triages post-retro)"
+    owner: "Amelia"
+    status: open
+  - epic: 2
+    action: "Genre case-insensitive unique index migration (promoted from deferred; Luca triages post-retro)"
+    owner: "Amelia"
+    status: open
+  - epic: 2
+    action: "Evaluate permanent-delete-from-Dropped vs archived flag against append-only/sync assumption; place in an epic if it survives"
+    owner: "Luca + John"
     status: open

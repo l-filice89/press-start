@@ -1,16 +1,15 @@
-import {
-	applyD1Migrations,
-	createExecutionContext,
-	env,
-	waitOnExecutionContext,
-} from 'cloudflare:test';
+import { applyD1Migrations, env } from 'cloudflare:test';
 import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, inject, it } from 'vitest';
-import type { EmailProvider, MagicLinkEmail } from '../../src/providers/email';
 import { createDb } from '../../src/repositories/db';
 import { user } from '../../src/schema';
-import { createAuth } from '../../src/services/auth';
-import worker from '../../worker/index';
+import {
+	ALLOWED_EMAIL,
+	appFetch,
+	BASE,
+	establishSession,
+	requestMagicLink,
+} from './session';
 
 /**
  * Story 1.3 integration tests (FR-47/FR-48, AR-13): the full magic-link
@@ -18,66 +17,6 @@ import worker from '../../worker/index';
  * provider seam — a capturing fake injected into `createAuth` — so the
  * magic-link URL can be followed without any real email service.
  */
-
-const BASE = 'http://example.com';
-const ALLOWED_EMAIL = env.AUTH_ALLOWED_EMAIL;
-
-function capturingEmailProvider() {
-	const sent: MagicLinkEmail[] = [];
-	const provider: EmailProvider = {
-		async sendMagicLinkEmail(email) {
-			sent.push(email);
-		},
-	};
-	return { sent, provider };
-}
-
-async function appFetch(path: string, init?: RequestInit) {
-	const ctx = createExecutionContext();
-	const response = await worker.fetch(
-		new Request(`${BASE}${path}`, init),
-		env,
-		ctx,
-	);
-	await waitOnExecutionContext(ctx);
-	return response;
-}
-
-/** Request a magic link through an auth instance with a capturing email fake. */
-async function requestMagicLink(email: string) {
-	const { sent, provider } = capturingEmailProvider();
-	const auth = createAuth(env, { baseURL: BASE, emailProvider: provider });
-	const response = await auth.handler(
-		new Request(`${BASE}/api/auth/sign-in/magic-link`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json', Origin: BASE },
-			body: JSON.stringify({ email, callbackURL: '/' }),
-		}),
-	);
-	return { response, sent };
-}
-
-/** Follow a captured magic-link URL; returns the session cookie pair. */
-async function establishSession() {
-	const { response, sent } = await requestMagicLink(ALLOWED_EMAIL);
-	expect(response.status).toBe(200);
-	expect(sent).toHaveLength(1);
-
-	const auth = createAuth(env, { baseURL: BASE });
-	const verifyResponse = await auth.handler(
-		new Request(sent[0].url, { headers: { Origin: BASE } }),
-	);
-	expect(verifyResponse.status).toBe(302);
-	expect(verifyResponse.headers.get('location')).toBe(`${BASE}/`);
-
-	const setCookie = verifyResponse.headers.getSetCookie().join('; ');
-	// Optional __Secure- prefix: better-auth adds it under an https baseURL.
-	const match = setCookie.match(
-		/(?:__Secure-)?better-auth\.session_token=[^;]+/,
-	);
-	expect(match).not.toBeNull();
-	return (match as RegExpMatchArray)[0];
-}
 
 describe('magic-link auth & user scoping (integration, real workerd + local D1)', () => {
 	beforeAll(async () => {

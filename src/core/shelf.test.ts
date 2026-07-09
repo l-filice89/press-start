@@ -27,16 +27,16 @@ describe('isDefaultShelfVisible', () => {
 });
 
 describe('orderShelf', () => {
-	function entry(effectiveState: EffectiveState, title: string) {
-		return { effectiveState, title };
+	function entry(effectiveState: EffectiveState, title: string, owned = false) {
+		return { effectiveState, owned, title };
 	}
 
-	it('orders Playing→Paused→Up next→Not started', () => {
+	it('orders Playing→Paused→Up next→Not started regardless of ownership', () => {
 		const ordered = orderShelf([
-			entry('Not started', 'a'),
-			entry('Up next', 'b'),
-			entry('Playing', 'c'),
-			entry('Paused', 'd'),
+			entry('Not started', 'a', true),
+			entry('Up next', 'b', false),
+			entry('Playing', 'c', false),
+			entry('Paused', 'd', true),
 		]);
 		expect(ordered.map((e) => e.effectiveState)).toEqual([
 			'Playing',
@@ -57,6 +57,30 @@ describe('orderShelf', () => {
 			'Bloodborne',
 			'Zelda',
 		]);
+	});
+
+	it('sorts owned before un-owned within a state group (ownership beats title)', () => {
+		const ordered = orderShelf([
+			entry('Playing', 'Apex', false),
+			entry('Playing', 'Zelda', true),
+		]);
+		expect(ordered.map((e) => e.title)).toEqual(['Zelda', 'Apex']);
+	});
+
+	it('applies the ownership tier in every state group, not just the top one', () => {
+		const ordered = orderShelf([
+			entry('Not started', 'Apex', false),
+			entry('Not started', 'Zelda', true),
+		]);
+		expect(ordered.map((e) => e.title)).toEqual(['Zelda', 'Apex']);
+	});
+
+	it('state priority still beats ownership', () => {
+		const ordered = orderShelf([
+			entry('Paused', 'a', true),
+			entry('Playing', 'b', false),
+		]);
+		expect(ordered.map((e) => e.title)).toEqual(['b', 'a']);
 	});
 
 	it('does not mutate the input array', () => {
@@ -88,12 +112,31 @@ describe('orderShelf', () => {
 });
 
 describe('compareShelf', () => {
-	it('returns 0 for equal state + title', () => {
-		expect(
-			compareShelf(
-				{ effectiveState: 'Playing', title: 'X' },
-				{ effectiveState: 'Playing', title: 'X' },
-			),
-		).toBe(0);
+	it('returns 0 for equal state + ownership + title', () => {
+		for (const owned of [true, false]) {
+			expect(
+				compareShelf(
+					{ effectiveState: 'Playing', owned, title: 'X' },
+					{ effectiveState: 'Playing', owned, title: 'X' },
+				),
+			).toBe(0);
+		}
+	});
+
+	it('is antisymmetric on the ownership tier', () => {
+		const ownedGame = {
+			effectiveState: 'Playing',
+			owned: true,
+			title: 'X',
+		} as const;
+		const wishlisted = {
+			effectiveState: 'Playing',
+			owned: false,
+			title: 'X',
+		} as const;
+		expect(compareShelf(ownedGame, wishlisted)).toBe(
+			-compareShelf(wishlisted, ownedGame),
+		);
+		expect(compareShelf(ownedGame, wishlisted)).toBeLessThan(0);
 	});
 });

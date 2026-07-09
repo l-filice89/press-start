@@ -8,16 +8,22 @@
 	width: 100%;
 }
 
-.shelf__row {
+.shelf__grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
 	gap: var(--space-4);
-	align-items: start;
+	/* stretch (default): every card in a row gets the row's height. */
+}
+
+/* Rows are ARIA-only groups: display:contents lifts the cards into the single
+   auto-fill grid above, so the visual layout is unchanged by the regrouping. */
+.shelf__row {
+	display: contents;
 }
 
 /* Phone: lean 2-up grid, tighter gaps. */
 @media (max-width: 600px) {
-	.shelf__row {
+	.shelf__grid {
 		grid-template-columns: repeat(2, 1fr);
 		gap: var(--space-3);
 	}

@@ -22,7 +22,8 @@
 	background: var(--color-surface);
 	border: 1px solid var(--color-border-soft);
 	border-radius: var(--radius-md);
-	overflow: hidden;
+	/* No overflow clip here: the status popover must escape the card. The
+	   cover clips itself below. */
 	transition: border-color var(--motion-fast) var(--ease-standard);
 }
 
@@ -40,6 +41,21 @@
 	position: relative;
 	aspect-ratio: 3 / 4;
 	background: var(--color-surface-raised);
+	/* -1px = the card's own border-width; keep in sync if that ever changes. */
+	border-radius: calc(var(--radius-md) - 1px) calc(var(--radius-md) - 1px) 0 0;
+	overflow: hidden;
+}
+
+/* The whole cover is the open-detail trigger (Story 2.3) — an invisible
+   button; the cover art itself is the visual. */
+.card__cover-button {
+	display: block;
+	width: 100%;
+	height: 100%;
+	padding: 0;
+	border: none;
+	background: none;
+	cursor: pointer;
 }
 
 .card__cover-img {
@@ -62,7 +78,33 @@
 	font-size: 2rem;
 }
 
-/* Top-left flag cluster. */
+/* Top-right owned toggle (Story 2.4): visually tiny, `tap-expander` projects
+   the ≥44px hit area. Doubled class beats `.tap-expander`'s own
+   `position: relative` regardless of stylesheet order. */
+.card__owned-toggle.card__owned-toggle {
+	position: absolute;
+	top: var(--space-2);
+	right: var(--space-2);
+	z-index: 1;
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-pill);
+	background: rgba(5, 9, 15, 0.72);
+	color: var(--color-text-muted);
+	font-size: 11px;
+	cursor: pointer;
+	backdrop-filter: blur(2px);
+}
+
+.card__owned-toggle[aria-pressed="true"] {
+	color: var(--color-accent-glow);
+	border-color: var(--color-accent-glow);
+}
+
+/* Top-left flag cluster. Overlays the cover trigger; the flags are read-only
+   signals, so presses pass through to the open-detail button beneath. */
 .card__flags {
 	position: absolute;
 	top: var(--space-2);
@@ -70,6 +112,7 @@
 	display: flex;
 	flex-wrap: wrap;
 	gap: var(--space-1);
+	pointer-events: none;
 }
 
 .card__flag {
@@ -117,14 +160,23 @@
 	text-overflow: ellipsis;
 }
 
+/* Sole child is the status popover; flex keeps it shrink-wrapped on its row. */
 .card__meta {
 	display: flex;
-	align-items: center;
-	gap: var(--space-2);
-	flex-wrap: wrap;
+}
+
+.card__owned-line {
+	/* The chip is always in the DOM; hiding via visibility (not display)
+	   keeps the line's height, so owned and un-owned cards stay uniform. */
+	line-height: 1;
+}
+
+.card__owned:not([data-owned]) {
+	visibility: hidden;
 }
 
 .card__owned {
+	display: inline-block;
 	font-family: var(--font-mono);
 	font-size: 9px;
 	letter-spacing: 0.06em;
@@ -137,6 +189,9 @@
 .card__genres {
 	font-family: var(--font-body);
 	font-size: 11px;
+	line-height: 1.4;
+	/* Reserve the line even when a game has no genres — uniform card height. */
+	min-height: 1.4em;
 	color: var(--color-text-muted);
 	white-space: nowrap;
 	overflow: hidden;

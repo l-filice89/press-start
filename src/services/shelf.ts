@@ -11,6 +11,7 @@ import {
 	type EffectiveState,
 	isDefaultShelfVisible,
 	orderShelf,
+	type PlayStatus,
 } from '../core';
 import {
 	type LibraryRow,
@@ -20,16 +21,20 @@ import {
 import type { Db } from '../repositories/db';
 
 /**
- * The read-only card contract, baked server-side. `effectiveState` drove the
- * ordering and feeds the pill; `hasCompleted`/`hasPlatinum` are carried apart
- * from `effectiveState` so a live (`Playing`) card can still show a milestone
- * badge. Derived flags (`released`/`wishlisted`) come from `core/` (AD-8).
+ * The card contract, baked server-side. `effectiveState` drove the ordering and
+ * feeds the pill; `hasCompleted`/`hasPlatinum` are carried apart from
+ * `effectiveState` so a live (`Playing`) card can still show a milestone badge.
+ * The raw `playStatus` rides along too: a replayed game reads `Playing` while
+ * carrying `completed_on`, so the status popover cannot derive which row is
+ * checked from `effectiveState` alone. Derived flags (`released`/`wishlisted`)
+ * come from `core/` (AD-8).
  */
 export interface ShelfGame {
 	id: string;
 	title: string;
 	coverUrl: string | null;
 	storeUrl: string | null;
+	playStatus: PlayStatus | null;
 	effectiveState: EffectiveState;
 	owned: boolean;
 	released: boolean;
@@ -37,6 +42,16 @@ export interface ShelfGame {
 	psPlusExtra: boolean;
 	hasCompleted: boolean;
 	hasPlatinum: boolean;
+	// The raw milestone dates ride along with the booleans: the status popover's
+	// already-achieved rows show *when* (Story 2.2), not just that.
+	completedOn: string | null;
+	platinumOn: string | null;
+	// Lifecycle dates + ownership type for the detail panel (Story 2.3) — the
+	// card DTO is the panel's only data source; there is no detail endpoint.
+	startedOn: string | null;
+	boughtOn: string | null;
+	wishlistedOn: string | null;
+	ownershipType: 'physical' | 'digital' | null;
 	releaseDate: string | null;
 	genres: string[];
 }
@@ -59,6 +74,7 @@ function bakeCard(row: LibraryRow, genres: string[]): ShelfGame {
 		title: row.title,
 		coverUrl: row.coverUrl,
 		storeUrl: row.storeUrl,
+		playStatus: row.playStatus,
 		effectiveState,
 		owned: row.owned,
 		released,
@@ -66,6 +82,12 @@ function bakeCard(row: LibraryRow, genres: string[]): ShelfGame {
 		psPlusExtra: row.psPlusExtra,
 		hasCompleted: row.completedOn != null,
 		hasPlatinum: row.platinumOn != null,
+		completedOn: row.completedOn,
+		platinumOn: row.platinumOn,
+		startedOn: row.startedOn,
+		boughtOn: row.boughtOn,
+		wishlistedOn: row.wishlistedOn,
+		ownershipType: row.ownershipType,
 		releaseDate: row.releaseDate,
 		genres,
 	};
@@ -95,9 +117,9 @@ export async function loadLibrary(
 
 /**
  * The default backlog shelf: live-play-status games only (Completed/Platinum/
- * Dropped hidden), ordered Playing→Paused→Up next→Not started, alphabetical
- * within each group — the whole sorted set materialized here (AD-7), never a
- * SQL `ORDER BY play_status`.
+ * Dropped hidden), ordered Playing→Paused→Up next→Not started, owned before
+ * un-owned, alphabetical within each group — the whole sorted set materialized
+ * here (AD-7), never a SQL `ORDER BY play_status`.
  */
 export async function getShelf(db: Db, userId: string): Promise<ShelfGame[]> {
 	const library = await loadLibrary(db, userId);
@@ -110,7 +132,9 @@ export async function getShelf(db: Db, userId: string): Promise<ShelfGame[]> {
  * The dedicated whole-library search (FR-19) — a separate path from `getShelf`,
  * NOT a filter over the shelf result. Matches every game by case-insensitive
  * substring on the display title, ignoring active filters and hidden states.
- * Blank query → no results (the SPA falls back to the shelf).
+ * Plain alphabetical on purpose — the shelf's state/ownership tiers (FR-18)
+ * do NOT apply here. Blank query → no results (the SPA falls back to the
+ * shelf).
  */
 export async function searchLibrary(
 	db: Db,

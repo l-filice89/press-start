@@ -4,5 +4,7 @@
  * touches both `repositories/` and `providers/` (AD-6).
  */
 export * from './auth';
+export * from './genres';
 export * from './seed-import';
 export * from './shelf';
+export * from './tracking';

@@ -1,5 +1,5 @@
 import { registerSW } from 'virtual:pwa-register';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 // Global styles — order matters: fonts + tokens define what everything else
@@ -9,22 +9,9 @@ import './tokens.css';
 import './index.css';
 import './components/hit-area.css';
 import App from './App.tsx';
+import { createQueryClient } from './query-client';
 
-// The app's single TanStack Query client (the architecture-pinned data-fetch
-// layer). Reads are cached; the shelf/search queries live under it. A 4xx
-// (e.g. an expired session → 401) is a dead end — don't burn the default three
-// retries on it; only transient (5xx/network) errors retry.
-const queryClient = new QueryClient({
-	defaultOptions: {
-		queries: {
-			retry: (failureCount, error) => {
-				const status = (error as { status?: number }).status;
-				if (status && status >= 400 && status < 500) return false;
-				return failureCount < 3;
-			},
-		},
-	},
-});
+const queryClient = createQueryClient();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

@@ -1,10 +1,10 @@
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ShelfGame } from './api';
-import { Shelf } from './Shelf';
+import { chunkIntoRows, countColumns, Shelf } from './Shelf';
 
 function card(
 	id: string,
@@ -16,6 +16,7 @@ function card(
 		title,
 		coverUrl: null,
 		storeUrl: null,
+		playStatus: 'Not started',
 		effectiveState: 'Not started',
 		owned: true,
 		released: true,
@@ -23,6 +24,12 @@ function card(
 		psPlusExtra: false,
 		hasCompleted: false,
 		hasPlatinum: false,
+		completedOn: null,
+		platinumOn: null,
+		startedOn: null,
+		boughtOn: null,
+		wishlistedOn: null,
+		ownershipType: null,
 		releaseDate: null,
 		genres: [],
 		...over,
@@ -96,6 +103,48 @@ describe('Shelf', () => {
 		expect(cards[0]).toHaveFocus();
 	});
 
+	it('cycles Tab between pill, cover, and owned toggle inside a cell, Escape returns to it (Stories 2.3/2.4)', async () => {
+		const user = userEvent.setup();
+		mockFetch([card('a', 'Apex'), card('b', 'Bolt')]);
+		renderShelf();
+		const cards = await screen.findAllByTestId('shelf-card');
+
+		// Enter on the cell still lands on the pill first (2.1 contract).
+		cards[0].focus();
+		await user.keyboard('{Enter}');
+		const pill = within(cards[0]).getByTestId('status-pill-button');
+		expect(pill).toHaveFocus();
+
+		// Tab cycles through the cell's three widgets without leaving it.
+		const cover = within(cards[0]).getByTestId('card-cover-button');
+		const ownedToggle = within(cards[0]).getByTestId('card-owned-toggle');
+		await user.tab();
+		expect(cover).toHaveFocus();
+		await user.tab();
+		expect(ownedToggle).toHaveFocus();
+		await user.tab();
+		expect(pill).toHaveFocus();
+		await user.tab({ shift: true });
+		expect(ownedToggle).toHaveFocus();
+
+		// Escape from a widget hands focus back to the owning gridcell.
+		await user.keyboard('{Escape}');
+		expect(cards[0]).toHaveFocus();
+	});
+
+	it('nests gridcells in role="row" groups under one role="grid" (not a flat 1×N row)', async () => {
+		mockFetch([card('a', 'Apex'), card('b', 'Bolt'), card('c', 'Cyan')]);
+		renderShelf();
+		const grid = await screen.findByRole('grid');
+		// jsdom has no layout engine / ResizeObserver, so columnCount falls back
+		// to 1 → one gridcell per row (an N×1 grid, never a single 1×N row).
+		const rows = within(grid).getAllByRole('row');
+		expect(rows).toHaveLength(3);
+		for (const row of rows) {
+			expect(within(row).getAllByRole('gridcell')).toHaveLength(1);
+		}
+	});
+
 	it('shows an alert if the shelf fails to load', async () => {
 		vi.stubGlobal(
 			'fetch',
@@ -103,5 +152,31 @@ describe('Shelf', () => {
 		);
 		renderShelf();
 		expect(await screen.findByRole('alert')).toBeInTheDocument();
+	});
+});
+
+describe('countColumns', () => {
+	it('counts resolved track sizes', () => {
+		expect(countColumns('150px 150px 150px')).toBe(3);
+	});
+
+	it('falls back to 1 for unresolved templates (jsdom / none)', () => {
+		expect(countColumns('repeat(auto-fill, minmax(150px, 1fr))')).toBe(1);
+		expect(countColumns('none')).toBe(1);
+		expect(countColumns('')).toBe(1);
+	});
+});
+
+describe('chunkIntoRows', () => {
+	it('partitions items into contiguous reading-order rows', () => {
+		expect(chunkIntoRows([0, 1, 2, 3, 4], 2)).toEqual([[0, 1], [2, 3], [4]]);
+	});
+
+	it('treats a column count below 1 as one item per row', () => {
+		expect(chunkIntoRows([0, 1, 2], 0)).toEqual([[0], [1], [2]]);
+	});
+
+	it('returns no rows for an empty list', () => {
+		expect(chunkIntoRows([], 3)).toEqual([]);
 	});
 });

@@ -21,7 +21,7 @@ This document provides the complete epic and story breakdown for ps-game-catalog
 **State model — play status (§2)**
 
 - **FR-1** — Play status is one per game (`Not started` · `Up next` · `Playing` · `Paused` · `Dropped`) and defaults to `Not started`.
-- **FR-2** — Play status may be **null** only once a completion milestone exists. Logging a completion milestone auto-clears status to null; the user may also clear it manually; a replay sets it back to `Playing`.
+- **FR-2** — Play status may be **null** only once a completion milestone exists. Logging a **platinum** auto-clears status to null; a **story completion** leaves it untouched (amended 2026-07-09); the user may also clear it manually; a replay sets it back to `Playing`.
 - **FR-3** — Invariant: every game always has a play status **or** at least one completion milestone. The detail view refuses any edit that would leave neither (clearing the last milestone requires setting a play status first).
 - **FR-4** — `Dropped` games are hidden from the default shelf, reachable via the `Dropped` reveal pill.
 
@@ -46,7 +46,7 @@ This document provides the complete epic and story breakdown for ps-game-catalog
 - **FR-15** — Cards are minimal by default: cover art, name, genre tags, owned indicator, flag icons for PS+ Extra and release state.
 - **FR-16** — Clicking a card flips it into the full editable detail view: play status, milestones (with confirm modal), lifecycle dates, genres, ownership flag + type, and — for wishlisted games — a "View on PS Store" link (product URL when known, store search-by-title fallback).
 - **FR-17** — Default view shows every game whose effective state is a live play status; `Story completed`, `Platinum achieved`, and `Dropped` are hidden by default (the default shelf is the backlog view).
-- **FR-18** — Default ordering: `Playing` → `Paused` → `Up next` → `Not started`; alphabetical by name within each group.
+- **FR-18** — Default ordering: `Playing` → `Paused` → `Up next` → `Not started`; owned before wishlisted, then alphabetical by name, within each group (ownership tier added 2026-07-09).
 - **FR-19** — Infinite scroll with an always-visible name search bar. Search matches the entire library, ignoring active filters and hidden states.
 
 **The Shelf — filters (§3)**
@@ -203,7 +203,7 @@ _From `DESIGN.md` (visual identity) and `EXPERIENCE.md` (behavior). Both spines 
 Each FR is assigned a **primary** epic; FRs that genuinely span epics list each contributing epic.
 
 - **FR-1** — E1: play-status enum + `Not started` default, modeled and displayed on cards.
-- **FR-2** — E2: milestone logging auto-clears status to null; replay returns it to `Playing`.
+- **FR-2** — E2: platinum logging auto-clears status to null (story completion keeps it, amended 2026-07-09); replay returns it to `Playing`.
 - **FR-3** — E2: completion invariant enforced at the detail-edit boundary.
 - **FR-4** — E1 (hidden from default shelf) / E3 (`Dropped` reveal pill).
 - **FR-5** — E1 (milestone-date model + silver badge on cards) / E2 (logging).
@@ -504,7 +504,7 @@ So that "what's my gaming life right now?" and "did I ever finish that?" are ans
 **Given** the default view with no filters active
 **When** the shelf renders
 **Then** only live-play-status games show (Completed/Platinum/Dropped hidden)
-**And** they are ordered Playing→Paused→Up next→Not started, alphabetical within each group (FR-17, FR-18, FR-4 hide)
+**And** they are ordered Playing→Paused→Up next→Not started, owned-then-alphabetical within each group (FR-17, FR-18, FR-4 hide)
 
 **Given** a large library
 **When** I scroll
@@ -580,7 +580,7 @@ So that the record is trustworthy and fat-finger-proof.
 **Given** I confirm
 **When** the milestone is logged
 **Then** `completed_on`/`platinum_on` is written
-**And** play status auto-clears to null via the single core milestone-write reconciliation function (FR-2, FR-5, AR-13, AR-21)
+**And** play status auto-clears to null via the single core milestone-write reconciliation function (FR-2, FR-5, AR-13, AR-21) — _amended 2026-07-09: only a platinum auto-clears; a story completion leaves the status untouched_
 
 **Given** a milestone that already has a date
 **When** I log it again
@@ -982,10 +982,4 @@ So that my data has a second copy and the app fits my hand.
 **When** it opens
 **Then** I can sign out and view About/Help (FR-47 session)
 
-**Given** a 401 from an expired session on any authed page
-**When** the request fails
-**Then** the app redirects to sign-in instead of showing a generic load error (deferred from Story 1.7 — `web/shelf/api.ts` / `Shelf.tsx` currently show a generic error with no re-auth path; needs a centralized redirect, not a per-surface patch)
-
-**Given** the shelf card grid on any viewport
-**When** the responsive column count changes
-**Then** the grid's ARIA rows are regrouped to match the visual column count, so assistive tech announces the true N×M structure instead of a flat 1×N (deferred from Story 1.7 — `web/shelf/Shelf.tsx` renders one `role="row"` for all cards; reading-order nav already works, this is an ARIA-structure refinement)
+> **Delivered ahead of Epic 6:** the centralized 401 re-auth redirect (DW-3) and the shelf-grid ARIA row regrouping (DW-4) shipped as deferred-work bundles and were removed from this story's ACs. Story 6.3 is scoped to CSV export and settings.

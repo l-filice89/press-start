@@ -1,0 +1,374 @@
+/* Flip-to-detail dialog (Story 2.3): full-screen on mobile, centered ~760px on
+   desktop, over a dimmed backdrop. Entry is flip-then-grow from the panel's own
+   box; `prefers-reduced-motion` gets a fast cross-fade instead. Tokens-only. */
+
+.detail-panel__backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: var(--z-overlay);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: color-mix(in srgb, black 62%, transparent);
+}
+
+.detail-panel {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-4);
+	width: 100%;
+	height: 100%;
+	padding: var(--space-4);
+	overflow-y: auto;
+	background: var(--color-surface-raised);
+	border: 1px solid var(--color-border-hairline);
+	box-shadow: var(--glow-ring);
+}
+
+/* Centered ~760px on desktop; full-screen below. Sections flow into two
+   columns (header spans both) so the panel reads composed, not a lone strip
+   of controls down the left edge. */
+@media (min-width: 760px) {
+	.detail-panel {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		align-items: start;
+		column-gap: var(--space-5);
+		width: min(760px, calc(100vw - 2 * var(--space-5)));
+		height: auto;
+		max-height: calc(100vh - 2 * var(--space-5));
+		padding: var(--space-5);
+		border-radius: var(--radius-lg);
+	}
+
+	.detail-panel__header {
+		grid-column: 1 / -1;
+	}
+
+	/* Inside a ~340px column the mobile cap just leaves a ragged edge. */
+	.detail-panel__milestone,
+	.detail-panel__dates {
+		max-width: none;
+	}
+
+	/* Section chrome is a desktop device — mobile stays full-bleed. */
+	.detail-panel__section {
+		padding: var(--space-3);
+		border: 1px solid var(--color-border-soft);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+	}
+
+	/* Five sections in two columns leave one odd section out; let the last
+	   span both columns instead of facing an empty cell. */
+	.detail-panel__section:last-of-type {
+		grid-column: 1 / -1;
+	}
+}
+
+/* Flip-then-grow entry: a transform-origin flip from the panel's own box reads
+   as the card gesture at a fraction of a true FLIP animation's complexity. */
+.detail-panel--flip {
+	animation: detail-panel-flip var(--motion-base) var(--ease-standard);
+	transform-origin: center;
+}
+
+@keyframes detail-panel-flip {
+	from {
+		opacity: 0;
+		transform: perspective(1200px) rotateY(-72deg) scale(0.72);
+	}
+	60% {
+		opacity: 1;
+		transform: perspective(1200px) rotateY(0) scale(0.94);
+	}
+	to {
+		transform: none;
+	}
+}
+
+/* Reduced motion: a fast cross-fade, no flip/grow transform. */
+.detail-panel--fade {
+	animation: detail-panel-fade var(--motion-fast) var(--ease-standard);
+}
+
+@keyframes detail-panel-fade {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+.detail-panel__header {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+}
+
+.detail-panel__cover {
+	width: 56px;
+	aspect-ratio: 3 / 4;
+	object-fit: cover;
+	border-radius: var(--radius-sm);
+	border: 1px solid var(--color-border-soft);
+}
+
+.detail-panel__title {
+	flex: 1;
+	margin: 0;
+	font-family: var(--font-display);
+	font-size: 18px;
+	color: var(--color-text-primary);
+}
+
+.detail-panel__close {
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-sm);
+	background: none;
+	color: var(--color-text-primary);
+	font: inherit;
+	cursor: pointer;
+}
+
+.detail-panel__section {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+	align-items: flex-start;
+	width: 100%;
+}
+
+.detail-panel__heading {
+	margin: 0;
+	font-family: var(--font-ui);
+	font-size: 12px;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--color-text-muted);
+}
+
+/* Segmented play-status control. */
+.detail-panel__statuses {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-1);
+}
+
+.detail-panel__status {
+	padding: var(--space-1) var(--space-3);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-pill);
+	background: none;
+	color: var(--color-text-secondary);
+	font-family: var(--font-ui);
+	font-size: 13px;
+	cursor: pointer;
+}
+
+.detail-panel__status[aria-checked="true"] {
+	border-color: var(--color-accent-electric);
+	color: var(--color-accent-electric);
+	background: color-mix(in srgb, var(--color-accent-electric) 12%, transparent);
+}
+
+.detail-panel__clear {
+	border: none;
+	background: none;
+	color: var(--color-text-muted);
+	font-family: var(--font-ui);
+	font-size: 13px;
+	text-decoration: underline;
+	cursor: pointer;
+}
+
+.detail-panel__milestone {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-3);
+	width: 100%;
+	max-width: 20rem;
+	padding: var(--space-2) var(--space-3);
+	border: 1px solid color-mix(in srgb, var(--state-milestone) 35%, transparent);
+	border-radius: var(--radius-sm);
+	background: none;
+	color: var(--state-milestone);
+	font-family: var(--font-ui);
+	font-size: 13px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.detail-panel__milestone[aria-disabled="true"] {
+	opacity: 0.7;
+	cursor: default;
+}
+
+.detail-panel__milestone-date {
+	font-family: var(--font-mono);
+	font-size: 12px;
+	color: var(--color-text-secondary);
+}
+
+.detail-panel__dates {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-1);
+	margin: 0;
+	width: 100%;
+	max-width: 20rem;
+}
+
+/* Editable date rows (Story 2.4): label + native date input. */
+.detail-panel__date-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-3);
+}
+
+.detail-panel__date-label {
+	font-family: var(--font-ui);
+	font-size: 13px;
+	color: var(--color-text-secondary);
+}
+
+.detail-panel__date-input {
+	padding: var(--space-1) var(--space-2);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-sm);
+	background: var(--color-surface);
+	color: var(--color-text-primary);
+	font-family: var(--font-mono);
+	font-size: 13px;
+	color-scheme: dark;
+}
+
+/* Genre editing (Story 2.5): removable chips + an add form with native
+   datalist suggestions. Add and remove only — no merge/rename (FR-25). */
+.detail-panel__genre-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-1);
+	margin: 0 0 var(--space-2);
+	padding: 0;
+	list-style: none;
+}
+
+.detail-panel__genre-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-1);
+	max-width: 100%;
+	padding: var(--space-1) var(--space-2);
+	overflow-wrap: anywhere;
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-pill);
+	color: var(--color-text-primary);
+	font-family: var(--font-body);
+	font-size: 13px;
+}
+
+.detail-panel__genre-remove {
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border: none;
+	border-radius: var(--radius-pill);
+	background: none;
+	color: var(--color-text-muted);
+	font-size: 13px;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.detail-panel__genre-remove:hover {
+	color: var(--color-text-primary);
+}
+
+.detail-panel__genre-add {
+	display: flex;
+	gap: var(--space-1);
+}
+
+.detail-panel__genre-input {
+	flex: 1;
+	min-width: 0;
+	padding: var(--space-1) var(--space-2);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-sm);
+	background: var(--color-surface);
+	color: var(--color-text-primary);
+	font-family: var(--font-body);
+	font-size: 13px;
+	color-scheme: dark;
+}
+
+.detail-panel__genre-submit {
+	padding: var(--space-1) var(--space-3);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-pill);
+	background: none;
+	color: var(--color-text-secondary);
+	font-family: var(--font-ui);
+	font-size: 13px;
+	cursor: pointer;
+}
+
+/* Ownership controls (Story 2.4): owned toggle + segmented type pair. */
+.detail-panel__owned-toggle {
+	padding: var(--space-1) var(--space-3);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-pill);
+	background: none;
+	color: var(--color-text-secondary);
+	font-family: var(--font-ui);
+	font-size: 13px;
+	cursor: pointer;
+}
+
+.detail-panel__owned-toggle[aria-pressed="true"] {
+	border-color: var(--color-accent-electric);
+	color: var(--color-accent-electric);
+	background: color-mix(in srgb, var(--color-accent-electric) 12%, transparent);
+}
+
+/* A fieldset for group semantics; its native chrome is reset away. */
+.detail-panel__ownership-types {
+	display: flex;
+	gap: var(--space-1);
+	margin: 0;
+	padding: 0;
+	border: none;
+}
+
+.detail-panel__ownership-type {
+	padding: var(--space-1) var(--space-3);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-pill);
+	background: none;
+	color: var(--color-text-secondary);
+	font-family: var(--font-ui);
+	font-size: 13px;
+	cursor: pointer;
+}
+
+.detail-panel__ownership-type[aria-pressed="true"] {
+	border-color: var(--color-accent-electric);
+	color: var(--color-accent-electric);
+	background: color-mix(in srgb, var(--color-accent-electric) 12%, transparent);
+}
+
+.detail-panel__store-link {
+	display: inline-flex;
+	align-items: center;
+	padding: var(--space-1) var(--space-3);
+	border: 1px solid var(--color-accent-electric);
+	border-radius: var(--radius-sm);
+	color: var(--color-accent-electric);
+	font-family: var(--font-ui);
+	font-size: 13px;
+	text-decoration: none;
+}

@@ -76,7 +76,7 @@ Behavioral rules; visual specs live in `DESIGN.md.Components`.
 - **Play status** (only user-set mutable state): Not started · Up next · Playing · Paused · Dropped. One per game; may be null once a milestone exists (FR-1/2). Dropped is hidden from the default shelf (FR-4).
 - **Milestones = dates, not statuses:** `completed_on` / `platinum_on`. Immutable through normal flows; editable only in detail; confirm-gated (FR-5/6/7).
 - **Effective state (FR-8):** play status if set, else Platinum if platinum_on, else Story completed if completed_on. Ordering, card pills, and filters all operate on effective state.
-- **Default visible set:** live play status only. Completed / Platinum / Dropped are hidden by default; the reveal pills OR them back in (FR-17/21). Default order: Playing → Paused → Up next → Not started, alphabetical within each (FR-18).
+- **Default visible set:** live play status only. Completed / Platinum / Dropped are hidden by default; the reveal pills OR them back in (FR-17/21). Default order: Playing → Paused → Up next → Not started, owned-then-alphabetical within each (FR-18, ownership tier 2026-07-09).
 - **Derived (never stored):** Released, Wishlisted (= not owned), Playable now (owned-or-PS+Extra AND released) — FR-12/13/14. "Anything that can be computed is computed."
 
 **Feedback — four channels, one rule.**
