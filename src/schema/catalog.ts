@@ -19,13 +19,14 @@ import {
 	text,
 	uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
-import { PLAY_STATUSES } from '../core/types';
+import { OWNERSHIP_TYPES, PLAY_STATUSES } from '../core/types';
 import { user } from './auth';
 
 /** DB vocabulary for `external_link.source` (persistence-only, not a domain enum). */
 export const EXTERNAL_LINK_SOURCES = ['PSN', 'IGDB'] as const;
-/** DB vocabulary for `game_tracking.ownership_type`. */
-export const OWNERSHIP_TYPES = ['physical', 'digital'] as const;
+// `game_tracking.ownership_type` keys off the core vocabulary (AD-3); the
+// re-export keeps existing `schema/catalog` importers working.
+export { OWNERSHIP_TYPES };
 
 /**
  * GAME — shared catalog identity (AD-19). Facts fetched by ingest jobs, not

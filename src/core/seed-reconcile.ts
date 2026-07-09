@@ -13,9 +13,7 @@
 
 import { mapNotionStatus, parseNotionDate } from './notion-status';
 import { normalizeTitle } from './title-normalizer';
-import type { PlayStatus } from './types';
-
-export type OwnershipType = 'physical' | 'digital';
+import type { OwnershipType, PlayStatus } from './types';
 
 /**
  * One reconciled game before enrichment. `source` records where it came from:

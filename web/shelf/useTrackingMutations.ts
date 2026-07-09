@@ -2,10 +2,14 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import { useToast } from '../components/Toast';
 import {
+	changeOwnership,
 	changePlayStatus,
+	type DateEdits,
 	type EffectiveState,
+	editDates,
 	logMilestone,
 	type Milestone,
+	type OwnershipType,
 	type PlayStatus,
 	type ShelfGame,
 } from './api';
@@ -165,6 +169,94 @@ export function useTrackingMutations(
 		[toast],
 	);
 
+	// Ownership writes (Story 2.4): the card toggle and the panel's ownership
+	// section share this one path. Ownership never changes effective state, so
+	// no `onHidden` — invalidation alone keeps the shelf honest.
+	const ownershipMutation = useMutation({
+		mutationFn: (change: { owned?: boolean; ownershipType?: OwnershipType }) =>
+			changeOwnership(game.id, change),
+		onSuccess: () => queryClient.invalidateQueries({ queryKey: ['shelf'] }),
+		onError: () =>
+			toast({ message: `Couldn’t update ${game.title}. Try again.` }),
+	});
+	const { mutate: mutateOwnership, isPending: ownershipPending } =
+		ownershipMutation;
+
+	const setOwnership = useCallback(
+		(change: { owned?: boolean; ownershipType?: OwnershipType }) => {
+			// Same race guard as `selectStatus`, scoped to ownership writes.
+			if (ownershipPending) {
+				toast({
+					message: `Still saving ${game.title}. Try again in a moment.`,
+				});
+				return;
+			}
+			const previousType = game.ownershipType;
+			mutateOwnership(change, {
+				onSuccess: () => {
+					if (change.owned === false) {
+						// Un-owning is a reversible risky action: UNDO restores the flag
+						// AND the previous type. `bought_on` needs no restore — un-owning
+						// never touched it (write-once server-side).
+						toast({
+							message: `${game.title} — no longer owned`,
+							undo: {
+								onUndo: () =>
+									mutateOwnership({
+										owned: true,
+										...(previousType ? { ownershipType: previousType } : {}),
+									}),
+							},
+						});
+						return;
+					}
+					toast({
+						message:
+							change.owned === true
+								? `${game.title} — owned`
+								: `${game.title} — ${change.ownershipType}`,
+					});
+				},
+			});
+		},
+		[game.title, game.ownershipType, mutateOwnership, ownershipPending, toast],
+	);
+
+	// Lifecycle-date corrections (Story 2.4, FR-45): deliberate overrides. A 409
+	// is the completion-invariant refusal, same as clearing a status — explain
+	// it and refetch (the client's picture of the row was stale or wrong).
+	const datesMutation = useMutation({
+		mutationFn: (edits: DateEdits) => editDates(game.id, edits),
+		onSuccess: () => queryClient.invalidateQueries({ queryKey: ['shelf'] }),
+		onError: (error) => {
+			if ((error as Error & { status?: number }).status === 409) {
+				toast({
+					message: `Can’t clear the last milestone of ${game.title} — set a play status first.`,
+				});
+				queryClient.invalidateQueries({ queryKey: ['shelf'] });
+				return;
+			}
+			toast({ message: `Couldn’t update ${game.title}. Try again.` });
+		},
+	});
+	const { mutate: mutateDates, isPending: datesPending } = datesMutation;
+
+	const saveDates = useCallback(
+		(edits: DateEdits) => {
+			// Same race guard as `selectStatus`, scoped to date writes.
+			if (datesPending) {
+				toast({
+					message: `Still saving ${game.title}. Try again in a moment.`,
+				});
+				return;
+			}
+			mutateDates(edits, {
+				onSuccess: () => toast({ message: `${game.title} — date saved` }),
+			});
+		},
+		[game.title, mutateDates, datesPending, toast],
+	);
+
 	const cancelConfirm = useCallback(() => {
 		setConfirming(null);
 		onConfirmClose?.();
@@ -200,6 +292,8 @@ export function useTrackingMutations(
 
 	return {
 		selectStatus,
+		setOwnership,
+		saveDates,
 		milestoneRows,
 		activateMilestoneRow,
 		confirming,

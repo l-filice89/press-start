@@ -1,8 +1,15 @@
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import {
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+	within,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { FOCUSABLE_SELECTOR } from '../components/focusable';
 import { ToastHost } from '../components/Toast';
 import type { ShelfGame } from './api';
 import { Card } from './Card';
@@ -107,10 +114,11 @@ describe('DetailPanel', () => {
 	it('traps Tab inside the dialog', async () => {
 		const user = await openPanel();
 
-		// Shift+Tab from the first focusable (the close button) wraps to the last.
+		// Shift+Tab from the first focusable (the close button) wraps to the last
+		// per the shared trap selector (focusable.ts).
 		expect(screen.getByRole('button', { name: 'Close details' })).toHaveFocus();
 		await user.tab({ shift: true });
-		const focusables = panel().querySelectorAll('button, a[href]');
+		const focusables = panel().querySelectorAll(FOCUSABLE_SELECTOR);
 		expect(focusables[focusables.length - 1]).toHaveFocus();
 		// And Tab from the last wraps back to the first.
 		await user.tab();
@@ -365,18 +373,14 @@ describe('DetailPanel', () => {
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
 
-	it('renders lifecycle dates with an em dash for the unrecorded ones', async () => {
+	it('renders the five lifecycle dates as date inputs, empty when unrecorded', async () => {
 		await openPanel(game({ startedOn: '2024-01-01', boughtOn: '2023-12-25' }));
 
-		const dates = panel().querySelectorAll('.detail-panel__date-row');
-		const rows = Array.from(dates).map((r) => r.textContent);
-		expect(rows).toEqual([
-			'Wishlisted—',
-			'Bought2023-12-25',
-			'Started2024-01-01',
-			'Story completed—',
-			'Platinum—',
-		]);
+		expect(screen.getByLabelText('Wishlisted')).toHaveValue('');
+		expect(screen.getByLabelText('Bought')).toHaveValue('2023-12-25');
+		expect(screen.getByLabelText('Started')).toHaveValue('2024-01-01');
+		expect(screen.getByLabelText('Story completed')).toHaveValue('');
+		expect(screen.getByLabelText('Platinum')).toHaveValue('');
 	});
 
 	it('links a wishlisted game to its persisted store URL', async () => {
@@ -417,7 +421,10 @@ describe('DetailPanel', () => {
 		expect(
 			screen.queryByRole('link', { name: 'View on PS Store' }),
 		).not.toBeInTheDocument();
-		expect(screen.getByText('Owned · physical')).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: 'Owned' })).toHaveAttribute(
+			'aria-pressed',
+			'true',
+		);
 	});
 
 	it('uses the flip entry by default and the cross-fade under reduced motion', async () => {
@@ -433,5 +440,170 @@ describe('DetailPanel', () => {
 		await user.click(cover());
 		expect(panel()).toHaveClass('detail-panel--fade');
 		expect(panel()).not.toHaveClass('detail-panel--flip');
+	});
+
+	describe('ownership editing (Story 2.4)', () => {
+		it('owning from the panel PATCHes the ownership route and toasts plainly', async () => {
+			const user = await openPanel(
+				game({ owned: false, wishlisted: true, ownershipType: null }),
+			);
+
+			const toggle = screen.getByRole('button', { name: 'Not owned' });
+			expect(toggle).toHaveAttribute('aria-pressed', 'false');
+			await user.click(toggle);
+
+			await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+			const [url, init] = fetchMock.mock.calls[0];
+			expect(url).toBe('/api/games/g1/ownership');
+			expect(init).toMatchObject({ method: 'PATCH' });
+			expect(JSON.parse(init.body)).toEqual({ owned: true });
+			expect(await screen.findByTestId('toast')).toHaveTextContent(
+				'Bloodborne — owned',
+			);
+			expect(
+				screen.queryByRole('button', { name: 'Undo' }),
+			).not.toBeInTheDocument();
+		});
+
+		it('un-owning carries an UNDO that restores flag and previous type', async () => {
+			const user = await openPanel(
+				game({ owned: true, ownershipType: 'physical' }),
+			);
+			await user.click(screen.getByRole('button', { name: 'Owned' }));
+
+			await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+			expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+				owned: false,
+			});
+
+			const undo = await screen.findByRole('button', { name: 'Undo' });
+			await user.click(undo);
+			await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+			expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
+				owned: true,
+				ownershipType: 'physical',
+			});
+		});
+
+		it('switches the ownership type through the segmented pair', async () => {
+			const user = await openPanel(
+				game({ owned: true, ownershipType: 'physical' }),
+			);
+
+			const group = screen.getByRole('group', {
+				name: 'Ownership type for Bloodborne',
+			});
+			expect(
+				within(group).getByRole('button', { name: 'physical' }),
+			).toHaveAttribute('aria-pressed', 'true');
+
+			await user.click(within(group).getByRole('button', { name: 'digital' }));
+			await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+			expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+				ownershipType: 'digital',
+			});
+		});
+
+		it('activating the already-set type writes nothing', async () => {
+			const user = await openPanel(
+				game({ owned: true, ownershipType: 'physical' }),
+			);
+			await user.click(screen.getByRole('button', { name: 'physical' }));
+			expect(fetchMock).not.toHaveBeenCalled();
+		});
+
+		it('hides the type pair when the game is not owned', async () => {
+			await openPanel(game({ owned: false, wishlisted: true }));
+			expect(
+				screen.queryByRole('group', { name: 'Ownership type for Bloodborne' }),
+			).not.toBeInTheDocument();
+		});
+	});
+
+	describe('date editing (Story 2.4)', () => {
+		it('saving a date input PATCHes the dates route on blur, not per keystroke', async () => {
+			await openPanel(game());
+
+			const input = screen.getByLabelText('Started');
+			// Segment-by-segment typing emits complete-but-wrong intermediates
+			// (React onChange fires per input event) — none of them may PATCH.
+			fireEvent.change(input, { target: { value: '0002-03-01' } });
+			fireEvent.change(input, { target: { value: '2024-03-01' } });
+			expect(fetchMock).not.toHaveBeenCalled();
+
+			fireEvent.blur(input);
+
+			await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+			const [url, init] = fetchMock.mock.calls[0];
+			expect(url).toBe('/api/games/g1/dates');
+			expect(init).toMatchObject({ method: 'PATCH' });
+			expect(JSON.parse(init.body)).toEqual({ startedOn: '2024-03-01' });
+			expect(await screen.findByTestId('toast')).toHaveTextContent(
+				'Bloodborne — date saved',
+			);
+		});
+
+		it('clearing a date input sends null for that field', async () => {
+			await openPanel(game({ boughtOn: '2023-12-25' }));
+
+			const input = screen.getByLabelText('Bought');
+			fireEvent.change(input, { target: { value: '' } });
+			fireEvent.blur(input);
+
+			await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+			expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+				boughtOn: null,
+			});
+		});
+
+		it('explains a 409 completion-invariant refusal on a date edit', async () => {
+			fetchMock.mockResolvedValue({
+				ok: false,
+				status: 409,
+				json: async () => ({ error: 'completion invariant' }),
+			});
+			await openPanel(
+				game({
+					playStatus: null,
+					effectiveState: 'Story completed',
+					hasCompleted: true,
+					completedOn: '2024-06-01',
+				}),
+			);
+
+			const input = screen.getByLabelText('Story completed');
+			fireEvent.change(input, { target: { value: '' } });
+			fireEvent.blur(input);
+
+			expect(await screen.findByTestId('toast')).toHaveTextContent(
+				/Can’t clear the last milestone of Bloodborne — set a play status first/,
+			);
+		});
+
+		it('the focus trap counts the new form controls (shared selector)', async () => {
+			const user = await openPanel(game({ owned: true }));
+
+			// The shared boundary set includes every date input — no per-dialog drift.
+			const focusables = Array.from(
+				panel().querySelectorAll(FOCUSABLE_SELECTOR),
+			);
+			const inputs = Array.from(panel().querySelectorAll('input[type="date"]'));
+			expect(inputs).toHaveLength(5);
+			for (const input of inputs) {
+				expect(focusables).toContain(input);
+			}
+
+			// Shift+Tab from the first focusable wraps to the last of that same set…
+			expect(
+				screen.getByRole('button', { name: 'Close details' }),
+			).toHaveFocus();
+			await user.tab({ shift: true });
+			expect(focusables[focusables.length - 1]).toHaveFocus();
+			// …and Tab from the last wraps forward across the inputs to the first.
+			await user.tab();
+			expect(
+				screen.getByRole('button', { name: 'Close details' }),
+			).toHaveFocus();
+		});
 	});
 });

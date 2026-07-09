@@ -1,7 +1,13 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { PLAY_STATUSES, type ShelfGame } from './api';
+import { FOCUSABLE_SELECTOR } from '../components/focusable';
+import {
+	type DateEdits,
+	OWNERSHIP_TYPES,
+	PLAY_STATUSES,
+	type ShelfGame,
+} from './api';
 import { MILESTONE_LABELS, useTrackingMutations } from './useTrackingMutations';
 import './detail-panel.css';
 
@@ -13,13 +19,42 @@ function storeHref(game: ShelfGame): string {
 	);
 }
 
-/** One read-only lifecycle date row; "—" when the date was never recorded. */
-function DateRow({ label, date }: { label: string; date: string | null }) {
+/**
+ * One editable lifecycle date row (Story 2.4, FR-45): a native
+ * `<input type="date">` — no picker dependency. Edits accumulate in a local
+ * draft and commit on blur: React's `onChange` fires per segment keystroke
+ * (typing a year emits `0002-…` as a complete value), so saving there would
+ * PATCH garbage intermediates and drop the real edit on the pending guard.
+ * The draft re-seeds from the DTO, so a server refusal (409) snaps the input
+ * back to the stored value; clearing the input sends `null`.
+ */
+function DateRow({
+	label,
+	field,
+	date,
+	onSave,
+}: {
+	label: string;
+	field: keyof DateEdits;
+	date: string | null;
+	onSave: (edits: DateEdits) => void;
+}) {
+	const [draft, setDraft] = useState(date ?? '');
+	useEffect(() => setDraft(date ?? ''), [date]);
 	return (
-		<div className="detail-panel__date-row">
-			<dt>{label}</dt>
-			<dd>{date ?? '—'}</dd>
-		</div>
+		<label className="detail-panel__date-row">
+			<span className="detail-panel__date-label">{label}</span>
+			<input
+				type="date"
+				className="detail-panel__date-input"
+				value={draft}
+				onChange={(e) => setDraft(e.target.value)}
+				onBlur={() => {
+					const next = draft === '' ? null : draft;
+					if (next !== date) onSave({ [field]: next });
+				}}
+			/>
+		</label>
 	);
 }
 
@@ -52,6 +87,8 @@ export function DetailPanel({
 
 	const {
 		selectStatus,
+		setOwnership,
+		saveDates,
 		milestoneRows,
 		activateMilestoneRow,
 		confirming,
@@ -104,12 +141,12 @@ export function DetailPanel({
 	const onKeyDown = (e: React.KeyboardEvent) => {
 		if (e.key !== 'Tab') return;
 		// N-focusable trap: Tab cycles inside the dialog, never out of it. The
-		// roving-tabindex radios (tabindex="-1") are excluded — they're reached by
-		// arrow keys, not Tab, and counting them would put the trap's boundaries
-		// on elements Tab can never land on.
-		const focusables = dialogRef.current?.querySelectorAll<HTMLElement>(
-			'button:not([tabindex="-1"]), a[href]',
-		);
+		// shared selector (focusable.ts) includes the Story-2.4 form controls and
+		// excludes roving-tabindex radios — they're reached by arrow keys, not
+		// Tab, and counting them would put the trap's boundaries on elements Tab
+		// can never land on.
+		const focusables =
+			dialogRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
 		if (!focusables?.length) return;
 		const first = focusables[0];
 		const last = focusables[focusables.length - 1];
@@ -261,13 +298,38 @@ export function DetailPanel({
 
 					<section className="detail-panel__section">
 						<h3 className="detail-panel__heading">Dates</h3>
-						<dl className="detail-panel__dates">
-							<DateRow label="Wishlisted" date={game.wishlistedOn} />
-							<DateRow label="Bought" date={game.boughtOn} />
-							<DateRow label="Started" date={game.startedOn} />
-							<DateRow label="Story completed" date={game.completedOn} />
-							<DateRow label="Platinum" date={game.platinumOn} />
-						</dl>
+						<div className="detail-panel__dates">
+							<DateRow
+								label="Wishlisted"
+								field="wishlistedOn"
+								date={game.wishlistedOn}
+								onSave={saveDates}
+							/>
+							<DateRow
+								label="Bought"
+								field="boughtOn"
+								date={game.boughtOn}
+								onSave={saveDates}
+							/>
+							<DateRow
+								label="Started"
+								field="startedOn"
+								date={game.startedOn}
+								onSave={saveDates}
+							/>
+							<DateRow
+								label="Story completed"
+								field="completedOn"
+								date={game.completedOn}
+								onSave={saveDates}
+							/>
+							<DateRow
+								label="Platinum"
+								field="platinumOn"
+								date={game.platinumOn}
+								onSave={saveDates}
+							/>
+						</div>
 					</section>
 
 					<section className="detail-panel__section">
@@ -279,11 +341,37 @@ export function DetailPanel({
 
 					<section className="detail-panel__section">
 						<h3 className="detail-panel__heading">Ownership</h3>
-						<p className="detail-panel__ownership">
-							{game.owned
-								? `Owned${game.ownershipType ? ` · ${game.ownershipType}` : ''}`
-								: 'Wishlisted'}
-						</p>
+						{/* Reversible, no confirm: un-owning gets an UNDO toast instead. */}
+						<button
+							type="button"
+							className="detail-panel__owned-toggle tap-target"
+							aria-pressed={game.owned}
+							onClick={() => setOwnership({ owned: !game.owned })}
+						>
+							{game.owned ? 'Owned' : 'Not owned'}
+						</button>
+						{game.owned && (
+							<fieldset
+								aria-label={`Ownership type for ${game.title}`}
+								className="detail-panel__ownership-types"
+							>
+								{OWNERSHIP_TYPES.map((type) => (
+									<button
+										key={type}
+										type="button"
+										aria-pressed={game.ownershipType === type}
+										className="detail-panel__ownership-type tap-target"
+										onClick={() => {
+											if (game.ownershipType !== type) {
+												setOwnership({ ownershipType: type });
+											}
+										}}
+									>
+										{type}
+									</button>
+								))}
+							</fieldset>
+						)}
 						{!game.owned && (
 							// Persisted data only (NFR-3): the product URL when known, a
 							// store search by title otherwise — never a third-party call.

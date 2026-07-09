@@ -29,6 +29,18 @@ export type EffectiveState = (typeof EFFECTIVE_STATES)[number];
 
 export type Milestone = 'completed' | 'platinum';
 
+export const OWNERSHIP_TYPES = ['physical', 'digital'] as const;
+
+export type OwnershipType = (typeof OWNERSHIP_TYPES)[number];
+
+/** A partial per-field lifecycle-date edit: a date string sets, `null` clears. */
+export type DateEdits = Partial<
+	Record<
+		'wishlistedOn' | 'boughtOn' | 'startedOn' | 'completedOn' | 'platinumOn',
+		string | null
+	>
+>;
+
 export const shelfGameSchema = z.object({
 	id: z.string(),
 	title: z.string(),
@@ -122,6 +134,42 @@ export async function logMilestone(
 			body: JSON.stringify({ milestone }),
 		},
 	);
+	return playStatusResponseSchema.parse(body).effectiveState;
+}
+
+/**
+ * Change the ownership flag and/or type (Story 2.4). Owning stamps `bought_on`
+ * once server-side; a type on an un-owned game is refused with a 400.
+ */
+export async function changeOwnership(
+	gameId: string,
+	change: { owned?: boolean; ownershipType?: OwnershipType },
+): Promise<EffectiveState> {
+	const body = await callApi(
+		`/api/games/${encodeURIComponent(gameId)}/ownership`,
+		{
+			method: 'PATCH',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify(change),
+		},
+	);
+	return playStatusResponseSchema.parse(body).effectiveState;
+}
+
+/**
+ * Manually correct lifecycle dates (Story 2.4, FR-45). An edit that would
+ * clear the last milestone of a status-less game is refused server-side with
+ * a 409.
+ */
+export async function editDates(
+	gameId: string,
+	edits: DateEdits,
+): Promise<EffectiveState> {
+	const body = await callApi(`/api/games/${encodeURIComponent(gameId)}/dates`, {
+		method: 'PATCH',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify(edits),
+	});
 	return playStatusResponseSchema.parse(body).effectiveState;
 }
 

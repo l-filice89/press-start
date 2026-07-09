@@ -1,16 +1,29 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { EFFECTIVE_STATES, MILESTONES, PLAY_STATUSES } from '../core';
+import {
+	EFFECTIVE_STATES,
+	type LIFECYCLE_DATE_FIELDS,
+	MILESTONES,
+	OWNERSHIP_TYPES,
+	PLAY_STATUSES,
+} from '../core';
 import { createDb } from '../repositories/db';
-import { changePlayStatus, logMilestone } from '../services';
+import {
+	changeOwnership,
+	changePlayStatus,
+	editDates,
+	logMilestone,
+} from '../services';
 import { type AuthVariables, requireAuth } from './auth';
 
 /**
- * The tracking write boundary (Stories 2.1/2.2): the play-status PATCH and the
- * milestone POST, both user-scoped behind `requireAuth` (AD-13) and
- * Zod-validated in and out (AR-26). The PATCH accepts the five play statuses
- * or `null` (Story 2.3: clear) — clearing is refused with 409 when it would
- * violate the completion invariant (FR-3/AR-12), decided in `services/`.
+ * The tracking write boundary (Stories 2.1/2.2/2.4): the play-status,
+ * ownership, and lifecycle-dates PATCHes and the milestone POST, all
+ * user-scoped behind `requireAuth` (AD-13) and Zod-validated in and out
+ * (AR-26). The play-status PATCH accepts the five play statuses or `null`
+ * (Story 2.3: clear) — clearing is refused with 409 when it would violate the
+ * completion invariant (FR-3/AR-12), decided in `services/`; a date edit that
+ * would clear the last milestone of a status-less game gets the same 409.
  */
 
 const playStatusBodySchema = z.object({
@@ -20,6 +33,38 @@ const playStatusBodySchema = z.object({
 const milestoneBodySchema = z.object({
 	milestone: z.enum(MILESTONES),
 });
+
+const ownershipBodySchema = z
+	.object({
+		owned: z.boolean().optional(),
+		ownershipType: z.enum(OWNERSHIP_TYPES).optional(),
+	})
+	.refine(
+		(body) => body.owned !== undefined || body.ownershipType !== undefined,
+		{ message: 'at least one key required' },
+	);
+
+// Shape only (`YYYY-MM-DD` or null, at least one of the five keys) — calendar
+// validity (2024-13-99) is `core/`'s call, surfaced as the same 400.
+const isoDateShape = z
+	.string()
+	.regex(/^\d{4}-\d{2}-\d{2}$/)
+	.nullable()
+	.optional();
+const dateEditsBodySchema = z
+	.object({
+		wishlistedOn: isoDateShape,
+		boughtOn: isoDateShape,
+		startedOn: isoDateShape,
+		completedOn: isoDateShape,
+		platinumOn: isoDateShape,
+	} satisfies Record<
+		(typeof LIFECYCLE_DATE_FIELDS)[number],
+		typeof isoDateShape
+	>)
+	.refine((body) => Object.values(body).some((value) => value !== undefined), {
+		message: 'at least one date key required',
+	});
 
 // Shared by both writes: every tracking mutation answers with the new
 // effective state, and the SPA refetches the shelf for everything else.
@@ -49,6 +94,62 @@ trackingRoute.patch('/games/:gameId/play-status', requireAuth, async (c) => {
 		body.data.playStatus,
 		today,
 	);
+	if (effectiveState === 'invariant') {
+		return c.json({ error: 'completion invariant' }, 409);
+	}
+	if (!effectiveState) {
+		return c.json({ error: 'not found' }, 404);
+	}
+
+	return c.json(trackingResponseSchema.parse({ effectiveState }), 200);
+});
+
+trackingRoute.patch('/games/:gameId/ownership', requireAuth, async (c) => {
+	const body = ownershipBodySchema.safeParse(
+		await c.req.json().catch(() => null),
+	);
+	if (!body.success) {
+		return c.json({ error: 'invalid ownership change' }, 400);
+	}
+
+	// `today` is resolved here, not in `core/` — the ownership function stays
+	// pure and takes the date as an input (AD-3).
+	const today = new Date().toISOString().slice(0, 10);
+	const effectiveState = await changeOwnership(
+		createDb(c.env.DB),
+		c.get('userId'),
+		c.req.param('gameId'),
+		body.data,
+		today,
+	);
+	if (effectiveState === 'invalid') {
+		// A type on an un-owned game (the type belongs to an owned game).
+		return c.json({ error: 'invalid ownership change' }, 400);
+	}
+	if (!effectiveState) {
+		return c.json({ error: 'not found' }, 404);
+	}
+
+	return c.json(trackingResponseSchema.parse({ effectiveState }), 200);
+});
+
+trackingRoute.patch('/games/:gameId/dates', requireAuth, async (c) => {
+	const body = dateEditsBodySchema.safeParse(
+		await c.req.json().catch(() => null),
+	);
+	if (!body.success) {
+		return c.json({ error: 'invalid date edit' }, 400);
+	}
+
+	const effectiveState = await editDates(
+		createDb(c.env.DB),
+		c.get('userId'),
+		c.req.param('gameId'),
+		body.data,
+	);
+	if (effectiveState === 'invalid') {
+		return c.json({ error: 'invalid date edit' }, 400);
+	}
 	if (effectiveState === 'invariant') {
 		return c.json({ error: 'completion invariant' }, 409);
 	}

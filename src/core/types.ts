@@ -43,3 +43,12 @@ export type EffectiveState = (typeof EFFECTIVE_STATES)[number];
 export const MILESTONES = ['completed', 'platinum'] as const;
 
 export type Milestone = (typeof MILESTONES)[number];
+
+/**
+ * The ownership-type vocabulary (Story 2.4). A runtime tuple (not just a type)
+ * so the schema's `ownership_type` enum column and the ownership route's Zod
+ * body key off this single source rather than re-listing the values (AD-3).
+ */
+export const OWNERSHIP_TYPES = ['physical', 'digital'] as const;
+
+export type OwnershipType = (typeof OWNERSHIP_TYPES)[number];

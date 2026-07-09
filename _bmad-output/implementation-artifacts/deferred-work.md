@@ -96,3 +96,15 @@ decision: 2026-07-08 Add requirement refs — Add bracketed FR/AR/UX-DR requirem
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-3-flip-a-card-to-its-detail-view.md`
   summary: Three hand-rolled focus traps (ConfirmDialog, DetailPanel, and their shared technique) each duplicate ~20 lines and key off a `querySelectorAll('button…, a[href]')` selector that will silently miss the `<input>`/`<select>` controls Stories 2.4/2.5 add to the detail panel.
   evidence: `web/components/ConfirmDialog.tsx` and `web/shelf/DetailPanel.tsx` both implement first/last-focusable Tab cycling with near-identical code but already-drifted selectors (`button` vs `button:not([tabindex="-1"]), a[href]`). When date/ownership/genre editing lands in the panel (2.4/2.5), form controls become focusable but invisible to the trap boundary — Tab can escape the modal at the new controls. Consolidate into one trap helper (or adopt native `<dialog>.showModal()`) before 2.4 adds inputs.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-4-edit-ownership-and-lifecycle-dates-in-detail.md`
+  summary: Every tracking write is an untransacted read-decide-write (`getTracking` → core → `upsertTracking`), so concurrent PATCHes can interleave — double-stamping write-once `bought_on`, persisting a type on an un-owned row, or breaking the completion invariant via a status-clear racing a milestone-date-clear; the "deleted underneath us" comment on the post-upsert guard is also wrong (the upsert is insert-or-update and always returns a row — a concurrent delete is silently resurrected, not 404'd).
+  evidence: `src/services/tracking.ts` (all four write functions, pattern established in 2.1) and `src/repositories/tracking.ts:30` (`onConflictDoUpdate` + `returning()`). D1 has no interactive transactions from Drizzle here; a fix is conditional UPDATEs (`WHERE bought_on IS NULL`, invariant re-checked in SQL) — a seam-wide change, not a per-route patch. Single-user app today, so exposure is one person's own racing tabs.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-4-edit-ownership-and-lifecycle-dates-in-detail.md`
+  summary: Toast UNDO callbacks (`Dropped` status since 2.1, un-own in 2.4) call the raw mutation directly, bypassing the in-flight pending guard every other entry point gets, so an UNDO can interleave with a pending write on the same game.
+  evidence: `web/shelf/useTrackingMutations.ts` — `onUndo: () => mutate(previous)` and `onUndo: () => mutateOwnership(...)` skip the `isPending` check because the guard value is a stale render-scoped closure. Last-write-wins, no corruption; fix once with a ref-backed guard shared by all mutation entry points.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-4-edit-ownership-and-lifecycle-dates-in-detail.md`
+  summary: `bash.exe.stackdump` is a tracked crash-dump junk file that keeps riding into diffs as line-ending churn; delete it and gitignore `*.stackdump`.
+  evidence: `git ls-files` lists it at the repo root; it re-appeared in this story's working tree as CRLF churn (reverted during review). Not this story's artifact — a one-commit cleanup.

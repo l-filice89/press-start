@@ -189,31 +189,80 @@
 	max-width: 20rem;
 }
 
+/* Editable date rows (Story 2.4): label + native date input. */
 .detail-panel__date-row {
 	display: flex;
+	align-items: center;
 	justify-content: space-between;
 	gap: var(--space-3);
 }
 
-.detail-panel__date-row dt {
+.detail-panel__date-label {
 	font-family: var(--font-ui);
 	font-size: 13px;
 	color: var(--color-text-secondary);
 }
 
-.detail-panel__date-row dd {
-	margin: 0;
+.detail-panel__date-input {
+	padding: var(--space-1) var(--space-2);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-sm);
+	background: var(--color-surface);
+	color: var(--color-text-primary);
 	font-family: var(--font-mono);
 	font-size: 13px;
-	color: var(--color-text-primary);
+	color-scheme: dark;
 }
 
-.detail-panel__genres,
-.detail-panel__ownership {
+.detail-panel__genres {
 	margin: 0;
 	font-family: var(--font-body);
 	font-size: 13px;
 	color: var(--color-text-primary);
+}
+
+/* Ownership controls (Story 2.4): owned toggle + segmented type pair. */
+.detail-panel__owned-toggle {
+	padding: var(--space-1) var(--space-3);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-pill);
+	background: none;
+	color: var(--color-text-secondary);
+	font-family: var(--font-ui);
+	font-size: 13px;
+	cursor: pointer;
+}
+
+.detail-panel__owned-toggle[aria-pressed="true"] {
+	border-color: var(--color-accent-electric);
+	color: var(--color-accent-electric);
+	background: color-mix(in srgb, var(--color-accent-electric) 12%, transparent);
+}
+
+/* A fieldset for group semantics; its native chrome is reset away. */
+.detail-panel__ownership-types {
+	display: flex;
+	gap: var(--space-1);
+	margin: 0;
+	padding: 0;
+	border: none;
+}
+
+.detail-panel__ownership-type {
+	padding: var(--space-1) var(--space-3);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-pill);
+	background: none;
+	color: var(--color-text-secondary);
+	font-family: var(--font-ui);
+	font-size: 13px;
+	cursor: pointer;
+}
+
+.detail-panel__ownership-type[aria-pressed="true"] {
+	border-color: var(--color-accent-electric);
+	color: var(--color-accent-electric);
+	background: color-mix(in srgb, var(--color-accent-electric) 12%, transparent);
 }
 
 .detail-panel__store-link {

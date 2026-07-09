@@ -2,6 +2,7 @@ import { type KeyboardEvent, useCallback, useRef, useState } from 'react';
 import type { ShelfGame } from './api';
 import { DetailPanel } from './DetailPanel';
 import { StatusPopover } from './StatusPopover';
+import { useTrackingMutations } from './useTrackingMutations';
 import './card.css';
 
 /**
@@ -32,6 +33,10 @@ export function Card({
 	const [coverFailed, setCoverFailed] = useState(false);
 	const [detailOpen, setDetailOpen] = useState(false);
 	const coverRef = useRef<HTMLButtonElement>(null);
+
+	// Ownership writes go through the same shared seam as every other tracking
+	// mutation (AR-13) — un-owning toasts with UNDO, owning toasts plainly.
+	const { setOwnership } = useTrackingMutations(game);
 
 	// Closing the panel returns focus to the originating card's gridcell
 	// (UX-DR19) — the panel itself doesn't know where it was opened from.
@@ -102,6 +107,35 @@ export function Card({
 							<span className="card__cover-fallback-mark">▹</span>
 						</div>
 					)}
+				</button>
+
+				{/* Top-right owned toggle (Story 2.4): reversible, no confirm. A
+				    sibling of the cover trigger (not nested), so a press can never
+				    activate the open-detail button — stopPropagation is belt and
+				    braces. tabIndex={-1} like the pill/cover: the gridcell is the
+				    single tab stop, and widget-mode Tab (Shelf.tsx) reaches it. */}
+				<button
+					type="button"
+					className="card__owned-toggle tap-expander"
+					tabIndex={-1}
+					aria-pressed={game.owned}
+					aria-label={`Owned — ${game.title}`}
+					data-testid="card-owned-toggle"
+					onClick={(e) => {
+						e.stopPropagation();
+						setOwnership({ owned: !game.owned });
+					}}
+					onKeyDown={(e) => {
+						if (e.key === 'Escape') {
+							// Leave "widget mode": hand focus back to the owning gridcell.
+							e.stopPropagation();
+							e.currentTarget
+								.closest<HTMLElement>('[role="gridcell"]')
+								?.focus();
+						}
+					}}
+				>
+					<span aria-hidden="true">{game.owned ? '◆' : '◇'}</span>
 				</button>
 
 				<div className="card__flags">

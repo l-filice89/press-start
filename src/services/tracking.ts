@@ -6,11 +6,15 @@
  * user-scoped (AD-13): a row that isn't this user's simply isn't found.
  */
 import {
+	applyDateEdits,
 	applyMilestone,
+	applyOwnershipChange,
 	applyPlayStatusChange,
 	computeEffectiveState,
+	type DateEdits,
 	type EffectiveState,
 	type Milestone,
+	type OwnershipType,
 	type PlayStatus,
 	wouldViolateCompletionInvariant,
 } from '../core';
@@ -90,5 +94,69 @@ export async function logMilestone(
 		playStatus: row.playStatus,
 		completedOn: row.completedOn,
 		platinumOn: row.platinumOn,
+	});
+}
+
+/**
+ * Change the ownership flag and/or type on this user's tracking row
+ * (Story 2.4). `core/` owns the rules (AR-13): owning stamps `bought_on` only
+ * when null (FR-44 write-once) and defaults the type to physical; un-owning
+ * clears the type, never a date. `'invalid'` (a type on an un-owned game —
+ * nothing written, the route answers 400) and `null` (no tracking row → 404)
+ * pass through.
+ */
+export async function changeOwnership(
+	db: Db,
+	userId: string,
+	gameId: string,
+	next: { owned?: boolean; ownershipType?: OwnershipType },
+	today: string,
+): Promise<EffectiveState | 'invalid' | null> {
+	const current = await getTracking(db, userId, gameId);
+	if (!current) return null;
+
+	const patch = applyOwnershipChange({ next, current, today });
+	if (patch === 'invalid') return 'invalid';
+
+	const updated = await upsertTracking(db, userId, gameId, patch);
+	// The row was there a moment ago; if the upsert returned nothing, it was
+	// deleted underneath us. Report "not found" rather than dereferencing.
+	if (!updated) return null;
+
+	return computeEffectiveState({
+		playStatus: updated.playStatus,
+		completedOn: updated.completedOn,
+		platinumOn: updated.platinumOn,
+	});
+}
+
+/**
+ * Manually correct lifecycle dates on this user's tracking row (Story 2.4,
+ * FR-45 — a deliberate override that never touches `play_status`). `core/`
+ * validates and enforces the completion invariant on the merged result:
+ * `'invalid'` (malformed date → 400) and `'invariant'` (would clear the last
+ * milestone of a status-less game → 409) pass through with nothing written.
+ */
+export async function editDates(
+	db: Db,
+	userId: string,
+	gameId: string,
+	edits: DateEdits,
+): Promise<EffectiveState | 'invalid' | 'invariant' | null> {
+	const current = await getTracking(db, userId, gameId);
+	if (!current) return null;
+
+	const patch = applyDateEdits({ edits, current });
+	if (patch === 'invalid' || patch === 'invariant') return patch;
+
+	const updated = await upsertTracking(db, userId, gameId, patch);
+	// The row was there a moment ago; if the upsert returned nothing, it was
+	// deleted underneath us. Report "not found" rather than dereferencing.
+	if (!updated) return null;
+
+	return computeEffectiveState({
+		playStatus: updated.playStatus,
+		completedOn: updated.completedOn,
+		platinumOn: updated.platinumOn,
 	});
 }

@@ -72,6 +72,30 @@ function postMilestone(gameId: string, body: unknown, cookie?: string) {
 	});
 }
 
+/** PATCH the ownership route through the real Worker. */
+function patchOwnership(gameId: string, body: unknown, cookie?: string) {
+	return appFetch(`/api/games/${gameId}/ownership`, {
+		method: 'PATCH',
+		headers: {
+			'content-type': 'application/json',
+			...(cookie ? { cookie } : {}),
+		},
+		body: JSON.stringify(body),
+	});
+}
+
+/** PATCH the lifecycle-dates route through the real Worker. */
+function patchDates(gameId: string, body: unknown, cookie?: string) {
+	return appFetch(`/api/games/${gameId}/dates`, {
+		method: 'PATCH',
+		headers: {
+			'content-type': 'application/json',
+			...(cookie ? { cookie } : {}),
+		},
+		body: JSON.stringify(body),
+	});
+}
+
 let userA: string;
 let userB: string;
 
@@ -456,5 +480,274 @@ describe('milestone writes (integration, real workerd + local D1)', () => {
 			expect(row?.playStatus).toBe('Playing');
 			expect(row?.completedOn).toBeNull();
 		});
+	});
+});
+
+describe('ownership writes (Story 2.4, through the route with a real session)', () => {
+	const CLOCK_TODAY = () => new Date().toISOString().slice(0, 10);
+	let cookie: string;
+	let sessionUser: string;
+
+	beforeAll(async () => {
+		await applyD1Migrations(env.DB, inject('migrations'));
+		cookie = await establishSession();
+		const [row] = await db()
+			.select()
+			.from(user)
+			.where(eq(user.email, ALLOWED_EMAIL))
+			.limit(1);
+		sessionUser = row.id;
+	});
+
+	// The first named hazard of Story 2.4 (route level): two full own cycles —
+	// `bought_on` is stamped once and the re-own never overwrites it.
+	it('stamps bought_on once across own → un-own → re-own cycles', async () => {
+		const id = await addGame(sessionUser, 'Own Cycles', {
+			playStatus: 'Not started',
+			boughtOn: '2024-01-01',
+		});
+
+		// Re-owning a game with a recorded purchase date must not restamp it.
+		let response = await patchOwnership(id, { owned: true }, cookie);
+		expect(response.status).toBe(200);
+		let row = await getTracking(db(), sessionUser, id);
+		expect(row?.owned).toBe(true);
+		expect(row?.ownershipType).toBe('physical');
+		expect(row?.boughtOn).toBe('2024-01-01');
+
+		await patchOwnership(id, { owned: false }, cookie);
+		response = await patchOwnership(id, { owned: true }, cookie);
+		expect(response.status).toBe(200);
+		row = await getTracking(db(), sessionUser, id);
+		expect(row?.owned).toBe(true);
+		expect(row?.boughtOn).toBe('2024-01-01');
+	});
+
+	it('stamps bought_on today on the very first own', async () => {
+		const id = await addGame(sessionUser, 'First Own', {
+			playStatus: 'Not started',
+		});
+		const response = await patchOwnership(id, { owned: true }, cookie);
+		expect(response.status).toBe(200);
+		const row = await getTracking(db(), sessionUser, id);
+		expect(row?.owned).toBe(true);
+		expect(row?.ownershipType).toBe('physical');
+		// The route is the only path that resolves `today` from the real clock.
+		expect(row?.boughtOn).toBe(CLOCK_TODAY());
+	});
+
+	it('un-owning clears the type and leaves every date untouched; the UNDO PATCH restores both', async () => {
+		const id = await addGame(sessionUser, 'Un-owned', {
+			playStatus: 'Playing',
+			owned: true,
+			ownershipType: 'digital',
+			boughtOn: '2024-01-01',
+			startedOn: '2024-02-02',
+		});
+
+		const response = await patchOwnership(id, { owned: false }, cookie);
+		expect(response.status).toBe(200);
+		let row = await getTracking(db(), sessionUser, id);
+		expect(row?.owned).toBe(false);
+		expect(row?.ownershipType).toBeNull();
+		expect(row?.boughtOn).toBe('2024-01-01');
+		expect(row?.startedOn).toBe('2024-02-02');
+
+		// The toast UNDO path: one PATCH restoring flag + previous type.
+		const undo = await patchOwnership(
+			id,
+			{ owned: true, ownershipType: 'digital' },
+			cookie,
+		);
+		expect(undo.status).toBe(200);
+		row = await getTracking(db(), sessionUser, id);
+		expect(row?.owned).toBe(true);
+		expect(row?.ownershipType).toBe('digital');
+		// Still write-once: the UNDO never restamps the purchase date.
+		expect(row?.boughtOn).toBe('2024-01-01');
+	});
+
+	it('switches the type of an owned game and nothing else', async () => {
+		const id = await addGame(sessionUser, 'Type Switch', {
+			playStatus: 'Playing',
+			owned: true,
+			ownershipType: 'physical',
+			boughtOn: '2024-01-01',
+		});
+		const response = await patchOwnership(
+			id,
+			{ ownershipType: 'digital' },
+			cookie,
+		);
+		expect(response.status).toBe(200);
+		const row = await getTracking(db(), sessionUser, id);
+		expect(row?.ownershipType).toBe('digital');
+		expect(row?.owned).toBe(true);
+		expect(row?.boughtOn).toBe('2024-01-01');
+	});
+
+	it('refuses a type on an un-owned game with 400, row unchanged', async () => {
+		const id = await addGame(sessionUser, 'Type Without Owned', {
+			playStatus: 'Not started',
+		});
+		const response = await patchOwnership(
+			id,
+			{ ownershipType: 'digital' },
+			cookie,
+		);
+		expect(response.status).toBe(400);
+		const row = await getTracking(db(), sessionUser, id);
+		expect(row?.owned).toBe(false);
+		expect(row?.ownershipType).toBeNull();
+	});
+
+	it('rejects an empty body with 400', async () => {
+		const id = await addGame(sessionUser, 'Empty Ownership', {
+			playStatus: 'Not started',
+		});
+		const response = await patchOwnership(id, {}, cookie);
+		expect(response.status).toBe(400);
+	});
+
+	it('rejects an unauthenticated PATCH with 401 JSON (requireAuth seam)', async () => {
+		const response = await patchOwnership('whatever', { owned: true });
+		expect(response.status).toBe(401);
+		expect(await response.json()).toEqual({ error: 'unauthorized' });
+	});
+
+	it('answers 404 for a game this user does not track', async () => {
+		const response = await patchOwnership(
+			crypto.randomUUID(),
+			{ owned: true },
+			cookie,
+		);
+		expect(response.status).toBe(404);
+		expect(await response.json()).toEqual({ error: 'not found' });
+	});
+});
+
+describe('lifecycle-date edits (Story 2.4, through the route with a real session)', () => {
+	let cookie: string;
+	let sessionUser: string;
+
+	beforeAll(async () => {
+		await applyD1Migrations(env.DB, inject('migrations'));
+		cookie = await establishSession();
+		const [row] = await db()
+			.select()
+			.from(user)
+			.where(eq(user.email, ALLOWED_EMAIL))
+			.limit(1);
+		sessionUser = row.id;
+	});
+
+	it('corrects a date verbatim and answers the effective state', async () => {
+		const id = await addGame(sessionUser, 'Date Correction', {
+			playStatus: 'Playing',
+			startedOn: '2024-03-10',
+		});
+		const response = await patchDates(id, { startedOn: '2024-03-01' }, cookie);
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({ effectiveState: 'Playing' });
+		expect((await getTracking(db(), sessionUser, id))?.startedOn).toBe(
+			'2024-03-01',
+		);
+	});
+
+	it('clears a non-milestone date', async () => {
+		const id = await addGame(sessionUser, 'Clear Bought', {
+			playStatus: 'Playing',
+			boughtOn: '2023-12-25',
+		});
+		const response = await patchDates(id, { boughtOn: null }, cookie);
+		expect(response.status).toBe(200);
+		expect((await getTracking(db(), sessionUser, id))?.boughtOn).toBeNull();
+	});
+
+	// The second named hazard of Story 2.4 (route level): a date edit clearing
+	// the last milestone of a status-less game is refused with 409, row unchanged.
+	it('refuses to clear the last milestone of a status-less game: 409, row unchanged', async () => {
+		const id = await addGame(sessionUser, 'Last Milestone', {
+			playStatus: null,
+			completedOn: '2024-06-01',
+		});
+		const response = await patchDates(id, { completedOn: null }, cookie);
+		expect(response.status).toBe(409);
+		expect(await response.json()).toEqual({ error: 'completion invariant' });
+		const row = await getTracking(db(), sessionUser, id);
+		expect(row?.completedOn).toBe('2024-06-01');
+		expect(row?.playStatus).toBeNull();
+		expect(row?.platinumOn).toBeNull();
+	});
+
+	it('clears one of two milestones while the other stands', async () => {
+		const id = await addGame(sessionUser, 'One Of Two', {
+			playStatus: null,
+			completedOn: '2024-06-01',
+			platinumOn: '2024-07-01',
+		});
+		const response = await patchDates(id, { platinumOn: null }, cookie);
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({
+			effectiveState: 'Story completed',
+		});
+		const row = await getTracking(db(), sessionUser, id);
+		expect(row?.platinumOn).toBeNull();
+		expect(row?.completedOn).toBe('2024-06-01');
+	});
+
+	it('sets a milestone date manually without touching play_status (no auto-clear)', async () => {
+		const id = await addGame(sessionUser, 'Manual Milestone', {
+			playStatus: 'Playing',
+		});
+		const response = await patchDates(
+			id,
+			{ completedOn: '2024-06-01' },
+			cookie,
+		);
+		expect(response.status).toBe(200);
+		const row = await getTracking(db(), sessionUser, id);
+		expect(row?.completedOn).toBe('2024-06-01');
+		expect(row?.playStatus).toBe('Playing');
+	});
+
+	it.each([
+		{ startedOn: 'junk' },
+		{ startedOn: '2024-13-99' },
+		{ startedOn: '2024-02-30' },
+	])('rejects the malformed date body %o with 400, row unchanged', async (body) => {
+		const id = await addGame(sessionUser, `Bad Date ${JSON.stringify(body)}`, {
+			playStatus: 'Playing',
+			startedOn: '2024-01-01',
+		});
+		const response = await patchDates(id, body, cookie);
+		expect(response.status).toBe(400);
+		expect((await getTracking(db(), sessionUser, id))?.startedOn).toBe(
+			'2024-01-01',
+		);
+	});
+
+	it('rejects an empty body with 400', async () => {
+		const id = await addGame(sessionUser, 'Empty Dates', {
+			playStatus: 'Playing',
+		});
+		const response = await patchDates(id, {}, cookie);
+		expect(response.status).toBe(400);
+	});
+
+	it('rejects an unauthenticated PATCH with 401 JSON (requireAuth seam)', async () => {
+		const response = await patchDates('whatever', { boughtOn: null });
+		expect(response.status).toBe(401);
+		expect(await response.json()).toEqual({ error: 'unauthorized' });
+	});
+
+	it('answers 404 for a game this user does not track', async () => {
+		const response = await patchDates(
+			crypto.randomUUID(),
+			{ boughtOn: null },
+			cookie,
+		);
+		expect(response.status).toBe(404);
+		expect(await response.json()).toEqual({ error: 'not found' });
 	});
 });

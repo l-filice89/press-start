@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { FOCUSABLE_SELECTOR } from './focusable';
 import './confirm-dialog.css';
 
 /**
@@ -46,9 +47,10 @@ export function ConfirmDialog({
 
 	const onKeyDown = (e: React.KeyboardEvent) => {
 		if (e.key !== 'Tab') return;
-		// Two-button trap: Tab cycles inside the dialog, never out of it.
+		// Tab cycles inside the dialog, never out of it — the shared selector
+		// (focusable.ts) keeps both dialogs' trap boundaries from drifting.
 		const focusables =
-			dialogRef.current?.querySelectorAll<HTMLElement>('button');
+			dialogRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
 		if (!focusables?.length) return;
 		const first = focusables[0];
 		const last = focusables[focusables.length - 1];

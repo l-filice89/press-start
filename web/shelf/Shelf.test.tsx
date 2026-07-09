@@ -103,7 +103,7 @@ describe('Shelf', () => {
 		expect(cards[0]).toHaveFocus();
 	});
 
-	it('cycles Tab between pill and cover inside a cell, Escape returns to it (Story 2.3)', async () => {
+	it('cycles Tab between pill, cover, and owned toggle inside a cell, Escape returns to it (Stories 2.3/2.4)', async () => {
 		const user = userEvent.setup();
 		mockFetch([card('a', 'Apex'), card('b', 'Bolt')]);
 		renderShelf();
@@ -115,14 +115,17 @@ describe('Shelf', () => {
 		const pill = within(cards[0]).getByTestId('status-pill-button');
 		expect(pill).toHaveFocus();
 
-		// Tab cycles between the cell's two widgets without leaving it.
+		// Tab cycles through the cell's three widgets without leaving it.
 		const cover = within(cards[0]).getByTestId('card-cover-button');
+		const ownedToggle = within(cards[0]).getByTestId('card-owned-toggle');
 		await user.tab();
 		expect(cover).toHaveFocus();
+		await user.tab();
+		expect(ownedToggle).toHaveFocus();
 		await user.tab();
 		expect(pill).toHaveFocus();
 		await user.tab({ shift: true });
-		expect(cover).toHaveFocus();
+		expect(ownedToggle).toHaveFocus();
 
 		// Escape from a widget hands focus back to the owning gridcell.
 		await user.keyboard('{Escape}');

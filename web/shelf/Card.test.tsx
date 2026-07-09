@@ -1,8 +1,10 @@
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ToastHost } from '../components/Toast';
 import type { ShelfGame } from './api';
 import { Card } from './Card';
 
@@ -32,12 +34,16 @@ function game(overrides: Partial<ShelfGame> = {}): ShelfGame {
 	};
 }
 
-/** The card's status pill is a mutation-bearing widget, so it needs a client. */
+/** The card's status pill and owned toggle are mutation-bearing widgets. */
 function Providers({ children }: { children: ReactNode }) {
 	const client = new QueryClient({
 		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 	});
-	return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+	return (
+		<QueryClientProvider client={client}>
+			<ToastHost>{children}</ToastHost>
+		</QueryClientProvider>
+	);
 }
 
 function renderCard(g: ShelfGame) {
@@ -117,5 +123,95 @@ describe('Card', () => {
 		expect(
 			screen.getByText('In the PlayStation Plus Extra catalog'),
 		).toBeInTheDocument();
+	});
+
+	describe('owned toggle (Story 2.4)', () => {
+		afterEach(() => {
+			vi.unstubAllGlobals();
+		});
+
+		// Untyped like DetailPanel.test's stub: `mock.calls` stays assertable
+		// without fighting the zero-arg tuple inference.
+		function stubFetch(): ReturnType<typeof vi.fn> {
+			const fetchMock = vi.fn(async () => ({
+				ok: true,
+				status: 200,
+				json: async () => ({ effectiveState: 'Not started' }),
+			}));
+			vi.stubGlobal('fetch', fetchMock);
+			return fetchMock;
+		}
+
+		it('renders top-right with an accessible name and pressed state', () => {
+			renderCard(game({ owned: true }));
+			const toggle = screen.getByRole('button', {
+				name: 'Owned — Bloodborne',
+			});
+			expect(toggle).toHaveAttribute('aria-pressed', 'true');
+			// Out of the tab order like the pill/cover: the gridcell is the stop.
+			expect(toggle).toHaveAttribute('tabindex', '-1');
+		});
+
+		it('reflects the un-owned state', () => {
+			renderCard(game({ owned: false }));
+			expect(
+				screen.getByRole('button', { name: 'Owned — Bloodborne' }),
+			).toHaveAttribute('aria-pressed', 'false');
+		});
+
+		it('owning PATCHes the ownership route without a confirm', async () => {
+			const fetchMock = stubFetch();
+			const user = userEvent.setup();
+			renderCard(game({ owned: false }));
+
+			await user.click(
+				screen.getByRole('button', { name: 'Owned — Bloodborne' }),
+			);
+			await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+			const [url, init] = fetchMock.mock.calls[0];
+			expect(url).toBe('/api/games/g1/ownership');
+			expect(init).toMatchObject({ method: 'PATCH' });
+			expect(JSON.parse(init.body)).toEqual({ owned: true });
+			// Owning is not risky — plain toast, no UNDO.
+			expect(await screen.findByTestId('toast')).toHaveTextContent(
+				'Bloodborne — owned',
+			);
+			expect(
+				screen.queryByRole('button', { name: 'Undo' }),
+			).not.toBeInTheDocument();
+		});
+
+		it('un-owning shows an UNDO toast that restores flag and previous type', async () => {
+			const fetchMock = stubFetch();
+			const user = userEvent.setup();
+			renderCard(game({ owned: true, ownershipType: 'digital' }));
+
+			await user.click(
+				screen.getByRole('button', { name: 'Owned — Bloodborne' }),
+			);
+			await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+			expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+				owned: false,
+			});
+
+			const undo = await screen.findByRole('button', { name: 'Undo' });
+			await user.click(undo);
+			await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+			expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
+				owned: true,
+				ownershipType: 'digital',
+			});
+		});
+
+		it('never opens the detail panel', async () => {
+			stubFetch();
+			const user = userEvent.setup();
+			renderCard(game({ owned: false }));
+
+			await user.click(
+				screen.getByRole('button', { name: 'Owned — Bloodborne' }),
+			);
+			expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+		});
 	});
 });

@@ -142,26 +142,28 @@ function ShelfGrid({ games }: { games: ShelfGame[] }) {
 
 	const onCardKeyDown = useCallback(
 		(index: number) => (e: React.KeyboardEvent<HTMLDivElement>) => {
-			// Widget-mode Tab cycle (Story 2.3): with focus on the pill (menu
-			// closed) or the cover trigger, Tab/Shift+Tab moves between the cell's
-			// two widgets instead of leaving it. Escape from either widget hands
-			// focus back to the gridcell (each widget wires that itself).
+			// Widget-mode Tab cycle (Stories 2.3/2.4): with focus on one of the
+			// cell's widgets (the pill with its menu closed, the cover trigger, or
+			// the owned toggle), Tab/Shift+Tab moves between them instead of
+			// leaving the cell. Escape from any widget hands focus back to the
+			// gridcell (each widget wires that itself).
 			if (e.key === 'Tab') {
 				const target = e.target as HTMLElement;
-				const pill = e.currentTarget.querySelector<HTMLElement>(
+				const cell = e.currentTarget;
+				const widgets = [
 					'.status-popover__pill',
-				);
-				const cover = e.currentTarget.querySelector<HTMLElement>(
 					'.card__cover-button',
-				);
-				if (!pill || !cover || (target !== pill && target !== cover)) return;
+					'.card__owned-toggle',
+				]
+					.map((selector) => cell.querySelector<HTMLElement>(selector))
+					.filter((el): el is HTMLElement => el !== null);
+				const from = widgets.indexOf(target);
+				if (from === -1) return;
 				// With the menu open, Tab belongs to the popover's own handling.
-				if (target === pill && pill.getAttribute('aria-expanded') === 'true') {
-					return;
-				}
+				if (target.getAttribute('aria-expanded') === 'true') return;
 				e.preventDefault();
-				// Two widgets: Tab and Shift+Tab both land on the other one.
-				(target === pill ? cover : pill).focus();
+				const step = e.shiftKey ? -1 : 1;
+				widgets[(from + step + widgets.length) % widgets.length].focus();
 				return;
 			}
 
