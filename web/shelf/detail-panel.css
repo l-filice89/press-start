@@ -25,13 +25,44 @@
 	box-shadow: var(--glow-ring);
 }
 
-/* Centered ~760px on desktop; full-screen below. */
+/* Centered ~760px on desktop; full-screen below. Sections flow into two
+   columns (header spans both) so the panel reads composed, not a lone strip
+   of controls down the left edge. */
 @media (min-width: 760px) {
 	.detail-panel {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		align-items: start;
+		column-gap: var(--space-5);
 		width: min(760px, calc(100vw - 2 * var(--space-5)));
 		height: auto;
 		max-height: calc(100vh - 2 * var(--space-5));
+		padding: var(--space-5);
 		border-radius: var(--radius-lg);
+	}
+
+	.detail-panel__header {
+		grid-column: 1 / -1;
+	}
+
+	/* Inside a ~340px column the mobile cap just leaves a ragged edge. */
+	.detail-panel__milestone,
+	.detail-panel__dates {
+		max-width: none;
+	}
+
+	/* Section chrome is a desktop device — mobile stays full-bleed. */
+	.detail-panel__section {
+		padding: var(--space-3);
+		border: 1px solid var(--color-border-soft);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+	}
+
+	/* Five sections in two columns leave one odd section out; let the last
+	   span both columns instead of facing an empty cell. */
+	.detail-panel__section:last-of-type {
+		grid-column: 1 / -1;
 	}
 }
 
@@ -106,6 +137,7 @@
 	flex-direction: column;
 	gap: var(--space-2);
 	align-items: flex-start;
+	width: 100%;
 }
 
 .detail-panel__heading {

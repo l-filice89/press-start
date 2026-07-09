@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import {
+	useCallback,
+	useEffect,
+	useId,
+	useLayoutEffect,
+	useRef,
+	useState,
+} from 'react';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { PLAY_STATUSES, type PlayStatus, type ShelfGame } from './api';
 import { StatePill } from './StatePill';
@@ -62,6 +69,34 @@ export function StatusPopover({ game }: { game: ShelfGame }) {
 	// `preventScroll` because a menu opened near the viewport edge would
 	// otherwise scroll itself into view, and the scroll handler below reads any
 	// scroll as "outside activity" and closes the menu we just opened.
+	// Keep the menu on screen: default placement is below/left-aligned; when
+	// that runs off the viewport, flip to whichever side has more room and cap
+	// the menu's height to that side (CSS adds overflow-y for the capped case,
+	// so short viewports scroll inside the menu instead of clipping rows).
+	// CSS reads the data attrs. Layout effect so it lands before paint — no
+	// flicker. The menu unmounts on close, so attrs and inline style reset.
+	useLayoutEffect(() => {
+		if (!open) return;
+		const menu = menuRef.current;
+		const pill = pillRef.current;
+		if (!menu || !pill) return;
+		const rect = menu.getBoundingClientRect();
+		const pillRect = pill.getBoundingClientRect();
+		const margin = 8;
+		const spaceBelow = window.innerHeight - pillRect.bottom - margin;
+		const spaceAbove = pillRect.top - margin;
+		if (rect.height > spaceBelow) {
+			const flipUp = spaceAbove > spaceBelow;
+			if (flipUp) menu.dataset.flip = 'up';
+			const available = flipUp ? spaceAbove : spaceBelow;
+			if (rect.height > available) menu.style.maxHeight = `${available}px`;
+		}
+		// clientWidth, not innerWidth — a classic scrollbar eats into the latter.
+		if (rect.right > document.documentElement.clientWidth) {
+			menu.dataset.align = 'right';
+		}
+	}, [open]);
+
 	const initialFocusIndex = useRef(0);
 	initialFocusIndex.current = Math.max(0, checkedIndex);
 	useEffect(() => {
@@ -83,12 +118,21 @@ export function StatusPopover({ game }: { game: ShelfGame }) {
 			// An outside press moves focus itself — don't yank it back to the pill.
 			close(false);
 		};
-		const onScroll = () => close(false);
+		// Ignore scrolls inside the menu itself (a height-capped menu scrolls
+		// internally); anything else is outside activity. Resize gets the same
+		// treatment — the anchored placement is stale after either.
+		const onScroll = (e: Event) => {
+			if (menuRef.current?.contains(e.target as Node)) return;
+			close(false);
+		};
+		const onResize = () => close(false);
 		document.addEventListener('pointerdown', onPointerDown);
 		window.addEventListener('scroll', onScroll, true);
+		window.addEventListener('resize', onResize);
 		return () => {
 			document.removeEventListener('pointerdown', onPointerDown);
 			window.removeEventListener('scroll', onScroll, true);
+			window.removeEventListener('resize', onResize);
 		};
 	}, [open, close]);
 

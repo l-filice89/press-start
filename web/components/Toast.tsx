@@ -13,12 +13,15 @@ import './toast.css';
 
 /**
  * Transient bottom confirmation (UX-DR12/17): status change / add / milestone.
- * Auto-dismisses after ~3s and announces via the polite live region. Reversible
- * risky actions (mark Dropped, un-own) pass `onUndo` to render a one-tap UNDO
- * that cancels the dismiss (milestones are already confirm-gated, so they need
- * no undo). Reusable seam — later stories call `useToast().toast(...)`.
+ * Auto-dismisses after ~3s (~6s when undoable) and announces via the polite
+ * live region. Reversible risky actions (mark Dropped, un-own) pass `onUndo`
+ * to render a one-tap UNDO that cancels the dismiss (milestones are already
+ * confirm-gated, so they need no undo). Reusable seam — later stories call
+ * `useToast().toast(...)`.
  */
 export const TOAST_DURATION_MS = 3000;
+/** Undoable toasts stay longer — 3s is too short to spot and reach UNDO. */
+export const UNDO_TOAST_DURATION_MS = 6000;
 
 type ToastSpec = {
 	message: string;
@@ -31,14 +34,16 @@ export function Toast({
 	onUndo,
 	undoLabel = 'Undo',
 	onDismiss,
-	duration = TOAST_DURATION_MS,
+	duration,
 }: {
 	message: string;
 	onUndo?: () => void;
 	undoLabel?: string;
 	onDismiss?: () => void;
+	/** Explicit value always wins; the default depends on undoability. */
 	duration?: number;
 }) {
+	duration ??= onUndo ? UNDO_TOAST_DURATION_MS : TOAST_DURATION_MS;
 	const announce = useAnnounce();
 	const dismissedRef = useRef(false);
 	const announcedRef = useRef(false);

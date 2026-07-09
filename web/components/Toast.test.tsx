@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { TOAST_DURATION_MS, Toast } from './Toast';
+import { TOAST_DURATION_MS, Toast, UNDO_TOAST_DURATION_MS } from './Toast';
 
 // Spy on the live-region announcer so we can assert the toast announces without
 // standing up a real provider.
@@ -41,6 +41,38 @@ describe('Toast', () => {
 
 		// The pending 3s timer must not fire a second dismissal.
 		act(() => vi.advanceTimersByTime(TOAST_DURATION_MS));
+		expect(onDismiss).toHaveBeenCalledTimes(1);
+	});
+
+	it('keeps an undoable toast past 3s and dismisses it at ~6s', () => {
+		vi.useFakeTimers();
+		const onDismiss = vi.fn();
+		render(
+			<Toast message="Marked Dropped" onUndo={vi.fn()} onDismiss={onDismiss} />,
+		);
+
+		act(() => vi.advanceTimersByTime(TOAST_DURATION_MS));
+		expect(onDismiss).not.toHaveBeenCalled();
+
+		act(() =>
+			vi.advanceTimersByTime(UNDO_TOAST_DURATION_MS - TOAST_DURATION_MS),
+		);
+		expect(onDismiss).toHaveBeenCalledTimes(1);
+	});
+
+	it('an explicit duration wins over the undoable default', () => {
+		vi.useFakeTimers();
+		const onDismiss = vi.fn();
+		render(
+			<Toast
+				message="Marked Dropped"
+				onUndo={vi.fn()}
+				onDismiss={onDismiss}
+				duration={1000}
+			/>,
+		);
+
+		act(() => vi.advanceTimersByTime(1000));
 		expect(onDismiss).toHaveBeenCalledTimes(1);
 	});
 

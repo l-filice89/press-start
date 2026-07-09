@@ -162,17 +162,26 @@ export function Card({
 				</div>
 			</div>
 
+			{/* Info strip stacks one row per line — title, genres, status, owned —
+			    and every row is always rendered (hidden/empty rows reserve their
+			    line) so all cards are the same height regardless of content.
+			    (Below 600px the genres row is display:none for every card, so
+			    uniformity holds per breakpoint, not via reservation there.) */}
 			<div className="card__info">
 				<p className="card__title" title={game.title}>
 					{game.title}
 				</p>
+				<p className="card__genres">{game.genres.join(' · ')}</p>
 				<div className="card__meta">
 					<StatusPopover game={game} />
-					{game.owned && <span className="card__owned">OWNED</span>}
 				</div>
-				{game.genres.length > 0 && (
-					<p className="card__genres">{game.genres.join(' · ')}</p>
-				)}
+				<p className="card__owned-line">
+					{/* visibility-hidden (CSS, via data-owned) when un-owned — keeps
+					    the row height and drops the chip from the a11y tree. */}
+					<span className="card__owned" data-owned={game.owned || undefined}>
+						OWNED
+					</span>
+				</p>
 			</div>
 
 			{detailOpen && <DetailPanel game={game} onClose={closeDetail} />}

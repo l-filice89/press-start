@@ -12,7 +12,7 @@
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
 	gap: var(--space-4);
-	align-items: start;
+	/* stretch (default): every card in a row gets the row's height. */
 }
 
 /* Rows are ARIA-only groups: display:contents lifts the cards into the single

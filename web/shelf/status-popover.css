@@ -35,6 +35,8 @@
 	background: var(--color-surface-raised);
 	box-shadow: 0 0 26px
 		color-mix(in srgb, var(--color-accent-glow) 22%, transparent);
+	/* StatusPopover caps max-height inline when the viewport is short. */
+	overflow-y: auto;
 }
 
 .status-popover__item {
@@ -66,6 +68,18 @@
 	content: "";
 	margin-right: var(--space-2);
 	width: 1ch;
+}
+
+/* Viewport-edge handling: StatusPopover measures after open and sets these
+   when the default below/left placement would run off screen. */
+.status-popover__menu[data-flip="up"] {
+	top: auto;
+	bottom: calc(100% + var(--space-2));
+}
+
+.status-popover__menu[data-align="right"] {
+	left: auto;
+	right: 0;
 }
 
 .status-popover__separator {
