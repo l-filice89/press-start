@@ -2,8 +2,9 @@
 title: 'Playwright framework & auth smoke test (story 2.5.1 gap closure)'
 type: 'feature'
 created: '2026-07-10'
-status: 'in-review'
+status: 'done'
 baseline_revision: 'dae7d7fc54b4097443ba9fe587c6dd5c9971cd32'
+final_revision: 'e16f8573cd6e26088a9447b8d63e2ca9133129cc'
 review_loop_iteration: 0
 followup_review_recommended: true
 context: []
