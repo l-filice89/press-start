@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { EFFECTIVE_STATES, PLAY_STATUSES } from '../core';
 import { createDb } from '../repositories/db';
+import { OWNERSHIP_TYPES } from '../schema/catalog';
 import { getShelf, searchLibrary } from '../services';
 import { type AuthVariables, requireAuth } from './auth';
 
@@ -28,6 +29,10 @@ const shelfGameSchema = z.object({
 	hasPlatinum: z.boolean(),
 	completedOn: z.string().nullable(),
 	platinumOn: z.string().nullable(),
+	startedOn: z.string().nullable(),
+	boughtOn: z.string().nullable(),
+	wishlistedOn: z.string().nullable(),
+	ownershipType: z.enum(OWNERSHIP_TYPES).nullable(),
 	releaseDate: z.string().nullable(),
 	genres: z.array(z.string()),
 });

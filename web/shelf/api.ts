@@ -44,6 +44,10 @@ export const shelfGameSchema = z.object({
 	hasPlatinum: z.boolean(),
 	completedOn: z.string().nullable(),
 	platinumOn: z.string().nullable(),
+	startedOn: z.string().nullable(),
+	boughtOn: z.string().nullable(),
+	wishlistedOn: z.string().nullable(),
+	ownershipType: z.enum(['physical', 'digital']).nullable(),
 	releaseDate: z.string().nullable(),
 	genres: z.array(z.string()),
 });
@@ -85,10 +89,14 @@ const playStatusResponseSchema = z.object({
 	effectiveState: z.enum(EFFECTIVE_STATES),
 });
 
-/** Apply a play status to one game (Story 2.1). Resolves to its new effective state. */
+/**
+ * Apply a play status to one game (Story 2.1), or clear it with `null`
+ * (Story 2.3). Resolves to its new effective state; a clear that would violate
+ * the completion invariant is refused server-side with a 409.
+ */
 export async function changePlayStatus(
 	gameId: string,
-	playStatus: PlayStatus,
+	playStatus: PlayStatus | null,
 ): Promise<EffectiveState> {
 	const body = await callApi(
 		`/api/games/${encodeURIComponent(gameId)}/play-status`,

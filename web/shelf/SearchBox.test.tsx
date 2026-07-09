@@ -22,6 +22,10 @@ function card(id: string, title: string): ShelfGame {
 		hasPlatinum: false,
 		completedOn: null,
 		platinumOn: null,
+		startedOn: null,
+		boughtOn: null,
+		wishlistedOn: null,
+		ownershipType: null,
 		releaseDate: null,
 		genres: [],
 	};

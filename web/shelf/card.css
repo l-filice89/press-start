@@ -42,6 +42,18 @@
 	background: var(--color-surface-raised);
 }
 
+/* The whole cover is the open-detail trigger (Story 2.3) — an invisible
+   button; the cover art itself is the visual. */
+.card__cover-button {
+	display: block;
+	width: 100%;
+	height: 100%;
+	padding: 0;
+	border: none;
+	background: none;
+	cursor: pointer;
+}
+
 .card__cover-img {
 	display: block;
 	width: 100%;
@@ -62,7 +74,8 @@
 	font-size: 2rem;
 }
 
-/* Top-left flag cluster. */
+/* Top-left flag cluster. Overlays the cover trigger; the flags are read-only
+   signals, so presses pass through to the open-detail button beneath. */
 .card__flags {
 	position: absolute;
 	top: var(--space-2);
@@ -70,6 +83,7 @@
 	display: flex;
 	flex-wrap: wrap;
 	gap: var(--space-1);
+	pointer-events: none;
 }
 
 .card__flag {

@@ -8,13 +8,13 @@ import { type AuthVariables, requireAuth } from './auth';
 /**
  * The tracking write boundary (Stories 2.1/2.2): the play-status PATCH and the
  * milestone POST, both user-scoped behind `requireAuth` (AD-13) and
- * Zod-validated in and out (AR-26). Only the five play statuses are accepted on
- * the PATCH — clearing the status to null happens exclusively as the milestone
- * write's auto-clear inside `core/` (AR-21).
+ * Zod-validated in and out (AR-26). The PATCH accepts the five play statuses
+ * or `null` (Story 2.3: clear) — clearing is refused with 409 when it would
+ * violate the completion invariant (FR-3/AR-12), decided in `services/`.
  */
 
 const playStatusBodySchema = z.object({
-	playStatus: z.enum(PLAY_STATUSES),
+	playStatus: z.enum(PLAY_STATUSES).nullable(),
 });
 
 const milestoneBodySchema = z.object({
@@ -49,6 +49,9 @@ trackingRoute.patch('/games/:gameId/play-status', requireAuth, async (c) => {
 		body.data.playStatus,
 		today,
 	);
+	if (effectiveState === 'invariant') {
+		return c.json({ error: 'completion invariant' }, 409);
+	}
 	if (!effectiveState) {
 		return c.json({ error: 'not found' }, 404);
 	}

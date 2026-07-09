@@ -22,6 +22,10 @@ function game(overrides: Partial<ShelfGame> = {}): ShelfGame {
 		hasPlatinum: false,
 		completedOn: null,
 		platinumOn: null,
+		startedOn: null,
+		boughtOn: null,
+		wishlistedOn: null,
+		ownershipType: null,
 		releaseDate: '2015-03-24',
 		genres: ['Action', 'RPG'],
 		...overrides,
@@ -96,6 +100,16 @@ describe('Card', () => {
 			/>,
 		);
 		expect(screen.getByText('SOON')).toBeInTheDocument();
+	});
+
+	it('makes the cover an open-details trigger outside the tab order (Story 2.3)', () => {
+		renderCard(game());
+		const trigger = screen.getByRole('button', {
+			name: 'Open details — Bloodborne',
+		});
+		expect(trigger).toHaveAttribute('tabindex', '-1');
+		// The cover art renders inside the trigger — the whole cover is the target.
+		expect(trigger).toContainElement(screen.getByTestId('card-cover'));
 	});
 
 	it('shows the PS+ Extra badge only for an unowned in-catalog game', () => {

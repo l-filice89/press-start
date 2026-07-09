@@ -144,6 +144,40 @@ describe('play-status writes (integration, real workerd + local D1)', () => {
 		expect(card?.effectiveState).toBe('Up next');
 	});
 
+	it('clears play_status when a completion milestone exists (Story 2.3)', async () => {
+		const id = await addGame(userA, 'Clear With Milestone', {
+			playStatus: 'Playing',
+			startedOn: '2024-01-01',
+			completedOn: '2024-06-01',
+		});
+		// The effective state falls back to the milestone.
+		expect(await changePlayStatus(db(), userA, id, null, TODAY)).toBe(
+			'Story completed',
+		);
+		const row = await getTracking(db(), userA, id);
+		expect(row?.playStatus).toBeNull();
+		// Clearing never stamps or touches any date.
+		expect(row?.startedOn).toBe('2024-01-01');
+		expect(row?.completedOn).toBe('2024-06-01');
+		expect(row?.platinumOn).toBeNull();
+	});
+
+	// The named hazard of Story 2.3 (service level): clearing without a milestone
+	// is refused by the API — the UI hiding the control is not the enforcement.
+	it('refuses to clear play_status when no milestone exists (FR-3 invariant)', async () => {
+		const id = await addGame(userA, 'Clear Without Milestone', {
+			playStatus: 'Paused',
+		});
+		expect(await changePlayStatus(db(), userA, id, null, TODAY)).toBe(
+			'invariant',
+		);
+		// Nothing was written — the row is exactly as before.
+		const row = await getTracking(db(), userA, id);
+		expect(row?.playStatus).toBe('Paused');
+		expect(row?.completedOn).toBeNull();
+		expect(row?.platinumOn).toBeNull();
+	});
+
 	it('will not touch another user’s tracking row (AD-13 scope)', async () => {
 		const id = await addGame(userB, 'B Only', { playStatus: 'Paused' });
 		// User A has no tracking row for it → the service reports "not found".
@@ -219,6 +253,36 @@ describe('play-status writes (integration, real workerd + local D1)', () => {
 			);
 			expect(response.status).toBe(404);
 			expect(await response.json()).toEqual({ error: 'not found' });
+		});
+
+		it('clears the status through the route when a milestone stands (Story 2.3)', async () => {
+			const id = await addGame(sessionUser, 'Routed Clear', {
+				playStatus: 'Playing',
+				platinumOn: '2024-03-03',
+			});
+			const response = await patch(id, { playStatus: null }, cookie);
+			expect(response.status).toBe(200);
+			expect(await response.json()).toEqual({
+				effectiveState: 'Platinum achieved',
+			});
+			const row = await getTracking(db(), sessionUser, id);
+			expect(row?.playStatus).toBeNull();
+			expect(row?.platinumOn).toBe('2024-03-03');
+		});
+
+		// The named hazard of Story 2.3 (route level): a playStatus:null PATCH
+		// reaching the API by any means is refused with 409 and the row unchanged.
+		it('refuses playStatus:null with 409 when no milestone exists, row unchanged', async () => {
+			const id = await addGame(sessionUser, 'Routed Invariant', {
+				playStatus: 'Paused',
+			});
+			const response = await patch(id, { playStatus: null }, cookie);
+			expect(response.status).toBe(409);
+			expect(await response.json()).toEqual({ error: 'completion invariant' });
+			const row = await getTracking(db(), sessionUser, id);
+			expect(row?.playStatus).toBe('Paused');
+			expect(row?.completedOn).toBeNull();
+			expect(row?.platinumOn).toBeNull();
 		});
 	});
 });

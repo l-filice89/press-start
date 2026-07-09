@@ -12,24 +12,41 @@ import {
 	type EffectiveState,
 	type Milestone,
 	type PlayStatus,
+	wouldViolateCompletionInvariant,
 } from '../core';
 import { getTracking, upsertTracking } from '../repositories';
 import type { Db } from '../repositories/db';
 
 /**
- * Apply a play status to this user's tracking row. Returns the game's new
- * effective state, or `null` when the user has no tracking row for that game
- * (unknown game, or another user's — the route answers 404 either way).
+ * Apply a play status (or clear it with `null`, Story 2.3) to this user's
+ * tracking row. Returns the game's new effective state; `null` when the user
+ * has no tracking row for that game (unknown game, or another user's — the
+ * route answers 404 either way); or `'invariant'` when clearing would leave
+ * neither a status nor a milestone (FR-3/AR-12 — refused, nothing written,
+ * the route answers 409).
  */
 export async function changePlayStatus(
 	db: Db,
 	userId: string,
 	gameId: string,
-	next: PlayStatus,
+	next: PlayStatus | null,
 	today: string,
-): Promise<EffectiveState | null> {
+): Promise<EffectiveState | 'invariant' | null> {
 	const current = await getTracking(db, userId, gameId);
 	if (!current) return null;
+
+	// The completion invariant is enforced HERE, at the API boundary — the UI
+	// hiding its Clear control is not the enforcement (AR-12/FR-3).
+	if (
+		next === null &&
+		wouldViolateCompletionInvariant({
+			playStatus: null,
+			completedOn: current.completedOn,
+			platinumOn: current.platinumOn,
+		})
+	) {
+		return 'invariant';
+	}
 
 	// `upsertTracking` drops `undefined`, so an omitted `startedOn` is exactly
 	// "leave the recorded date alone" — no no-overwrite branch needed here.

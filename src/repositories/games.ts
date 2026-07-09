@@ -99,7 +99,11 @@ export type LibraryRow = {
 	playStatus: (typeof gameTracking.$inferSelect)['playStatus'];
 	completedOn: string | null;
 	platinumOn: string | null;
+	startedOn: string | null;
+	boughtOn: string | null;
+	wishlistedOn: string | null;
 	owned: boolean;
+	ownershipType: (typeof gameTracking.$inferSelect)['ownershipType'];
 };
 
 /**
@@ -125,7 +129,11 @@ export async function listLibraryForUser(
 			playStatus: gameTracking.playStatus,
 			completedOn: gameTracking.completedOn,
 			platinumOn: gameTracking.platinumOn,
+			startedOn: gameTracking.startedOn,
+			boughtOn: gameTracking.boughtOn,
+			wishlistedOn: gameTracking.wishlistedOn,
 			owned: gameTracking.owned,
+			ownershipType: gameTracking.ownershipType,
 		})
 		.from(gameTracking)
 		.innerJoin(game, eq(gameTracking.gameId, game.id))

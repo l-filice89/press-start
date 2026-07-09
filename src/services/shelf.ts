@@ -46,6 +46,12 @@ export interface ShelfGame {
 	// already-achieved rows show *when* (Story 2.2), not just that.
 	completedOn: string | null;
 	platinumOn: string | null;
+	// Lifecycle dates + ownership type for the detail panel (Story 2.3) — the
+	// card DTO is the panel's only data source; there is no detail endpoint.
+	startedOn: string | null;
+	boughtOn: string | null;
+	wishlistedOn: string | null;
+	ownershipType: 'physical' | 'digital' | null;
 	releaseDate: string | null;
 	genres: string[];
 }
@@ -78,6 +84,10 @@ function bakeCard(row: LibraryRow, genres: string[]): ShelfGame {
 		hasPlatinum: row.platinumOn != null,
 		completedOn: row.completedOn,
 		platinumOn: row.platinumOn,
+		startedOn: row.startedOn,
+		boughtOn: row.boughtOn,
+		wishlistedOn: row.wishlistedOn,
+		ownershipType: row.ownershipType,
 		releaseDate: row.releaseDate,
 		genres,
 	};

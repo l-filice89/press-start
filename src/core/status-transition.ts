@@ -2,7 +2,8 @@ import type { PlayStatus } from './types';
 
 /** The dates a play-status change reads to decide whether `started_on` is stamped. */
 export interface PlayStatusChangeInput {
-	next: PlayStatus;
+	/** `null` clears the status (Story 2.3) — legal only past the invariant guard. */
+	next: PlayStatus | null;
 	current: {
 		startedOn: string | null;
 		completedOn: string | null;
@@ -14,7 +15,7 @@ export interface PlayStatusChangeInput {
 
 /** The fields a play-status change writes. An omitted key means "don't touch it". */
 export interface PlayStatusChangePatch {
-	playStatus: PlayStatus;
+	playStatus: PlayStatus | null;
 	startedOn?: string;
 }
 
@@ -23,7 +24,8 @@ export interface PlayStatusChangePatch {
  * symmetric to `computeEffectiveState`'s read side (AD-7). `started_on` is
  * stamped on the FIRST transition to `Playing` and only while no completion
  * milestone exists — a re-transition never overwrites it, and a replay (a game
- * with `completed_on`/`platinum_on`) never writes it at all.
+ * with `completed_on`/`platinum_on`) never writes it at all. A `null` next
+ * (clearing the status, Story 2.3) never stamps or touches any date.
  */
 export function applyPlayStatusChange({
 	next,

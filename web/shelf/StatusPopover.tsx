@@ -1,23 +1,13 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { useToast } from '../components/Toast';
-import {
-	changePlayStatus,
-	logMilestone,
-	type Milestone,
-	PLAY_STATUSES,
-	type PlayStatus,
-	type ShelfGame,
-} from './api';
+import { PLAY_STATUSES, type PlayStatus, type ShelfGame } from './api';
 import { StatePill } from './StatePill';
+import {
+	MILESTONE_LABELS,
+	type MilestoneRow,
+	useTrackingMutations,
+} from './useTrackingMutations';
 import './status-popover.css';
-
-/** Menu labels for the two milestone rows, keyed off the wire vocabulary. */
-const MILESTONE_LABELS: Record<Milestone, string> = {
-	completed: 'Story completed',
-	platinum: 'Platinum achieved',
-};
 
 /**
  * The status pill as an ARIA menu button (Story 2.1). Tapping it opens a
@@ -34,44 +24,26 @@ const MILESTONE_LABELS: Record<Milestone, string> = {
  * pressing Enter on the focused cell (Shelf.tsx wires that), not by adding a
  * second tab stop per card.
  *
- * Nothing here recomputes effective state (AD-7) — the mutation invalidates the
- * shelf query and the server re-bakes label, ordering and visibility.
+ * All mutation/toast/confirm logic lives in `useTrackingMutations` — the one
+ * seam this popover shares with the detail panel (AR-13/AR-21). Nothing here
+ * recomputes effective state (AD-7).
  */
 export function StatusPopover({ game }: { game: ShelfGame }) {
 	const [open, setOpen] = useState(false);
-	// Which milestone the confirm dialog is gating; null = no dialog.
-	const [confirming, setConfirming] = useState<Milestone | null>(null);
 	const pillRef = useRef<HTMLButtonElement>(null);
 	const menuRef = useRef<HTMLDivElement>(null);
 	const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
 	const menuId = useId();
 
-	const queryClient = useQueryClient();
-	const { toast } = useToast();
-
-	const mutation = useMutation({
-		mutationFn: (status: PlayStatus) => changePlayStatus(game.id, status),
-		onSuccess: () => queryClient.invalidateQueries({ queryKey: ['shelf'] }),
-		// A 401 routes to sign-in centrally (query-client.ts). Everything else must
-		// say so — a status change that silently did nothing is worse than an
-		// error, because the shelf still shows the old pill and the user walks away
-		// believing it stuck. Covers the UNDO write too, which uses this same
-		// mutation.
-		onError: () =>
-			toast({ message: `Couldn’t update ${game.title}. Try again.` }),
-	});
-	// `mutate` is stable across renders; naming it keeps the callbacks below from
-	// depending on the whole mutation object.
-	const { mutate, isPending } = mutation;
-
-	const milestoneMutation = useMutation({
-		mutationFn: (milestone: Milestone) => logMilestone(game.id, milestone),
-		onSuccess: () => queryClient.invalidateQueries({ queryKey: ['shelf'] }),
-		onError: () =>
-			toast({ message: `Couldn’t update ${game.title}. Try again.` }),
-	});
-	const { mutate: mutateMilestone, isPending: milestonePending } =
-		milestoneMutation;
+	const focusPill = useCallback(() => pillRef.current?.focus(), []);
+	const {
+		selectStatus,
+		milestoneRows,
+		activateMilestoneRow,
+		confirming,
+		confirmMilestone,
+		cancelConfirm,
+	} = useTrackingMutations(game, { onConfirmClose: focusPill });
 
 	const close = useCallback((returnFocus = true) => {
 		setOpen(false);
@@ -123,96 +95,21 @@ export function StatusPopover({ game }: { game: ShelfGame }) {
 	const select = useCallback(
 		(next: PlayStatus) => {
 			close();
-			if (next === game.playStatus) return;
-			// A second selection while the first write is in flight would race: both
-			// PATCH, and whichever response lands last wins — not necessarily the
-			// status the user picked last. Dropping it silently is the same failure
-			// the `onError` toast exists to prevent, so say so.
-			if (isPending) {
-				toast({
-					message: `Still saving ${game.title}. Try again in a moment.`,
-				});
-				return;
-			}
-			const previous = game.playStatus;
-			mutate(next, {
-				onSuccess: () => {
-					// Dropped hides the card from the default shelf — a reversible
-					// risky action, so it gets an UNDO (EXPERIENCE.md feedback rules).
-					const undo =
-						next === 'Dropped' && previous
-							? { onUndo: () => mutate(previous) }
-							: undefined;
-					toast({ message: `${game.title} — ${next}`, undo });
-				},
-			});
+			selectStatus(next);
 		},
-		[close, game.playStatus, game.title, mutate, toast, isPending],
+		[close, selectStatus],
 	);
-
-	// The two gated milestone actions. `achieved` disables the row: the first
-	// achievement stands (FR-6), so an already-dated milestone is inert here.
-	const milestoneRows = [
-		{
-			milestone: 'completed' as const,
-			achieved: game.hasCompleted,
-			date: game.completedOn,
-		},
-		{
-			milestone: 'platinum' as const,
-			achieved: game.hasPlatinum,
-			date: game.platinumOn,
-		},
-	];
 
 	// A milestone row closes the menu (focus back to the pill) and opens the
-	// confirm gate — nothing is written until Confirm (FR-7). An achieved row
-	// stays inert (FR-6) but must not be a dead-end: activating it says why.
-	const activateMilestoneRow = useCallback(
-		(row: (typeof milestoneRows)[number]) => {
-			if (row.achieved) {
-				toast({
-					message: `${MILESTONE_LABELS[row.milestone]} already logged${row.date ? ` on ${row.date}` : ''}.`,
-				});
-				return;
-			}
-			close();
-			setConfirming(row.milestone);
+	// confirm gate; an achieved row stays inert (the hook toasts why) and the
+	// menu stays open.
+	const onMilestoneRow = useCallback(
+		(row: MilestoneRow) => {
+			if (!row.achieved) close();
+			activateMilestoneRow(row);
 		},
-		[close, toast],
+		[close, activateMilestoneRow],
 	);
-
-	const cancelConfirm = useCallback(() => {
-		setConfirming(null);
-		pillRef.current?.focus();
-	}, []);
-
-	const confirmMilestone = useCallback(() => {
-		const milestone = confirming;
-		if (!milestone) return;
-		// Same race guard as `select`: a confirm while another write is in flight
-		// would let the slower response win. But this intent was explicitly
-		// confirmed — keep the dialog open so retrying is one tap, not a full
-		// re-navigation through menu and modal.
-		if (isPending || milestonePending) {
-			toast({ message: `Still saving ${game.title}. Try again in a moment.` });
-			return;
-		}
-		setConfirming(null);
-		pillRef.current?.focus();
-		mutateMilestone(milestone, {
-			// Confirm-gated already, so the toast carries no UNDO.
-			onSuccess: () =>
-				toast({ message: `${game.title} — ${MILESTONE_LABELS[milestone]}` }),
-		});
-	}, [
-		confirming,
-		game.title,
-		isPending,
-		milestonePending,
-		mutateMilestone,
-		toast,
-	]);
 
 	const onPillKeyDown = (e: React.KeyboardEvent) => {
 		if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
@@ -326,7 +223,7 @@ export function StatusPopover({ game }: { game: ShelfGame }) {
 								aria-disabled={row.achieved || undefined}
 								tabIndex={-1}
 								className="status-popover__item status-popover__item--milestone tap-target"
-								onClick={() => activateMilestoneRow(row)}
+								onClick={() => onMilestoneRow(row)}
 								onKeyDown={(e) => onMenuKeyDown(e, index)}
 							>
 								{label}

@@ -1,0 +1,437 @@
+import '@testing-library/jest-dom/vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ToastHost } from '../components/Toast';
+import type { ShelfGame } from './api';
+import { Card } from './Card';
+
+/**
+ * Story 2.3: the flip-to-detail dialog. Opened from the card's cover trigger,
+ * focus-trapped and labelled, writing only through the shared mutation seam —
+ * the same PATCH/POST the shelf popover sends. Rendered through `Card` so the
+ * open-from-cover and focus-return-to-gridcell contracts are the real ones.
+ */
+
+function game(over: Partial<ShelfGame> = {}): ShelfGame {
+	return {
+		id: 'g1',
+		title: 'Bloodborne',
+		coverUrl: null,
+		storeUrl: null,
+		playStatus: 'Not started',
+		effectiveState: 'Not started',
+		owned: true,
+		released: true,
+		wishlisted: false,
+		psPlusExtra: false,
+		hasCompleted: false,
+		hasPlatinum: false,
+		completedOn: null,
+		platinumOn: null,
+		startedOn: null,
+		boughtOn: null,
+		wishlistedOn: null,
+		ownershipType: null,
+		releaseDate: null,
+		genres: [],
+		...over,
+	};
+}
+
+function renderCard(g: ShelfGame = game()) {
+	const client = new QueryClient({
+		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+	});
+	return render(
+		<QueryClientProvider client={client}>
+			<ToastHost>
+				<Card game={g} tabIndex={0} />
+			</ToastHost>
+		</QueryClientProvider>,
+	);
+}
+
+let fetchMock: ReturnType<typeof vi.fn>;
+
+beforeEach(() => {
+	fetchMock = vi.fn(async () => ({
+		ok: true,
+		status: 200,
+		json: async () => ({ effectiveState: 'Playing' }),
+	}));
+	vi.stubGlobal('fetch', fetchMock);
+});
+
+afterEach(() => {
+	vi.unstubAllGlobals();
+});
+
+const cover = () => screen.getByTestId('card-cover-button');
+const panel = () => screen.getByTestId('detail-panel');
+
+async function openPanel(g: ShelfGame = game()) {
+	const user = userEvent.setup();
+	renderCard(g);
+	await user.click(cover());
+	return user;
+}
+
+describe('DetailPanel', () => {
+	it('opens from the cover as a modal dialog labelled by the game title', async () => {
+		await openPanel();
+
+		const dialog = screen.getByRole('dialog', { name: 'Bloodborne' });
+		expect(dialog).toHaveAttribute('aria-modal', 'true');
+		// Focus moved into the dialog on open.
+		expect(screen.getByRole('button', { name: 'Close details' })).toHaveFocus();
+		// Nothing was written by opening.
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it('has an accessibly named cover trigger, out of the tab order', () => {
+		renderCard(game());
+		expect(cover()).toHaveAccessibleName('Open details — Bloodborne');
+		expect(cover()).toHaveAttribute('tabindex', '-1');
+	});
+
+	it('opens from the keyboard on the cover trigger', async () => {
+		const user = userEvent.setup();
+		renderCard(game());
+		cover().focus();
+		await user.keyboard('{Enter}');
+		expect(screen.getByRole('dialog', { name: 'Bloodborne' })).toBeVisible();
+	});
+
+	it('traps Tab inside the dialog', async () => {
+		const user = await openPanel();
+
+		// Shift+Tab from the first focusable (the close button) wraps to the last.
+		expect(screen.getByRole('button', { name: 'Close details' })).toHaveFocus();
+		await user.tab({ shift: true });
+		const focusables = panel().querySelectorAll('button, a[href]');
+		expect(focusables[focusables.length - 1]).toHaveFocus();
+		// And Tab from the last wraps back to the first.
+		await user.tab();
+		expect(screen.getByRole('button', { name: 'Close details' })).toHaveFocus();
+	});
+
+	it('Escape closes, writes nothing, and returns focus to the gridcell', async () => {
+		const user = await openPanel();
+		await user.keyboard('{Escape}');
+
+		expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+		expect(fetchMock).not.toHaveBeenCalled();
+		expect(screen.getByTestId('shelf-card')).toHaveFocus();
+	});
+
+	it('the close button closes and returns focus to the gridcell', async () => {
+		const user = await openPanel();
+		await user.click(screen.getByRole('button', { name: 'Close details' }));
+
+		expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+		expect(screen.getByTestId('shelf-card')).toHaveFocus();
+	});
+
+	it('a backdrop press dismisses without writing', async () => {
+		const user = await openPanel();
+		await user.click(screen.getByTestId('detail-backdrop'));
+
+		expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it('shows the five statuses as a radiogroup checked off the raw play status', async () => {
+		await openPanel(game({ playStatus: 'Paused', effectiveState: 'Paused' }));
+
+		const radios = within(
+			screen.getByRole('radiogroup', { name: 'Play status for Bloodborne' }),
+		).getAllByRole('radio');
+		expect(radios.map((r) => r.textContent)).toEqual([
+			'Not started',
+			'Up next',
+			'Playing',
+			'Paused',
+			'Dropped',
+		]);
+		expect(screen.getByRole('radio', { name: 'Paused' })).toHaveAttribute(
+			'aria-checked',
+			'true',
+		);
+		expect(
+			radios.filter((r) => r.getAttribute('aria-checked') === 'true'),
+		).toHaveLength(1);
+	});
+
+	it('the segmented control fires the same PATCH as the shelf popover', async () => {
+		const user = await openPanel();
+		await user.click(screen.getByRole('radio', { name: 'Playing' }));
+
+		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+		const [url, init] = fetchMock.mock.calls[0];
+		expect(url).toBe('/api/games/g1/play-status');
+		expect(init).toMatchObject({ method: 'PATCH' });
+		expect(JSON.parse(init.body)).toEqual({ playStatus: 'Playing' });
+		expect(await screen.findByTestId('toast')).toHaveTextContent(
+			'Bloodborne — Playing',
+		);
+	});
+
+	it('hides Clear status when no milestone exists', async () => {
+		await openPanel();
+		expect(
+			screen.queryByRole('button', { name: 'Clear status' }),
+		).not.toBeInTheDocument();
+	});
+
+	it('Clear status renders with a milestone and PATCHes playStatus null', async () => {
+		const user = await openPanel(
+			game({
+				playStatus: 'Playing',
+				effectiveState: 'Playing',
+				hasCompleted: true,
+				completedOn: '2024-06-01',
+			}),
+		);
+		await user.click(screen.getByRole('button', { name: 'Clear status' }));
+
+		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+		const [url, init] = fetchMock.mock.calls[0];
+		expect(url).toBe('/api/games/g1/play-status');
+		expect(init).toMatchObject({ method: 'PATCH' });
+		expect(JSON.parse(init.body)).toEqual({ playStatus: null });
+		expect(await screen.findByTestId('toast')).toHaveTextContent(
+			'Bloodborne — status cleared',
+		);
+	});
+
+	it('roves the radiogroup with arrow keys without selecting', async () => {
+		const user = await openPanel(
+			game({ playStatus: 'Paused', effectiveState: 'Paused' }),
+		);
+
+		const radios = screen.getAllByRole('radio');
+		// One tab stop: the checked radio; the rest are reached by arrows.
+		expect(
+			radios.filter((r) => r.getAttribute('tabindex') === '0'),
+		).toHaveLength(1);
+		expect(screen.getByRole('radio', { name: 'Paused' })).toHaveAttribute(
+			'tabindex',
+			'0',
+		);
+
+		screen.getByRole('radio', { name: 'Paused' }).focus();
+		await user.keyboard('{ArrowRight}');
+		expect(screen.getByRole('radio', { name: 'Dropped' })).toHaveFocus();
+		await user.keyboard('{ArrowRight}');
+		expect(screen.getByRole('radio', { name: 'Not started' })).toHaveFocus();
+		await user.keyboard('{ArrowLeft}');
+		expect(screen.getByRole('radio', { name: 'Dropped' })).toHaveFocus();
+		// Arrows only move focus — selection is a deliberate activation.
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it('closes itself when its own write hides the card from the shelf', async () => {
+		fetchMock.mockResolvedValue({
+			ok: true,
+			status: 200,
+			json: async () => ({ effectiveState: 'Dropped' }),
+		});
+		const user = await openPanel();
+		await user.click(screen.getByRole('radio', { name: 'Dropped' }));
+
+		// The card is about to unmount on refetch — the panel closes deliberately
+		// instead of vanishing under the user.
+		await waitFor(() =>
+			expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+		);
+		expect(await screen.findByTestId('toast')).toHaveTextContent(
+			'Bloodborne — Dropped',
+		);
+	});
+
+	it('hides Clear status when the play status is already null', async () => {
+		await openPanel(
+			game({
+				playStatus: null,
+				effectiveState: 'Story completed',
+				hasCompleted: true,
+				completedOn: '2024-06-01',
+			}),
+		);
+		expect(
+			screen.queryByRole('button', { name: 'Clear status' }),
+		).not.toBeInTheDocument();
+	});
+
+	it('a cleared status offers UNDO that restores the previous status', async () => {
+		fetchMock.mockResolvedValue({
+			ok: true,
+			status: 200,
+			json: async () => ({ effectiveState: 'Story completed' }),
+		});
+		const user = await openPanel(
+			game({
+				playStatus: 'Playing',
+				effectiveState: 'Playing',
+				hasCompleted: true,
+				completedOn: '2024-06-01',
+			}),
+		);
+		await user.click(screen.getByRole('button', { name: 'Clear status' }));
+
+		// Clearing hides the card (effective state falls back to the milestone) —
+		// same reversible risky action as Dropped, so the toast carries UNDO.
+		const undo = await screen.findByRole('button', { name: 'Undo' });
+		await user.click(undo);
+		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+		expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
+			playStatus: 'Playing',
+		});
+	});
+
+	it('explains a 409 completion-invariant refusal instead of "try again"', async () => {
+		fetchMock.mockResolvedValue({
+			ok: false,
+			status: 409,
+			json: async () => ({ error: 'completion invariant' }),
+		});
+		const user = await openPanel(
+			game({
+				playStatus: 'Playing',
+				effectiveState: 'Playing',
+				// Stale cache: the client believes a milestone exists; the server
+				// disagrees and refuses the clear.
+				hasCompleted: true,
+				completedOn: '2024-06-01',
+			}),
+		);
+		await user.click(screen.getByRole('button', { name: 'Clear status' }));
+
+		expect(await screen.findByTestId('toast')).toHaveTextContent(
+			/Can’t clear Bloodborne — no milestone logged/,
+		);
+	});
+
+	it('gates a milestone behind the confirm dialog, then POSTs once confirmed', async () => {
+		const user = await openPanel();
+		await user.click(screen.getByRole('button', { name: /Story completed/ }));
+
+		// Confirm gate open, nothing written yet (FR-7).
+		expect(
+			screen.getByRole('dialog', { name: /Log Story completed/ }),
+		).toBeInTheDocument();
+		expect(fetchMock).not.toHaveBeenCalled();
+
+		await user.click(screen.getByRole('button', { name: 'Confirm' }));
+		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+		const [url, init] = fetchMock.mock.calls[0];
+		expect(url).toBe('/api/games/g1/milestones');
+		expect(init).toMatchObject({ method: 'POST' });
+		expect(JSON.parse(init.body)).toEqual({ milestone: 'completed' });
+	});
+
+	it('Escape in the confirm gate cancels it without closing the panel', async () => {
+		const user = await openPanel();
+		await user.click(screen.getByRole('button', { name: /Platinum achieved/ }));
+		await user.keyboard('{Escape}');
+
+		expect(
+			screen.queryByRole('dialog', { name: /Log Platinum/ }),
+		).not.toBeInTheDocument();
+		expect(screen.getByRole('dialog', { name: 'Bloodborne' })).toBeVisible();
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it('shows an achieved milestone disabled with its date, inert on activation', async () => {
+		const user = await openPanel(
+			game({
+				playStatus: 'Playing',
+				effectiveState: 'Playing',
+				hasPlatinum: true,
+				platinumOn: '2023-05-05',
+			}),
+		);
+
+		const row = screen.getByRole('button', { name: /Platinum achieved/ });
+		expect(row).toHaveAttribute('aria-disabled', 'true');
+		expect(row).toHaveTextContent('2023-05-05');
+
+		await user.click(row);
+		expect(
+			screen.queryByRole('dialog', { name: /Log Platinum/ }),
+		).not.toBeInTheDocument();
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it('renders lifecycle dates with an em dash for the unrecorded ones', async () => {
+		await openPanel(game({ startedOn: '2024-01-01', boughtOn: '2023-12-25' }));
+
+		const dates = panel().querySelectorAll('.detail-panel__date-row');
+		const rows = Array.from(dates).map((r) => r.textContent);
+		expect(rows).toEqual([
+			'Wishlisted—',
+			'Bought2023-12-25',
+			'Started2024-01-01',
+			'Story completed—',
+			'Platinum—',
+		]);
+	});
+
+	it('links a wishlisted game to its persisted store URL', async () => {
+		await openPanel(
+			game({
+				owned: false,
+				wishlisted: true,
+				storeUrl: 'https://store.playstation.com/product/BB',
+			}),
+		);
+
+		const link = screen.getByRole('link', { name: 'View on PS Store' });
+		expect(link).toHaveAttribute(
+			'href',
+			'https://store.playstation.com/product/BB',
+		);
+		expect(link).toHaveAttribute('target', '_blank');
+		expect(link).toHaveAttribute('rel', 'noopener');
+	});
+
+	it('falls back to a store title search when no store URL is persisted', async () => {
+		await openPanel(
+			game({ owned: false, wishlisted: true, title: "Marvel's Spider-Man" }),
+		);
+
+		expect(
+			screen.getByRole('link', { name: 'View on PS Store' }),
+		).toHaveAttribute(
+			'href',
+			`https://store.playstation.com/search/${encodeURIComponent(
+				"Marvel's Spider-Man",
+			)}`,
+		);
+	});
+
+	it('shows no store link for an owned game', async () => {
+		await openPanel(game({ owned: true, ownershipType: 'physical' }));
+		expect(
+			screen.queryByRole('link', { name: 'View on PS Store' }),
+		).not.toBeInTheDocument();
+		expect(screen.getByText('Owned · physical')).toBeInTheDocument();
+	});
+
+	it('uses the flip entry by default and the cross-fade under reduced motion', async () => {
+		// jsdom has no matchMedia → the motion default (flip) applies.
+		const user = await openPanel();
+		expect(panel()).toHaveClass('detail-panel--flip');
+		await user.keyboard('{Escape}');
+
+		vi.stubGlobal(
+			'matchMedia',
+			vi.fn(() => ({ matches: true })),
+		);
+		await user.click(cover());
+		expect(panel()).toHaveClass('detail-panel--fade');
+		expect(panel()).not.toHaveClass('detail-panel--flip');
+	});
+});

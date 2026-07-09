@@ -55,4 +55,30 @@ describe('applyPlayStatusChange', () => {
 			applyPlayStatusChange({ next, current: CLEAN, today: TODAY }),
 		).toEqual({ playStatus: next });
 	});
+
+	// Story 2.3: clearing the status writes exactly `playStatus: null` — never a
+	// date stamp, no matter what the current dates look like.
+	it('clearing stamps nothing on a fresh row', () => {
+		const patch = applyPlayStatusChange({
+			next: null,
+			current: CLEAN,
+			today: TODAY,
+		});
+		expect(patch).toEqual({ playStatus: null });
+		expect(patch.startedOn).toBeUndefined();
+	});
+
+	it('clearing leaves every recorded date untouched', () => {
+		expect(
+			applyPlayStatusChange({
+				next: null,
+				current: {
+					startedOn: '2024-01-01',
+					completedOn: '2024-06-01',
+					platinumOn: '2024-07-01',
+				},
+				today: TODAY,
+			}),
+		).toEqual({ playStatus: null });
+	});
 });

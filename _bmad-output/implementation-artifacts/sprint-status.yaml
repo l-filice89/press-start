@@ -63,7 +63,7 @@ development_status:
   epic-2: in-progress
   2-1-change-play-status-from-the-shelf: done
   2-2-log-completion-milestones-confirm-gated: done
-  2-3-flip-a-card-to-its-detail-view: backlog
+  2-3-flip-a-card-to-its-detail-view: done
   2-4-edit-ownership-and-lifecycle-dates-in-detail: backlog
   2-5-edit-genres-in-detail: backlog
   epic-2-retrospective: optional

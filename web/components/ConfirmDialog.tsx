@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import './confirm-dialog.css';
 
 /**
@@ -60,7 +61,9 @@ export function ConfirmDialog({
 		}
 	};
 
-	return (
+	// Portaled to <body>: consumers render this from inside ARIA composites
+	// (gridcells, menus) where a dialog is invalid content.
+	return createPortal(
 		// biome-ignore lint/a11y/noStaticElementInteractions: the backdrop is a dismiss surface, not a control — Escape and the Cancel button are the accessible paths; this only mirrors them for pointer users.
 		<div
 			className="confirm-dialog__backdrop"
@@ -71,11 +74,15 @@ export function ConfirmDialog({
 				if (e.target === e.currentTarget) onCancel();
 			}}
 		>
+			{/* tabIndex={-1} makes the dialog root click-focusable: a press on the
+			    title text keeps focus inside the trap instead of dropping it to
+			    <body>, where Tab would walk the page behind the modal. */}
 			<div
 				ref={dialogRef}
 				role="dialog"
 				aria-modal="true"
 				aria-labelledby={titleId}
+				tabIndex={-1}
 				className="confirm-dialog"
 				onKeyDown={onKeyDown}
 			>
@@ -100,6 +107,7 @@ export function ConfirmDialog({
 					</button>
 				</div>
 			</div>
-		</div>
+		</div>,
+		document.body,
 	);
 }
