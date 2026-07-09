@@ -34,3 +34,12 @@ export const EFFECTIVE_STATES = [
 ] as const;
 
 export type EffectiveState = (typeof EFFECTIVE_STATES)[number];
+
+/**
+ * The completion-milestone vocabulary (Story 2.2). A runtime tuple (not just a
+ * type) so the milestone route's Zod body enum keys off this single source
+ * rather than re-listing the values (AD-3).
+ */
+export const MILESTONES = ['completed', 'platinum'] as const;
+
+export type Milestone = (typeof MILESTONES)[number];

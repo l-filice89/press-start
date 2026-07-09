@@ -20,6 +20,8 @@ function game(overrides: Partial<ShelfGame> = {}): ShelfGame {
 		psPlusExtra: false,
 		hasCompleted: false,
 		hasPlatinum: false,
+		completedOn: null,
+		platinumOn: null,
 		releaseDate: '2015-03-24',
 		genres: ['Action', 'RPG'],
 		...overrides,

@@ -24,6 +24,8 @@ function card(
 		psPlusExtra: false,
 		hasCompleted: false,
 		hasPlatinum: false,
+		completedOn: null,
+		platinumOn: null,
 		releaseDate: null,
 		genres: [],
 		...over,

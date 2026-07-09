@@ -1,14 +1,23 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useToast } from '../components/Toast';
 import {
 	changePlayStatus,
+	logMilestone,
+	type Milestone,
 	PLAY_STATUSES,
 	type PlayStatus,
 	type ShelfGame,
 } from './api';
 import { StatePill } from './StatePill';
 import './status-popover.css';
+
+/** Menu labels for the two milestone rows, keyed off the wire vocabulary. */
+const MILESTONE_LABELS: Record<Milestone, string> = {
+	completed: 'Story completed',
+	platinum: 'Platinum achieved',
+};
 
 /**
  * The status pill as an ARIA menu button (Story 2.1). Tapping it opens a
@@ -30,6 +39,8 @@ import './status-popover.css';
  */
 export function StatusPopover({ game }: { game: ShelfGame }) {
 	const [open, setOpen] = useState(false);
+	// Which milestone the confirm dialog is gating; null = no dialog.
+	const [confirming, setConfirming] = useState<Milestone | null>(null);
 	const pillRef = useRef<HTMLButtonElement>(null);
 	const menuRef = useRef<HTMLDivElement>(null);
 	const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -52,6 +63,15 @@ export function StatusPopover({ game }: { game: ShelfGame }) {
 	// `mutate` is stable across renders; naming it keeps the callbacks below from
 	// depending on the whole mutation object.
 	const { mutate, isPending } = mutation;
+
+	const milestoneMutation = useMutation({
+		mutationFn: (milestone: Milestone) => logMilestone(game.id, milestone),
+		onSuccess: () => queryClient.invalidateQueries({ queryKey: ['shelf'] }),
+		onError: () =>
+			toast({ message: `Couldn’t update ${game.title}. Try again.` }),
+	});
+	const { mutate: mutateMilestone, isPending: milestonePending } =
+		milestoneMutation;
 
 	const close = useCallback((returnFocus = true) => {
 		setOpen(false);
@@ -130,6 +150,70 @@ export function StatusPopover({ game }: { game: ShelfGame }) {
 		[close, game.playStatus, game.title, mutate, toast, isPending],
 	);
 
+	// The two gated milestone actions. `achieved` disables the row: the first
+	// achievement stands (FR-6), so an already-dated milestone is inert here.
+	const milestoneRows = [
+		{
+			milestone: 'completed' as const,
+			achieved: game.hasCompleted,
+			date: game.completedOn,
+		},
+		{
+			milestone: 'platinum' as const,
+			achieved: game.hasPlatinum,
+			date: game.platinumOn,
+		},
+	];
+
+	// A milestone row closes the menu (focus back to the pill) and opens the
+	// confirm gate — nothing is written until Confirm (FR-7). An achieved row
+	// stays inert (FR-6) but must not be a dead-end: activating it says why.
+	const activateMilestoneRow = useCallback(
+		(row: (typeof milestoneRows)[number]) => {
+			if (row.achieved) {
+				toast({
+					message: `${MILESTONE_LABELS[row.milestone]} already logged${row.date ? ` on ${row.date}` : ''}.`,
+				});
+				return;
+			}
+			close();
+			setConfirming(row.milestone);
+		},
+		[close, toast],
+	);
+
+	const cancelConfirm = useCallback(() => {
+		setConfirming(null);
+		pillRef.current?.focus();
+	}, []);
+
+	const confirmMilestone = useCallback(() => {
+		const milestone = confirming;
+		if (!milestone) return;
+		// Same race guard as `select`: a confirm while another write is in flight
+		// would let the slower response win. But this intent was explicitly
+		// confirmed — keep the dialog open so retrying is one tap, not a full
+		// re-navigation through menu and modal.
+		if (isPending || milestonePending) {
+			toast({ message: `Still saving ${game.title}. Try again in a moment.` });
+			return;
+		}
+		setConfirming(null);
+		pillRef.current?.focus();
+		mutateMilestone(milestone, {
+			// Confirm-gated already, so the toast carries no UNDO.
+			onSuccess: () =>
+				toast({ message: `${game.title} — ${MILESTONE_LABELS[milestone]}` }),
+		});
+	}, [
+		confirming,
+		game.title,
+		isPending,
+		milestonePending,
+		mutateMilestone,
+		toast,
+	]);
+
 	const onPillKeyDown = (e: React.KeyboardEvent) => {
 		if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
 			e.preventDefault();
@@ -143,7 +227,8 @@ export function StatusPopover({ game }: { game: ShelfGame }) {
 	};
 
 	const onMenuKeyDown = (e: React.KeyboardEvent, index: number) => {
-		const last = PLAY_STATUSES.length - 1;
+		// Traversal spans the whole menu: five status radios + two milestone rows.
+		const last = PLAY_STATUSES.length + milestoneRows.length - 1;
 		let target: number | null = null;
 		switch (e.key) {
 			case 'ArrowDown':
@@ -223,7 +308,44 @@ export function StatusPopover({ game }: { game: ShelfGame }) {
 							{status}
 						</button>
 					))}
+
+					{/* Native separator: implicit `role="separator"` with no ARIA to hand-wire. */}
+					<hr className="status-popover__separator" />
+
+					{milestoneRows.map((row, offset) => {
+						const index = PLAY_STATUSES.length + offset;
+						const label = MILESTONE_LABELS[row.milestone];
+						return (
+							<button
+								key={row.milestone}
+								ref={(el) => {
+									itemRefs.current[index] = el;
+								}}
+								type="button"
+								role="menuitem"
+								aria-disabled={row.achieved || undefined}
+								tabIndex={-1}
+								className="status-popover__item status-popover__item--milestone tap-target"
+								onClick={() => activateMilestoneRow(row)}
+								onKeyDown={(e) => onMenuKeyDown(e, index)}
+							>
+								{label}
+								{row.achieved && row.date && (
+									<span className="status-popover__item-date">{row.date}</span>
+								)}
+							</button>
+						);
+					})}
 				</div>
+			)}
+
+			{confirming && (
+				<ConfirmDialog
+					title={`Log ${MILESTONE_LABELS[confirming]} for ${game.title}? This is permanent.`}
+					confirmLabel="Confirm"
+					onConfirm={confirmMilestone}
+					onCancel={cancelConfirm}
+				/>
 			)}
 		</span>
 	);

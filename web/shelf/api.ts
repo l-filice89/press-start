@@ -27,6 +27,8 @@ const EFFECTIVE_STATES = [
 export type PlayStatus = (typeof PLAY_STATUSES)[number];
 export type EffectiveState = (typeof EFFECTIVE_STATES)[number];
 
+export type Milestone = 'completed' | 'platinum';
+
 export const shelfGameSchema = z.object({
 	id: z.string(),
 	title: z.string(),
@@ -40,6 +42,8 @@ export const shelfGameSchema = z.object({
 	psPlusExtra: z.boolean(),
 	hasCompleted: z.boolean(),
 	hasPlatinum: z.boolean(),
+	completedOn: z.string().nullable(),
+	platinumOn: z.string().nullable(),
 	releaseDate: z.string().nullable(),
 	genres: z.array(z.string()),
 });
@@ -92,6 +96,22 @@ export async function changePlayStatus(
 			method: 'PATCH',
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ playStatus }),
+		},
+	);
+	return playStatusResponseSchema.parse(body).effectiveState;
+}
+
+/** Log a completion milestone (Story 2.2). Resolves to the new effective state. */
+export async function logMilestone(
+	gameId: string,
+	milestone: Milestone,
+): Promise<EffectiveState> {
+	const body = await callApi(
+		`/api/games/${encodeURIComponent(gameId)}/milestones`,
+		{
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ milestone }),
 		},
 	);
 	return playStatusResponseSchema.parse(body).effectiveState;

@@ -8,7 +8,7 @@ import {
 } from '../../src/repositories';
 import { createDb } from '../../src/repositories/db';
 import { user } from '../../src/schema';
-import { changePlayStatus, getShelf } from '../../src/services';
+import { changePlayStatus, getShelf, logMilestone } from '../../src/services';
 import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
 
 /**
@@ -52,6 +52,18 @@ async function addGame(
 function patch(gameId: string, body: unknown, cookie?: string) {
 	return appFetch(`/api/games/${gameId}/play-status`, {
 		method: 'PATCH',
+		headers: {
+			'content-type': 'application/json',
+			...(cookie ? { cookie } : {}),
+		},
+		body: JSON.stringify(body),
+	});
+}
+
+/** POST the milestone route through the real Worker. */
+function postMilestone(gameId: string, body: unknown, cookie?: string) {
+	return appFetch(`/api/games/${gameId}/milestones`, {
+		method: 'POST',
 		headers: {
 			'content-type': 'application/json',
 			...(cookie ? { cookie } : {}),
@@ -207,6 +219,178 @@ describe('play-status writes (integration, real workerd + local D1)', () => {
 			);
 			expect(response.status).toBe(404);
 			expect(await response.json()).toEqual({ error: 'not found' });
+		});
+	});
+});
+
+describe('milestone writes (integration, real workerd + local D1)', () => {
+	it('stamps completed_on today and auto-clears play_status', async () => {
+		const id = await addGame(userA, 'Story Done', { playStatus: 'Playing' });
+		expect(await logMilestone(db(), userA, id, 'completed', TODAY)).toBe(
+			'Story completed',
+		);
+		const row = await getTracking(db(), userA, id);
+		expect(row?.completedOn).toBe(TODAY);
+		expect(row?.playStatus).toBeNull();
+	});
+
+	it('stamps platinum_on today and auto-clears play_status', async () => {
+		const id = await addGame(userA, 'Platinumed', { playStatus: 'Paused' });
+		expect(await logMilestone(db(), userA, id, 'platinum', TODAY)).toBe(
+			'Platinum achieved',
+		);
+		const row = await getTracking(db(), userA, id);
+		expect(row?.platinumOn).toBe(TODAY);
+		expect(row?.playStatus).toBeNull();
+	});
+
+	it('re-logging leaves the original date standing — the first achievement stands', async () => {
+		const id = await addGame(userA, 'Already Done', {
+			playStatus: 'Playing',
+			completedOn: '2023-05-05',
+		});
+		// The no-op still reports the current state (200-shaped), but writes
+		// nothing: the date AND the play status are exactly as before.
+		expect(await logMilestone(db(), userA, id, 'completed', TODAY)).toBe(
+			'Playing',
+		);
+		const row = await getTracking(db(), userA, id);
+		expect(row?.completedOn).toBe('2023-05-05');
+		expect(row?.playStatus).toBe('Playing');
+	});
+
+	it('logs platinum after story completion without touching completed_on or started_on', async () => {
+		const id = await addGame(userA, 'Plat After Story', {
+			playStatus: 'Playing',
+			startedOn: '2024-01-01',
+			completedOn: '2024-06-01',
+		});
+		expect(await logMilestone(db(), userA, id, 'platinum', TODAY)).toBe(
+			'Platinum achieved',
+		);
+		const row = await getTracking(db(), userA, id);
+		expect(row?.platinumOn).toBe(TODAY);
+		expect(row?.completedOn).toBe('2024-06-01');
+		expect(row?.startedOn).toBe('2024-01-01');
+		expect(row?.playStatus).toBeNull();
+	});
+
+	it('rejects an unauthenticated POST with 401 JSON (requireAuth seam)', async () => {
+		const response = await postMilestone('whatever', {
+			milestone: 'completed',
+		});
+		expect(response.status).toBe(401);
+		expect(await response.json()).toEqual({ error: 'unauthorized' });
+	});
+
+	describe('through the route, with a real session', () => {
+		let cookie: string;
+		let sessionUser: string;
+
+		beforeAll(async () => {
+			cookie = await establishSession();
+			const [row] = await db()
+				.select()
+				.from(user)
+				.where(eq(user.email, ALLOWED_EMAIL))
+				.limit(1);
+			sessionUser = row.id;
+		});
+
+		it('logs a milestone and answers with the new effective state', async () => {
+			const id = await addGame(sessionUser, 'Routed Milestone', {
+				playStatus: 'Playing',
+			});
+			const response = await postMilestone(
+				id,
+				{ milestone: 'platinum' },
+				cookie,
+			);
+			expect(response.status).toBe(200);
+			expect(await response.json()).toEqual({
+				effectiveState: 'Platinum achieved',
+			});
+			// The route is the only path that resolves `today` from the real clock.
+			expect((await getTracking(db(), sessionUser, id))?.platinumOn).toBe(
+				new Date().toISOString().slice(0, 10),
+			);
+		});
+
+		it('logs story completion through the route (both enum members exercised)', async () => {
+			const id = await addGame(sessionUser, 'Routed Completion', {
+				playStatus: 'Playing',
+			});
+			const response = await postMilestone(
+				id,
+				{ milestone: 'completed' },
+				cookie,
+			);
+			expect(response.status).toBe(200);
+			expect(await response.json()).toEqual({
+				effectiveState: 'Story completed',
+			});
+		});
+
+		it('answers the FR-6 no-op through the route with the standing state', async () => {
+			const id = await addGame(sessionUser, 'Routed No-op', {
+				playStatus: 'Playing',
+				completedOn: '2023-05-05',
+			});
+			const response = await postMilestone(
+				id,
+				{ milestone: 'completed' },
+				cookie,
+			);
+			expect(response.status).toBe(200);
+			expect(await response.json()).toEqual({ effectiveState: 'Playing' });
+			expect((await getTracking(db(), sessionUser, id))?.completedOn).toBe(
+				'2023-05-05',
+			);
+		});
+
+		it('rejects a malformed (non-JSON) body with 400 and writes nothing', async () => {
+			const id = await addGame(sessionUser, 'Malformed Milestone', {
+				playStatus: 'Playing',
+			});
+			const response = await appFetch(`/api/games/${id}/milestones`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json', cookie },
+				body: 'not json',
+			});
+			expect(response.status).toBe(400);
+			expect(
+				(await getTracking(db(), sessionUser, id))?.completedOn,
+			).toBeNull();
+		});
+
+		it('rejects an unknown milestone value with 400 and writes nothing', async () => {
+			const id = await addGame(sessionUser, 'Bad Milestone', {
+				playStatus: 'Playing',
+			});
+			const response = await postMilestone(
+				id,
+				{ milestone: 'speedrun' },
+				cookie,
+			);
+			expect(response.status).toBe(400);
+			const row = await getTracking(db(), sessionUser, id);
+			expect(row?.playStatus).toBe('Playing');
+			expect(row?.completedOn).toBeNull();
+			expect(row?.platinumOn).toBeNull();
+		});
+
+		it('answers 404 for another user’s game and leaves their row untouched', async () => {
+			const id = await addGame(userB, 'B Milestone', { playStatus: 'Playing' });
+			const response = await postMilestone(
+				id,
+				{ milestone: 'completed' },
+				cookie,
+			);
+			expect(response.status).toBe(404);
+			expect(await response.json()).toEqual({ error: 'not found' });
+			const row = await getTracking(db(), userB, id);
+			expect(row?.playStatus).toBe('Playing');
+			expect(row?.completedOn).toBeNull();
 		});
 	});
 });

@@ -1,0 +1,56 @@
+/* Confirm gate for milestone writes (UX-DR14): a centered dialog over a dimmed
+   backdrop, accented in milestone silver — the gravity color, never a status. */
+
+.confirm-dialog__backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: var(--z-overlay);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: color-mix(in srgb, black 62%, transparent);
+}
+
+.confirm-dialog {
+	max-width: 22rem;
+	margin: var(--space-4);
+	padding: var(--space-4);
+	border: 1px solid color-mix(in srgb, var(--state-milestone) 45%, transparent);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface-raised);
+	box-shadow: 0 0 26px
+		color-mix(in srgb, var(--state-milestone) 22%, transparent);
+}
+
+.confirm-dialog__title {
+	margin: 0 0 var(--space-3);
+	color: var(--color-text-primary);
+	font-family: var(--font-ui);
+}
+
+.confirm-dialog__actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: var(--space-2);
+}
+
+.confirm-dialog__cancel,
+.confirm-dialog__confirm {
+	padding: var(--space-2) var(--space-3);
+	border-radius: var(--radius-sm);
+	font: inherit;
+	font-family: var(--font-ui);
+	cursor: pointer;
+}
+
+.confirm-dialog__cancel {
+	border: 1px solid var(--color-border-hairline);
+	background: none;
+	color: var(--color-text-primary);
+}
+
+.confirm-dialog__confirm {
+	border: 1px solid var(--state-milestone);
+	background: color-mix(in srgb, var(--state-milestone) 18%, transparent);
+	color: var(--state-milestone);
+}

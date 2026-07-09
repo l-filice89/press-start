@@ -20,6 +20,8 @@ function card(id: string, title: string): ShelfGame {
 		psPlusExtra: false,
 		hasCompleted: false,
 		hasPlatinum: false,
+		completedOn: null,
+		platinumOn: null,
 		releaseDate: null,
 		genres: [],
 	};

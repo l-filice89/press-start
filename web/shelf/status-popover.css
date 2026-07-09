@@ -67,3 +67,34 @@
 	margin-right: var(--space-2);
 	width: 1ch;
 }
+
+.status-popover__separator {
+	width: 100%;
+	margin: var(--space-2) 0;
+	border: 0;
+	border-top: 1px solid var(--color-border-hairline);
+}
+
+/* Milestone rows: gated actions, not statuses — milestone-silver glyph + text
+   (UX-DR14). The glyph aligns them with the radio rows' check column. */
+.status-popover__item--milestone {
+	color: var(--state-milestone);
+}
+
+.status-popover__item--milestone::before {
+	content: "◆";
+	margin-right: var(--space-2);
+	width: 1ch;
+}
+
+.status-popover__item--milestone[aria-disabled="true"] {
+	color: var(--color-text-secondary);
+	cursor: default;
+}
+
+.status-popover__item-date {
+	margin-left: auto;
+	padding-left: var(--space-3);
+	color: var(--color-text-secondary);
+	font-size: 0.85em;
+}

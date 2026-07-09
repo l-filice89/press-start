@@ -28,6 +28,8 @@ function game(over: Partial<ShelfGame> = {}): ShelfGame {
 		psPlusExtra: false,
 		hasCompleted: false,
 		hasPlatinum: false,
+		completedOn: null,
+		platinumOn: null,
 		releaseDate: null,
 		genres: [],
 		...over,
@@ -123,9 +125,11 @@ describe('StatusPopover', () => {
 		expect(
 			screen.getByRole('menuitemradio', { name: 'Up next' }),
 		).toHaveFocus();
+		// End reaches past the radios into the milestone rows — one traversal
+		// spans the whole menu.
 		await user.keyboard('{End}');
 		expect(
-			screen.getByRole('menuitemradio', { name: 'Dropped' }),
+			screen.getByRole('menuitem', { name: 'Platinum achieved' }),
 		).toHaveFocus();
 		await user.keyboard('{Home}');
 		expect(
@@ -212,6 +216,165 @@ describe('StatusPopover', () => {
 		);
 		// The racing second write never left the client.
 		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
+	it('lists two milestone menuitem rows after a separator, seven rows total', async () => {
+		const user = userEvent.setup();
+		renderPopover();
+		await user.click(pill());
+
+		const menu = screen.getByRole('menu');
+		expect(within(menu).getAllByRole('menuitemradio')).toHaveLength(5);
+		const milestones = within(menu).getAllByRole('menuitem');
+		expect(milestones.map((m) => m.textContent)).toEqual([
+			'Story completed',
+			'Platinum achieved',
+		]);
+		expect(within(menu).getByRole('separator')).toBeInTheDocument();
+		// Actions, not statuses: never part of the radio group's checked state.
+		for (const m of milestones) {
+			expect(m).not.toHaveAttribute('aria-checked');
+		}
+	});
+
+	it('gates a milestone behind the confirm dialog — no request before Confirm', async () => {
+		const user = userEvent.setup();
+		renderPopover();
+		await user.click(pill());
+		await user.click(screen.getByRole('menuitem', { name: 'Story completed' }));
+
+		// Menu closed, dialog open, and NOTHING has been written yet (FR-7).
+		expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+		expect(
+			screen.getByRole('dialog', { name: /Log Story completed/ }),
+		).toBeInTheDocument();
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it('confirming logs the milestone once and toasts without UNDO', async () => {
+		const user = userEvent.setup();
+		fetchMock.mockResolvedValue({
+			ok: true,
+			status: 200,
+			json: async () => ({ effectiveState: 'Story completed' }),
+		});
+		renderPopover();
+		await user.click(pill());
+		await user.click(screen.getByRole('menuitem', { name: 'Story completed' }));
+		await user.click(screen.getByRole('button', { name: 'Confirm' }));
+
+		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+		const [url, init] = fetchMock.mock.calls[0];
+		expect(url).toBe('/api/games/g1/milestones');
+		expect(init).toMatchObject({ method: 'POST' });
+		expect(JSON.parse(init.body)).toEqual({ milestone: 'completed' });
+
+		expect(await screen.findByTestId('toast')).toHaveTextContent(
+			'Bloodborne — Story completed',
+		);
+		// Confirm-gated already: no UNDO on milestone toasts.
+		expect(
+			screen.queryByRole('button', { name: 'Undo' }),
+		).not.toBeInTheDocument();
+	});
+
+	it('Escape on the dialog writes nothing and returns focus to the pill', async () => {
+		const user = userEvent.setup();
+		renderPopover();
+		await user.click(pill());
+		await user.click(
+			screen.getByRole('menuitem', { name: 'Platinum achieved' }),
+		);
+		await user.keyboard('{Escape}');
+
+		expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+		expect(fetchMock).not.toHaveBeenCalled();
+		expect(pill()).toHaveFocus();
+	});
+
+	it('Cancel writes nothing and returns focus to the pill', async () => {
+		const user = userEvent.setup();
+		renderPopover();
+		await user.click(pill());
+		await user.click(screen.getByRole('menuitem', { name: 'Story completed' }));
+		await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+		expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+		expect(fetchMock).not.toHaveBeenCalled();
+		expect(pill()).toHaveFocus();
+	});
+
+	it('renders an achieved milestone disabled with its date, and inert', async () => {
+		const user = userEvent.setup();
+		renderPopover(
+			game({
+				playStatus: 'Playing',
+				effectiveState: 'Playing',
+				hasCompleted: true,
+				completedOn: '2023-05-05',
+			}),
+		);
+		await user.click(pill());
+
+		const row = screen.getByRole('menuitem', { name: /Story completed/ });
+		expect(row).toHaveAttribute('aria-disabled', 'true');
+		expect(row).toHaveTextContent('2023-05-05');
+
+		// The first achievement stands: the row opens nothing and sends nothing —
+		// but it is not a silent dead-end; activating it says why.
+		await user.click(row);
+		expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+		expect(fetchMock).not.toHaveBeenCalled();
+		expect(await screen.findByTestId('toast')).toHaveTextContent(
+			'Story completed already logged on 2023-05-05.',
+		);
+	});
+
+	it('keeps the dialog open when a confirm races an in-flight write', async () => {
+		const user = userEvent.setup();
+		// A status PATCH that never settles keeps `isPending` true.
+		fetchMock.mockReturnValue(new Promise(() => {}));
+		renderPopover();
+
+		await user.click(pill());
+		await user.click(screen.getByRole('menuitemradio', { name: 'Playing' }));
+		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+		await user.click(pill());
+		await user.click(screen.getByRole('menuitem', { name: 'Story completed' }));
+		await user.click(screen.getByRole('button', { name: 'Confirm' }));
+
+		// The confirmed intent is NOT discarded: the dialog stays open so retrying
+		// is one tap, and the refusal is spoken.
+		expect(await screen.findByTestId('toast')).toHaveTextContent(
+			/Still saving Bloodborne/,
+		);
+		expect(
+			screen.getByRole('dialog', { name: /Log Story completed/ }),
+		).toBeInTheDocument();
+		// The milestone POST never left the client.
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
+	it('reaches the milestone rows by arrow traversal', async () => {
+		const user = userEvent.setup();
+		renderPopover(game({ playStatus: 'Dropped', effectiveState: 'Dropped' }));
+		await user.click(pill());
+
+		// From the checked last radio, ArrowDown crosses into the milestone rows…
+		await user.keyboard('{ArrowDown}');
+		expect(
+			screen.getByRole('menuitem', { name: 'Story completed' }),
+		).toHaveFocus();
+		await user.keyboard('{ArrowDown}');
+		expect(
+			screen.getByRole('menuitem', { name: 'Platinum achieved' }),
+		).toHaveFocus();
+		// …and wraps back around to the first radio.
+		await user.keyboard('{ArrowDown}');
+		expect(
+			screen.getByRole('menuitemradio', { name: 'Not started' }),
+		).toHaveFocus();
 	});
 
 	it('does not offer UNDO for a non-hiding status', async () => {

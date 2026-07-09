@@ -26,6 +26,8 @@ const shelfGameSchema = z.object({
 	psPlusExtra: z.boolean(),
 	hasCompleted: z.boolean(),
 	hasPlatinum: z.boolean(),
+	completedOn: z.string().nullable(),
+	platinumOn: z.string().nullable(),
 	releaseDate: z.string().nullable(),
 	genres: z.array(z.string()),
 });

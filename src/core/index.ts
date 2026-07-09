@@ -3,6 +3,7 @@ export * from './csv';
 export * from './derived-state';
 export * from './effective-state';
 export * from './igdb-match';
+export * from './milestone';
 export * from './notion-status';
 export * from './seed-reconcile';
 export * from './shelf';

@@ -42,6 +42,10 @@ export interface ShelfGame {
 	psPlusExtra: boolean;
 	hasCompleted: boolean;
 	hasPlatinum: boolean;
+	// The raw milestone dates ride along with the booleans: the status popover's
+	// already-achieved rows show *when* (Story 2.2), not just that.
+	completedOn: string | null;
+	platinumOn: string | null;
 	releaseDate: string | null;
 	genres: string[];
 }
@@ -72,6 +76,8 @@ function bakeCard(row: LibraryRow, genres: string[]): ShelfGame {
 		psPlusExtra: row.psPlusExtra,
 		hasCompleted: row.completedOn != null,
 		hasPlatinum: row.platinumOn != null,
+		completedOn: row.completedOn,
+		platinumOn: row.platinumOn,
 		releaseDate: row.releaseDate,
 		genres,
 	};
