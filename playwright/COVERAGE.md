@@ -62,3 +62,14 @@ it, or `skipped` with the reason. Epic 2 rows land with story 2.5.3.
 
 Epic 1's deferred 1.5h (prefers-reduced-motion) is closed by
 `epic2-detail.spec.ts` › reduced motion swaps the flip entry for a cross-fade.
+
+## Epic 3
+
+| AC | Coverage |
+|----|----------|
+| 3.1a State multiselect of live statuses; Genre multiselect of vocabulary | `epic3-filter.spec.ts` › state filter shows exactly the selected states…; › genre filter ORs within the group… (e2e asserts seeded genres appear as menu rows; the full four-status list and full-vocabulary listing are pinned in jsdom `FilterRow.test.tsx`) |
+| 3.1b OR within a group, AND across groups | `epic3-filter.spec.ts` › genre filter ORs within the group and ANDs against the state group |
+| 3.1c nothing selected → default set; any selection → exactly those states | `epic3-filter.spec.ts` › state filter shows exactly the selected states, highlights, and restores the default set |
+| 3.1d active filter entry visually highlighted | `epic3-filter.spec.ts` › state filter… (data-active trigger + aria-checked row asserted) |
+| 3.1 FR-18 ordering holds in filtered views | `epic3-filter.spec.ts` › a filtered view keeps state → owned → alpha ordering |
+| 3.1 search isolation (filters never leak into whole-library search) | `epic3-filter.spec.ts` › whole-library search ignores active shelf filters |

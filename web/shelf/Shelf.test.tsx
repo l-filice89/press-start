@@ -145,6 +145,50 @@ describe('Shelf', () => {
 		}
 	});
 
+	it('filters to exactly the selected states and restores the default set on deselect (Story 3.1)', async () => {
+		const user = userEvent.setup();
+		mockFetch([
+			card('a', 'Apex', { effectiveState: 'Playing', playStatus: 'Playing' }),
+			card('b', 'Bolt', { effectiveState: 'Paused', playStatus: 'Paused' }),
+			card('c', 'Cyan'),
+		]);
+		renderShelf();
+		await screen.findAllByTestId('shelf-card');
+
+		await user.click(screen.getByRole('button', { name: 'State' }));
+		await user.click(screen.getByRole('menuitemcheckbox', { name: 'Playing' }));
+
+		let cards = screen.getAllByTestId('shelf-card');
+		expect(cards).toHaveLength(1);
+		expect(cards[0]).toHaveTextContent('Apex');
+
+		// Second pick ORs within the group, preserving server order.
+		await user.click(screen.getByRole('menuitemcheckbox', { name: 'Paused' }));
+		cards = screen.getAllByTestId('shelf-card');
+		expect(cards.map((c) => c.textContent)).toEqual([
+			expect.stringContaining('Apex'),
+			expect.stringContaining('Bolt'),
+		]);
+
+		// Deselecting everything restores the default visible set.
+		await user.click(screen.getByRole('menuitemcheckbox', { name: 'Playing' }));
+		await user.click(screen.getByRole('menuitemcheckbox', { name: 'Paused' }));
+		expect(screen.getAllByTestId('shelf-card')).toHaveLength(3);
+	});
+
+	it('shows NO MATCH (never a blank shelf) when filters match nothing', async () => {
+		const user = userEvent.setup();
+		mockFetch([card('a', 'Apex', { effectiveState: 'Playing' })]);
+		renderShelf();
+		await screen.findAllByTestId('shelf-card');
+
+		await user.click(screen.getByRole('button', { name: 'State' }));
+		await user.click(screen.getByRole('menuitemcheckbox', { name: 'Paused' }));
+
+		expect(screen.queryAllByTestId('shelf-card')).toHaveLength(0);
+		expect(screen.getByText('NO MATCH')).toBeInTheDocument();
+	});
+
 	it('shows an alert if the shelf fails to load', async () => {
 		vi.stubGlobal(
 			'fetch',

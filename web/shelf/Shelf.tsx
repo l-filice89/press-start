@@ -1,9 +1,17 @@
 import { useQuery } from '@tanstack/react-query';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EmptyState } from '../components/EmptyState';
+import { useAnnounce } from '../components/LiveRegion';
 import { SkeletonGrid } from '../components/Skeleton';
 import { fetchShelf, type ShelfGame } from './api';
 import { Card } from './Card';
+import { FilterRow } from './FilterRow';
+import {
+	applyShelfFilter,
+	EMPTY_FILTER,
+	isFilterActive,
+	type ShelfFilter,
+} from './filters';
 import { useProgressiveList } from './useProgressiveList';
 import './shelf.css';
 
@@ -14,6 +22,10 @@ import './shelf.css';
  *
  * Ordering + hidden-state filtering happen server-side (AD-7); this component
  * never re-derives state — it renders what `/api/shelf` returns, in order.
+ * Story 3.1 layers State/Genre filtering on top as a pure, order-preserving
+ * subset of that payload (`applyShelfFilter`), so FR-18 ordering holds in
+ * every filtered view. The whole-library search is a separate query path and
+ * never sees this filter.
  */
 export function Shelf() {
 	const { data, isPending, isError } = useQuery({
@@ -34,7 +46,42 @@ export function Shelf() {
 	if (data.length === 0) {
 		return <EmptyState variant="insert-games" />;
 	}
-	return <ShelfGrid games={data} />;
+	return <FilteredShelf games={data} />;
+}
+
+/** Filter state + the filter row, between the shelf query and the grid. */
+function FilteredShelf({ games }: { games: ShelfGame[] }) {
+	const [filter, setFilter] = useState<ShelfFilter>(EMPTY_FILTER);
+	const announce = useAnnounce();
+	const visible = useMemo(
+		() => applyShelfFilter(games, filter),
+		[games, filter],
+	);
+
+	// Announce filter changes from the one filtered result the grid renders —
+	// a second applyShelfFilter call here would be duplicated logic waiting to
+	// diverge. Skips mount; refetches with an unchanged filter stay silent.
+	const lastAnnounced = useRef(filter);
+	useEffect(() => {
+		if (lastAnnounced.current === filter) return;
+		lastAnnounced.current = filter;
+		announce(
+			isFilterActive(filter)
+				? `Filters applied. Showing ${visible.length} of ${games.length} games.`
+				: 'Filters cleared.',
+		);
+	}, [filter, visible.length, games.length, announce]);
+
+	return (
+		<>
+			<FilterRow filter={filter} onChange={setFilter} />
+			{visible.length === 0 ? (
+				<EmptyState variant="no-match" />
+			) : (
+				<ShelfGrid games={visible} />
+			)}
+		</>
+	);
 }
 
 const PAGE_SIZE = 48;
