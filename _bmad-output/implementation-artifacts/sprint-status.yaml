@@ -77,7 +77,7 @@ development_status:
   epic-2-5-retrospective: done
 
   # Epic 3: Filter & Focus the Backlog
-  epic-3: done # 2026-07-10: reopened for 3.5/3.6 post-retro, both shipped same day; merge to main still open below
+  epic-3: done # 2026-07-10: reopened for 3.5/3.6 post-retro, both shipped same day; merged to main (PR #7, deca64d)
   3-1-filter-the-shelf-by-state-and-genre: done
   3-2-flag-pills-and-state-reveal-pills: done
   3-3-live-filter-summary-empty-state-responsive-filters: done
@@ -191,4 +191,4 @@ action_items:
   - epic: 3
     action: "Merge feat/epic-3/filter-focus-backlog to main through the CI OK gate"
     owner: "Luca"
-    status: open
+    status: done # 2026-07-10: PR #7 merged (deca64d), CI+CD green on main, branch deleted
