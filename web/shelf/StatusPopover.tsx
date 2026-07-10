@@ -1,11 +1,4 @@
-import {
-	useCallback,
-	useEffect,
-	useId,
-	useLayoutEffect,
-	useRef,
-	useState,
-} from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef } from 'react';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { PLAY_STATUSES, type PlayStatus, type ShelfGame } from './api';
 import { StatePill } from './StatePill';
@@ -34,9 +27,22 @@ import './status-popover.css';
  * All mutation/toast/confirm logic lives in `useTrackingMutations` — the one
  * seam this popover shares with the detail panel (AR-13/AR-21). Nothing here
  * recomputes effective state (AD-7).
+ *
+ * `open` is CONTROLLED by ShelfGrid (Story 3.6, AC3 — the 3.4 panel-hoist
+ * pattern): a refetch that re-chunks the rows remounts this component, and
+ * Card-local open-state would die with it. The menu DOM still remounts, but
+ * the hoisted boolean re-opens it and the `open`-keyed effects re-run
+ * (anchor, initial row focus) — the menu survives the write.
  */
-export function StatusPopover({ game }: { game: ShelfGame }) {
-	const [open, setOpen] = useState(false);
+export function StatusPopover({
+	game,
+	open,
+	onOpenChange,
+}: {
+	game: ShelfGame;
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+}) {
 	const pillRef = useRef<HTMLButtonElement>(null);
 	const menuRef = useRef<HTMLDivElement>(null);
 	const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -52,10 +58,13 @@ export function StatusPopover({ game }: { game: ShelfGame }) {
 		cancelConfirm,
 	} = useTrackingMutations(game, { onConfirmClose: focusPill });
 
-	const close = useCallback((returnFocus = true) => {
-		setOpen(false);
-		if (returnFocus) pillRef.current?.focus();
-	}, []);
+	const close = useCallback(
+		(returnFocus = true) => {
+			onOpenChange(false);
+			if (returnFocus) pillRef.current?.focus();
+		},
+		[onOpenChange],
+	);
 
 	// The checked row is the RAW play status, never the effective state: a
 	// replayed game reads `Playing` while carrying `completed_on`.
@@ -65,7 +74,11 @@ export function StatusPopover({ game }: { game: ShelfGame }) {
 
 	// Focus the checked row (or the first) once the menu is rendered. Keyed on
 	// `open` alone: a refetch that changes `checkedIndex` while the menu is open
-	// must not yank focus off whatever row the user has arrowed to.
+	// must not yank focus off whatever row the user has arrowed to. (A refetch
+	// that REMOUNTS this component — grid re-chunk, Story 3.6 — re-runs this on
+	// the fresh instance: the menu survives but the arrowed position resets to
+	// the checked row. Known trade-off; hoisting the row index too is the
+	// upgrade path if it ever bites.)
 	// `preventScroll` because a menu opened near the viewport edge would
 	// otherwise scroll itself into view, and the scroll handler below reads any
 	// scroll as "outside activity" and closes the menu we just opened.
@@ -159,7 +172,7 @@ export function StatusPopover({ game }: { game: ShelfGame }) {
 		if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
 			e.preventDefault();
 			e.stopPropagation();
-			setOpen(true);
+			onOpenChange(true);
 		} else if (e.key === 'Escape') {
 			// Leave "widget mode": hand focus back to the owning gridcell.
 			e.stopPropagation();
@@ -217,7 +230,7 @@ export function StatusPopover({ game }: { game: ShelfGame }) {
 				aria-controls={open ? menuId : undefined}
 				aria-label={`${game.effectiveState} — change status`}
 				data-testid="status-pill-button"
-				onClick={() => (open ? close() : setOpen(true))}
+				onClick={() => (open ? close() : onOpenChange(true))}
 				onKeyDown={onPillKeyDown}
 			>
 				<StatePill state={game.effectiveState} />

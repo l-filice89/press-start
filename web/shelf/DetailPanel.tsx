@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { FOCUSABLE_SELECTOR } from '../components/focusable';
+import { useModalTrap } from '../components/useModalTrap';
 import {
 	type DateEdits,
 	fetchGenreVocabulary,
@@ -128,49 +128,14 @@ export function DetailPanel({
 			window.matchMedia('(prefers-reduced-motion: reduce)').matches,
 	);
 
-	// Focus moves into the dialog on open.
-	useEffect(() => {
-		closeRef.current?.focus();
-	}, []);
-
-	// Escape must work no matter where focus sits (same rationale as
-	// ConfirmDialog) — but while the milestone confirm is stacked on top, Escape
-	// belongs to it alone, so this handler stands down.
-	const onCloseRef = useRef(onClose);
-	onCloseRef.current = onClose;
-	const confirmingRef = useRef(confirming);
-	confirmingRef.current = confirming;
-	useEffect(() => {
-		const onDocKeyDown = (e: KeyboardEvent) => {
-			if (e.key !== 'Escape' || confirmingRef.current) return;
-			e.preventDefault();
-			e.stopPropagation();
-			onCloseRef.current();
-		};
-		document.addEventListener('keydown', onDocKeyDown, true);
-		return () => document.removeEventListener('keydown', onDocKeyDown, true);
-	}, []);
-
-	const onKeyDown = (e: React.KeyboardEvent) => {
-		if (e.key !== 'Tab') return;
-		// N-focusable trap: Tab cycles inside the dialog, never out of it. The
-		// shared selector (focusable.ts) includes the Story-2.4 form controls and
-		// excludes roving-tabindex radios — they're reached by arrow keys, not
-		// Tab, and counting them would put the trap's boundaries on elements Tab
-		// can never land on.
-		const focusables =
-			dialogRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
-		if (!focusables?.length) return;
-		const first = focusables[0];
-		const last = focusables[focusables.length - 1];
-		if (e.shiftKey && document.activeElement === first) {
-			e.preventDefault();
-			last.focus();
-		} else if (!e.shiftKey && document.activeElement === last) {
-			e.preventDefault();
-			first.focus();
-		}
-	};
+	// Shared modal scaffold (Story 3.5): the close button takes focus on open;
+	// Escape resolves to onClose from anywhere — but while the milestone
+	// confirm is stacked on top, Escape belongs to it alone (`enabled` stands
+	// this trap's Escape down).
+	const onKeyDown = useModalTrap(dialogRef, onClose, {
+		enabled: !confirming,
+		initialFocusRef: closeRef,
+	});
 
 	// ARIA radio pattern (roving tabindex): the group is one tab stop — the
 	// checked status (or the first) — and arrows move focus between statuses

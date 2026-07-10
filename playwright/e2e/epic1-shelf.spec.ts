@@ -6,6 +6,7 @@ import {
 	type SeedGame,
 } from '../support/factories/game-factory';
 import { deleteGames, seedGames } from '../support/helpers/d1';
+import { loadAllPages } from '../support/helpers/shelf';
 import { expect, test } from '../support/merged-fixtures';
 
 /**
@@ -15,31 +16,6 @@ import { expect, test } from '../support/merged-fixtures';
  * unique ids/titles and delete them in finally; BASELINE_GAMES (Alpha=Playing,
  * Beta=Up next, Gamma=Not started) are read-only shared fixture.
  */
-
-/**
- * Reveals every client page: scrolls the IntersectionObserver sentinel until
- * the shelf removes it (rendered when hasMore only — Shelf.tsx:260).
- */
-async function loadAllPages(page: Page): Promise<void> {
-	const cards = page.getByTestId('shelf-card');
-	await expect(cards.first()).toBeVisible();
-	const sentinel = page.locator('.shelf__sentinel');
-	for (;;) {
-		if ((await sentinel.count()) === 0) return; // no more pages
-		const before = await cards.count();
-		await sentinel.scrollIntoViewIfNeeded();
-		await expect
-			.poll(
-				async () =>
-					(await cards.count()) > before || (await sentinel.count()) === 0,
-				{
-					message: 'next page to render after sentinel scroll',
-					timeout: 10_000,
-				},
-			)
-			.toBe(true);
-	}
-}
 
 /** aria-labels of shelf cards ("{title} — {state}"), filtered to `titles`, in DOM order. */
 async function cardOrder(page: Page, titles: string[]): Promise<string[]> {
@@ -217,8 +193,11 @@ test('empty library shows INSERT GAMES with no dead CTAs (1.7e)', async ({
 	// The shared per-run fixture is never empty, so this client-render state
 	// is unreachable against real data — stub the one response (justified
 	// interception per story 2.5.2 spec; the response shape is Vitest-pinned).
-	await page.route('**/api/shelf', (route) =>
-		route.fulfill({ json: { games: [] } }),
+	// URL predicate, not a glob — the shelf query carries `?include=hidden`
+	// since Story 3.2 and a glob `?` is a single-char wildcard.
+	await page.route(
+		(url) => url.pathname === '/api/shelf',
+		(route) => route.fulfill({ json: { games: [] } }),
 	);
 	await page.goto('/');
 	const empty = page.getByTestId('empty-state');
@@ -233,10 +212,13 @@ test('first load shows skeletons until the shelf arrives (1.7e)', async ({
 }) => {
 	// Local D1 answers too fast to observe the pending state — delay the one
 	// response (justified interception per story 2.5.2 spec).
-	await page.route('**/api/shelf', async (route) => {
-		await new Promise((r) => setTimeout(r, 1_200));
-		await route.fallback();
-	});
+	await page.route(
+		(url) => url.pathname === '/api/shelf',
+		async (route) => {
+			await new Promise((r) => setTimeout(r, 1_200));
+			await route.fallback();
+		},
+	);
 	await page.goto('/');
 	await expect(page.getByTestId('skeleton-grid')).toBeVisible();
 	await expect(page.getByTestId('shelf-card').first()).toBeVisible();

@@ -8,12 +8,27 @@
 import type { EffectiveState } from './types';
 
 /**
- * The default backlog view order (FR-17/18): live play statuses only, in
- * Playing→Paused→Up next→Not started priority. Completion milestones
- * (`Story completed`/`Platinum achieved`) and `Dropped` are NOT here — they are
- * hidden from the default shelf.
+ * Shelf state priority (FR-17/18): live play statuses first, in
+ * Playing→Paused→Up next→Not started priority. The backlog-hidden states rank
+ * after every live one — they only appear when a reveal filter (Story 3.2)
+ * asks for the unfiltered ordering — milestones grouped before `Dropped`.
  */
 export const SHELF_STATE_ORDER: readonly EffectiveState[] = [
+	'Playing',
+	'Paused',
+	'Up next',
+	'Not started',
+	'Story completed',
+	'Platinum achieved',
+	'Dropped',
+];
+
+/**
+ * The four live statuses of the default (unfiltered) shelf view. Deliberately
+ * NOT derived from `SHELF_STATE_ORDER` — the order list now ranks hidden
+ * states too, and visibility must not widen when ordering does.
+ */
+const DEFAULT_VISIBLE_STATES: readonly EffectiveState[] = [
 	'Playing',
 	'Paused',
 	'Up next',
@@ -22,12 +37,11 @@ export const SHELF_STATE_ORDER: readonly EffectiveState[] = [
 
 /**
  * Whether a game with this effective state shows on the default (unfiltered)
- * shelf. Only the four live statuses in `SHELF_STATE_ORDER` do; `Story
- * completed`, `Platinum achieved`, and `Dropped` are the backlog-hidden states
- * (FR-4/17).
+ * shelf. Only the four live statuses do; `Story completed`,
+ * `Platinum achieved`, and `Dropped` are the backlog-hidden states (FR-4/17).
  */
 export function isDefaultShelfVisible(state: EffectiveState): boolean {
-	return SHELF_STATE_ORDER.includes(state);
+	return DEFAULT_VISIBLE_STATES.includes(state);
 }
 
 /** The minimal shape shelf ordering needs — effective state + ownership + title. */
@@ -38,9 +52,9 @@ export interface ShelfSortable {
 }
 
 /**
- * Sort rank for the default shelf. A visible state maps to its index in
- * `SHELF_STATE_ORDER`; a hidden state sorts after all visible ones (it only
- * matters if a caller sorts an unfiltered set — `getShelf` filters first).
+ * Sort rank: the state's index in `SHELF_STATE_ORDER`. Every effective state
+ * is listed, so the fallback is defensive only (a future state added to the
+ * vocabulary but not the order list sorts last instead of first).
  */
 function shelfRank(state: EffectiveState): number {
 	const index = SHELF_STATE_ORDER.indexOf(state);

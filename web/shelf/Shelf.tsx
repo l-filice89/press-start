@@ -1,9 +1,19 @@
 import { useQuery } from '@tanstack/react-query';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EmptyState } from '../components/EmptyState';
+import { useAnnounce } from '../components/LiveRegion';
 import { SkeletonGrid } from '../components/Skeleton';
 import { fetchShelf, type ShelfGame } from './api';
 import { Card } from './Card';
+import { DetailPanel } from './DetailPanel';
+import { FilterRow } from './FilterRow';
+import {
+	applyShelfFilter,
+	EMPTY_FILTER,
+	isFilterActive,
+	type ShelfFilter,
+	summarizeFilterText,
+} from './filters';
 import { useProgressiveList } from './useProgressiveList';
 import './shelf.css';
 
@@ -14,6 +24,10 @@ import './shelf.css';
  *
  * Ordering + hidden-state filtering happen server-side (AD-7); this component
  * never re-derives state — it renders what `/api/shelf` returns, in order.
+ * Story 3.1 layers State/Genre filtering on top as a pure, order-preserving
+ * subset of that payload (`applyShelfFilter`), so FR-18 ordering holds in
+ * every filtered view. The whole-library search is a separate query path and
+ * never sees this filter.
  */
 export function Shelf() {
 	const { data, isPending, isError } = useQuery({
@@ -34,7 +48,118 @@ export function Shelf() {
 	if (data.length === 0) {
 		return <EmptyState variant="insert-games" />;
 	}
-	return <ShelfGrid games={data} />;
+	return <FilteredShelf games={data} />;
+}
+
+/** Filter state + the filter row, between the shelf query and the grid. */
+function FilteredShelf({ games }: { games: ShelfGame[] }) {
+	const [filter, setFilter] = useState<ShelfFilter>(EMPTY_FILTER);
+	const announce = useAnnounce();
+	const visible = useMemo(
+		() => applyShelfFilter(games, filter),
+		[games, filter],
+	);
+	// The payload is the whole library (hidden states included) — user-facing
+	// counts and the "is the backlog empty" judgment use the default set.
+	const defaultCount = useMemo(
+		() => applyShelfFilter(games, EMPTY_FILTER).length,
+		[games],
+	);
+
+	// Grid↔empty-state focus handoff (Story 3.5; deferred from 3.4): when the
+	// visible set empties, ShelfGrid unmounts WITH its focus-restore effect —
+	// the browser silently drops focus to <body>. Land it deliberately on the
+	// empty state's action (Clear filters) or its headline. Symmetrically,
+	// activating Clear filters unmounts the empty state under the focused
+	// button — land back on the grid. `shelfHadFocus` is armed by focus/blur
+	// capture on the wrapper below (same technique as ShelfGrid's restore):
+	// a node unmounting fires NO blur, so the flag survives exactly when focus
+	// died with the swap — and a user parked in the filter row, on a toast, or
+	// on dead page background never gets focus stolen.
+	const shelfHadFocus = useRef(false);
+	const prevView = useRef<'none' | 'grid' | 'empty'>('none');
+	useEffect(() => {
+		const view = visible.length > 0 ? 'grid' : 'empty';
+		const focusFell =
+			shelfHadFocus.current && document.activeElement === document.body;
+		if (view === 'empty' && prevView.current === 'grid' && focusFell) {
+			const empty = document.querySelector('[data-testid="empty-state"]');
+			const target =
+				empty?.querySelector<HTMLElement>('.empty-state__action') ??
+				empty?.querySelector<HTMLElement>('.empty-state__headline');
+			target?.focus();
+		} else if (view === 'grid' && prevView.current === 'empty' && focusFell) {
+			document
+				.querySelector<HTMLElement>('[data-testid="shelf-grid"]')
+				?.focus();
+		}
+		prevView.current = view;
+	}, [visible.length]);
+
+	// Announce filter changes from the one filtered result the grid renders —
+	// a second applyShelfFilter call here would be duplicated logic waiting to
+	// diverge. Skips mount; refetches with an unchanged filter stay silent.
+	const lastAnnounced = useRef(filter);
+	useEffect(() => {
+		if (lastAnnounced.current === filter) return;
+		lastAnnounced.current = filter;
+		// Denominator: a reveal view selects from the WHOLE library (hidden
+		// states included) — "3 of 12" against the default set would exclude the
+		// very games being shown. Non-reveal filters narrow the default set.
+		const total = filter.reveals.length > 0 ? games.length : defaultCount;
+		announce(
+			isFilterActive(filter)
+				? `Filters applied. ${summarizeFilterText(filter)} ${visible.length} of ${total}.`
+				: 'Filters cleared.',
+		);
+	}, [filter, visible.length, defaultCount, games.length, announce]);
+
+	return (
+		<>
+			<FilterRow
+				filter={filter}
+				onChange={setFilter}
+				visibleCount={visible.length}
+			/>
+			{/* display:contents wrapper: arms the handoff flag while focus lives
+			    anywhere in the grid OR the empty state (Clear filters included, so
+			    the reverse handoff works). Unmounts fire no blur — that's the
+			    signal the handoff effect reads. */}
+			<div
+				style={{ display: 'contents' }}
+				onFocusCapture={() => {
+					shelfHadFocus.current = true;
+				}}
+				onBlurCapture={(e) => {
+					if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+						shelfHadFocus.current = false;
+					}
+				}}
+			>
+				{visible.length === 0 ? (
+					// "NO MATCH" is a filter outcome; a library whose every game is
+					// hidden (all completed/dropped) with no filter active is an empty
+					// backlog, not a failed filter. The filter outcome offers the way
+					// back out (UX-DR18).
+					isFilterActive(filter) ? (
+						<EmptyState
+							variant="no-match"
+							actions={[
+								{
+									label: 'Clear filters',
+									onClick: () => setFilter(EMPTY_FILTER),
+								},
+							]}
+						/>
+					) : (
+						<EmptyState variant="insert-games" />
+					)
+				) : (
+					<ShelfGrid games={visible} />
+				)}
+			</div>
+		</>
+	);
 }
 
 const PAGE_SIZE = 48;
@@ -78,6 +203,66 @@ function ShelfGrid({ games }: { games: ShelfGame[] }) {
 	const sentinelRef = useRef<HTMLDivElement | null>(null);
 	// Only steal focus after a keyboard move — never on mount or refetch.
 	const pendingFocus = useRef(false);
+
+	// Open-detail state lives HERE, not in Card (Story 3.4): a refetch that
+	// re-chunks the rows remounts Cards, and a panel owned by one would die
+	// mid-interaction. One panel renders below, looked up by id — so it also
+	// re-renders with fresh data after every refetch.
+	const [openGameId, setOpenGameId] = useState<string | null>(null);
+	// Same hoist for the status-popover menu (Story 3.6, AC3): the open menu's
+	// Card remounts on any refetch re-chunk — the boolean living here re-opens
+	// it on the remounted Card. Single id: at most one menu open at a time.
+	const [openStatusGameId, setOpenStatusGameId] = useState<string | null>(null);
+	// Stale-id cleanup (the other half of the 3.4 pattern): if the open-menu
+	// game leaves the rendered set, clear the id — otherwise the menu would
+	// spontaneously re-open and steal focus when the game reappears later.
+	useEffect(() => {
+		if (openStatusGameId && !visible.some((g) => g.id === openStatusGameId)) {
+			setOpenStatusGameId(null);
+		}
+	}, [visible, openStatusGameId]);
+	// Look up in the FULL list, not the progressive window: a write that
+	// reorders the open game past the rendered page must not kill its panel.
+	const openGame = openGameId
+		? games.find((g) => g.id === openGameId)
+		: undefined;
+	const closeDetail = useCallback(() => {
+		// Return focus to the owning gridcell (UX-DR19) — by game id, not a
+		// captured index: the grid may have re-chunked while the panel was open.
+		// Focus first, then clear state (no side effects inside the updater).
+		const cell = openGameId
+			? gridRef.current?.querySelector<HTMLElement>(
+					`[role="gridcell"][data-game-id="${CSS.escape(openGameId)}"]`,
+				)
+			: null;
+		(cell ?? gridRef.current)?.focus();
+		setOpenGameId(null);
+	}, [openGameId]);
+
+	// A lookup miss (the open game left the filtered list outside the onHidden
+	// path — e.g. removed by another actor's refetch) must CLOSE deliberately:
+	// clearing the stale id stops the dialog resurrecting when the game
+	// reappears, and the focus handoff keeps the user off <body>.
+	useEffect(() => {
+		if (openGameId && !openGame) closeDetail();
+	}, [openGameId, openGame, closeDetail]);
+
+	// Focus restoration (Story 3.4, AC1+AC3): when the focused card unmounts —
+	// a resize re-chunk moving it across row parents, or a write removing it
+	// from the visible set — browsers drop focus to <body> with NO blur event,
+	// so the armed flag survives the unmount and this post-commit effect can
+	// land focus deliberately: the same/neighbor card at the clamped index, or
+	// the grid container itself. Tab-ing away (toast, panel, header) fires blur
+	// capture and disarms it, so this never steals focus from other surfaces.
+	const gridHadFocus = useRef(false);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: visible/columnCount identity changes are the re-chunk/unmount triggers this effect exists to observe.
+	useEffect(() => {
+		if (!gridHadFocus.current) return;
+		if (gridRef.current?.contains(document.activeElement)) return;
+		const target = cardRefs.current[Math.min(focusedIndex, visible.length - 1)];
+		if (target) target.focus();
+		else gridRef.current?.focus();
+	}, [visible, columnCount, focusedIndex]);
 
 	// Keep the focused index in range as the visible window shrinks/grows.
 	useEffect(() => {
@@ -230,6 +415,27 @@ function ShelfGrid({ games }: { games: ShelfGame[] }) {
 				role="grid"
 				aria-label="Your game shelf"
 				data-testid="shelf-grid"
+				tabIndex={-1}
+				onFocusCapture={(e) => {
+					gridHadFocus.current = true;
+					// Keep the roving index synced with REAL focus: a pointer click
+					// focuses a gridcell without going through moveFocus, and the
+					// restore-on-unmount path relies on focusedIndex being truthful.
+					const cell = (e.target as HTMLElement).closest<HTMLDivElement>(
+						'[role="gridcell"]',
+					);
+					if (cell) {
+						const index = cardRefs.current.indexOf(cell);
+						if (index !== -1) setFocusedIndex(index);
+					}
+				}}
+				onBlurCapture={(e) => {
+					// Deliberate focus moves (toast, panel, header) disarm restoration;
+					// an unmount of the focused node fires NO blur, leaving it armed.
+					if (!gridRef.current?.contains(e.relatedTarget as Node | null)) {
+						gridHadFocus.current = false;
+					}
+				}}
 			>
 				{rows.map((rowGames, rowIndex) => (
 					/* biome-ignore lint/a11y/useSemanticElements: ARIA grid row, not a table row */
@@ -251,6 +457,11 @@ function ShelfGrid({ games }: { games: ShelfGame[] }) {
 										cardRefs.current[index] = el;
 									}}
 									onKeyDown={onCardKeyDown(index)}
+									onOpenDetail={setOpenGameId}
+									statusMenuOpen={game.id === openStatusGameId}
+									onStatusMenuOpenChange={(menuOpen) =>
+										setOpenStatusGameId(menuOpen ? game.id : null)
+									}
 								/>
 							);
 						})}
@@ -260,6 +471,10 @@ function ShelfGrid({ games }: { games: ShelfGame[] }) {
 			{supportsObserver && progressive.hasMore && (
 				<div ref={sentinelRef} className="shelf__sentinel" aria-hidden="true" />
 			)}
+			{/* One panel for the whole grid: it survives any row re-chunk, and the
+			    id lookup feeds it fresh data after every refetch. A lookup miss
+			    (game left the visible set outside the onHidden path) unmounts it. */}
+			{openGame && <DetailPanel game={openGame} onClose={closeDetail} />}
 		</div>
 	);
 }

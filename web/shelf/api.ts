@@ -51,6 +51,7 @@ export const shelfGameSchema = z.object({
 	owned: z.boolean(),
 	released: z.boolean(),
 	wishlisted: z.boolean(),
+	playableNow: z.boolean(),
 	psPlusExtra: z.boolean(),
 	hasCompleted: z.boolean(),
 	hasPlatinum: z.boolean(),
@@ -215,9 +216,13 @@ export async function fetchGenreVocabulary(
 	return genresResponseSchema.parse(body).genres;
 }
 
-/** The default backlog shelf (server-ordered, hidden states removed). */
+/**
+ * The whole ordered library (Story 3.2): live statuses first, hidden states
+ * (milestones, Dropped) ranked after. The client filter derives the default
+ * visible set; reveal pills OR hidden states back in.
+ */
 export function fetchShelf(signal?: AbortSignal): Promise<ShelfGame[]> {
-	return fetchGames('/api/shelf', signal);
+	return fetchGames('/api/shelf?include=hidden', signal);
 }
 
 /** The dedicated whole-library search (matches every game, ignores filters). */

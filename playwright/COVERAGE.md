@@ -62,3 +62,38 @@ it, or `skipped` with the reason. Epic 2 rows land with story 2.5.3.
 
 Epic 1's deferred 1.5h (prefers-reduced-motion) is closed by
 `epic2-detail.spec.ts` › reduced motion swaps the flip entry for a cross-fade.
+
+## Epic 3
+
+| AC | Coverage |
+|----|----------|
+| 3.1a State multiselect of live statuses; Genre multiselect of vocabulary | `epic3-filter.spec.ts` › state filter shows exactly the selected states…; › genre filter ORs within the group… (e2e asserts seeded genres appear as menu rows; the full four-status list and full-vocabulary listing are pinned in jsdom `FilterRow.test.tsx`) |
+| 3.1b OR within a group, AND across groups | `epic3-filter.spec.ts` › genre filter ORs within the group and ANDs against the state group |
+| 3.1c nothing selected → default set; any selection → exactly those states | `epic3-filter.spec.ts` › state filter shows exactly the selected states, highlights, and restores the default set |
+| 3.1d active filter entry visually highlighted | `epic3-filter.spec.ts` › state filter… (data-active trigger + aria-checked row asserted) |
+| 3.1 FR-18 ordering holds in filtered views | `epic3-filter.spec.ts` › a filtered view keeps state → owned → alpha ordering |
+| 3.1 search isolation (filters never leak into whole-library search) | `epic3-filter.spec.ts` › whole-library search ignores active shelf filters |
+| 3.2a Flag pills Owned/Wishlisted/Released/Playable now, each its own AND group | `epic3-reveal.spec.ts` › flag pills are their own AND groups (Wishlisted + State AND asserted; all four pills' pressed state pinned in jsdom `FilterRow.test.tsx`) |
+| 3.2b reveal pill shows its hidden state (semantics amended by 3.5 — exclusive view) | superseded by 3.5a — `epic3-reveal.spec.ts` › a reveal pill is an exclusive view (all three pills pinned in jsdom + `filters.test.ts`) |
+| 3.2c solid pills narrow, dashed pills reveal | `epic3-reveal.spec.ts` › a reveal pill… / › flag pills… (modifier classes asserted; the dashed border itself is static CSS) |
+| 3.2d active pill glows/highlights | `epic3-reveal.spec.ts` › a reveal pill… (aria-pressed + data-active asserted; glow itself is static CSS) |
+| 3.2e UNDO restores auto-cleared (null) status through the invariant write path | `epic3-reveal.spec.ts` › UNDO after dropping a revealed milestone-only card restores the null status |
+| 3.2f panel on already-hidden game survives a no-visibility-change milestone write | transition logic pinned in jsdom `DetailPanel.test.tsx` (stays open, hidden→hidden); `epic3-reveal.spec.ts` › milestone write on a revealed hidden game… drives the flow e2e with reopen-based asserts — a direct stays-open assert is unreliable until Story 3.4 hoists panel state (epic2-detail NOTE convention) and 3.4 converts it |
+| 3.3a live summary sentence with literal or/and words, tinted connectors | `epic3-summary.spec.ts` › desktop shows the inline row with a live summary… (words + both connector tint classes asserted; exact colors are static CSS) |
+| 3.3b NO MATCH empty state with Clear filters | `epic3-summary.spec.ts` › NO MATCH offers Clear filters and it restores the default set |
+| 3.3c phone Filters button + badge → grouped bottom sheet with Show N games; desktop full row inline | `epic3-summary.spec.ts` › phone: Filters button + badge opens the grouped sheet…; desktop delta asserted in the summary test |
+| 3.4a focus survives resize re-chunk | `epic3-focus.spec.ts` › keyboard focus survives a viewport resize that re-chunks the ARIA rows (restoration path also jsdom-pinned in `Shelf.test.tsx`) |
+| 3.4b login swap focuses the form + announces | `epic3-focus.spec.ts` › signing out moves focus into the login form and announces the swap (fresh-session isolation; 401 path shares the same gate — jsdom `Login.test.tsx` pins the mount effect) |
+| 3.4c focus lands deliberately when a card leaves the shelf; UNDO Tab-reachable | `epic3-focus.spec.ts` › focus lands on a neighbor after Dropped removes the focused card |
+| 3.4d open panel survives refetch re-chunk | direct stays-open asserts converted across `epic2-detail.spec.ts` (dates/ownership/genres) and `epic3-reveal.spec.ts`; jsdom `Shelf.test.tsx` pins the hoist |
+| 3.4e toast UNDO respects the in-flight guard | jsdom `StatusPopover.test.tsx` › toast UNDO during a pending write toasts Still saving (no reliable e2e flow: needs a write held in flight, which the real Worker answers too fast to pin) |
+| 3.5a reveal pill = exclusive view; State group replaced, selections clear | `epic3-reveal.spec.ts` › a reveal pill is an exclusive view: only the hidden state(s) show, states clear (mutual exclusion asserted in BOTH directions; exclusive predicate + handler clears pinned in jsdom `filters.test.ts`/`FilterRow.test.tsx`/`Shelf.test.tsx`) |
+| 3.5b multiple reveal pills OR among themselves | `epic3-reveal.spec.ts` › a reveal pill is an exclusive view… (Completed + Dropped both visible; pinned in `filters.test.ts`) |
+| 3.5c Genre/Flags still AND with an active reveal view | `epic3-reveal.spec.ts` › flag selections AND with an exclusive reveal view (genre×reveal AND pinned in jsdom `filters.test.ts` — same predicate path as flags) |
+| 3.5d summary states the reveal view literally, no live-status enumeration | `epic3-summary.spec.ts` › an exclusive reveal view is stated literally in the summary |
+| 3.5e empty reveal/filter view: focus lands on Clear filters or the heading, never `<body>` | `epic3-focus.spec.ts` › focus hands off to Clear filters when the last visible card leaves the shelf (headline fallback + reverse grid-return handoff pinned in jsdom `Shelf.test.tsx` — no e2e flow renders an actionless empty state without emptying the shared parallel DB) |
+| 3.5f one shared focus-trap for ConfirmDialog/DetailPanel/FilterSheet | refactor with no new user flow — existing trap tests (jsdom `ConfirmDialog`/`DetailPanel`/`FilterRow` suites + `epic2-detail.spec.ts` trap/Escape tests) pin the unchanged behavior over `useModalTrap` |
+| 3.5g loadAllPages fold-position fix in the two flaky epic2 asserts | `epic2-detail.spec.ts` › backdrop click dismisses…; `epic2-tracking.spec.ts` › Dropped shows an UNDO toast… (fix is in the tests themselves) |
+| 3.6a every tracking write invalidates `['shelf']` AND `['shelf-search']` | jsdom `StatusPopover.test.tsx` › a status write invalidates the shelf-search query alongside the shelf (pins the invalidation; the refetch-on-invalidate of an active query is react-query's own contract. No e2e: the listbox is read-only and closes on blur — an open-listbox-during-write flow can't be driven deterministically) |
+| 3.6b stale toast UNDO cannot overwrite a newer settled write | jsdom `StatusPopover.test.tsx` › toast UNDO after a settled newer write expires and writes nothing (no reliable e2e flow: needs two writes + a live toast raced against the real Worker's response timing — same reason as 3.4e) |
+| 3.6c open status-popover menu survives a refetch re-chunk; retry loop removed | jsdom `Shelf.test.tsx` › keeps the status menu open… (menu identity asserted) + › does not resurrect a status menu…; the `epic2-tracking.spec.ts` helper now opens with a plain click (retry loop deleted) — regression signal is that suite flaking again |

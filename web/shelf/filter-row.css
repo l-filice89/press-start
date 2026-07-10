@@ -1,0 +1,273 @@
+/* The shelf filter row (Story 3.1). Two multiselect dropdown triggers; active
+   triggers highlight with accent ink on a lit surface (FR-22, AA contrast —
+   dark ink on neon, never white-on-neon). Menu chrome mirrors the status
+   popover so the two read as one system. */
+
+.filter-row {
+	margin-bottom: var(--space-4);
+}
+
+/* Desktop: the full inline row + summary sentence. Phone (≤600px): a single
+   Filters button opens the bottom sheet instead (UX-DR26). */
+.filter-row__desktop {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2);
+}
+
+.filter-row__sheet-trigger {
+	display: none;
+	align-items: center;
+	gap: var(--space-2);
+	padding: var(--space-2) var(--space-3);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface-raised);
+	color: var(--color-text-primary);
+	font-family: var(--font-ui);
+	font-size: 0.9rem;
+	cursor: pointer;
+}
+
+.filter-row__sheet-trigger[data-active] {
+	border-color: var(--color-accent-glow);
+	background: color-mix(in srgb, var(--color-accent-glow) 18%, transparent);
+}
+
+@media (max-width: 600px) {
+	.filter-row__desktop {
+		display: none;
+	}
+
+	.filter-row__sheet-trigger {
+		display: inline-flex;
+	}
+}
+
+/* The live summary sentence (Story 3.3, UX-DR23): literal words, connector
+   tints redundant to them. AA contrast: the -ink magenta variant on dark. */
+.filter-summary {
+	margin: var(--space-2) 0 0;
+	color: var(--color-text-secondary);
+	font-family: var(--font-ui);
+	font-size: 0.9rem;
+}
+
+.filter-summary__or {
+	color: var(--color-accent-glow);
+}
+
+.filter-summary__and {
+	color: var(--color-heat-magenta-ink);
+}
+
+/* Phone bottom sheet (UX-DR26). */
+.filter-sheet__backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: var(--z-overlay);
+	display: flex;
+	align-items: flex-end;
+	background: color-mix(in srgb, var(--color-void) 70%, transparent);
+}
+
+.filter-sheet {
+	width: 100%;
+	max-height: 80vh;
+	overflow-y: auto;
+	padding: var(--space-4);
+	padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+	border-top: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+	background: var(--color-surface-raised);
+}
+
+.filter-sheet__title {
+	margin: 0 0 var(--space-3);
+	color: var(--color-text-primary);
+	font-family: var(--font-display);
+	text-transform: uppercase;
+	font-size: 0.9rem;
+	letter-spacing: 0.08em;
+}
+
+.filter-sheet__group {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+	margin-bottom: var(--space-4);
+}
+
+.filter-sheet__group-label {
+	flex-basis: 100%;
+	margin: 0 0 var(--space-1);
+	color: var(--color-text-secondary);
+	font-family: var(--font-ui);
+	font-size: 0.8rem;
+}
+
+.filter-sheet__option {
+	padding: var(--space-2) var(--space-3);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-pill);
+	background: none;
+	color: var(--color-text-primary);
+	font-family: var(--font-ui);
+	font-size: 0.9rem;
+	cursor: pointer;
+}
+
+.filter-sheet__option[data-active] {
+	border-color: var(--color-accent-glow);
+	background: color-mix(in srgb, var(--color-accent-glow) 18%, transparent);
+}
+
+.filter-sheet__empty {
+	margin: 0;
+	color: var(--color-text-secondary);
+	font-family: var(--font-ui);
+	font-size: 0.9rem;
+}
+
+.filter-sheet__show {
+	width: 100%;
+	padding: var(--space-3);
+	border: 1px solid var(--color-accent-glow);
+	border-radius: var(--radius-lg);
+	background: color-mix(in srgb, var(--color-accent-glow) 18%, transparent);
+	color: var(--color-text-primary);
+	font-family: var(--font-ui);
+	font-size: 1rem;
+	cursor: pointer;
+}
+
+.filter-row__dropdown {
+	position: relative;
+	display: inline-flex;
+}
+
+.filter-row__trigger {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2);
+	padding: var(--space-2) var(--space-3);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface-raised);
+	color: var(--color-text-primary);
+	font-family: var(--font-ui);
+	font-size: 0.9rem;
+	cursor: pointer;
+}
+
+.filter-row__trigger[data-active] {
+	border-color: var(--color-accent-glow);
+	background: color-mix(in srgb, var(--color-accent-glow) 18%, transparent);
+	box-shadow: 0 0 12px
+		color-mix(in srgb, var(--color-accent-glow) 30%, transparent);
+}
+
+.filter-row__count {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 1.4em;
+	height: 1.4em;
+	border-radius: 999px;
+	background: var(--color-accent-glow);
+	color: var(--color-void);
+	font-size: 0.8em;
+	font-weight: 700;
+}
+
+.filter-row__menu {
+	position: absolute;
+	top: calc(100% + var(--space-2));
+	left: 0;
+	z-index: 20;
+	display: flex;
+	flex-direction: column;
+	min-width: 11rem;
+	max-height: 60vh;
+	padding: var(--space-2);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface-raised);
+	box-shadow: 0 0 26px
+		color-mix(in srgb, var(--color-accent-glow) 22%, transparent);
+	overflow-y: auto;
+}
+
+.filter-row__item {
+	display: flex;
+	align-items: center;
+	padding: var(--space-2) var(--space-3);
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: none;
+	color: var(--color-text-primary);
+	font: inherit;
+	font-family: var(--font-ui);
+	text-align: left;
+	cursor: pointer;
+}
+
+.filter-row__item:hover,
+.filter-row__item:focus-visible {
+	background: color-mix(in srgb, var(--color-accent-electric) 16%, transparent);
+}
+
+.filter-row__item[aria-checked="true"]::before {
+	content: "✓";
+	margin-right: var(--space-2);
+	width: 1ch;
+	color: var(--color-accent-glow);
+}
+
+.filter-row__item[aria-checked="false"]::before {
+	content: "";
+	margin-right: var(--space-2);
+	width: 1ch;
+}
+
+/* Flag + reveal pills (Story 3.2, UX-DR9): shape encodes behavior — a solid
+   border narrows (AND), a dashed border reveals a hidden state. Active pills
+   share the trigger's glow treatment (FR-22). */
+.filter-row__pill {
+	display: inline-flex;
+	align-items: center;
+	padding: var(--space-2) var(--space-3);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-pill);
+	background: var(--color-surface-raised);
+	color: var(--color-text-primary);
+	font-family: var(--font-ui);
+	font-size: 0.9rem;
+	cursor: pointer;
+}
+
+.filter-row__pill--reveal {
+	border-style: dashed;
+	color: var(--color-text-secondary);
+}
+
+.filter-row__pill[data-active] {
+	border-color: var(--color-accent-glow);
+	background: color-mix(in srgb, var(--color-accent-glow) 18%, transparent);
+	color: var(--color-text-primary);
+	box-shadow: 0 0 12px
+		color-mix(in srgb, var(--color-accent-glow) 30%, transparent);
+}
+
+/* Inert placeholder menuitem (empty/pending/failed vocabulary). */
+.filter-row__empty {
+	padding: var(--space-2) var(--space-3);
+	border: 0;
+	background: none;
+	color: var(--color-text-secondary);
+	font: inherit;
+	font-family: var(--font-ui);
+	text-align: left;
+	cursor: default;
+}

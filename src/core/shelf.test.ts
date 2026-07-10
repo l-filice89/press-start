@@ -10,17 +10,25 @@ import type { EffectiveState } from './types';
 
 describe('isDefaultShelfVisible', () => {
 	it('shows the four live play statuses', () => {
-		for (const state of SHELF_STATE_ORDER) {
+		for (const state of [
+			'Playing',
+			'Paused',
+			'Up next',
+			'Not started',
+		] as EffectiveState[]) {
 			expect(isDefaultShelfVisible(state)).toBe(true);
 		}
 	});
 
-	it('hides completion milestones and Dropped (backlog view)', () => {
+	// HAZARD (Story 3.2): `SHELF_STATE_ORDER` now ranks the hidden states for
+	// reveal ordering — visibility must NOT widen because ordering did.
+	it('hides completion milestones and Dropped even though they rank in SHELF_STATE_ORDER', () => {
 		for (const state of [
 			'Story completed',
 			'Platinum achieved',
 			'Dropped',
 		] as EffectiveState[]) {
+			expect(SHELF_STATE_ORDER).toContain(state);
 			expect(isDefaultShelfVisible(state)).toBe(false);
 		}
 	});
@@ -81,6 +89,23 @@ describe('orderShelf', () => {
 			entry('Playing', 'b', false),
 		]);
 		expect(ordered.map((e) => e.title)).toEqual(['b', 'a']);
+	});
+
+	it('ranks hidden states after every live state: milestones, then Dropped (Story 3.2)', () => {
+		const ordered = orderShelf([
+			entry('Dropped', 'a', true),
+			entry('Platinum achieved', 'b', true),
+			entry('Story completed', 'c', true),
+			entry('Not started', 'd', false),
+			entry('Playing', 'e', false),
+		]);
+		expect(ordered.map((e) => e.effectiveState)).toEqual([
+			'Playing',
+			'Not started',
+			'Story completed',
+			'Platinum achieved',
+			'Dropped',
+		]);
 	});
 
 	it('does not mutate the input array', () => {

@@ -24,6 +24,7 @@ const shelfGameSchema = z.object({
 	owned: z.boolean(),
 	released: z.boolean(),
 	wishlisted: z.boolean(),
+	playableNow: z.boolean(),
 	psPlusExtra: z.boolean(),
 	hasCompleted: z.boolean(),
 	hasPlatinum: z.boolean(),
@@ -50,7 +51,10 @@ export const shelfRoute = new Hono<ShelfEnv>();
 
 shelfRoute.get('/shelf', requireAuth, async (c) => {
 	const db = createDb(c.env.DB);
-	const games = await getShelf(db, c.get('userId'));
+	// `?include=hidden` (Story 3.2): the whole ordered library, so the client's
+	// reveal pills can OR hidden states into the visible set. Default unchanged.
+	const includeHidden = c.req.query('include') === 'hidden';
+	const games = await getShelf(db, c.get('userId'), includeHidden);
 	return c.json(shelfResponseSchema.parse({ games }), 200);
 });
 

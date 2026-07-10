@@ -1,4 +1,3 @@
-import { LiveRegionProvider } from '../components/LiveRegion';
 import { ToastHost } from '../components/Toast';
 import { SearchBox } from '../shelf/SearchBox';
 import { Shelf } from '../shelf/Shelf';
@@ -25,23 +24,23 @@ export function AppShell({
 	onSignOut: () => void;
 	signOutFailed?: boolean;
 }) {
+	// LiveRegionProvider is mounted above the session gate (main.tsx) so the
+	// login swap can announce — the shell only hosts the toast layer now.
 	return (
-		<LiveRegionProvider>
-			<ToastHost>
-				<Background />
-				<div className="app-shell">
-					<Header
-						email={email}
-						onSignOut={onSignOut}
-						signOutFailed={signOutFailed}
-						search={<SearchBox />}
-					/>
-					{/* Attention-banner slot (fed by later stories). */}
-					<main className="app-shell__main" id="shelf">
-						<Shelf />
-					</main>
-				</div>
-			</ToastHost>
-		</LiveRegionProvider>
+		<ToastHost>
+			<Background />
+			<div className="app-shell">
+				<Header
+					email={email}
+					onSignOut={onSignOut}
+					signOutFailed={signOutFailed}
+					search={<SearchBox />}
+				/>
+				{/* Attention-banner slot (fed by later stories). */}
+				<main className="app-shell__main" id="shelf">
+					<Shelf />
+				</main>
+			</div>
+		</ToastHost>
 	);
 }

@@ -1,9 +1,43 @@
-import { type KeyboardEvent, useCallback, useRef, useState } from 'react';
+import { type KeyboardEvent, useRef, useState } from 'react';
 import type { ShelfGame } from './api';
-import { DetailPanel } from './DetailPanel';
 import { StatusPopover } from './StatusPopover';
 import { useTrackingMutations } from './useTrackingMutations';
 import './card.css';
+
+/**
+ * The platinum badge: a stroke-only trophy in the app's neon outline style
+ * (the emoji renders full-color gold and a grayscale filter reads flat against
+ * the glow language). `currentColor` strokes so the flag's milestone-silver +
+ * glow apply; the small diamond in the cup echoes the owned ◆.
+ */
+function PlatinumTrophy() {
+	return (
+		<svg
+			viewBox="0 0 24 24"
+			width="1.2em"
+			height="1.2em"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth="1.8"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+			aria-hidden="true"
+			data-testid="platinum-trophy"
+		>
+			{/* cup */}
+			<path d="M7 4h10v4.5a5 5 0 0 1-10 0V4Z" />
+			{/* handles */}
+			<path d="M7 5.5H4.75V7a3 3 0 0 0 3 3" />
+			<path d="M17 5.5h2.25V7a3 3 0 0 1-3 3" />
+			{/* stem + base */}
+			<path d="M12 13.5V17" />
+			<path d="M8.5 20h7" />
+			<path d="M10 17h4" />
+			{/* the ◆, platinum-sized */}
+			<path d="m12 6 1.2 1.75L12 9.5l-1.2-1.75L12 6Z" />
+		</svg>
+	);
+}
 
 /**
  * A single shelf card. The cover is the open-detail trigger (Story 2.3): a
@@ -15,35 +49,39 @@ import './card.css';
  * and the whole card is a single roving tab stop in the grid (UX-DR19).
  *
  * `tabIndex` and the rest of the roving-focus wiring are owned by the parent
- * grid (Shelf); the card just forwards the ref and keydown handler.
+ * grid (Shelf); the card just forwards the ref and keydown handler. The
+ * open-detail state is ALSO owned by the grid (Story 3.4): a Card can remount
+ * whenever a refetch re-chunks the rows, so a panel it owned would die
+ * mid-interaction — the cover button only reports the intent upward.
  */
 export function Card({
 	game,
 	tabIndex,
 	cardRef,
 	onKeyDown,
+	onOpenDetail,
+	statusMenuOpen,
+	onStatusMenuOpenChange,
 }: {
 	game: ShelfGame;
 	tabIndex: number;
 	cardRef?: (el: HTMLDivElement | null) => void;
 	onKeyDown?: (e: KeyboardEvent<HTMLDivElement>) => void;
+	onOpenDetail?: (gameId: string) => void;
+	/** Status-menu open state lives in ShelfGrid (Story 3.6 — the 3.4 hoist
+	 * pattern): a refetch re-chunk remounts this Card, and local menu state
+	 * would die with it. Card only threads it down. */
+	statusMenuOpen: boolean;
+	onStatusMenuOpenChange: (open: boolean) => void;
 }) {
 	// A persisted cover_url that 404s / fails to load falls back to the same
 	// graceful mark as a missing cover — never a broken-image glyph, no network.
 	const [coverFailed, setCoverFailed] = useState(false);
-	const [detailOpen, setDetailOpen] = useState(false);
 	const coverRef = useRef<HTMLButtonElement>(null);
 
 	// Ownership writes go through the same shared seam as every other tracking
 	// mutation (AR-13) — un-owning toasts with UNDO, owning toasts plainly.
 	const { setOwnership } = useTrackingMutations(game);
-
-	// Closing the panel returns focus to the originating card's gridcell
-	// (UX-DR19) — the panel itself doesn't know where it was opened from.
-	const closeDetail = useCallback(() => {
-		setDetailOpen(false);
-		coverRef.current?.closest<HTMLElement>('[role="gridcell"]')?.focus();
-	}, []);
 
 	const onCoverKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
 		if (e.key === 'Escape') {
@@ -56,9 +94,9 @@ export function Card({
 	const showCover = !!game.coverUrl && !coverFailed;
 	const isPlaying = game.effectiveState === 'Playing';
 	const milestone = game.hasPlatinum
-		? { glyph: '🏆', label: 'Platinum achieved' }
+		? { glyph: <PlatinumTrophy />, label: 'Platinum achieved', platinum: true }
 		: game.hasCompleted
-			? { glyph: '✓', label: 'Story completed' }
+			? { glyph: '✓', label: 'Story completed', platinum: false }
 			: null;
 	// Release-state flag: only shown until a game is released.
 	const releaseFlag = game.released
@@ -76,6 +114,7 @@ export function Card({
 			tabIndex={tabIndex}
 			aria-label={`${game.title} — ${game.effectiveState}`}
 			data-testid="shelf-card"
+			data-game-id={game.id}
 			onKeyDown={onKeyDown}
 		>
 			<div className="card__cover">
@@ -89,7 +128,7 @@ export function Card({
 					tabIndex={-1}
 					aria-label={`Open details — ${game.title}`}
 					data-testid="card-cover-button"
-					onClick={() => setDetailOpen(true)}
+					onClick={() => onOpenDetail?.(game.id)}
 					onKeyDown={onCoverKeyDown}
 				>
 					{showCover ? (
@@ -154,7 +193,11 @@ export function Card({
 						</span>
 					)}
 					{milestone && (
-						<span className="card__flag card__flag--milestone">
+						<span
+							className={`card__flag card__flag--milestone${
+								milestone.platinum ? ' card__flag--platinum' : ''
+							}`}
+						>
 							<span aria-hidden="true">{milestone.glyph}</span>
 							<span className="sr-only">{milestone.label}</span>
 						</span>
@@ -173,7 +216,11 @@ export function Card({
 				</p>
 				<p className="card__genres">{game.genres.join(' · ')}</p>
 				<div className="card__meta">
-					<StatusPopover game={game} />
+					<StatusPopover
+						game={game}
+						open={statusMenuOpen}
+						onOpenChange={onStatusMenuOpenChange}
+					/>
 				</div>
 				<p className="card__owned-line">
 					{/* visibility-hidden (CSS, via data-owned) when un-owned — keeps
@@ -183,8 +230,6 @@ export function Card({
 					</span>
 				</p>
 			</div>
-
-			{detailOpen && <DetailPanel game={game} onClose={closeDetail} />}
 		</div>
 	);
 }

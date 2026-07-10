@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Page } from '@playwright/test';
 import { createGame, type SeedGame } from '../support/factories/game-factory';
 import { deleteGames, seedGames } from '../support/helpers/d1';
+import { loadAllPages } from '../support/helpers/shelf';
 import { expect, test } from '../support/merged-fixtures';
 
 /**
@@ -28,8 +29,18 @@ const cardFor = (page: Page, game: SeedGame) =>
 
 async function openStatusMenu(page: Page, game: SeedGame) {
 	const pill = cardFor(page, game).getByTestId('status-pill-button');
-	await pill.click();
 	const menu = page.getByTestId('status-menu');
+	// Menu open-state is grid-owned since Story 3.6 — a refetch re-chunk no
+	// longer kills an OPEN menu (jsdom-pinned), so the old blind retry loop is
+	// gone. What remains is a different race the loop also absorbed: a click
+	// dispatched while a just-settled write's refetch COMMITS (overlapping
+	// invalidations + parallel-worker DB churn = every commit is a full
+	// re-chunk, and the click lands in a mid-commit DOM — trace-verified).
+	// Our page only refetches on its own writes, so network quiescence is a
+	// deterministic gate: after networkidle nothing is pending, no commit can
+	// race the click.
+	await page.waitForLoadState('networkidle');
+	await pill.click();
 	await expect(menu).toBeVisible();
 	return { pill, menu };
 }
@@ -152,6 +163,9 @@ test('Dropped shows an UNDO toast, the card leaves the shelf, Undo restores it (
 			.getByTestId('toast')
 			.getByRole('button', { name: 'Undo', exact: true })
 			.evaluate((el) => (el as HTMLElement).click());
+		// The restored card can reappear past the progressive fold under
+		// parallel-suite load (deferred-work: 3.1 parallel-flake) — page it in.
+		await loadAllPages(page);
 		await expect(cardFor(page, game)).toBeVisible();
 		await expect(cardFor(page, game)).toHaveAttribute(
 			'aria-label',
@@ -171,6 +185,9 @@ test('first move to Playing stamps started_on, visible in the detail panel (2.1b
 	try {
 		await seedGames([game]);
 		await page.goto('/');
+		// The seeded card can sit past the progressive fold under parallel-suite
+		// load (deferred-work: 3.1 parallel-flake) — page it in first.
+		await loadAllPages(page);
 		const { menu } = await openStatusMenu(page, game);
 		await menu.getByRole('menuitemradio', { name: 'Playing' }).click();
 		await expect(
@@ -178,6 +195,7 @@ test('first move to Playing stamps started_on, visible in the detail panel (2.1b
 		).toBeVisible();
 		// Wait for the refetch to land before opening the panel — the shelf
 		// re-renders the card and a mid-render click can go stale.
+		await loadAllPages(page);
 		await expect(cardFor(page, game)).toHaveAttribute(
 			'aria-label',
 			`${game.title} — Playing`,

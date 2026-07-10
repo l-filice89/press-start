@@ -2,10 +2,12 @@ import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ToastHost } from '../components/Toast';
 import type { ShelfGame } from './api';
 import { StatusPopover } from './StatusPopover';
+import { resetInFlightWrites } from './useTrackingMutations';
 
 /**
  * The named a11y hazard of Story 2.1: the popover is a *menu* — haspopup/
@@ -25,6 +27,7 @@ function game(over: Partial<ShelfGame> = {}): ShelfGame {
 		owned: true,
 		released: true,
 		wishlisted: false,
+		playableNow: true,
 		psPlusExtra: false,
 		hasCompleted: false,
 		hasPlatinum: false,
@@ -40,17 +43,25 @@ function game(over: Partial<ShelfGame> = {}): ShelfGame {
 	};
 }
 
+// Open-state is grid-owned in production (Story 3.6, AC3); the harness plays
+// ShelfGrid's role with one stateful boolean.
+function Harness({ g }: { g: ShelfGame }) {
+	const [open, setOpen] = useState(false);
+	return <StatusPopover game={g} open={open} onOpenChange={setOpen} />;
+}
+
 function renderPopover(g: ShelfGame = game()) {
 	const client = new QueryClient({
 		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 	});
-	return render(
+	const result = render(
 		<QueryClientProvider client={client}>
 			<ToastHost>
-				<StatusPopover game={g} />
+				<Harness g={g} />
 			</ToastHost>
 		</QueryClientProvider>,
 	);
+	return { ...result, client };
 }
 
 let fetchMock: ReturnType<typeof vi.fn>;
@@ -66,6 +77,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	vi.unstubAllGlobals();
+	resetInFlightWrites();
 });
 
 const pill = () => screen.getByTestId('status-pill-button');
@@ -181,6 +193,116 @@ describe('StatusPopover', () => {
 		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
 		expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
 			playStatus: 'Paused',
+		});
+	});
+
+	// HAZARD (Story 3.2, FR-2/FR-3): a revealed milestone-only card has a null
+	// play status (auto-cleared). Dropping it must still offer UNDO, and the
+	// undo restores the cleared (null) status through the same write path.
+	it('offers UNDO for Dropped when the previous status was null, restoring null', async () => {
+		const user = userEvent.setup();
+		fetchMock.mockResolvedValue({
+			ok: true,
+			status: 200,
+			json: async () => ({ effectiveState: 'Dropped' }),
+		});
+		renderPopover(
+			game({
+				playStatus: null,
+				effectiveState: 'Story completed',
+				hasCompleted: true,
+				completedOn: '2024-01-01',
+			}),
+		);
+		await user.click(pill());
+		await user.click(screen.getByRole('menuitemradio', { name: 'Dropped' }));
+
+		const undo = await screen.findByRole('button', { name: 'Undo' });
+		await user.click(undo);
+
+		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+		expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
+			playStatus: null,
+		});
+	});
+
+	// HAZARD (Story 3.4, AC5): the UNDO closure must respect the same
+	// call-time in-flight guard as every other entry point — previously it
+	// called the mutation directly with a stale render-scoped guard.
+	it('toast UNDO during a pending write toasts Still saving and writes nothing', async () => {
+		const user = userEvent.setup();
+		let call = 0;
+		fetchMock.mockImplementation(() => {
+			call += 1;
+			if (call === 1) {
+				return Promise.resolve({
+					ok: true,
+					status: 200,
+					json: async () => ({ effectiveState: 'Dropped' }),
+				});
+			}
+			return new Promise(() => {}); // the second write never settles
+		});
+		renderPopover(game({ playStatus: 'Paused', effectiveState: 'Paused' }));
+
+		await user.click(pill());
+		await user.click(screen.getByRole('menuitemradio', { name: 'Dropped' }));
+		const undo = await screen.findByRole('button', { name: 'Undo' });
+
+		// Start a second write that stays in flight.
+		await user.click(pill());
+		await user.click(screen.getByRole('menuitemradio', { name: 'Playing' }));
+		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+		await user.click(undo);
+		expect(
+			await screen.findByText(/Still saving Bloodborne/),
+		).toBeInTheDocument();
+		// The undo write never fired.
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
+
+	// HAZARD (Story 3.6, AC2): an UNDO clicked after a NEWER write on the same
+	// game has SETTLED must not overwrite the newer intent — the in-flight
+	// guard alone can't catch it (nothing is pending anymore).
+	it('toast UNDO after a settled newer write expires and writes nothing', async () => {
+		const user = userEvent.setup();
+		renderPopover(game({ playStatus: 'Paused', effectiveState: 'Paused' }));
+
+		// Write 1: Dropped (its toast carries the UNDO).
+		await user.click(pill());
+		await user.click(screen.getByRole('menuitemradio', { name: 'Dropped' }));
+		const undo = await screen.findByRole('button', { name: 'Undo' });
+
+		// Write 2: Playing — settles (default mock resolves immediately).
+		await user.click(pill());
+		await user.click(screen.getByRole('menuitemradio', { name: 'Playing' }));
+		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+		// The stale UNDO must not restore Paused over Playing — and must say so.
+		await user.click(undo);
+		expect(
+			await screen.findByText(/Undo expired — Bloodborne was changed again/),
+		).toBeInTheDocument();
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
+
+	// HAZARD (Story 3.6, AC1): every write refreshes the search query too — an
+	// open search listbox must never keep rendering pre-write data.
+	it('a status write invalidates the shelf-search query alongside the shelf', async () => {
+		const user = userEvent.setup();
+		const { client } = renderPopover();
+		client.setQueryData(['shelf-search', 'blood'], { games: [] });
+		client.setQueryData(['shelf'], { games: [] });
+
+		await user.click(pill());
+		await user.click(screen.getByRole('menuitemradio', { name: 'Playing' }));
+
+		await waitFor(() => {
+			expect(
+				client.getQueryState(['shelf-search', 'blood'])?.isInvalidated,
+			).toBe(true);
+			expect(client.getQueryState(['shelf'])?.isInvalidated).toBe(true);
 		});
 	});
 

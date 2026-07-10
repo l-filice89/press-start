@@ -24,7 +24,7 @@ This document provides the complete epic and story breakdown for ps-game-catalog
 - **FR-1** — Play status is one per game (`Not started` · `Up next` · `Playing` · `Paused` · `Dropped`) and defaults to `Not started`.
 - **FR-2** — Play status may be **null** only once a completion milestone exists. Logging a **platinum** auto-clears status to null; a **story completion** leaves it untouched (amended 2026-07-09); the user may also clear it manually; a replay sets it back to `Playing`.
 - **FR-3** — Invariant: every game always has a play status **or** at least one completion milestone. The detail view refuses any edit that would leave neither (clearing the last milestone requires setting a play status first).
-- **FR-4** — `Dropped` games are hidden from the default shelf, reachable via the `Dropped` reveal pill.
+- **FR-4** — `Dropped` games are hidden from the default shelf, reachable via the `Dropped` reveal pill (exclusive view — shows only `Dropped` games; amended 2026-07-10).
 
 **State model — completion milestones (§2)**
 
@@ -52,8 +52,8 @@ This document provides the complete epic and story breakdown for ps-game-catalog
 
 **The Shelf — filters (§3)**
 
-- **FR-20** — Filter semantics: OR within a group, AND across groups. Groups: State (multiselect dropdown of live statuses), State-reveals (individual reveal pills for Completed/Platinum/Dropped that OR into the visible set), Genre (multiselect dropdown), Flags (individual pills `Owned`/`Wishlisted`/`Released`/`Playable now`, each its own AND group).
-- **FR-21** — State-group selection rule: with nothing selected, the shelf shows the default visible set (FR-17); the moment anything in the state group is selected, the shelf shows exactly the selected states.
+- **FR-20** — Filter semantics: OR within a group, AND across groups. Groups: State (multiselect dropdown of live statuses), State-reveals (own group, amended 2026-07-10 — reveal pills for Completed/Platinum/Dropped OR among themselves and replace the State group entirely when active), Genre (multiselect dropdown), Flags (individual pills `Owned`/`Wishlisted`/`Released`/`Playable now`, each its own AND group).
+- **FR-21** — Selection rules (amended 2026-07-10): nothing selected → default visible set (FR-17); State-dropdown selection → exactly the selected live states; reveal-pill selection → exclusive view of the selected hidden state(s), State group cleared (State dropdown and reveal pills mutually exclusive).
 - **FR-22** — Active pills are visually highlighted (toggle-on state).
 
 **The Shelf — genre vocabulary (§3)**
@@ -885,6 +885,60 @@ Bundles the open focus/interaction deferred-work items — placed in Epic 3 beca
 **Given** a pending tracking mutation on a game
 **When** a toast UNDO for that game is activated
 **Then** the UNDO respects the same in-flight guard as every other entry point (ref-backed, not render-scoped) (deferred-work: spec-2-4 UNDO-guard item)
+
+### Story 3.5: Reveal-pill exclusive mode
+
+As Luca (backlog reviewer),
+I want a dotted reveal pill to show only the matching hidden games,
+So that Completed/Platinum/Dropped games are immediately visible instead of appended behind the infinite scroll.
+
+Semantics change decided at the Epic 3 retro (2026-07-10, Significant Discovery — see epic-3-retro-2026-07-10.md): additive reveals push hidden games to the end of the FR-18 order, behind infinite scroll. Requires FR-4/FR-20 amendment in the PRD before implementation (John). Bundles three assigned deferred-work items touching the same surfaces.
+
+**Acceptance Criteria:**
+
+**Given** any dotted reveal pill selected
+**When** the shelf renders
+**Then** the visible set contains only games in the selected hidden state(s) — the State group is replaced entirely (state pills clear) (FR-4, FR-20 as amended)
+
+**Given** two or more dotted pills selected
+**Then** they OR among themselves (Completed + Platinum = either)
+
+**Given** an active exclusive reveal view
+**When** Genre or Flag selections are also active
+**Then** they still AND with it (e.g. Completed + RPG + Owned → only completed, owned RPGs)
+
+**Given** an active exclusive reveal view
+**Then** the summary sentence states it literally ("Showing Completed games.") — the additive-semantics live-status enumeration is removed (FR-21)
+
+**Given** an exclusive reveal view with zero matching games
+**When** ShelfGrid unmounts for the empty state
+**Then** focus lands on a deliberate target (Clear filters or the empty-state heading), never `<body>` (deferred-work: spec-3-4 last-visible-card boundary entry)
+
+**Given** the three modal surfaces (ConfirmDialog, DetailPanel, FilterSheet)
+**Then** they share one extracted focus-trap implementation (deferred-work: spec-3-3 trap-triplication entry)
+
+**Given** the e2e suites rewritten for the new reveal contract
+**Then** epic2-detail.spec.ts:127 and epic2-tracking.spec.ts:165 also get the loadAllPages fold-position fix (deferred-work: spec-3-1 parallel-flake entry)
+
+### Story 3.6: Write-path hardening (pre-sync)
+
+As Luca (soon syncing from PSN),
+I want every client write path safe against stale reads and stale intent,
+So that Epic 4's automated sync writes cannot render stale panels, be clobbered by old UNDO toasts, or kill open menus.
+
+Bundles the three write-path deferred-work items assigned at the Epic 3 retro triage. Must land before Story 4.2 introduces sync as a new write source.
+
+**Acceptance Criteria:**
+
+**Given** any tracking write settles
+**Then** both `['shelf']` and `['shelf-search']` query keys are invalidated — a detail panel opened from search never renders stale (deferred-work: spec-3-2 search-staleness entry)
+
+**Given** a toast UNDO activated after a newer write on the same game has settled
+**Then** the stale UNDO cannot overwrite the newer intent (latest-write token, or stale undo toasts dismissed on newer writes) (deferred-work: spec-3-4 stale-UNDO entry)
+
+**Given** an open status-popover menu
+**When** a refetch re-chunks the grid and remounts its Card
+**Then** the menu survives (open-state hoisted like the 3.4 detail-panel fix) AND the `openStatusMenu` retry loop in epic2-tracking.spec.ts is removed in the same change (deferred-work: spec-3-4 popover-remount entry)
 
 ---
 

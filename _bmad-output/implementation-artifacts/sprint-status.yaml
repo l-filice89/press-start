@@ -77,12 +77,14 @@ development_status:
   epic-2-5-retrospective: done
 
   # Epic 3: Filter & Focus the Backlog
-  epic-3: backlog
-  3-1-filter-the-shelf-by-state-and-genre: backlog
-  3-2-flag-pills-and-state-reveal-pills: backlog
-  3-3-live-filter-summary-empty-state-responsive-filters: backlog
-  3-4-focus-interaction-hardening-deferred-work-sweep: backlog
-  epic-3-retrospective: optional
+  epic-3: done # 2026-07-10: reopened for 3.5/3.6 post-retro, both shipped same day; merge to main still open below
+  3-1-filter-the-shelf-by-state-and-genre: done
+  3-2-flag-pills-and-state-reveal-pills: done
+  3-3-live-filter-summary-empty-state-responsive-filters: done
+  3-4-focus-interaction-hardening-deferred-work-sweep: done
+  3-5-reveal-pill-exclusive-mode: done # 2026-07-10 (c78e6ce)
+  3-6-write-path-hardening-pre-sync: done # 2026-07-10 (a3afc85)
+  epic-3-retrospective: done
 
   # Epic 4: Fill the Library from PlayStation (Sync)
   epic-4: backlog
@@ -161,8 +163,32 @@ action_items:
   - epic: 2.5
     action: "Merge feat/epic-2.5/playwright-foundation to main through the CI OK gate"
     owner: "Luca"
-    status: open
+    status: done # 2026-07-10: PR #6 merged (13e0ee2), CI+CD green on main, branch deleted
   - epic: 2.5
     action: "Trace PLAYWRIGHT-COVERAGE standing-rule compliance through Epic 3; add a mechanical COVERAGE.md audit only if a leak appears"
     owner: "Murat + Luca"
+    status: done # 2026-07-10 epic 3 retro: zero silent drops — every 3.x story shipped AC tests + COVERAGE.md rows; no audit chore needed
+  - epic: 3
+    action: "Story 3.5 — reveal-pill exclusive mode: amend FR-4/FR-20 + epics.md, implement replace-State/OR-within/AND-across semantics, rewrite reveal + summary e2e"
+    owner: "John + Amelia"
+    status: done # 2026-07-10 story 3.5 shipped (spec-3-5-reveal-pill-exclusive-mode.md)
+  - epic: 3
+    action: "Invalidate ['shelf-search'] on all writes (staleness seam; story 3.6 AC1)"
+    owner: "Amelia"
+    status: done # 2026-07-10 story 3.6
+  - epic: 3
+    action: "Latest-write token for UNDO — stale-intent guard atop IN_FLIGHT (story 3.6 AC2)"
+    owner: "Amelia"
+    status: done # 2026-07-10 story 3.6
+  - epic: 3
+    action: "Hoist status-popover menu open-state + remove openStatusMenu e2e retry loop (story 3.6 AC3)"
+    owner: "Amelia"
+    status: done # 2026-07-10 story 3.6 (loop replaced by networkidle quiescence gate — see spec triage log)
+  - epic: 3
+    action: "Extract single modal focus-trap (ConfirmDialog/DetailPanel/FilterSheet); bundle into story 3.5"
+    owner: "Amelia"
+    status: done # 2026-07-10 story 3.5 (web/components/useModalTrap.ts)
+  - epic: 3
+    action: "Merge feat/epic-3/filter-focus-backlog to main through the CI OK gate"
+    owner: "Luca"
     status: open

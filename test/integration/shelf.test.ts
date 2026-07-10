@@ -71,7 +71,12 @@ describe('read-only shelf + search (integration, real workerd + local D1)', () =
 
 		// A spread of states for user A. Alpha-out-of-order within groups so the
 		// alphabetical tiebreak is actually tested.
-		await addGame(userA, 'Zephyr', { playStatus: 'Playing', owned: true });
+		await addGame(
+			userA,
+			'Zephyr',
+			{ playStatus: 'Playing', owned: true },
+			{ releaseDate: '2020-01-01' },
+		);
 		const apexId = await addGame(userA, 'Apex', {
 			playStatus: 'Playing',
 			owned: true,
@@ -133,6 +138,35 @@ describe('read-only shelf + search (integration, real workerd + local D1)', () =
 		const nova = shelf.find((g) => g.title === 'Nova');
 		expect(nova?.owned).toBe(false);
 		expect(nova?.wishlisted).toBe(true);
+	});
+
+	it('bakes playableNow = (owned OR PS+ catalog) AND released (Story 3.2)', async () => {
+		const shelf = await getShelf(db(), userA);
+		// Owned + released 2020 → playable now.
+		expect(shelf.find((g) => g.title === 'Zephyr')?.playableNow).toBe(true);
+		// Owned but no release date → released false → not playable now.
+		expect(shelf.find((g) => g.title === 'Bolt')?.playableNow).toBe(false);
+		// Un-owned, not in the PS+ catalog → not playable now.
+		expect(shelf.find((g) => g.title === 'Nova')?.playableNow).toBe(false);
+	});
+
+	// HAZARD (Story 3.2): the default response must not widen when the state
+	// order list gains hidden ranks — visibility is decoupled from ordering.
+	it('includeHidden returns the whole ordered library; the default stays live-only', async () => {
+		const all = await getShelf(db(), userA, true);
+		expect(all.map((g) => g.title)).toEqual([
+			'Apex', // Playing
+			'Replaying', // Playing
+			'Zephyr', // Playing
+			'Mist', // Paused
+			'Nova', // Up next
+			'Bolt', // Not started
+			'Done Game', // Story completed — hidden states rank after live ones
+			'Dropped Game', // Dropped ranks last
+		]);
+		const defaults = await getShelf(db(), userA);
+		expect(defaults.map((g) => g.title)).not.toContain('Done Game');
+		expect(defaults.map((g) => g.title)).not.toContain('Dropped Game');
 	});
 
 	it('groups IGDB genres onto the card DTO', async () => {

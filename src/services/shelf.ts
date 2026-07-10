@@ -39,6 +39,7 @@ export interface ShelfGame {
 	owned: boolean;
 	released: boolean;
 	wishlisted: boolean;
+	playableNow: boolean;
 	psPlusExtra: boolean;
 	hasCompleted: boolean;
 	hasPlatinum: boolean;
@@ -62,11 +63,11 @@ function bakeCard(row: LibraryRow, genres: string[]): ShelfGame {
 		completedOn: row.completedOn,
 		platinumOn: row.platinumOn,
 	});
-	const { released, wishlisted } = computeDerivedStates({
+	const { released, wishlisted, playableNow } = computeDerivedStates({
 		owned: row.owned,
 		releaseDate: row.releaseDate,
-		// True per-region PS+ Extra membership is Epic 5; `playableNow` is not
-		// consumed by the read-only shelf, so the catalog flag is enough here.
+		// True per-region PS+ Extra membership is Epic 5; until then the catalog
+		// flag stands in, so `playableNow` = (owned OR in-catalog) AND released.
 		inPsPlusExtraCatalog: row.psPlusExtra,
 	});
 	return {
@@ -79,6 +80,7 @@ function bakeCard(row: LibraryRow, genres: string[]): ShelfGame {
 		owned: row.owned,
 		released,
 		wishlisted,
+		playableNow,
 		psPlusExtra: row.psPlusExtra,
 		hasCompleted: row.completedOn != null,
 		hasPlatinum: row.platinumOn != null,
@@ -116,15 +118,23 @@ export async function loadLibrary(
 }
 
 /**
- * The default backlog shelf: live-play-status games only (Completed/Platinum/
- * Dropped hidden), ordered Playing→Paused→Up next→Not started, owned before
- * un-owned, alphabetical within each group — the whole sorted set materialized
- * here (AD-7), never a SQL `ORDER BY play_status`.
+ * The backlog shelf: ordered Playing→Paused→Up next→Not started (revealed
+ * states after), owned before un-owned, alphabetical within each group — the
+ * whole sorted set materialized here (AD-7), never a SQL `ORDER BY
+ * play_status`. By default only live-play-status games (Completed/Platinum/
+ * Dropped hidden); `includeHidden` (Story 3.2 reveal pills) returns the whole
+ * library so the client filter can OR hidden states into the visible set.
  */
-export async function getShelf(db: Db, userId: string): Promise<ShelfGame[]> {
+export async function getShelf(
+	db: Db,
+	userId: string,
+	includeHidden = false,
+): Promise<ShelfGame[]> {
 	const library = await loadLibrary(db, userId);
 	return orderShelf(
-		library.filter((g) => isDefaultShelfVisible(g.effectiveState)),
+		includeHidden
+			? library
+			: library.filter((g) => isDefaultShelfVisible(g.effectiveState)),
 	);
 }
 

@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ToastHost } from '../components/Toast';
 import type { ShelfGame } from './api';
 import { Card } from './Card';
+import { resetInFlightWrites } from './useTrackingMutations';
 
 function game(overrides: Partial<ShelfGame> = {}): ShelfGame {
 	return {
@@ -19,6 +20,7 @@ function game(overrides: Partial<ShelfGame> = {}): ShelfGame {
 		owned: true,
 		released: true,
 		wishlisted: false,
+		playableNow: true,
 		psPlusExtra: false,
 		hasCompleted: false,
 		hasPlatinum: false,
@@ -35,6 +37,9 @@ function game(overrides: Partial<ShelfGame> = {}): ShelfGame {
 }
 
 /** The card's status pill and owned toggle are mutation-bearing widgets. */
+// Menu open-state is grid-owned (Story 3.6); these tests never open it.
+const noMenu = { statusMenuOpen: false, onStatusMenuOpenChange: () => {} };
+
 function Providers({ children }: { children: ReactNode }) {
 	const client = new QueryClient({
 		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -47,7 +52,9 @@ function Providers({ children }: { children: ReactNode }) {
 }
 
 function renderCard(g: ShelfGame) {
-	return render(<Card game={g} tabIndex={0} />, { wrapper: Providers });
+	return render(<Card game={g} tabIndex={0} {...noMenu} />, {
+		wrapper: Providers,
+	});
 }
 
 describe('Card', () => {
@@ -71,7 +78,13 @@ describe('Card', () => {
 	it('adds the Playing bloom class only for a Playing card', () => {
 		const { rerender } = renderCard(game({ effectiveState: 'Playing' }));
 		expect(screen.getByTestId('shelf-card')).toHaveClass('card--playing');
-		rerender(<Card game={game({ effectiveState: 'Paused' })} tabIndex={0} />);
+		rerender(
+			<Card
+				game={game({ effectiveState: 'Paused' })}
+				tabIndex={0}
+				{...noMenu}
+			/>,
+		);
 		expect(screen.getByTestId('shelf-card')).not.toHaveClass('card--playing');
 	});
 
@@ -84,7 +97,7 @@ describe('Card', () => {
 			}),
 		);
 		expect(screen.getByText('Platinum achieved')).toBeInTheDocument();
-		expect(screen.getByText('🏆')).toBeInTheDocument();
+		expect(screen.getByTestId('platinum-trophy')).toBeInTheDocument();
 		expect(screen.queryByText('Story completed')).not.toBeInTheDocument();
 	});
 
@@ -103,6 +116,7 @@ describe('Card', () => {
 			<Card
 				game={game({ released: false, releaseDate: '2999-01-01' })}
 				tabIndex={0}
+				{...noMenu}
 			/>,
 		);
 		expect(screen.getByText('SOON')).toBeInTheDocument();
@@ -127,6 +141,7 @@ describe('Card', () => {
 
 	describe('owned toggle (Story 2.4)', () => {
 		afterEach(() => {
+			resetInFlightWrites();
 			vi.unstubAllGlobals();
 		});
 
