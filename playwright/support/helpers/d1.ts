@@ -1,4 +1,7 @@
 import { execFileSync } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createGame, type SeedGame } from '../factories/game-factory';
 
 /**
@@ -9,24 +12,56 @@ import { createGame, type SeedGame } from '../factories/game-factory';
  */
 // ponytail: shells out per call (~1-2s); switch to a dev-only seed endpoint if suite setup time starts to hurt
 
-const sq = (value: string | null): string =>
+export const sq = (value: string | null): string =>
 	value === null ? 'NULL' : `'${value.replaceAll("'", "''")}'`;
 
+const sleepSync = (ms: number) =>
+	Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+/**
+ * Runs `wrangler d1 execute` with the given trailing args. Parallel workers
+ * all hit one local SQLite file, so lock contention (SQLITE_BUSY) is retried
+ * with backoff; failures surface wrangler's stderr, not a bare exit code.
+ */
+function runWrangler(args: string[]): string {
+	for (let attempt = 1; ; attempt++) {
+		try {
+			return execFileSync(
+				'bun',
+				['x', 'wrangler', 'd1', 'execute', 'DB', '--local', '--env', 'e2e', ...args],
+				{ stdio: ['ignore', 'pipe', 'pipe'] },
+			).toString();
+		} catch (error) {
+			const stderr =
+				(error as { stderr?: Buffer }).stderr?.toString() ?? '';
+			const stdout = (error as { stdout?: Buffer }).stdout?.toString() ?? '';
+			if (attempt < 5 && /locked|busy/i.test(stderr + stdout)) {
+				sleepSync(250 * attempt);
+				continue;
+			}
+			throw new Error(
+				`wrangler d1 execute failed:\n${stderr || stdout || String(error)}`,
+			);
+		}
+	}
+}
+
 export function d1Execute(sql: string): void {
-	execFileSync(
-		'bun',
-		['x', 'wrangler', 'd1', 'execute', 'DB', '--local', '--env', 'e2e', '--command', sql],
-		{ stdio: 'pipe' },
-	);
+	// Large batches (e.g. 49 seeded games) overflow the Windows ~8K command
+	// line — hand the SQL to wrangler as a file instead of --command.
+	const dir = mkdtempSync(join(tmpdir(), 'e2e-d1-'));
+	const file = join(dir, 'batch.sql');
+	writeFileSync(file, sql);
+	try {
+		runWrangler(['--file', file]);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
 }
 
 /** Runs a single SELECT and returns its rows (wrangler `--json` output). */
 export function d1Query<T>(sql: string): T[] {
-	const raw = execFileSync(
-		'bun',
-		['x', 'wrangler', 'd1', 'execute', 'DB', '--local', '--env', 'e2e', '--json', '--command', sql],
-		{ stdio: ['ignore', 'pipe', 'pipe'] },
-	).toString();
+	const raw = runWrangler(['--json', '--command', sql]);
 	// wrangler may prefix the JSON with log lines — anchor on the payload's
 	// `[{` opener, not just any bracket (log noise like [WARNING] has those)
 	const start = raw.search(/\[\s*\{/);
@@ -36,14 +71,27 @@ export function d1Query<T>(sql: string): T[] {
 	return (JSON.parse(raw.slice(start)) as Array<{ results: T[] }>)[0]?.results ?? [];
 }
 
-export function seedGame(game: SeedGame): void {
+const seedSql = (game: SeedGame): string => {
 	const t = game.tracking;
-	d1Execute(
-		`INSERT INTO game (id, title, title_normalized, release_date, cover_url, store_url, ps_plus_extra, unenriched)
+	return `INSERT INTO game (id, title, title_normalized, release_date, cover_url, store_url, ps_plus_extra, unenriched)
 		 VALUES (${sq(game.id)}, ${sq(game.title)}, ${sq(game.title.toLowerCase())}, ${sq(game.releaseDate)}, ${sq(game.coverUrl)}, ${sq(game.storeUrl)}, ${game.psPlusExtra ? 1 : 0}, 0);
 		 INSERT INTO game_tracking (user_id, game_id, owned, play_status, completed_on, platinum_on, wishlisted_on)
-		 SELECT id, ${sq(game.id)}, ${t.owned ? 1 : 0}, ${sq(t.playStatus)}, ${sq(t.completedOn)}, ${sq(t.platinumOn)}, ${sq(t.wishlistedOn)} FROM user LIMIT 1;`,
-	);
+		 SELECT id, ${sq(game.id)}, ${t.owned ? 1 : 0}, ${sq(t.playStatus)}, ${sq(t.completedOn)}, ${sq(t.platinumOn)}, ${sq(t.wishlistedOn)} FROM user LIMIT 1;`;
+};
+
+export function seedGame(game: SeedGame): void {
+	d1Execute(seedSql(game));
+}
+
+/** Seeds many games in ONE wrangler shell-out (~1-2s each otherwise). */
+export function seedGames(games: SeedGame[]): void {
+	if (games.length > 0) d1Execute(games.map(seedSql).join(' '));
+}
+
+/** Deletes many games in one call; game_tracking rows cascade. */
+export function deleteGames(gameIds: string[]): void {
+	if (gameIds.length > 0)
+		d1Execute(`DELETE FROM game WHERE id IN (${gameIds.map(sq).join(', ')});`);
 }
 
 export function deleteGame(gameId: string): void {
@@ -94,7 +142,5 @@ export const BASELINE_GAMES: SeedGame[] = [
 ];
 
 export function seedBaseline(): void {
-	for (const game of BASELINE_GAMES) {
-		seedGame(game);
-	}
+	seedGames(BASELINE_GAMES);
 }

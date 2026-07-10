@@ -83,8 +83,14 @@
    `position: relative` regardless of stylesheet order. */
 .card__owned-toggle.card__owned-toggle {
 	position: absolute;
-	top: var(--space-2);
-	right: var(--space-2);
+	/* Not --space-2 (8px): the cover clips overflow, so the centered
+	   --hit-target overlay needs (44 - 22px chip) / 2 = 11px clearance on
+	   each side or the real hit area shrinks below WCAG's 44px (1.5g). */
+	/* ponytail: cover border-radius still clips the overlay's extreme corner
+	   diagonal; move the toggle out of .card__cover if full-square compliance
+	   is ever required */
+	top: calc((var(--hit-target) - 22px) / 2);
+	right: calc((var(--hit-target) - 22px) / 2);
 	z-index: 1;
 	width: 22px;
 	height: 22px;

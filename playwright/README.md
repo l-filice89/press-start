@@ -77,6 +77,7 @@ test('shows expired-cookie banner', { annotation: [{ type: 'skipNetworkMonitorin
 - **Isolation**: factories generate unique titles; delete what you seed
   (`try/finally` or a fixture) so specs stay parallel-safe (`fullyParallel: true`).
 - **Standing rule (TR-3)**: every AC with a UI flow ships with a Playwright test.
+- **Coverage note**: `COVERAGE.md` maps every Epic AC to its test or a skip reason.
 
 ## CI
 

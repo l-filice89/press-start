@@ -133,3 +133,6 @@ decision: 2026-07-08 Add requirement refs — Add bracketed FR/AR/UX-DR requirem
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-5-1-playwright-framework-auth-smoke-test.md`
   summary: CI burn-in job interpolates git-diff-derived spec filenames directly into a shell command (`bunx playwright test ${{ steps.changed.outputs.specs }}`).
   evidence: Pre-existing from dae7d7f but now merge-relevant via the ci-ok gate; a hostile filename under playwright/e2e/ would be shell-interpolated. Mitigated today by pull_request read-only fork tokens and a single-maintainer repo.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-5-2-backfill-epic-1-e2e-flows.md`
+  summary: Owned-toggle 44px hit-area overlay is diagonally clipped at the card cover's rounded corner (border-radius ~11px), so the extreme corner of the WCAG target square is not clickable.
+  evidence: The overlay sits flush to the cover edge (offset = (44-22)/2) and .card__cover has overflow:hidden + border-radius; cardinal probes pass but a diagonal probe at the corner would fail. Upgrade path: move the toggle out of .card__cover (ponytail comment in web/shelf/card.css names it).
