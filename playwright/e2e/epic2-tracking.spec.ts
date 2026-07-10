@@ -30,16 +30,18 @@ const cardFor = (page: Page, game: SeedGame) =>
 async function openStatusMenu(page: Page, game: SeedGame) {
 	const pill = cardFor(page, game).getByTestId('status-pill-button');
 	const menu = page.getByTestId('status-menu');
-	// A background refetch (parallel workers churning the shared DB) can
-	// re-chunk the grid and remount the card, which unmounts a just-opened
-	// menu. Retry until the menu survives a beat — Story 3.4 hardens the
-	// product side of this (transient UI vs re-chunk); then drop this loop.
-	await expect(async () => {
-		if (!(await menu.isVisible())) {
-			await pill.click({ timeout: 5_000 });
-		}
-		await expect(menu).toBeVisible({ timeout: 2_000 });
-	}).toPass({ timeout: 20_000 });
+	// Menu open-state is grid-owned since Story 3.6 — a refetch re-chunk no
+	// longer kills an OPEN menu (jsdom-pinned), so the old blind retry loop is
+	// gone. What remains is a different race the loop also absorbed: a click
+	// dispatched while a just-settled write's refetch COMMITS (overlapping
+	// invalidations + parallel-worker DB churn = every commit is a full
+	// re-chunk, and the click lands in a mid-commit DOM — trace-verified).
+	// Our page only refetches on its own writes, so network quiescence is a
+	// deterministic gate: after networkidle nothing is pending, no commit can
+	// race the click.
+	await page.waitForLoadState('networkidle');
+	await pill.click();
+	await expect(menu).toBeVisible();
 	return { pill, menu };
 }
 
@@ -183,6 +185,9 @@ test('first move to Playing stamps started_on, visible in the detail panel (2.1b
 	try {
 		await seedGames([game]);
 		await page.goto('/');
+		// The seeded card can sit past the progressive fold under parallel-suite
+		// load (deferred-work: 3.1 parallel-flake) — page it in first.
+		await loadAllPages(page);
 		const { menu } = await openStatusMenu(page, game);
 		await menu.getByRole('menuitemradio', { name: 'Playing' }).click();
 		await expect(
@@ -190,6 +195,7 @@ test('first move to Playing stamps started_on, visible in the detail panel (2.1b
 		).toBeVisible();
 		// Wait for the refetch to land before opening the panel — the shelf
 		// re-renders the card and a mid-render click can go stale.
+		await loadAllPages(page);
 		await expect(cardFor(page, game)).toHaveAttribute(
 			'aria-label',
 			`${game.title} — Playing`,

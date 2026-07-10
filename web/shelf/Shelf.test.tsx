@@ -478,6 +478,100 @@ describe('Shelf', () => {
 		expect(screen.getByRole('dialog', { name: 'Bolt' })).toBeVisible();
 	});
 
+	// HAZARD (Story 3.6, AC3): menu open-state lives in ShelfGrid — a refetch
+	// that reorders/re-chunks the rows (remounting every Card in jsdom's
+	// one-column layout) must not kill an open status menu. The refetch is
+	// driven by direct invalidation (a background actor — Epic 4 sync): an
+	// outside CLICK is supposed to close the menu, so a pointer-driven write
+	// can't exercise this.
+	it('keeps the status menu open across a refetch that re-chunks the grid', async () => {
+		const user = userEvent.setup();
+		const a = card('a', 'Apex', {
+			effectiveState: 'Playing',
+			playStatus: 'Playing',
+		});
+		const b = card('b', 'Bolt', {
+			effectiveState: 'Playing',
+			playStatus: 'Playing',
+		});
+		let games = [a, b];
+		mockFetch(games);
+		const client = new QueryClient({
+			defaultOptions: { queries: { retry: false } },
+		});
+		render(
+			<QueryClientProvider client={client}>
+				<Shelf />
+			</QueryClientProvider>,
+		);
+		const cards = await screen.findAllByTestId('shelf-card');
+
+		// Open Bolt's status menu the keyboard way.
+		cards[1].focus();
+		await user.keyboard('{Enter}');
+		await user.keyboard('{Enter}');
+		expect(screen.getByTestId('status-menu')).toBeVisible();
+
+		// Background refetch reorders the shelf — every Card remounts.
+		games = [b, a];
+		mockFetch(games);
+		await client.invalidateQueries({ queryKey: ['shelf'] });
+		await waitFor(() =>
+			expect(screen.getAllByTestId('shelf-card')[0]).toHaveTextContent('Bolt'),
+		);
+		// The menu survived the remount (grid-owned open-state) — and it is
+		// still BOLT's menu, not whatever card sits at the old index.
+		const menu = screen.getByTestId('status-menu');
+		expect(menu).toBeVisible();
+		expect(menu).toHaveAccessibleName('Play status for Bolt');
+	});
+
+	// Stale-id cleanup: the open-menu game leaving the rendered set must clear
+	// the grid-owned id — a later reappearance must NOT re-open the menu.
+	it('does not resurrect a status menu when its game leaves and reappears', async () => {
+		const user = userEvent.setup();
+		const a = card('a', 'Apex', {
+			effectiveState: 'Playing',
+			playStatus: 'Playing',
+		});
+		const b = card('b', 'Bolt', {
+			effectiveState: 'Playing',
+			playStatus: 'Playing',
+		});
+		let games = [a, b];
+		mockFetch(games);
+		const client = new QueryClient({
+			defaultOptions: { queries: { retry: false } },
+		});
+		render(
+			<QueryClientProvider client={client}>
+				<Shelf />
+			</QueryClientProvider>,
+		);
+		const cards = await screen.findAllByTestId('shelf-card');
+
+		cards[1].focus();
+		await user.keyboard('{Enter}');
+		await user.keyboard('{Enter}');
+		expect(screen.getByTestId('status-menu')).toBeVisible();
+
+		// Bolt leaves the visible set (background actor)…
+		games = [a];
+		mockFetch(games);
+		await client.invalidateQueries({ queryKey: ['shelf'] });
+		await waitFor(() =>
+			expect(screen.getAllByTestId('shelf-card')).toHaveLength(1),
+		);
+		// …and returns: no uninvited menu.
+		games = [a, b];
+		mockFetch(games);
+		await client.invalidateQueries({ queryKey: ['shelf'] });
+		await waitFor(() =>
+			expect(screen.getAllByTestId('shelf-card')).toHaveLength(2),
+		);
+		expect(screen.queryByTestId('status-menu')).not.toBeInTheDocument();
+	});
+
 	it('shows an alert if the shelf fails to load', async () => {
 		vi.stubGlobal(
 			'fetch',

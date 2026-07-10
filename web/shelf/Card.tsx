@@ -25,12 +25,19 @@ export function Card({
 	cardRef,
 	onKeyDown,
 	onOpenDetail,
+	statusMenuOpen,
+	onStatusMenuOpenChange,
 }: {
 	game: ShelfGame;
 	tabIndex: number;
 	cardRef?: (el: HTMLDivElement | null) => void;
 	onKeyDown?: (e: KeyboardEvent<HTMLDivElement>) => void;
 	onOpenDetail?: (gameId: string) => void;
+	/** Status-menu open state lives in ShelfGrid (Story 3.6 — the 3.4 hoist
+	 * pattern): a refetch re-chunk remounts this Card, and local menu state
+	 * would die with it. Card only threads it down. */
+	statusMenuOpen: boolean;
+	onStatusMenuOpenChange: (open: boolean) => void;
 }) {
 	// A persisted cover_url that 404s / fails to load falls back to the same
 	// graceful mark as a missing cover — never a broken-image glyph, no network.
@@ -170,7 +177,11 @@ export function Card({
 				</p>
 				<p className="card__genres">{game.genres.join(' · ')}</p>
 				<div className="card__meta">
-					<StatusPopover game={game} />
+					<StatusPopover
+						game={game}
+						open={statusMenuOpen}
+						onOpenChange={onStatusMenuOpenChange}
+					/>
 				</div>
 				<p className="card__owned-line">
 					{/* visibility-hidden (CSS, via data-owned) when un-owned — keeps

@@ -25,12 +25,25 @@ import { REVEAL_STATES } from './filters';
 // can't slip two writes through.
 const IN_FLIGHT = new Set<string>();
 
+// Per-game write generation (Story 3.6, AC2): bumped on every beginWrite.
+// A toast UNDO closure captures the generation of ITS OWN write; a differing
+// value at activation time means newer intent exists (settled or in flight),
+// so the stale undo must not fire. DELIBERATELY broad, like IN_FLIGHT: ANY
+// later write on the game — a date save, a genre add, even one that failed —
+// expires its undos. Conservative on purpose: a spuriously expired undo is a
+// re-doable inconvenience; a stale undo overwriting newer intent is silent
+// data loss. Module scope for the same reason as IN_FLIGHT: one truth across
+// every hook instance and closure.
+const WRITE_GEN = new Map<string, number>();
+
 /**
- * Test-only escape hatch: module state outlives unmounted components, so a
- * test that deliberately leaves a write hanging must clear it between cases.
+ * Test-only escape hatch: module state (the in-flight set AND the write
+ * generations) outlives unmounted components, so tests that leave writes
+ * hanging or bump generations must clear both between cases.
  */
 export function resetInFlightWrites() {
 	IN_FLIGHT.clear();
+	WRITE_GEN.clear();
 }
 
 // UI-orchestration mirror of the server's default-shelf filter (AD-7 computes
@@ -88,8 +101,33 @@ export function useTrackingMutations(
 		toast({ message: `Still saving ${game.title}. Try again in a moment.` });
 		return true;
 	}, [toast, game.id, game.title]);
-	const beginWrite = useCallback(() => IN_FLIGHT.add(game.id), [game.id]);
+	const beginWrite = useCallback(() => {
+		IN_FLIGHT.add(game.id);
+		WRITE_GEN.set(game.id, (WRITE_GEN.get(game.id) ?? 0) + 1);
+	}, [game.id]);
 	const settleWrite = useCallback(() => IN_FLIGHT.delete(game.id), [game.id]);
+	// Stale-intent guard for toast UNDO closures (Story 3.6, AC2): captured
+	// right after the undone write began, checked at activation. A newer write
+	// on the same game — settled or still in flight — expires the undo; saying
+	// so beats silently doing nothing (NFR-4).
+	const guardStaleUndo = useCallback(
+		(gen: number) => {
+			if (WRITE_GEN.get(game.id) === gen) return false;
+			toast({
+				message: `Undo expired — ${game.title} was changed again.`,
+			});
+			return true;
+		},
+		[toast, game.id, game.title],
+	);
+	// One invalidation seam for every write path (Story 3.6, AC1): the search
+	// listbox renders from ['shelf-search', term] — a write that refreshes the
+	// shelf but not the search leaves an open listbox stale (prefix match
+	// covers every term). 409 paths refresh through here too.
+	const invalidateShelfQueries = useCallback(() => {
+		queryClient.invalidateQueries({ queryKey: ['shelf'] });
+		queryClient.invalidateQueries({ queryKey: ['shelf-search'] });
+	}, [queryClient]);
 
 	// `onHidden` fires only on a visible→hidden TRANSITION (Story 3.2, FR-4/17):
 	// a write on an already-hidden game (reached via reveal pill or search) that
@@ -103,7 +141,7 @@ export function useTrackingMutations(
 			changePlayStatus(game.id, status),
 		onSettled: settleWrite,
 		onSuccess: (state) => {
-			queryClient.invalidateQueries({ queryKey: ['shelf'] });
+			invalidateShelfQueries();
 			if (becameHidden(state)) onHidden?.();
 		},
 		// A 401 routes to sign-in centrally (query-client.ts). Everything else must
@@ -117,7 +155,7 @@ export function useTrackingMutations(
 				toast({
 					message: `Can’t clear ${game.title} — no milestone logged.`,
 				});
-				queryClient.invalidateQueries({ queryKey: ['shelf'] });
+				invalidateShelfQueries();
 				return;
 			}
 			toast({ message: `Couldn’t update ${game.title}. Try again.` });
@@ -131,7 +169,7 @@ export function useTrackingMutations(
 		mutationFn: (milestone: Milestone) => logMilestone(game.id, milestone),
 		onSettled: settleWrite,
 		onSuccess: (state) => {
-			queryClient.invalidateQueries({ queryKey: ['shelf'] });
+			invalidateShelfQueries();
 			if (becameHidden(state)) onHidden?.();
 		},
 		onError: () =>
@@ -150,6 +188,9 @@ export function useTrackingMutations(
 			if (guardPending()) return;
 			const previous = game.playStatus;
 			beginWrite();
+			// This write's generation — the undo below is valid only while no
+			// newer write on this game has begun (Story 3.6, AC2).
+			const gen = WRITE_GEN.get(game.id) ?? 0;
 			mutate(next, {
 				onSuccess: () => {
 					// Dropped — and clearing to a milestone state — hide the card from
@@ -162,9 +203,10 @@ export function useTrackingMutations(
 						next === 'Dropped' || next === null
 							? {
 									// The UNDO respects the same call-time guard as every
-									// other entry point (Story 3.4, AC5).
+									// other entry point (Story 3.4, AC5) — and expires when a
+									// newer write on this game exists (Story 3.6, AC2).
 									onUndo: () => {
-										if (guardPending()) return;
+										if (guardPending() || guardStaleUndo(gen)) return;
 										beginWrite();
 										mutate(previous);
 									},
@@ -179,7 +221,16 @@ export function useTrackingMutations(
 				},
 			});
 		},
-		[game.playStatus, game.title, mutate, toast, guardPending, beginWrite],
+		[
+			game.playStatus,
+			game.title,
+			game.id,
+			mutate,
+			toast,
+			guardPending,
+			guardStaleUndo,
+			beginWrite,
+		],
 	);
 
 	// The two gated milestone actions. `achieved` disables the row: the first
@@ -220,7 +271,7 @@ export function useTrackingMutations(
 		mutationFn: (change: { owned?: boolean; ownershipType?: OwnershipType }) =>
 			changeOwnership(game.id, change),
 		onSettled: settleWrite,
-		onSuccess: () => queryClient.invalidateQueries({ queryKey: ['shelf'] }),
+		onSuccess: () => invalidateShelfQueries(),
 		onError: () =>
 			toast({ message: `Couldn’t update ${game.title}. Try again.` }),
 	});
@@ -232,6 +283,8 @@ export function useTrackingMutations(
 			if (guardPending()) return;
 			const previousType = game.ownershipType;
 			beginWrite();
+			// Same stale-intent token as the status undo (Story 3.6, AC2).
+			const gen = WRITE_GEN.get(game.id) ?? 0;
 			mutateOwnership(change, {
 				onSuccess: () => {
 					if (change.owned === false) {
@@ -242,7 +295,7 @@ export function useTrackingMutations(
 							message: `${game.title} — no longer owned`,
 							undo: {
 								onUndo: () => {
-									if (guardPending()) return;
+									if (guardPending() || guardStaleUndo(gen)) return;
 									beginWrite();
 									mutateOwnership({
 										owned: true,
@@ -265,8 +318,10 @@ export function useTrackingMutations(
 		[
 			game.title,
 			game.ownershipType,
+			game.id,
 			mutateOwnership,
 			guardPending,
+			guardStaleUndo,
 			beginWrite,
 			toast,
 		],
@@ -278,13 +333,13 @@ export function useTrackingMutations(
 	const datesMutation = useMutation({
 		mutationFn: (edits: DateEdits) => editDates(game.id, edits),
 		onSettled: settleWrite,
-		onSuccess: () => queryClient.invalidateQueries({ queryKey: ['shelf'] }),
+		onSuccess: () => invalidateShelfQueries(),
 		onError: (error) => {
 			if ((error as Error & { status?: number }).status === 409) {
 				toast({
 					message: `Can’t clear the last milestone of ${game.title} — set a play status first.`,
 				});
-				queryClient.invalidateQueries({ queryKey: ['shelf'] });
+				invalidateShelfQueries();
 				return;
 			}
 			toast({ message: `Couldn’t update ${game.title}. Try again.` });
@@ -314,7 +369,7 @@ export function useTrackingMutations(
 				: removeGenre(game.id, op.name),
 		onSettled: settleWrite,
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ['shelf'] });
+			invalidateShelfQueries();
 			queryClient.invalidateQueries({ queryKey: ['genres'] });
 		},
 		onError: () =>

@@ -56,6 +56,9 @@ function game(over: Partial<ShelfGame> = {}): ShelfGame {
  * the Card and the single panel is looked up by it, so the open-from-cover
  * and focus-return-to-gridcell contracts exercised here are the real ones.
  */
+// Menu open-state is grid-owned (Story 3.6); these tests never open it.
+const noMenu = { statusMenuOpen: false, onStatusMenuOpenChange: () => {} };
+
 function GridHarness({ g }: { g: ShelfGame }) {
 	const [openId, setOpenId] = useState<string | null>(null);
 	const close = () => {
@@ -66,7 +69,7 @@ function GridHarness({ g }: { g: ShelfGame }) {
 	};
 	return (
 		<>
-			<Card game={g} tabIndex={0} onOpenDetail={setOpenId} />
+			<Card game={g} tabIndex={0} onOpenDetail={setOpenId} {...noMenu} />
 			{openId === g.id && <DetailPanel game={g} onClose={close} />}
 		</>
 	);

@@ -209,6 +209,18 @@ function ShelfGrid({ games }: { games: ShelfGame[] }) {
 	// mid-interaction. One panel renders below, looked up by id — so it also
 	// re-renders with fresh data after every refetch.
 	const [openGameId, setOpenGameId] = useState<string | null>(null);
+	// Same hoist for the status-popover menu (Story 3.6, AC3): the open menu's
+	// Card remounts on any refetch re-chunk — the boolean living here re-opens
+	// it on the remounted Card. Single id: at most one menu open at a time.
+	const [openStatusGameId, setOpenStatusGameId] = useState<string | null>(null);
+	// Stale-id cleanup (the other half of the 3.4 pattern): if the open-menu
+	// game leaves the rendered set, clear the id — otherwise the menu would
+	// spontaneously re-open and steal focus when the game reappears later.
+	useEffect(() => {
+		if (openStatusGameId && !visible.some((g) => g.id === openStatusGameId)) {
+			setOpenStatusGameId(null);
+		}
+	}, [visible, openStatusGameId]);
 	// Look up in the FULL list, not the progressive window: a write that
 	// reorders the open game past the rendered page must not kill its panel.
 	const openGame = openGameId
@@ -446,6 +458,10 @@ function ShelfGrid({ games }: { games: ShelfGame[] }) {
 									}}
 									onKeyDown={onCardKeyDown(index)}
 									onOpenDetail={setOpenGameId}
+									statusMenuOpen={game.id === openStatusGameId}
+									onStatusMenuOpenChange={(menuOpen) =>
+										setOpenStatusGameId(menuOpen ? game.id : null)
+									}
 								/>
 							);
 						})}
