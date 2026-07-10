@@ -30,8 +30,10 @@ import {
 import { changeOwnership } from './tracking';
 
 export interface SyncResult {
-	added: number;
-	flipped: number;
+	/** Titles of games this run created (or newly started tracking). */
+	added: string[];
+	/** Titles whose `Owned` flag flipped false→true this run. */
+	flipped: string[];
 	skippedMembership: number;
 	needsAttention: SyncAttentionItem[];
 }
@@ -110,8 +112,8 @@ export async function runSync(
 	]);
 	const trackingByGameId = new Map(trackingRows.map((t) => [t.gameId, t]));
 	const result: SyncResult = {
-		added: 0,
-		flipped: 0,
+		added: [],
+		flipped: [],
 		skippedMembership: plan.skippedMembership,
 		needsAttention: plan.conflicts.map((c) => ({
 			title: c.title,
@@ -150,7 +152,7 @@ export async function runSync(
 				});
 			}
 			await insertTrackingIfAbsent(db, userId, created.id, newTracking);
-			result.added++;
+			result.added.push(create.title);
 		} catch (error) {
 			result.needsAttention.push({
 				title: create.title,
@@ -192,7 +194,7 @@ export async function runSync(
 					match.gameId,
 					newTracking,
 				);
-				if (inserted) result.added++;
+				if (inserted) result.added.push(match.title);
 			} else if (!tracking.owned) {
 				// The one mutation sync may make to existing user data
 				// (FR-33/AD-10), through the standard guard: bought_on COALESCEs,
@@ -204,7 +206,7 @@ export async function runSync(
 					{ owned: true, ownershipType: 'digital' },
 					today,
 				);
-				if (outcome && outcome !== 'invalid') result.flipped++;
+				if (outcome && outcome !== 'invalid') result.flipped.push(match.title);
 			}
 		} catch (error) {
 			result.needsAttention.push({

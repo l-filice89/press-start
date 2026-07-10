@@ -12,6 +12,34 @@ import './sync-summary-modal.css';
  * counts belong to the run that produced them and aren't persisted, so
  * `result` is null on that path.
  */
+/** One counts group: "Heading (N)" plus the game titles by name. */
+function TitledList({
+	heading,
+	hint,
+	titles,
+}: {
+	heading: string;
+	hint?: string;
+	titles: string[];
+}) {
+	return (
+		<div className="sync-summary__group">
+			<h3 className="sync-summary__group-title">
+				{heading} <span className="sync-summary__count">({titles.length})</span>
+			</h3>
+			{hint && <p className="sync-summary__group-hint">{hint}</p>}
+			{titles.length > 0 && (
+				<ul className="sync-summary__titles">
+					{titles.map((title, index) => (
+						// biome-ignore lint/suspicious/noArrayIndexKey: two distinct games can share a display title; the list never reorders while open.
+						<li key={`${index}-${title}`}>{title}</li>
+					))}
+				</ul>
+			)}
+		</div>
+	);
+}
+
 export function SyncSummaryModal({
 	result,
 	attention,
@@ -75,20 +103,20 @@ export function SyncSummaryModal({
 				</h2>
 
 				{result && (
-					<dl className="sync-summary__counts" data-testid="sync-counts">
-						<div>
-							<dt>Games added</dt>
-							<dd>{result.added}</dd>
-						</div>
-						<div>
-							<dt>Now owned</dt>
-							<dd>{result.flipped}</dd>
-						</div>
-						<div>
-							<dt>Membership entries skipped</dt>
-							<dd>{result.skippedMembership}</dd>
-						</div>
-					</dl>
+					<div className="sync-summary__counts" data-testid="sync-counts">
+						<TitledList heading="Games added" titles={result.added} />
+						<TitledList
+							heading="Now owned"
+							hint="already on your shelf, found among your PSN purchases"
+							titles={result.flipped}
+						/>
+						<p className="sync-summary__count-line">
+							Membership entries skipped:{' '}
+							<span className="sync-summary__count">
+								{result.skippedMembership}
+							</span>
+						</p>
+					</div>
 				)}
 
 				{attention.length > 0 && (

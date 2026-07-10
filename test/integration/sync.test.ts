@@ -97,8 +97,8 @@ describe('POST /api/sync (integration, real workerd + local D1)', () => {
 		const res = await postSync(cookie);
 		expect(res.status).toBe(200);
 		expect(await res.json()).toEqual({
-			added: 1,
-			flipped: 0,
+			added: ['Astro Bot'],
+			flipped: [],
 			skippedMembership: 0,
 			needsAttention: [],
 		});
@@ -129,8 +129,8 @@ describe('POST /api/sync (integration, real workerd + local D1)', () => {
 		stubPsn([psn()]);
 		const res = await postSync(cookie);
 		expect(await res.json()).toEqual({
-			added: 0,
-			flipped: 0,
+			added: [],
+			flipped: [],
 			skippedMembership: 0,
 			needsAttention: [],
 		});
@@ -159,7 +159,10 @@ describe('POST /api/sync (integration, real workerd + local D1)', () => {
 			}),
 		]);
 		const res = await postSync(cookie);
-		expect(await res.json()).toMatchObject({ added: 0, flipped: 1 });
+		expect(await res.json()).toMatchObject({
+			added: [],
+			flipped: ['Hollow Knight'],
+		});
 
 		const after = await getTracking(db(), userId, tracked.id);
 		// The flip and its inferences...
@@ -207,8 +210,8 @@ describe('POST /api/sync (integration, real workerd + local D1)', () => {
 		]);
 		const res = await postSync(cookie);
 		expect(await res.json()).toEqual({
-			added: 0,
-			flipped: 0,
+			added: [],
+			flipped: [],
 			skippedMembership: 2,
 			needsAttention: [],
 		});
@@ -238,7 +241,7 @@ describe('POST /api/sync (integration, real workerd + local D1)', () => {
 		const body = (await res.json()) as {
 			needsAttention: { title: string; reason: string }[];
 		};
-		expect(body).toMatchObject({ added: 0, flipped: 0 });
+		expect(body).toMatchObject({ added: [], flipped: [] });
 		expect(body.needsAttention).toHaveLength(1);
 		expect(body.needsAttention[0].title).toBe('Doppelganger');
 

@@ -42,8 +42,10 @@ export async function savePsnCookie(cookie: string): Promise<void> {
 
 /** Result of a PSN library sync (Story 4.2; 4.3 renders the full summary). */
 export const syncResultSchema = z.object({
-	added: z.number(),
-	flipped: z.number(),
+	/** Titles created this run — the modal lists them by name. */
+	added: z.array(z.string()),
+	/** Titles whose `Owned` flag flipped false→true this run. */
+	flipped: z.array(z.string()),
 	skippedMembership: z.number(),
 	needsAttention: z.array(syncAttentionItemSchema),
 });

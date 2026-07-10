@@ -12,8 +12,8 @@ import { SyncSummaryModal } from './SyncSummaryModal';
  */
 
 const result = {
-	added: 2,
-	flipped: 1,
+	added: ['Astro Bot', 'Hades II'],
+	flipped: ['Hollow Knight'],
 	skippedMembership: 3,
 	needsAttention: [{ title: 'Doppelganger', reason: 'ambiguous match' }],
 };
@@ -29,9 +29,13 @@ describe('SyncSummaryModal', () => {
 		);
 
 		const counts = screen.getByTestId('sync-counts');
-		expect(counts).toHaveTextContent('Games added2');
-		expect(counts).toHaveTextContent('Now owned1');
-		expect(counts).toHaveTextContent('Membership entries skipped3');
+		// Counts AND the game names — which games landed must never be a guess.
+		expect(counts).toHaveTextContent('Games added (2)');
+		expect(counts).toHaveTextContent('Astro Bot');
+		expect(counts).toHaveTextContent('Hades II');
+		expect(counts).toHaveTextContent('Now owned (1)');
+		expect(counts).toHaveTextContent('Hollow Knight');
+		expect(counts).toHaveTextContent('Membership entries skipped: 3');
 		expect(screen.getByText('Needs attention (1)')).toBeInTheDocument();
 		expect(screen.getByText('Doppelganger')).toBeInTheDocument();
 	});

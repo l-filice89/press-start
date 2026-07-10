@@ -29,8 +29,8 @@ const okResult = () =>
 	Promise.resolve(
 		new Response(
 			JSON.stringify({
-				added: 2,
-				flipped: 1,
+				added: ['Astro Bot', 'Hades II'],
+				flipped: ['Hollow Knight'],
 				skippedMembership: 3,
 				needsAttention: [],
 			}),
@@ -88,8 +88,8 @@ describe('Fab', () => {
 		// The result goes to the summary modal (FR-37), not a toast.
 		await waitFor(() =>
 			expect(onSyncComplete).toHaveBeenCalledWith({
-				added: 2,
-				flipped: 1,
+				added: ['Astro Bot', 'Hades II'],
+				flipped: ['Hollow Knight'],
 				skippedMembership: 3,
 				needsAttention: [],
 			}),

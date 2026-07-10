@@ -30,24 +30,41 @@
 
 .sync-summary__counts {
 	display: grid;
-	gap: var(--space-2);
+	gap: var(--space-3);
 	margin: 0 0 var(--space-3);
 }
 
-.sync-summary__counts div {
-	display: flex;
-	justify-content: space-between;
-	gap: var(--space-3);
-}
-
-.sync-summary__counts dt {
-	color: var(--color-text-secondary);
-}
-
-.sync-summary__counts dd {
+.sync-summary__group-title {
 	margin: 0;
 	color: var(--color-text-primary);
+	font-family: var(--font-ui);
+	font-size: 0.9375rem;
+}
+
+.sync-summary__group-hint {
+	margin: 0;
+	color: var(--color-text-secondary);
+	font-size: 0.8125rem;
+}
+
+.sync-summary__count {
+	color: var(--color-text-secondary);
 	font-family: var(--font-mono);
+}
+
+.sync-summary__titles {
+	margin: var(--space-1) 0 0;
+	padding-left: var(--space-4);
+	display: grid;
+	gap: var(--space-1);
+	color: var(--color-text-primary);
+	font-size: 0.875rem;
+}
+
+.sync-summary__count-line {
+	margin: 0;
+	color: var(--color-text-secondary);
+	font-size: 0.9375rem;
 }
 
 .sync-summary__attention {
