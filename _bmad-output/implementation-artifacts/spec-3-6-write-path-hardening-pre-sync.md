@@ -2,8 +2,9 @@
 title: 'Story 3.6: Write-path hardening (pre-sync)'
 type: 'feature'
 created: '2026-07-10'
-status: 'in-review'
+status: 'done'
 baseline_revision: '3e03f478e94059a7e50ea7738d60c976a5f05538'
+final_revision: 'a3afc85dda0f10214fefcb5a03625b905da7b96b'
 review_loop_iteration: 0
 followup_review_recommended: false
 context: []
