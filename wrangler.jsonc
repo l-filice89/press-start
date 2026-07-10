@@ -67,7 +67,10 @@
 			],
 			"vars": {
 				"AUTH_ALLOWED_EMAIL": "e2e@press-start.local",
-				"AUTH_EMAIL_FROM": ""
+				"AUTH_EMAIL_FROM": "",
+				// Enables POST /api/e2e/sql (test seeding through the Worker, avoiding
+				// cross-process SQLite locks). e2e env only — never deployed.
+				"E2E_TEST_HOOKS": "1"
 			}
 		}
 	}

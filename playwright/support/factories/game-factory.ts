@@ -15,7 +15,13 @@ export interface SeedGame {
 	psPlusExtra: boolean;
 	tracking: {
 		owned: boolean;
-		playStatus: 'Not started' | 'Up next' | 'Playing' | 'Paused' | 'Dropped' | null;
+		playStatus:
+			| 'Not started'
+			| 'Up next'
+			| 'Playing'
+			| 'Paused'
+			| 'Dropped'
+			| null;
 		completedOn: string | null;
 		platinumOn: string | null;
 		wishlistedOn: string | null;
@@ -52,5 +58,9 @@ export const createWishlistedGame = (
 ): SeedGame =>
 	createGame({
 		...overrides,
-		tracking: { owned: false, wishlistedOn: '2026-01-01', ...overrides.tracking },
+		tracking: {
+			owned: false,
+			wishlistedOn: '2026-01-01',
+			...overrides.tracking,
+		},
 	});

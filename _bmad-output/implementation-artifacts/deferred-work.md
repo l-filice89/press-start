@@ -136,3 +136,6 @@ decision: 2026-07-08 Add requirement refs — Add bracketed FR/AR/UX-DR requirem
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-5-2-backfill-epic-1-e2e-flows.md`
   summary: Owned-toggle 44px hit-area overlay is diagonally clipped at the card cover's rounded corner (border-radius ~11px), so the extreme corner of the WCAG target square is not clickable.
   evidence: The overlay sits flush to the cover edge (offset = (44-22)/2) and .card__cover has overflow:hidden + border-radius; cardinal probes pass but a diagonal probe at the corner would fail. Upgrade path: move the toggle out of .card__cover (ponytail comment in web/shelf/card.css names it).
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-5-3-backfill-epic-2-e2e-flows.md`
+  summary: An open DetailPanel unmounts whenever a write's shelf refetch re-chunks the grid rows and remounts its Card (dialog open-state lives in Card).
+  evidence: Reproduced under parallel e2e (other actors' rows shift positions); solo user only sees it when their own write reorders the card across a row boundary. Upgrade path is hoisting the open-panel game id to Shelf level. E2e tests assert post-write truths on the card or after reopen as a workaround (comment in epic2-detail.spec.ts).

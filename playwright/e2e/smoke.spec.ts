@@ -27,13 +27,13 @@ test('the shelf loads for the authenticated user', async ({ page }) => {
 
 test('a seeded game appears on the shelf', async ({ page }) => {
 	const game = createGame();
-	seedGame(game);
+	await seedGame(game);
 	try {
 		await page.goto('/');
 		await expect(
 			page.getByTestId('shelf-card').filter({ hasText: game.title }),
 		).toBeVisible();
 	} finally {
-		deleteGame(game.id);
+		await deleteGame(game.id);
 	}
 });

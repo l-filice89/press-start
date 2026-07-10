@@ -37,7 +37,17 @@ export default async function globalSetup() {
 	// The e2e D1 database is fresh state under .wrangler — migrations first.
 	execFileSync(
 		'bun',
-		['x', 'wrangler', 'd1', 'migrations', 'apply', 'DB', '--local', '--env', 'e2e'],
+		[
+			'x',
+			'wrangler',
+			'd1',
+			'migrations',
+			'apply',
+			'DB',
+			'--local',
+			'--env',
+			'e2e',
+		],
 		{ stdio: 'inherit' },
 	);
 
@@ -47,11 +57,15 @@ export default async function globalSetup() {
 
 	// Spawn the dev server ourselves (not Playwright's webServer): we must
 	// read its stdout to capture the magic link.
-	const child = spawn('bun', ['x', 'vite', 'dev', '--port', String(E2E_PORT), '--strictPort'], {
-		env: { ...process.env, CLOUDFLARE_ENV: 'e2e' },
-		stdio: ['ignore', 'pipe', 'pipe'],
-		detached: process.platform !== 'win32', // POSIX: own process group so teardown can kill the tree
-	});
+	const child = spawn(
+		'bun',
+		['x', 'vite', 'dev', '--port', String(E2E_PORT), '--strictPort'],
+		{
+			env: { ...process.env, CLOUDFLARE_ENV: 'e2e' },
+			stdio: ['ignore', 'pipe', 'pipe'],
+			detached: process.platform !== 'win32', // POSIX: own process group so teardown can kill the tree
+		},
+	);
 	let output = '';
 	writeFileSync(SERVER_LOG, ''); // fresh log; specs tail this for magic links
 	const capture = (d: Buffer) => {
@@ -78,7 +92,9 @@ export default async function globalSetup() {
 			headers: { Origin: BASE_URL },
 		});
 		if (!signIn.ok()) {
-			throw new Error(`magic-link request failed: ${signIn.status()} ${await signIn.text()}`);
+			throw new Error(
+				`magic-link request failed: ${signIn.status()} ${await signIn.text()}`,
+			);
 		}
 
 		const link = await waitFor(
@@ -93,11 +109,13 @@ export default async function globalSetup() {
 		}
 		const me = await api.get('/api/me');
 		if (!me.ok()) {
-			throw new Error(`session not established: /api/me returned ${me.status()}`);
+			throw new Error(
+				`session not established: /api/me returned ${me.status()}`,
+			);
 		}
 
 		// Baseline fixture rides the user row the sign-in just created.
-		seedBaseline();
+		await seedBaseline();
 
 		mkdirSync('playwright/.auth', { recursive: true });
 		await api.storageState({ path: STORAGE_STATE });

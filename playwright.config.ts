@@ -15,6 +15,9 @@ export default defineConfig({
 	forbidOnly: !!process.env.CI,
 	retries: process.env.CI ? 2 : 0,
 	timeout: 60_000,
+	// Mutations are refetch-driven (no optimistic updates): under parallel
+	// load a PATCH + shelf refetch can outlive the 5s default expect window.
+	expect: { timeout: 10_000 },
 	reporter: process.env.CI
 		? [
 				['list'],

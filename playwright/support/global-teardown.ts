@@ -12,7 +12,9 @@ export default async function globalTeardown() {
 	}
 	try {
 		if (process.platform === 'win32') {
-			execFileSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' });
+			execFileSync('taskkill', ['/pid', String(pid), '/T', '/F'], {
+				stdio: 'ignore',
+			});
 		} else {
 			process.kill(-pid, 'SIGTERM'); // negative pid = whole process group (spawned detached)
 		}

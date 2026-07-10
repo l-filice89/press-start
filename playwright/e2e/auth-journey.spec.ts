@@ -20,7 +20,9 @@ const readLog = () => readFileSync(SERVER_LOG, 'utf8');
 /** First magic-link URL appearing in the server log after char `offset`. */
 function linkAfter(offset: number): string | undefined {
 	const tail = readLog().slice(offset);
-	return [...tail.matchAll(new RegExp(MAGIC_LINK_RE.source, 'g'))].map((m) => m[1])[0];
+	return [...tail.matchAll(new RegExp(MAGIC_LINK_RE.source, 'g'))].map(
+		(m) => m[1],
+	)[0];
 }
 
 test('signs in via the console-captured magic link and sees the seeded shelf', async ({
@@ -53,7 +55,9 @@ test('signs in via the console-captured magic link and sees the seeded shelf', a
 	await page.goto(link);
 
 	// Signed in: login form gone, baseline fixture on the shelf.
-	await expect(page.getByRole('textbox', { name: /magic link/i })).toHaveCount(0);
+	await expect(page.getByRole('textbox', { name: /magic link/i })).toHaveCount(
+		0,
+	);
 	for (const game of BASELINE_GAMES) {
 		await expect(
 			page.getByTestId('shelf-card').filter({ hasText: game.title }),
@@ -61,16 +65,16 @@ test('signs in via the console-captured magic link and sees the seeded shelf', a
 	}
 });
 
-test('baseline fixture is exact — reset leaves no residue from prior runs', () => {
+test('baseline fixture is exact — reset leaves no residue from prior runs', async () => {
 	// Hazard test (TR-1 determinism): without resetDb() the e2e D1 would
 	// accumulate across runs. Baseline games scoped to the 'Baseline %'
 	// prefix so parallel specs' factory games can't race it; the user table
 	// must hold exactly the one account global-setup's sign-in created
 	// (accumulating users is the residue a PK-crash on games wouldn't show).
-	const games = d1Query<{ n: number }>(
+	const games = await d1Query<{ n: number }>(
 		"SELECT COUNT(*) AS n FROM game WHERE title LIKE 'Baseline %';",
 	);
 	expect(games[0]?.n).toBe(BASELINE_GAMES.length);
-	const users = d1Query<{ n: number }>('SELECT COUNT(*) AS n FROM user;');
+	const users = await d1Query<{ n: number }>('SELECT COUNT(*) AS n FROM user;');
 	expect(users[0]?.n).toBe(1);
 });

@@ -23,10 +23,10 @@ test('genres show on desktop and hide on phone (1.7a / 1.5c)', async ({
 	const genreId = `genre-${run}`;
 	const genreName = `E2E Genre ${run}`;
 	try {
-		seedGames([game]);
-		d1Execute(
-			`INSERT INTO genre (id, name) VALUES (${sq(genreId)}, ${sq(genreName)});
-			 INSERT INTO game_genre (game_id, genre_id) VALUES (${sq(game.id)}, ${sq(genreId)});`,
+		await seedGames([game]);
+		await d1Execute(
+			`INSERT INTO genre (id, name) VALUES (${sq(genreId)}, ${sq(genreName)});`,
+			`INSERT INTO game_genre (game_id, genre_id) VALUES (${sq(game.id)}, ${sq(genreId)});`,
 		);
 		await page.setViewportSize(DESKTOP);
 		await page.goto('/');
@@ -37,9 +37,9 @@ test('genres show on desktop and hide on phone (1.7a / 1.5c)', async ({
 		await expect(card.getByText(genreName)).toBeHidden();
 	} finally {
 		try {
-			deleteGames([game.id]);
+			await deleteGames([game.id]);
 		} finally {
-			d1Execute(`DELETE FROM genre WHERE id = ${sq(genreId)};`);
+			await d1Execute(`DELETE FROM genre WHERE id = ${sq(genreId)};`);
 		}
 	}
 });

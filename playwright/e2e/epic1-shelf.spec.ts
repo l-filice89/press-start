@@ -29,10 +29,14 @@ async function loadAllPages(page: Page): Promise<void> {
 		const before = await cards.count();
 		await sentinel.scrollIntoViewIfNeeded();
 		await expect
-			.poll(async () => (await cards.count()) > before || (await sentinel.count()) === 0, {
-				message: 'next page to render after sentinel scroll',
-				timeout: 10_000,
-			})
+			.poll(
+				async () =>
+					(await cards.count()) > before || (await sentinel.count()) === 0,
+				{
+					message: 'next page to render after sentinel scroll',
+					timeout: 10_000,
+				},
+			)
 			.toBe(true);
 	}
 }
@@ -41,7 +45,9 @@ async function loadAllPages(page: Page): Promise<void> {
 async function cardOrder(page: Page, titles: string[]): Promise<string[]> {
 	const labels = await page
 		.getByTestId('shelf-card')
-		.evaluateAll((cells) => cells.map((c) => c.getAttribute('aria-label') ?? ''));
+		.evaluateAll((cells) =>
+			cells.map((c) => c.getAttribute('aria-label') ?? ''),
+		);
 	return labels
 		.map((l) => titles.find((t) => l.startsWith(`${t} —`)))
 		.filter((t): t is string => t !== undefined);
@@ -57,12 +63,15 @@ test('shelf renders card content: title, state, OWNED chip, cover fallback, PS+ 
 		tracking: { playStatus: 'Not started' },
 	});
 	try {
-		seedGames([psPlus]);
+		await seedGames([psPlus]);
 		await page.goto('/');
 		const alpha = page
 			.getByTestId('shelf-card')
 			.filter({ hasText: 'Baseline Alpha' });
-		await expect(alpha).toHaveAttribute('aria-label', 'Baseline Alpha — Playing');
+		await expect(alpha).toHaveAttribute(
+			'aria-label',
+			'Baseline Alpha — Playing',
+		);
 		await expect(alpha.getByText('OWNED')).toBeVisible();
 		// No cover_url seeded: the fallback mark renders instead of an <img>
 		await expect(alpha.getByText('▹')).toBeVisible();
@@ -76,7 +85,7 @@ test('shelf renders card content: title, state, OWNED chip, cover fallback, PS+ 
 			flagged.getByText('In the PlayStation Plus Extra catalog'),
 		).toBeAttached();
 	} finally {
-		deleteGames([psPlus.id]);
+		await deleteGames([psPlus.id]);
 	}
 });
 
@@ -110,9 +119,16 @@ test('default shelf hides finished states and orders by state → owned → alph
 		title: `Order Dropped ${run}`,
 		tracking: { playStatus: 'Dropped' },
 	});
-	const seeded = [paused, notStartedZ, notStartedM, wishlisted, completed, dropped];
+	const seeded = [
+		paused,
+		notStartedZ,
+		notStartedM,
+		wishlisted,
+		completed,
+		dropped,
+	];
 	try {
-		seedGames(seeded);
+		await seedGames(seeded);
 		await page.goto('/');
 		await loadAllPages(page); // parallel seeds may push the unowned tier past page 1
 
@@ -136,7 +152,7 @@ test('default shelf hides finished states and orders by state → owned → alph
 		];
 		expect(await cardOrder(page, expected)).toEqual(expected);
 	} finally {
-		deleteGames(seeded.map((g) => g.id));
+		await deleteGames(seeded.map((g) => g.id));
 	}
 });
 
@@ -153,7 +169,7 @@ test('infinite scroll reveals the next page when the sentinel is reached (1.7c)'
 		}),
 	);
 	try {
-		seedGames(pads);
+		await seedGames(pads);
 		await page.goto('/');
 		const cards = page.getByTestId('shelf-card');
 		// First fold settles at exactly PAGE_SIZE (49 pads + 3 baseline > 48)
@@ -162,7 +178,7 @@ test('infinite scroll reveals the next page when the sentinel is reached (1.7c)'
 		await page.locator('.shelf__sentinel').scrollIntoViewIfNeeded();
 		await expect.poll(() => cards.count()).toBeGreaterThan(48);
 	} finally {
-		deleteGames(pads.map((g) => g.id));
+		await deleteGames(pads.map((g) => g.id));
 	}
 });
 
@@ -174,7 +190,7 @@ test('whole-library search matches games hidden from the shelf, NO MATCH otherwi
 		tracking: { playStatus: null, completedOn: '2026-01-01' },
 	});
 	try {
-		seedGames([quarry]);
+		await seedGames([quarry]);
 		await page.goto('/');
 		// Shelf must have finished loading before absence proves filtering
 		await expect(page.getByTestId('shelf-card').first()).toBeVisible();
@@ -191,7 +207,7 @@ test('whole-library search matches games hidden from the shelf, NO MATCH otherwi
 		await search.fill('zzz no such game xyzzy');
 		await expect(page.getByText('NO MATCH')).toBeVisible();
 	} finally {
-		deleteGames([quarry.id]);
+		await deleteGames([quarry.id]);
 	}
 });
 
@@ -239,7 +255,7 @@ test('shelf grid supports arrow traversal in reading order with roving tabindex 
 		}),
 	);
 	try {
-		seedGames(fillers);
+		await seedGames(fillers);
 		await page.goto('/');
 		await loadAllPages(page);
 		const cards = page.getByTestId('shelf-card');
@@ -247,7 +263,9 @@ test('shelf grid supports arrow traversal in reading order with roving tabindex 
 		// Real resolved column count — what jsdom (always 1 column) can't see
 		const columns = await page
 			.getByTestId('shelf-grid')
-			.evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(' ').length);
+			.evaluate(
+				(el) => getComputedStyle(el).gridTemplateColumns.split(' ').length,
+			);
 		expect(columns).toBeGreaterThan(1);
 
 		await cards.first().focus();
@@ -267,7 +285,7 @@ test('shelf grid supports arrow traversal in reading order with roving tabindex 
 		);
 		expect(focusedIndex).toBe(1 + columns);
 	} finally {
-		deleteGames(fillers.map((g) => g.id));
+		await deleteGames(fillers.map((g) => g.id));
 	}
 });
 

@@ -72,7 +72,7 @@ development_status:
   epic-2-5: in-progress
   2-5-1-playwright-framework-auth-smoke-test: done
   2-5-2-backfill-epic-1-e2e-flows: done
-  2-5-3-backfill-epic-2-e2e-flows: backlog
+  2-5-3-backfill-epic-2-e2e-flows: done
   2-5-4-standing-rule-every-ui-ac-ships-with-a-playwright-test: backlog
   epic-2-5-retrospective: optional
 

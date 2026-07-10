@@ -12,6 +12,7 @@
 			"web/**",
 			"worker/**",
 			"test/**",
+			"playwright/**",
 			"*.json",
 			"*.jsonc",
 			"*.ts",
@@ -44,6 +45,16 @@
 		}
 	},
 	"overrides": [
+		{
+			"includes": ["playwright/**"],
+			"linter": {
+				"rules": {
+					"nursery": {
+						"noFloatingPromises": "error"
+					}
+				}
+			}
+		},
 		{
 			"includes": ["src/core/**"],
 			"linter": {

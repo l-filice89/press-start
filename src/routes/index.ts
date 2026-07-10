@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { authRoute, meRoute } from './auth';
+import { e2eRoute } from './e2e';
 import { genresRoute } from './genres';
 import { healthRoute } from './health';
 import { shelfRoute } from './shelf';
@@ -18,3 +19,4 @@ apiRoutes.route('/', meRoute);
 apiRoutes.route('/', shelfRoute);
 apiRoutes.route('/', trackingRoute);
 apiRoutes.route('/', genresRoute);
+apiRoutes.route('/', e2eRoute); // 404s unless E2E_TEST_HOOKS=1 (local e2e env only)

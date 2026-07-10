@@ -24,7 +24,7 @@ it, or `skipped` with the reason. Epic 2 rows land with story 2.5.3.
 | 1.5e elevation/glow visuals | skipped — visual-only, class-presence pinned in jsdom `Card.test.tsx` |
 | 1.5f WCAG AA contrast | skipped — static token analysis, not a browser flow |
 | 1.5g ≥44×44 hit areas | `epic1-responsive.spec.ts` › owned toggle hit area is at least 44x44 in both viewports |
-| 1.5h prefers-reduced-motion | skipped — flip/glow surfaces land in Epic 2; revisit in 2.5.3 |
+| 1.5h prefers-reduced-motion | `epic2-detail.spec.ts` › reduced motion swaps the flip entry for a cross-fade (closed by story 2.5.3) |
 | 1.5i always-on focus outline | `epic1-shelf.spec.ts` › keyboard-focused card shows a focus outline (keyboard modality; mouse-focus outline behavior not separately pinned) |
 | 1.7a card content (cover/title/pill/owned/flags; genres desktop-only) | `epic1-shelf.spec.ts` › shelf renders card content (title/state/OWNED/cover-fallback/PS+ flag; release + milestone flags jsdom-pinned in `Card.test.tsx`); genres delta in `epic1-responsive.spec.ts` |
 | 1.7b default visible set + ordering (state → owned → alpha) | `epic1-shelf.spec.ts` › default shelf hides finished states and orders by state → owned → alpha |
@@ -36,4 +36,29 @@ it, or `skipped` with the reason. Epic 2 rows land with story 2.5.3.
 
 ## Epic 2
 
-Pending story 2.5.3.
+| AC | Coverage |
+|----|----------|
+| 2.1a pill → five-status popover, instant apply + toast | `epic2-tracking.spec.ts` › status pill opens a five-status menu; popover anchoring › popover flips above the pill at the viewport bottom |
+| 2.1b first →Playing stamps started_on once | `epic2-tracking.spec.ts` › first move to Playing stamps started_on (observed via detail panel; write-once re-stamp guard is server-side, Vitest-pinned) |
+| 2.1c Dropped → UNDO toast, card leaves default shelf | `epic2-tracking.spec.ts` › Dropped shows an UNDO toast… (re-inspecting the hidden card itself needs Epic 3 reveal pills — verified via Undo restore instead) |
+| 2.1d status change updates state/order/pill everywhere | `epic2-tracking.spec.ts` › …selection applies instantly (card aria-label AND shelf tier reordering asserted after refetch) |
+| 2.1e popover menu ARIA + Escape returns focus to pill | `epic2-tracking.spec.ts` › status menu closes on Escape and returns focus to the pill |
+| 2.2a milestone rows confirm-gated | `epic2-tracking.spec.ts` › milestones are confirm-gated (Cancel writes nothing; confirm-dialog focus lands on Cancel, Tab trapped, Escape returns focus) |
+| 2.2b confirm writes date; platinum auto-clears status | `epic2-tracking.spec.ts` › milestones are confirm-gated (story-complete keeps live status); › platinum clears the play status and the card leaves the shelf |
+| 2.2c already-dated milestone re-log refused | `epic2-tracking.spec.ts` › an achieved milestone re-log is refused with an already-logged toast |
+| 2.2d permanent badge regardless of later status | `epic2-tracking.spec.ts` › milestones… (badge asserted on the live card AND after a later Playing→Paused status change; persistence across a hidden state can't be re-inspected until Epic 3 reveal pills) |
+| 2.3a cover tap → panel ~760px desktop / full-screen mobile | `epic2-detail.spec.ts` › detail panel opens from the cover: ~760px centered on desktop, full-screen on phone |
+| 2.3b panel reuses status/milestone/date/genre/ownership controls | exercised across `epic2-detail.spec.ts` (dates, ownership, genres) and `epic2-tracking.spec.ts` (status via popover — same mutation hooks) |
+| 2.3c wishlisted game links to PS Store | `epic2-detail.spec.ts` › wishlisted game links to the PS Store; owned game does not |
+| 2.3d edit leaving neither status nor milestone refused (409) | skipped — the only triggering state (milestone-only game) is hidden from the shelf and the panel closes when a write hides its card; unreachable until Epic 3 reveal pills (jsdom pins the toast wiring) |
+| 2.3e focus-trapped dialog, focus returns to card | `epic2-detail.spec.ts` › detail panel traps focus; Escape closes and returns focus; › backdrop click dismisses |
+| 2.4a own/un-own with bought_on stamp + UNDO | `epic2-detail.spec.ts` › ownership: un-own offers UNDO and restores (bought_on stamp is server-side, Vitest-pinned) |
+| 2.4b ownership type digital/physical | `epic2-detail.spec.ts` › ownership: …type switches physical/digital |
+| 2.4c lifecycle date manual edit | `epic2-detail.spec.ts` › lifecycle date commits on blur and survives reopen |
+| 2.4d automatic flows never overwrite recorded dates | skipped — server write-once invariant with no distinct UI flow; Vitest worker-pool covered |
+| 2.5a genre add/remove updates set | `epic2-detail.spec.ts` › genres: novel name auto-creates, chip removes |
+| 2.5b unknown genre auto-created | `epic2-detail.spec.ts` › genres: novel name auto-creates… |
+| 2.5c no merge/rename tool | `epic2-detail.spec.ts` › genres: … no merge/rename UI |
+
+Epic 1's deferred 1.5h (prefers-reduced-motion) is closed by
+`epic2-detail.spec.ts` › reduced motion swaps the flip entry for a cross-fade.
