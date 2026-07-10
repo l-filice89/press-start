@@ -18,7 +18,13 @@ import {
 	type PlayStatus,
 	wouldViolateCompletionInvariant,
 } from '../core';
-import { getTracking, upsertTracking } from '../repositories';
+import {
+	getTracking,
+	updateTrackingDates,
+	updateTrackingMilestone,
+	updateTrackingOwnership,
+	updateTrackingStatus,
+} from '../repositories';
 import type { Db } from '../repositories/db';
 
 /**
@@ -52,13 +58,16 @@ export async function changePlayStatus(
 		return 'invariant';
 	}
 
-	// `upsertTracking` drops `undefined`, so an omitted `startedOn` is exactly
-	// "leave the recorded date alone" — no no-overwrite branch needed here.
+	// The invariant and the write-once `started_on` stamp are ALSO re-checked
+	// inside the UPDATE's SQL — the read above is advisory (fast 409), the SQL
+	// is the enforcement (untransacted seam, concurrent PATCHes can interleave).
 	const patch = applyPlayStatusChange({ next, current, today });
-	const updated = await upsertTracking(db, userId, gameId, patch);
-	// The row was there a moment ago; if the upsert returned nothing, it was
-	// deleted underneath us. Report "not found" rather than dereferencing.
-	if (!updated) return null;
+	const updated = await updateTrackingStatus(db, userId, gameId, patch);
+	// Nothing updated: the SQL guard refused a clear whose milestone raced
+	// away (409), or the row was deleted underneath us (404).
+	if (!updated) {
+		return (await getTracking(db, userId, gameId)) ? 'invariant' : null;
+	}
 
 	return computeEffectiveState({
 		playStatus: updated.playStatus,
@@ -84,10 +93,13 @@ export async function logMilestone(
 	const current = await getTracking(db, userId, gameId);
 	if (!current) return null;
 
+	// First-achievement-stands (FR-6) is ALSO enforced in the UPDATE's SQL
+	// (COALESCE) — a stamp that races this read can never be overwritten.
 	const patch = applyMilestone({ milestone, current, today });
-	const row = patch ? await upsertTracking(db, userId, gameId, patch) : current;
-	// The row was there a moment ago; if the upsert returned nothing, it was
-	// deleted underneath us. Report "not found" rather than dereferencing.
+	const row = patch
+		? await updateTrackingMilestone(db, userId, gameId, patch)
+		: current;
+	// Nothing updated: the row was deleted underneath us (404).
 	if (!row) return null;
 
 	return computeEffectiveState({
@@ -118,10 +130,14 @@ export async function changeOwnership(
 	const patch = applyOwnershipChange({ next, current, today });
 	if (patch === 'invalid') return 'invalid';
 
-	const updated = await upsertTracking(db, userId, gameId, patch);
-	// The row was there a moment ago; if the upsert returned nothing, it was
-	// deleted underneath us. Report "not found" rather than dereferencing.
-	if (!updated) return null;
+	// Write-once `bought_on` (COALESCE) and owned-only type switches (guard)
+	// are ALSO enforced in the UPDATE's SQL — the read above is advisory.
+	const updated = await updateTrackingOwnership(db, userId, gameId, patch);
+	// Nothing updated: the SQL guard refused a type switch whose ownership
+	// raced away (400), or the row was deleted underneath us (404).
+	if (!updated) {
+		return (await getTracking(db, userId, gameId)) ? 'invalid' : null;
+	}
 
 	return computeEffectiveState({
 		playStatus: updated.playStatus,
@@ -149,10 +165,14 @@ export async function editDates(
 	const patch = applyDateEdits({ edits, current });
 	if (patch === 'invalid' || patch === 'invariant') return patch;
 
-	const updated = await upsertTracking(db, userId, gameId, patch);
-	// The row was there a moment ago; if the upsert returned nothing, it was
-	// deleted underneath us. Report "not found" rather than dereferencing.
-	if (!updated) return null;
+	// The completion invariant is ALSO re-checked in the UPDATE's SQL against
+	// the row as it will stand AFTER the edit — the read above is advisory.
+	const updated = await updateTrackingDates(db, userId, gameId, patch);
+	// Nothing updated: the SQL guard refused an edit whose invariant cover
+	// raced away (409), or the row was deleted underneath us (404).
+	if (!updated) {
+		return (await getTracking(db, userId, gameId)) ? 'invariant' : null;
+	}
 
 	return computeEffectiveState({
 		playStatus: updated.playStatus,

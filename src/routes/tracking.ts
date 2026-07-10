@@ -13,6 +13,7 @@ import {
 	changePlayStatus,
 	editDates,
 	logMilestone,
+	todayForUser,
 } from '../services';
 import { type AuthVariables, requireAuth } from './auth';
 
@@ -84,12 +85,14 @@ trackingRoute.patch('/games/:gameId/play-status', requireAuth, async (c) => {
 		return c.json({ error: 'invalid play status' }, 400);
 	}
 
-	// `today` is resolved here, not in `core/` — the transition function stays
-	// pure and takes the date as an input (AD-3).
-	const today = new Date().toISOString().slice(0, 10);
+	const db = createDb(c.env.DB);
+	const userId = c.get('userId');
+	// `today` is resolved here in the user's timezone (Epic 2 retro policy),
+	// not in `core/` — the transition function stays pure (AD-3).
+	const today = await todayForUser(db, userId);
 	const effectiveState = await changePlayStatus(
-		createDb(c.env.DB),
-		c.get('userId'),
+		db,
+		userId,
 		c.req.param('gameId'),
 		body.data.playStatus,
 		today,
@@ -112,12 +115,14 @@ trackingRoute.patch('/games/:gameId/ownership', requireAuth, async (c) => {
 		return c.json({ error: 'invalid ownership change' }, 400);
 	}
 
-	// `today` is resolved here, not in `core/` — the ownership function stays
-	// pure and takes the date as an input (AD-3).
-	const today = new Date().toISOString().slice(0, 10);
+	const db = createDb(c.env.DB);
+	const userId = c.get('userId');
+	// `today` is resolved here in the user's timezone (Epic 2 retro policy),
+	// not in `core/` — the ownership function stays pure (AD-3).
+	const today = await todayForUser(db, userId);
 	const effectiveState = await changeOwnership(
-		createDb(c.env.DB),
-		c.get('userId'),
+		db,
+		userId,
 		c.req.param('gameId'),
 		body.data,
 		today,
@@ -168,12 +173,14 @@ trackingRoute.post('/games/:gameId/milestones', requireAuth, async (c) => {
 		return c.json({ error: 'invalid milestone' }, 400);
 	}
 
-	// `today` is resolved here, not in `core/` — the milestone function stays
-	// pure and takes the date as an input (AD-3).
-	const today = new Date().toISOString().slice(0, 10);
+	const db = createDb(c.env.DB);
+	const userId = c.get('userId');
+	// `today` is resolved here in the user's timezone (Epic 2 retro policy),
+	// not in `core/` — the milestone function stays pure (AD-3).
+	const today = await todayForUser(db, userId);
 	const effectiveState = await logMilestone(
-		createDb(c.env.DB),
-		c.get('userId'),
+		db,
+		userId,
 		c.req.param('gameId'),
 		body.data.milestone,
 		today,

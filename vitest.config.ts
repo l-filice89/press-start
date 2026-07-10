@@ -30,12 +30,15 @@ export default defineConfig({
 					cloudflareTest({
 						wrangler: { configPath: './wrangler.jsonc' },
 						miniflare: {
-							// Test-only secret: production/dev get BETTER_AUTH_SECRET
-							// from Wrangler secrets / `.dev.vars`, which don't exist in
-							// the test environment (CI has no `.dev.vars`).
+							// `vitest-pool-workers` loads `.dev.vars` as bindings, so a
+							// local run would otherwise inherit a real RESEND_API_KEY and
+							// email real magic links (Epic 2 retro, action item 4).
+							// Forcing it empty makes the console email provider win in
+							// every test run; BETTER_AUTH_SECRET is test-only likewise.
 							bindings: {
 								BETTER_AUTH_SECRET:
 									'vitest-only-better-auth-secret-0123456789abcdef',
+								RESEND_API_KEY: '',
 							},
 						},
 					}),

@@ -89,11 +89,13 @@ decision: 2026-07-08 Add requirement refs — Add bracketed FR/AR/UX-DR requirem
   summary: Lifecycle dates are stamped from the Worker's UTC clock, so an evening status change west of Greenwich records tomorrow's date, permanently.
   evidence: `src/routes/tracking.ts` computes `today` as `new Date().toISOString().slice(0, 10)`. `started_on` is write-once through automatic flows and explicitly unreconstructable (FR-44/FR-45, AD-11), so a wrong value never self-corrects. No PRD, architecture, or UX document picks a timezone policy, and the same choice binds `completed_on`/`platinum_on` (Story 2.2) and `bought_on` (Story 2.4) — an app-wide decision (store the user's zone in `SETTING`? stamp client-side?) rather than a per-route patch.
   decision: 2026-07-09 Policy decided by the Epic 2 retro — capture the browser timezone into `SETTING` at first login, user-editable in Settings; all four date-stamp sites compute "today" in that zone. Implement early Epic 3 (kept out of Epic 2.5, which is Playwright-only per 2026-07-09 scoping).
+  resolution: done 2026-07-10 — `setting` table (migration 0003), browser zone captured via `PUT /api/settings/timezone` (`onlyIfUnset`) from `App.tsx` on login, all stamp sites route through `todayForUser` → `todayInZone` (core, unit-tested); endpoint supports plain-PUT edits, the Settings-page UI hooks in at Story 6.3.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-2-log-completion-milestones-confirm-gated.md`
   summary: Milestone dates (`completed_on`/`platinum_on`) are stamped from the Worker's UTC clock — same undecided timezone policy as the 2.1 deferral, but now the wrong date is user-visible (shown on the achieved milestone row) and immutable (FR-6).
   evidence: `src/routes/tracking.ts` computes `today` as `new Date().toISOString().slice(0, 10)` on the milestone POST, mirroring the play-status PATCH. The 2.1 deferral already names this an app-wide policy decision binding Stories 2.2 and 2.4; 2.2 raises its stakes because the achieved row displays the stamped date and write-once means it never self-corrects. Resolve once, app-wide (user timezone in `SETTING`, or client-supplied date), not per route.
   decision: 2026-07-09 Same policy as the 2.1 entry — browser timezone in `SETTING` at first login, editable in Settings, used at all stamp sites; implement early Epic 3.
+  resolution: done 2026-07-10 — same fix as the 2.1 entry (the milestone POST stamps through `todayForUser`).
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-3-flip-a-card-to-its-detail-view.md`
   summary: Three hand-rolled focus traps (ConfirmDialog, DetailPanel, and their shared technique) each duplicate ~20 lines and key off a `querySelectorAll('button…, a[href]')` selector that will silently miss the `<input>`/`<select>` controls Stories 2.4/2.5 add to the detail panel.
@@ -103,6 +105,7 @@ decision: 2026-07-08 Add requirement refs — Add bracketed FR/AR/UX-DR requirem
   summary: Every tracking write is an untransacted read-decide-write (`getTracking` → core → `upsertTracking`), so concurrent PATCHes can interleave — double-stamping write-once `bought_on`, persisting a type on an un-owned row, or breaking the completion invariant via a status-clear racing a milestone-date-clear; the "deleted underneath us" comment on the post-upsert guard is also wrong (the upsert is insert-or-update and always returns a row — a concurrent delete is silently resurrected, not 404'd).
   evidence: `src/services/tracking.ts` (all four write functions, pattern established in 2.1) and `src/repositories/tracking.ts:30` (`onConflictDoUpdate` + `returning()`). D1 has no interactive transactions from Drizzle here; a fix is conditional UPDATEs (`WHERE bought_on IS NULL`, invariant re-checked in SQL) — a seam-wide change, not a per-route patch. Single-user app today, so exposure is one person's own racing tabs.
   decision: 2026-07-09 Fix now — promoted by the Epic 2 retro; Luca triages and schedules the fix post-retro (conditional UPDATEs enforcing write-once/invariants in SQL).
+  resolution: done 2026-07-10 — all four write paths now go through guarded UPDATEs in `repositories/tracking.ts`: write-once dates via `COALESCE`/`CASE` in the SET, completion invariant and owned-only type switches re-checked in the WHERE; the update never inserts, so a row deleted underneath us answers 404 instead of being resurrected (misleading comment gone with the upsert calls).
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-4-edit-ownership-and-lifecycle-dates-in-detail.md`
   summary: Toast UNDO callbacks (`Dropped` status since 2.1, un-own in 2.4) call the raw mutation directly, bypassing the in-flight pending guard every other entry point gets, so an UNDO can interleave with a pending write on the same game.
@@ -116,6 +119,7 @@ decision: 2026-07-08 Add requirement refs — Add bracketed FR/AR/UX-DR requirem
   summary: Case-insensitive genre dedup is check-then-insert in the service; the `genre.name` unique constraint is case-sensitive, so two concurrent adds of case-variants ("Action"/"action") can still mint the near-duplicate FR-24 forbids.
   evidence: `src/services/genres.ts` (`findGenreByNameInsensitive` → `upsertGenre`) with `src/schema/catalog.ts` `genre.name` `unique()` on BINARY collation. Fix is a `lower(name)` (or COLLATE NOCASE) unique index via a migration — same untransacted-write-seam family as the 2.4 deferral; single-user exposure only.
   decision: 2026-07-09 Fix now — promoted by the Epic 2 retro; Luca triages and schedules the fix post-retro (NOCASE unique index migration).
+  resolution: done 2026-07-10 — migration 0003 merges any pre-existing case-variant genres (links repointed via INSERT OR IGNORE, losers deleted) then creates the `lower(name)` unique index; schema carries `genre_name_nocase_uidx`.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-shelf-order-owned-tier.md`
   summary: Decide whether the FR-18 ownership tier also applies to Epic 3 filtered/reveal-pill shelf views (they flow through the same orderShelf), and document it in the Epic 3 spec.
@@ -126,6 +130,7 @@ decision: 2026-07-08 Add requirement refs — Add bracketed FR/AR/UX-DR requirem
   summary: Local integration test runs email Luca a real magic link — `vitest-pool-workers` loads `.dev.vars` as bindings, so tests get a real `RESEND_API_KEY` and `providers/email.ts` selects the real Resend provider; the `vitest.config.ts` comment claiming secrets "don't exist in the test environment" is only true in CI.
   evidence: Epic 2 retro challenge #2 and action item 4. Fix: force `RESEND_API_KEY: ''` in the vitest miniflare bindings so the console provider always wins in tests, and correct the misleading comment. Success criterion: full local `bun test` run, zero emails received.
   decision: 2026-07-09 Fix scoped by the Epic 2 retro; kept out of Epic 2.5 (Playwright-only per 2026-07-09 scoping) — schedule as standalone fix or early Epic 3.
+  resolution: done 2026-07-10 — `RESEND_API_KEY: ''` forced in the vitest miniflare bindings (console provider always wins), misleading comment corrected; full local `bun test` run passes with zero real emails.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-platinum-only-auto-hide.md`
   summary: A detail panel opened from search on an already-hidden game (Dropped, or milestone-only) auto-closes on any milestone log because `onHidden` keys off the returned state being in `HIDDEN_STATES`, even when the write never changed the card's visibility.

@@ -247,7 +247,7 @@ describe('catalog + tracking repositories (integration, real workerd + local D1)
 		expect(idx?.unique).toBe(0);
 	});
 
-	it('creates the six domain tables and no later-epic tables (entity-as-needed)', async () => {
+	it('creates the domain tables and no speculative tables (entity-as-needed)', async () => {
 		const { results } = await env.DB.prepare(
 			`SELECT name FROM sqlite_master
 			 WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
@@ -261,9 +261,10 @@ describe('catalog + tracking repositories (integration, real workerd + local D1)
 			'game_genre',
 			'external_link',
 			'import_straggler',
+			// `setting` earned its place via the Epic 2 retro timezone policy.
+			'setting',
 		]) {
 			expect(names).toContain(table);
 		}
-		expect(names).not.toContain('setting');
 	});
 });

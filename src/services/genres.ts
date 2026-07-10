@@ -44,6 +44,8 @@ export async function addGenreToGame(
 	if (!name) return 'invalid';
 
 	// FR-24: auto-create exactly once — a case-insensitive hit reuses the row.
+	// The DB's `lower(name)` unique index is the backstop: two concurrent adds
+	// of case-variants can no longer mint a near-duplicate (the loser errors).
 	const existing = await findGenreByNameInsensitive(db, name);
 	const row = existing ?? (await upsertGenre(db, name));
 	await linkGameGenre(db, gameId, row.id);

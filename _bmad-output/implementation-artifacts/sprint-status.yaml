@@ -124,35 +124,35 @@ action_items:
   - epic: 2
     action: "Epic 2.5: Playwright foundation — framework + magic-link auth via console-captured link"
     owner: "Murat + Amelia"
-    status: open
+    status: done # story 2-5-1
   - epic: 2
     action: "Epic 2.5: backfill one e2e test per Epic 1+2 AC with a matching UI user flow"
     owner: "Amelia"
-    status: open
+    status: done # stories 2-5-2 + 2-5-3 (16 Playwright tests)
   - epic: 2
     action: "Wire standing rule into _bmad/custom/bmad-dev-auto.toml: every AC with a matching UI flow ships with a Playwright test"
     owner: "Murat + Winston"
-    status: open
+    status: done # story 2-5-4
   - epic: 2
     action: "Stop tests emailing real magic links: force RESEND_API_KEY '' in vitest miniflare bindings + fix comment"
     owner: "Amelia"
-    status: open
+    status: done # 2026-07-10: RESEND_API_KEY '' forced in vitest.config.ts miniflare bindings; comment corrected
   - epic: 2
     action: "Document FR-18 amendment (owned tier applies to ALL shelf views, filtered included) before Story 3.1"
     owner: "Alice + Luca"
-    status: open
+    status: done # documented 2026-07-09 in prd.md (FR-18), epics.md, EXPERIENCE.md
   - epic: 2
     action: "Timezone policy: browser tz into SETTING at first login, editable in Settings, used at all date-stamp sites"
     owner: "Winston + Amelia"
-    status: open
+    status: done # 2026-07-10: setting table + PUT /api/settings/timezone (capture onlyIfUnset + edit) + todayForUser at all stamp sites; Settings-page UI itself lands with Story 6.3 (endpoint ready)
   - epic: 2
     action: "Fix untransacted read-decide-write seam via conditional UPDATEs (promoted from deferred; Luca triages post-retro)"
     owner: "Amelia"
-    status: open
+    status: done # 2026-07-10: guarded UPDATEs in repositories/tracking.ts — write-once via COALESCE/CASE, invariants re-checked in WHERE; deleted rows now 404 instead of resurrecting
   - epic: 2
     action: "Genre case-insensitive unique index migration (promoted from deferred; Luca triages post-retro)"
     owner: "Amelia"
-    status: open
+    status: done # 2026-07-10: migration 0003 merges case-variant genres then adds lower(name) unique index
   - epic: 2
     action: "Evaluate permanent-delete-from-Dropped vs archived flag against append-only/sync assumption; place in an epic if it survives"
     owner: "Luca + John"

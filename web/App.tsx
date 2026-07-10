@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { authClient } from './auth-client';
 import { Skeleton } from './components/Skeleton';
 import Login from './Login';
@@ -40,6 +40,20 @@ function App() {
 
 function AuthenticatedApp({ email }: { email: string }) {
 	const [signOutFailed, setSignOutFailed] = useState(false);
+
+	// Timezone policy (Epic 2 retro): capture the browser's IANA zone into
+	// SETTING on login so date stamps record the user's calendar day, not
+	// UTC's. `onlyIfUnset` means a user-edited value is never overwritten.
+	// Fire-and-forget — on failure the server just keeps stamping in UTC.
+	useEffect(() => {
+		const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+		if (!timezone) return;
+		void fetch('/api/settings/timezone', {
+			method: 'PUT',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ timezone, onlyIfUnset: true }),
+		}).catch(() => {});
+	}, []);
 	// Guard against a double-click firing two concurrent sign-outs (a late second
 	// response could otherwise flip state after the session already cleared).
 	const signingOutRef = useRef(false);

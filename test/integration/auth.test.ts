@@ -146,9 +146,9 @@ describe('magic-link auth & user scoping (integration, real workerd + local D1)'
 			   AND name != 'd1_migrations'
 			 ORDER BY name`,
 		).all<{ name: string }>();
-		// auth's four tables, plus Story 1.4's six domain tables and the
-		// Story 1.1 `meta` placeholder — and nothing else (no roles/sharing,
-		// no later-epic `setting`).
+		// auth's four tables, plus Story 1.4's six domain tables, the
+		// Story 1.1 `meta` placeholder, and `setting` (Epic 2 retro timezone
+		// policy) — and nothing else (no roles/sharing tables).
 		expect(results.map((row) => row.name)).toEqual([
 			'account',
 			'external_link',
@@ -159,6 +159,7 @@ describe('magic-link auth & user scoping (integration, real workerd + local D1)'
 			'import_straggler',
 			'meta',
 			'session',
+			'setting',
 			'user',
 			'verification',
 		]);
