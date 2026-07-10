@@ -2,10 +2,12 @@ import { deleteSetting, seedSetting } from '../support/helpers/d1';
 import { expect, test } from '../support/merged-fixtures';
 
 /**
- * Story 4.1 (FR-36, UX-DR11): the Settings panel edits the PSN session
- * cookie (presence-only readback, never the value), and a persisted
+ * Stories 4.1 + 4.2 (FR-36/FR-33, UX-DR10/11): the Settings panel edits the
+ * PSN session cookie (presence-only readback, never the value), a persisted
  * `psn_auth = expired` state surfaces the refresh instructions in the
- * attention banner — surviving reloads until a fresh cookie is saved.
+ * attention banner until a fresh cookie is saved, and the FAB drawer's Sync
+ * item drives the live missing-cookie → 401 → flag → banner wiring. All in
+ * ONE serial file: every test mutates the same per-user PSN setting keys.
  */
 
 // Both tests mutate the SAME per-user setting keys (one e2e user); parallel
@@ -77,4 +79,28 @@ test('an expired PSN auth state feeds the attention banner until a fresh cookie 
 	await page.reload();
 	await expect(page.getByRole('button', { name: 'Settings' })).toBeVisible();
 	await expect(page.getByTestId('attention-banner')).toHaveCount(0);
+});
+
+test('Sync from the FAB with no cookie configured lights the expired-cookie banner (4.2 → 4.1c live wiring)', {
+	// The 401 IS the flow under test — opt out of the network-error monitor.
+	annotation: [{ type: 'skipNetworkMonitoring' }],
+}, async ({ page }) => {
+	// No psn_cookie setting and no env seed in the e2e Worker: the provider
+	// fails as PsnAuthError before any outbound PSN call — deterministic.
+	await page.goto('/');
+	await expect(page.getByTestId('attention-banner')).toHaveCount(0);
+
+	const toggle = page.getByRole('button', { name: 'Chores' });
+	await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+	await toggle.click();
+	await page.getByTestId('fab-sync').click();
+
+	// The failure surfaces (toast) and the persisted flag feeds the banner.
+	await expect(page.getByTestId('toast')).toHaveText(/Sync failed/);
+	const banner = page.getByTestId('attention-banner');
+	await expect(banner).toBeVisible();
+	await expect(banner).toHaveClass(/attention-banner--expired-cookie/);
+	// Its action opens Settings — recovery is one tap from the failure.
+	await banner.getByRole('button', { name: 'Update cookie' }).click();
+	await expect(page.getByTestId('settings-panel')).toBeVisible();
 });

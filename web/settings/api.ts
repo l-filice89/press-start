@@ -29,3 +29,19 @@ export async function savePsnCookie(cookie: string): Promise<void> {
 		body: JSON.stringify({ cookie }),
 	});
 }
+
+/** Result of a PSN library sync (Story 4.2; 4.3 renders the full summary). */
+export const syncResultSchema = z.object({
+	added: z.number(),
+	flipped: z.number(),
+	skippedMembership: z.number(),
+	needsAttention: z.array(z.string()),
+});
+
+export type SyncResult = z.infer<typeof syncResultSchema>;
+
+/** Trigger the in-Worker PSN sync. A 401 means the session cookie expired —
+ * the server already lit the attention-banner flag; never auto-retry. */
+export async function runSync(): Promise<SyncResult> {
+	return syncResultSchema.parse(await callApi('/api/sync', { method: 'POST' }));
+}

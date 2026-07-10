@@ -3,3 +3,6 @@
 # no RESEND_API_KEY here — its absence selects the console email provider so
 # magic links print to stdout instead of sending real email (Epic 2.5 TR-1).
 BETTER_AUTH_SECRET=e2e-local-only-secret-never-used-in-production
+
+# Absent on purpose: the e2e sync test relies on NO cookie being configured.
+PSN_SESSION_COOKIE=""

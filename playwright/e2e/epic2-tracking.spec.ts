@@ -206,8 +206,14 @@ test('first move to Playing stamps started_on, visible in the detail panel (2.1b
 		await expect(panel).toBeVisible();
 		const started = panel.getByLabel('Started');
 		// Server stamped TODAY's date (write-once hazard, AR-11; the re-stamp
-		// guard itself is server-side, Vitest-pinned)
-		await expect(started).toHaveValue(new Date().toISOString().slice(0, 10));
+		// guard itself is server-side, Vitest-pinned). "Today" is the BROWSER's
+		// calendar day — the SPA captures its IANA zone at login and the server
+		// stamps in it (Epic 2 timezone policy) — never the UTC date, which
+		// diverges from local between local midnight and UTC midnight.
+		const localToday = new Intl.DateTimeFormat('en-CA', {
+			dateStyle: 'short',
+		}).format(new Date());
+		await expect(started).toHaveValue(localToday);
 	} finally {
 		await deleteGames([game.id]);
 	}

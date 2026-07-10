@@ -8,4 +8,5 @@ export * from './genres';
 export * from './seed-import';
 export * from './settings';
 export * from './shelf';
+export * from './sync';
 export * from './tracking';

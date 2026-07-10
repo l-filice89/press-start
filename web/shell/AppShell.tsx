@@ -7,6 +7,7 @@ import { SettingsPanel } from '../settings/SettingsPanel';
 import { SearchBox } from '../shelf/SearchBox';
 import { Shelf } from '../shelf/Shelf';
 import { Background } from './Background';
+import { Fab } from './Fab';
 import { Header } from './Header';
 import './app-shell.css';
 
@@ -64,6 +65,7 @@ export function AppShell({
 					<Shelf />
 				</main>
 			</div>
+			<Fab />
 			{settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
 		</ToastHost>
 	);
