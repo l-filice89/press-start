@@ -82,7 +82,7 @@ development_status:
   3-2-flag-pills-and-state-reveal-pills: done
   3-3-live-filter-summary-empty-state-responsive-filters: done
   3-4-focus-interaction-hardening-deferred-work-sweep: done
-  epic-3-retrospective: optional
+  epic-3-retrospective: done
 
   # Epic 4: Fill the Library from PlayStation (Sync)
   epic-4: backlog
@@ -165,4 +165,24 @@ action_items:
   - epic: 2.5
     action: "Trace PLAYWRIGHT-COVERAGE standing-rule compliance through Epic 3; add a mechanical COVERAGE.md audit only if a leak appears"
     owner: "Murat + Luca"
+    status: done # 2026-07-10 epic 3 retro: zero silent drops — every 3.x story shipped AC tests + COVERAGE.md rows; no audit chore needed
+  - epic: 3
+    action: "Story 3.5 — reveal-pill exclusive mode: amend FR-4/FR-20 + epics.md, implement replace-State/OR-within/AND-across semantics, rewrite reveal + summary e2e"
+    owner: "John + Amelia"
+    status: open
+  - epic: 3
+    action: "Invalidate ['shelf-search'] on all writes (staleness seam; required before story 4.2)"
+    owner: "Amelia"
+    status: open
+  - epic: 3
+    action: "Latest-write token for UNDO — stale-intent guard atop IN_FLIGHT (required before story 4.2)"
+    owner: "Amelia"
+    status: open
+  - epic: 3
+    action: "Extract single modal focus-trap (ConfirmDialog/DetailPanel/FilterSheet); bundle into story 3.5"
+    owner: "Amelia"
+    status: open
+  - epic: 3
+    action: "Merge feat/epic-3/filter-focus-backlog to main through the CI OK gate"
+    owner: "Luca"
     status: open
