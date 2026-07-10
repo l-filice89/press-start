@@ -161,7 +161,7 @@ action_items:
   - epic: 2.5
     action: "Merge feat/epic-2.5/playwright-foundation to main through the CI OK gate"
     owner: "Luca"
-    status: open
+    status: done # 2026-07-10: PR #6 merged (13e0ee2), CI+CD green on main, branch deleted
   - epic: 2.5
     action: "Trace PLAYWRIGHT-COVERAGE standing-rule compliance through Epic 3; add a mechanical COVERAGE.md audit only if a leak appears"
     owner: "Murat + Luca"
