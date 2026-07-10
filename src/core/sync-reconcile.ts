@@ -4,8 +4,10 @@
  * produces an explicit, additive-only *plan* — games to create, existing
  * games to ensure owned, links/facts to add — and performs no writes (the
  * service's job). Mirrors `seed-reconcile`'s plan-then-execute shape, but
- * with SYNC semantics: membership claims (PS+ etc.) are SKIPPED before
- * matching (FR-9/33), where the seed imported them as owned.
+ * FR-9-amended semantics: PS+ claims COUNT as owned (playable is what
+ * matters, matching the seed) but carry `viaMembership` so a future
+ * subscription-cancel flow can un-own claims without touching purchases.
+ * Only WEBMAF "web app" companion entitlements (IGN etc. — not games) skip.
  *
  * Matching (FR-34/AD-9/18/20): stored PSN external-id links first, then
  * normalized title with PS4/PS5 collapse. An external id resolving to a
@@ -19,9 +21,11 @@ import { normalizeTitle } from './title-normalizer';
 export interface SyncEntry {
 	name: string;
 	platform: string;
-	/** `'NONE'` = purchase; anything else is a membership claim (FR-9). */
+	/** `'NONE'`/absent = purchase; anything else is a membership claim (FR-9). */
 	membership: string | null;
 	titleId: string | null;
+	productId: string | null;
+	entitlementId: string | null;
 	imageUrl: string | null;
 	storeUrl: string | null;
 }
@@ -43,6 +47,8 @@ export interface SyncCreate {
 	coverUrl: string | null;
 	storeUrl: string | null;
 	externalIds: string[];
+	/** True when the group holds ONLY membership claims (owned_via source). */
+	viaMembership: boolean;
 }
 
 /** An existing game a purchase entry matched: ensure owned + backfill. */
@@ -50,6 +56,8 @@ export interface SyncMatch {
 	gameId: string;
 	/** The PSN entry's display name — names the game in failure reports. */
 	title: string;
+	/** True when the group holds ONLY membership claims (owned_via source). */
+	viaMembership: boolean;
 	/** Group ids not yet linked to the game. */
 	externalIdsToAdd: string[];
 	/** PSN facts for NULL-only backfill (never overwrite, FR-33/35). */
@@ -66,7 +74,8 @@ export interface SyncConflict {
 export interface SyncPlan {
 	creates: SyncCreate[];
 	matches: SyncMatch[];
-	skippedMembership: number;
+	/** WEBMAF web-app companion entitlements excluded (not games). */
+	skippedWebApps: number;
 	conflicts: SyncConflict[];
 }
 
@@ -82,35 +91,55 @@ function preferred(group: EntryGroup): SyncEntry {
 	return group.entries.find((e) => e.platform === 'PS5') ?? group.entries[0];
 }
 
+/** `'NONE'`/absent = purchase; anything else (incl. `''`) is a claim. */
+function isClaim(entry: SyncEntry): boolean {
+	return entry.membership !== null && entry.membership !== 'NONE';
+}
+
+/** A purchase anywhere in the group outranks claims (buying an already-
+ * claimed game upgrades it). */
+function groupVia(group: EntryGroup): boolean {
+	return group.entries.every(isClaim);
+}
+
+/**
+ * A "web app" entitlement — a browser-wrapper companion app (IGN,
+ * Multiplayer.it) rather than a game — carries Sony's WEBMAF marker in its
+ * product/entitlement id (same rule as the seed import).
+ */
+function isWebAppEntitlement(entry: SyncEntry): boolean {
+	return `${entry.productId ?? ''} ${entry.entitlementId ?? ''}`
+		.toUpperCase()
+		.includes('WEBMAF');
+}
+
 export function planSync(entries: SyncEntry[], index: SyncIndex): SyncPlan {
 	const plan: SyncPlan = {
 		creates: [],
 		matches: [],
-		skippedMembership: 0,
+		skippedWebApps: 0,
 		conflicts: [],
 	};
 
-	// Membership skip happens BEFORE matching: a claim never creates, never
-	// flips, and a claim matching a tracked game must leave it untouched.
-	const purchases: SyncEntry[] = [];
+	// Claims and purchases both sync (FR-9 amended) — only non-game web-app
+	// entitlements are excluded, same as the seed import.
+	const games: SyncEntry[] = [];
 	for (const entry of entries) {
-		// Anything but an explicit purchase marker is a claim — including an
-		// empty string; only `null` (field absent upstream) and `'NONE'` pass.
-		if (entry.membership !== null && entry.membership !== 'NONE') {
-			plan.skippedMembership++;
+		if (isWebAppEntitlement(entry)) {
+			plan.skippedWebApps++;
 		} else {
-			purchases.push(entry);
+			games.push(entry);
 		}
 	}
 
-	// PS4/PS5 collapse: group purchases by normalized title; ALL the group's
+	// PS4/PS5 collapse: group entries by normalized title; ALL the group's
 	// titleIds become links on the one game. Each titleId claims exactly one
 	// group (`seenIds`): a duplicate under a second name would otherwise plan
 	// two inserts of the same unique `(source, external_id)` and abort the
 	// execute mid-write.
 	const groups = new Map<string, EntryGroup>();
 	const seenIds = new Set<string>();
-	for (const entry of purchases) {
+	for (const entry of games) {
 		if (!entry.name.trim()) continue; // a nameless entry can't match or title a game
 		const titleNormalized = normalizeTitle(entry.name);
 		let group = groups.get(titleNormalized);
@@ -161,6 +190,7 @@ export function planSync(entries: SyncEntry[], index: SyncIndex): SyncPlan {
 			plan.matches.push({
 				gameId,
 				title: facts.name,
+				viaMembership: groupVia(group),
 				externalIdsToAdd: group.externalIds.filter(
 					(id) => index.linkedGameIdByExternalId[id] === undefined,
 				),
@@ -186,6 +216,7 @@ export function planSync(entries: SyncEntry[], index: SyncIndex): SyncPlan {
 				plan.matches.push({
 					gameId: candidates[0].gameId,
 					title: facts.name,
+					viaMembership: groupVia(group),
 					externalIdsToAdd: group.externalIds,
 					coverUrl: facts.imageUrl,
 					storeUrl: facts.storeUrl,
@@ -213,6 +244,7 @@ export function planSync(entries: SyncEntry[], index: SyncIndex): SyncPlan {
 			coverUrl: facts.imageUrl,
 			storeUrl: facts.storeUrl,
 			externalIds: group.externalIds,
+			viaMembership: groupVia(group),
 		});
 	}
 

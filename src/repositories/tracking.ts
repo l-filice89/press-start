@@ -179,6 +179,7 @@ export async function updateTrackingOwnership(
 		owned?: boolean;
 		ownershipType?: OwnershipType | null;
 		boughtOn?: string;
+		ownedVia?: 'purchase' | 'membership' | null;
 	},
 ) {
 	const set: SQLiteUpdateSetSource<typeof gameTracking> = {};
@@ -188,6 +189,7 @@ export async function updateTrackingOwnership(
 	if (patch.boughtOn !== undefined) {
 		set.boughtOn = sql`COALESCE(${gameTracking.boughtOn}, ${patch.boughtOn})`;
 	}
+	if (patch.ownedVia !== undefined) set.ownedVia = patch.ownedVia;
 	const guard =
 		patch.owned === undefined ? eq(gameTracking.owned, true) : undefined;
 	return updateTrackingWhere(db, userId, gameId, set, guard);

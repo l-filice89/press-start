@@ -1,0 +1,1 @@
+ALTER TABLE `game_tracking` ADD `owned_via` text;

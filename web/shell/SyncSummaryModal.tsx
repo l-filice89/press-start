@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useModalTrap } from '../components/useModalTrap';
-import type { SyncAttentionItem, SyncResult } from '../settings/api';
+import type { SyncAttentionItem, SyncResult, SyncTitle } from '../settings/api';
 import { seedSearch } from '../shelf/SearchBox';
 import './sync-summary-modal.css';
 
@@ -12,7 +12,8 @@ import './sync-summary-modal.css';
  * counts belong to the run that produced them and aren't persisted, so
  * `result` is null on that path.
  */
-/** One counts group: "Heading (N)" plus the game titles by name. */
+/** One counts group: "Heading (N)" plus the game titles by name; claims
+ * carry a PS+ tag (FR-9 amended — owned, but via subscription). */
 function TitledList({
 	heading,
 	hint,
@@ -20,7 +21,7 @@ function TitledList({
 }: {
 	heading: string;
 	hint?: string;
-	titles: string[];
+	titles: SyncTitle[];
 }) {
 	return (
 		<div className="sync-summary__group">
@@ -30,9 +31,20 @@ function TitledList({
 			{hint && <p className="sync-summary__group-hint">{hint}</p>}
 			{titles.length > 0 && (
 				<ul className="sync-summary__titles">
-					{titles.map((title, index) => (
+					{titles.map((item, index) => (
 						// biome-ignore lint/suspicious/noArrayIndexKey: two distinct games can share a display title; the list never reorders while open.
-						<li key={`${index}-${title}`}>{title}</li>
+						<li key={`${index}-${item.title}`}>
+							{item.title}
+							{item.viaMembership && (
+								<span
+									className="sync-summary__psplus-tag"
+									title="Claimed via PS+ membership, not purchased"
+								>
+									{' '}
+									PS+
+								</span>
+							)}
+						</li>
 					))}
 				</ul>
 			)}
@@ -107,15 +119,18 @@ export function SyncSummaryModal({
 						<TitledList heading="Games added" titles={result.added} />
 						<TitledList
 							heading="Now owned"
-							hint="already on your shelf, found among your PSN purchases"
+							hint="already on your shelf, found in your PSN library"
 							titles={result.flipped}
 						/>
-						<p className="sync-summary__count-line">
-							Membership entries skipped:{' '}
-							<span className="sync-summary__count">
-								{result.skippedMembership}
-							</span>
-						</p>
+						{result.upgraded.length > 0 && (
+							<TitledList
+								heading="Purchased (was a PS+ claim)"
+								titles={result.upgraded.map((title) => ({
+									title,
+									viaMembership: false,
+								}))}
+							/>
+						)}
 					</div>
 				)}
 

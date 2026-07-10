@@ -41,12 +41,23 @@ export async function savePsnCookie(cookie: string): Promise<void> {
 }
 
 /** Result of a PSN library sync (Story 4.2; 4.3 renders the full summary). */
+/** One synced title; `viaMembership` = a PS+ claim, not a purchase. */
+export const syncTitleSchema = z.object({
+	title: z.string(),
+	viaMembership: z.boolean(),
+});
+
+export type SyncTitle = z.infer<typeof syncTitleSchema>;
+
 export const syncResultSchema = z.object({
-	/** Titles created this run — the modal lists them by name. */
-	added: z.array(z.string()),
-	/** Titles whose `Owned` flag flipped false→true this run. */
-	flipped: z.array(z.string()),
-	skippedMembership: z.number(),
+	/** Games created this run — the modal lists them by name. */
+	added: z.array(syncTitleSchema),
+	/** Games whose `Owned` flag flipped false→true this run. */
+	flipped: z.array(syncTitleSchema),
+	/** Claimed games found purchased — source upgraded, bought_on stamped. */
+	upgraded: z.array(z.string()),
+	/** WEBMAF web-app companion entitlements excluded (not games). */
+	skippedWebApps: z.number(),
 	needsAttention: z.array(syncAttentionItemSchema),
 });
 

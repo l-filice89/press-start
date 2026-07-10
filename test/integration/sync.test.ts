@@ -21,11 +21,12 @@ import {
 import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
 
 /**
- * PSN sync integration (Story 4.2) against the real Worker + local D1, with
- * the outbound PSN call stubbed via `fetchMock`. The hazard rows: append-only
- * (a sync that flips `owned` must leave status/milestones/dates byte-equal),
- * the membership skip (a tracked claim changes NOTHING), and the live
- * 401 → `psn_auth=expired` wiring 4.1 couldn't reach.
+ * PSN sync integration (Story 4.2; FR-9 amended 2026-07-11) against the real
+ * Worker + local D1, with the outbound PSN call stubbed. The hazard rows:
+ * append-only (a sync that flips `owned` must leave status/milestones/dates
+ * byte-equal), claims count as owned but NEVER stamp bought_on and always
+ * carry owned_via='membership' (the subscription-cancel flow keys on it),
+ * and the live 401 → `psn_auth=expired` wiring 4.1 couldn't reach.
  */
 
 const db = () => createDb(env.DB);
@@ -97,9 +98,10 @@ describe('POST /api/sync (integration, real workerd + local D1)', () => {
 		const res = await postSync(cookie);
 		expect(res.status).toBe(200);
 		expect(await res.json()).toEqual({
-			added: ['Astro Bot'],
+			added: [{ title: 'Astro Bot', viaMembership: false }],
 			flipped: [],
-			skippedMembership: 0,
+			upgraded: [],
+			skippedWebApps: 0,
 			needsAttention: [],
 		});
 
@@ -131,7 +133,8 @@ describe('POST /api/sync (integration, real workerd + local D1)', () => {
 		expect(await res.json()).toEqual({
 			added: [],
 			flipped: [],
-			skippedMembership: 0,
+			upgraded: [],
+			skippedWebApps: 0,
 			needsAttention: [],
 		});
 	});
@@ -161,7 +164,7 @@ describe('POST /api/sync (integration, real workerd + local D1)', () => {
 		const res = await postSync(cookie);
 		expect(await res.json()).toMatchObject({
 			added: [],
-			flipped: ['Hollow Knight'],
+			flipped: [{ title: 'Hollow Knight', viaMembership: false }],
 		});
 
 		const after = await getTracking(db(), userId, tracked.id);
@@ -188,7 +191,7 @@ describe('POST /api/sync (integration, real workerd + local D1)', () => {
 		]);
 	});
 
-	it('skips membership claims — a tracked claim stays byte-identical (hazard FR-9/33)', async () => {
+	it('claims count as owned: no bought_on, owned_via=membership, user data untouched (hazard FR-9 amended)', async () => {
 		const claimed = await insertGame(db(), {
 			title: 'Claim Target',
 			titleNormalized: 'claim target',
@@ -198,31 +201,60 @@ describe('POST /api/sync (integration, real workerd + local D1)', () => {
 			playStatus: 'Playing',
 			startedOn: '2026-03-03',
 		});
-		const before = await getTracking(db(), userId, claimed.id);
 
 		stubPsn([
 			psn({ name: 'Claim Target', titleId: 'CLAIM_00', membership: 'PS_PLUS' }),
 			psn({
-				name: 'Unknown Claim',
+				name: 'Claimed New',
 				titleId: 'CLAIM_01',
 				membership: 'PS_PLUS',
 			}),
 		]);
 		const res = await postSync(cookie);
 		expect(await res.json()).toEqual({
-			added: [],
-			flipped: [],
-			skippedMembership: 2,
+			added: [{ title: 'Claimed New', viaMembership: true }],
+			flipped: [{ title: 'Claim Target', viaMembership: true }],
+			upgraded: [],
+			skippedWebApps: 0,
 			needsAttention: [],
 		});
 
-		expect(await getTracking(db(), userId, claimed.id)).toEqual(before);
-		expect(await listExternalLinks(db(), claimed.id)).toEqual([]);
-		const unknownClaim = await db()
+		// The tracked claim flipped owned — but is NOT a purchase: bought_on
+		// stays null (the slot belongs to a real purchase), the source flag is
+		// what the future subscription-cancel un-own keys on, and the user's
+		// play state is byte-identical (FR-33 still holds).
+		const after = await getTracking(db(), userId, claimed.id);
+		expect(after).toMatchObject({
+			owned: true,
+			ownershipType: 'digital',
+			ownedVia: 'membership',
+			boughtOn: null,
+			playStatus: 'Playing',
+			startedOn: '2026-03-03',
+		});
+
+		const [claimedNew] = await db()
 			.select()
 			.from(game)
-			.where(eq(game.title, 'Unknown Claim'));
-		expect(unknownClaim).toEqual([]);
+			.where(eq(game.title, 'Claimed New'));
+		expect((await getTracking(db(), userId, claimedNew.id))?.ownedVia).toBe(
+			'membership',
+		);
+	});
+
+	it('buying a claimed game upgrades the source and stamps bought_on (hazard: cancel flow must spare purchases)', async () => {
+		// Same library entry, now membership NONE (purchased outright).
+		stubPsn([psn({ name: 'Claim Target', titleId: 'CLAIM_00' })]);
+		const res = await postSync(cookie);
+		expect(await res.json()).toMatchObject({ upgraded: ['Claim Target'] });
+
+		const [g] = await db()
+			.select()
+			.from(game)
+			.where(eq(game.title, 'Claim Target'));
+		const after = await getTracking(db(), userId, g.id);
+		expect(after?.ownedVia).toBe('purchase');
+		expect(after?.boughtOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 	});
 
 	it('flags a title match carrying a different PSN id — never merges (hazard FR-34)', async () => {
@@ -241,7 +273,7 @@ describe('POST /api/sync (integration, real workerd + local D1)', () => {
 		const body = (await res.json()) as {
 			needsAttention: { title: string; reason: string }[];
 		};
-		expect(body).toMatchObject({ added: [], flipped: [] });
+		expect(body).toMatchObject({ added: [], flipped: [], upgraded: [] });
 		expect(body.needsAttention).toHaveLength(1);
 		expect(body.needsAttention[0].title).toBe('Doppelganger');
 

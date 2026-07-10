@@ -29,12 +29,20 @@ import {
 } from './settings';
 import { changeOwnership } from './tracking';
 
+/** One synced title; `viaMembership` = a PS+ claim, not a purchase. */
+export interface SyncTitle {
+	title: string;
+	viaMembership: boolean;
+}
+
 export interface SyncResult {
-	/** Titles of games this run created (or newly started tracking). */
-	added: string[];
-	/** Titles whose `Owned` flag flipped false→true this run. */
-	flipped: string[];
-	skippedMembership: number;
+	/** Games this run created (or newly started tracking). */
+	added: SyncTitle[];
+	/** Games whose `Owned` flag flipped false→true this run. */
+	flipped: SyncTitle[];
+	/** Claimed games found purchased this run — owned_via upgraded, bought_on stamped. */
+	upgraded: string[];
+	skippedWebApps: number;
 	needsAttention: SyncAttentionItem[];
 }
 
@@ -114,20 +122,25 @@ export async function runSync(
 	const result: SyncResult = {
 		added: [],
 		flipped: [],
-		skippedMembership: plan.skippedMembership,
+		upgraded: [],
+		skippedWebApps: plan.skippedWebApps,
 		needsAttention: plan.conflicts.map((c) => ({
 			title: c.title,
 			reason: c.reason,
 		})),
 	};
 
-	// FR-33 defaults for every row sync creates.
-	const newTracking = {
-		owned: true,
-		ownershipType: 'digital',
-		playStatus: 'Not started',
-		boughtOn: today,
-	} as const;
+	// FR-33 defaults for every row sync creates. A claim is owned but not
+	// BOUGHT (FR-9 amended): no bought_on, and owned_via records the source
+	// so a future subscription-cancel flow can un-own claims only.
+	const newTracking = (viaMembership: boolean) =>
+		({
+			owned: true,
+			ownershipType: 'digital',
+			playStatus: 'Not started',
+			boughtOn: viaMembership ? undefined : today,
+			ownedVia: viaMembership ? 'membership' : 'purchase',
+		}) as const;
 
 	// Execution is untransacted sequential writes (no D1 transaction across
 	// reads). Every op is additive and the whole plan is idempotent, so a
@@ -151,8 +164,16 @@ export async function runSync(
 					externalId,
 				});
 			}
-			await insertTrackingIfAbsent(db, userId, created.id, newTracking);
-			result.added.push(create.title);
+			await insertTrackingIfAbsent(
+				db,
+				userId,
+				created.id,
+				newTracking(create.viaMembership),
+			);
+			result.added.push({
+				title: create.title,
+				viaMembership: create.viaMembership,
+			});
 		} catch (error) {
 			result.needsAttention.push({
 				title: create.title,
@@ -184,29 +205,54 @@ export async function runSync(
 			}
 
 			const tracking = trackingByGameId.get(match.gameId);
+			const via = match.viaMembership ? 'membership' : 'purchase';
 			if (!tracking) {
-				// A shared game this user never tracked: a purchase means they
-				// own it. `IfAbsent` closes the read-write race — a row that
-				// appeared since the bulk read stays byte-identical (FR-33).
+				// A shared game this user never tracked: an entry in their
+				// library means they own it. `IfAbsent` closes the read-write
+				// race — a row that appeared since the bulk read stays
+				// byte-identical (FR-33).
 				const inserted = await insertTrackingIfAbsent(
 					db,
 					userId,
 					match.gameId,
-					newTracking,
+					newTracking(match.viaMembership),
 				);
-				if (inserted) result.added.push(match.title);
+				if (inserted)
+					result.added.push({
+						title: match.title,
+						viaMembership: match.viaMembership,
+					});
 			} else if (!tracking.owned) {
 				// The one mutation sync may make to existing user data
-				// (FR-33/AD-10), through the standard guard: bought_on COALESCEs,
-				// nothing else moves. Count only what actually persisted.
+				// (FR-33/AD-10), through the standard guard: bought_on COALESCEs
+				// (claims never stamp it), nothing else moves. Count only what
+				// actually persisted.
 				const outcome = await changeOwnership(
 					db,
 					userId,
 					match.gameId,
 					{ owned: true, ownershipType: 'digital' },
 					today,
+					via,
 				);
-				if (outcome && outcome !== 'invalid') result.flipped.push(match.title);
+				if (outcome && outcome !== 'invalid')
+					result.flipped.push({
+						title: match.title,
+						viaMembership: match.viaMembership,
+					});
+			} else if (tracking.ownedVia === 'membership' && via === 'purchase') {
+				// Bought a game previously only claimed: upgrade the source and
+				// stamp bought_on — otherwise a future subscription-cancel
+				// cleanup would un-own a game the user actually paid for.
+				const outcome = await changeOwnership(
+					db,
+					userId,
+					match.gameId,
+					{ owned: true },
+					today,
+					'purchase',
+				);
+				if (outcome && outcome !== 'invalid') result.upgraded.push(match.title);
 			}
 		} catch (error) {
 			result.needsAttention.push({

@@ -133,3 +133,9 @@
 	font-family: var(--font-ui);
 	cursor: pointer;
 }
+
+.sync-summary__psplus-tag {
+	color: var(--color-accent-electric);
+	font-family: var(--font-mono);
+	font-size: 0.75rem;
+}

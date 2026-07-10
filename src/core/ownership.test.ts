@@ -18,7 +18,41 @@ describe('applyOwnershipChange', () => {
 				current: NOT_OWNED,
 				today: TODAY,
 			}),
-		).toEqual({ owned: true, ownershipType: 'physical', boughtOn: TODAY });
+		).toEqual({
+			owned: true,
+			ownedVia: 'purchase',
+			ownershipType: 'physical',
+			boughtOn: TODAY,
+		});
+	});
+
+	// FR-9 amended (2026-07-11): a PS+ claim is owned but NOT bought — no
+	// bought_on stamp, and the source flag is what a future subscription-
+	// cancel flow keys un-owning on (hazard: claims-only, never purchases).
+	it('owning via membership flags the source and NEVER stamps bought_on', () => {
+		expect(
+			applyOwnershipChange({
+				next: { owned: true, ownershipType: 'digital' },
+				current: NOT_OWNED,
+				today: TODAY,
+				via: 'membership',
+			}),
+		).toEqual({
+			owned: true,
+			ownedVia: 'membership',
+			ownershipType: 'digital',
+		});
+	});
+
+	it('a later purchase upgrades a claim: source flips, bought_on stamps once', () => {
+		expect(
+			applyOwnershipChange({
+				next: { owned: true },
+				current: { owned: true, ownershipType: 'digital', boughtOn: null },
+				today: TODAY,
+				via: 'purchase',
+			}),
+		).toEqual({ owned: true, ownedVia: 'purchase', boughtOn: TODAY });
 	});
 
 	// The named hazard: an earlier purchase date survives re-owning.
@@ -28,7 +62,11 @@ describe('applyOwnershipChange', () => {
 			current: { owned: false, ownershipType: null, boughtOn: '2024-01-01' },
 			today: TODAY,
 		});
-		expect(patch).toEqual({ owned: true, ownershipType: 'physical' });
+		expect(patch).toEqual({
+			owned: true,
+			ownedVia: 'purchase',
+			ownershipType: 'physical',
+		});
 		expect(patch).not.toHaveProperty('boughtOn');
 	});
 
@@ -39,7 +77,7 @@ describe('applyOwnershipChange', () => {
 				current: { owned: false, ownershipType: 'digital', boughtOn: null },
 				today: TODAY,
 			}),
-		).toEqual({ owned: true, boughtOn: TODAY });
+		).toEqual({ owned: true, ownedVia: 'purchase', boughtOn: TODAY });
 	});
 
 	it('uses the requested type when owning with one', () => {
@@ -49,7 +87,12 @@ describe('applyOwnershipChange', () => {
 				current: NOT_OWNED,
 				today: TODAY,
 			}),
-		).toEqual({ owned: true, ownershipType: 'digital', boughtOn: TODAY });
+		).toEqual({
+			owned: true,
+			ownedVia: 'purchase',
+			ownershipType: 'digital',
+			boughtOn: TODAY,
+		});
 	});
 
 	it('un-owning flips the flag, clears the type, and never touches any date', () => {
@@ -62,7 +105,11 @@ describe('applyOwnershipChange', () => {
 			},
 			today: TODAY,
 		});
-		expect(patch).toEqual({ owned: false, ownershipType: null });
+		expect(patch).toEqual({
+			owned: false,
+			ownershipType: null,
+			ownedVia: null,
+		});
 		expect(patch).not.toHaveProperty('boughtOn');
 	});
 

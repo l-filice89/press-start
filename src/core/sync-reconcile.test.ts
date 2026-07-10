@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { planSync, type SyncEntry, type SyncIndex } from './sync-reconcile';
 
 /**
- * Pure sync-planner tests (Story 4.2). Hazard rows pinned red-then-green:
- * the plan is additive-only (no delete/un-own shape exists), membership
- * claims skip before matching (FR-9/33), and an external-id/title
+ * Pure sync-planner tests (Story 4.2; FR-9 amended 2026-07-11). Hazard rows
+ * pinned red-then-green: the plan is additive-only (no delete/un-own shape
+ * exists), PS+ claims sync as owned but ALWAYS carry `viaMembership` (the
+ * subscription-cancel flow depends on that flag), and an external-id/title
  * disagreement is flagged, never merged (FR-34).
  */
 
@@ -13,6 +14,8 @@ const entry = (over: Partial<SyncEntry> = {}): SyncEntry => ({
 	platform: 'PS5',
 	membership: 'NONE',
 	titleId: 'PPSA01325_00',
+	productId: 'EP9000-PPSA01325_00-GAME',
+	entitlementId: 'EP9000-PPSA01325_00-GAME',
 	imageUrl: 'https://image.api.playstation.com/astro.png',
 	storeUrl: 'https://store.playstation.com/concept/10005478',
 	...over,
@@ -34,36 +37,69 @@ describe('planSync', () => {
 				coverUrl: 'https://image.api.playstation.com/astro.png',
 				storeUrl: 'https://store.playstation.com/concept/10005478',
 				externalIds: ['PPSA01325_00'],
+				viaMembership: false,
 			},
 		]);
 		expect(plan.matches).toEqual([]);
 		expect(plan.conflicts).toEqual([]);
 	});
 
-	it('skips membership claims before matching — tracked or not (hazard FR-9/33)', () => {
+	it('claims sync as owned but ALWAYS carry viaMembership (hazard FR-9 amended)', () => {
 		const index = emptyIndex();
-		index.gamesByNormalizedTitle['astro bot'] = [
+		index.gamesByNormalizedTitle['claimed match'] = [
 			{ gameId: 'g1', psnExternalIds: [] },
 		];
 
 		const plan = planSync(
 			[
-				entry({ membership: 'PS_PLUS' }),
-				entry({ name: 'Unseen Claim', titleId: 'X_00', membership: 'PS_PLUS' }),
+				entry({
+					name: 'Claimed Match',
+					titleId: 'C_00',
+					membership: 'PS_PLUS',
+				}),
+				entry({ name: 'Claimed New', titleId: 'C_01', membership: 'PS_PLUS' }),
 			],
 			index,
 		);
 
-		// Neither creates, matches, nor conflicts — only the count moves.
-		expect(plan.skippedMembership).toBe(2);
-		expect(plan.creates).toEqual([]);
-		expect(plan.matches).toEqual([]);
-		expect(plan.conflicts).toEqual([]);
+		// Both claims land — one as a match, one as a create — flagged.
+		expect(plan.matches).toMatchObject([
+			{ gameId: 'g1', title: 'Claimed Match', viaMembership: true },
+		]);
+		expect(plan.creates).toMatchObject([
+			{ title: 'Claimed New', viaMembership: true },
+		]);
 	});
 
 	it('treats ANY non-NONE membership marker as a claim — even an empty string', () => {
 		const plan = planSync([entry({ membership: '' })], emptyIndex());
-		expect(plan.skippedMembership).toBe(1);
+		expect(plan.creates).toMatchObject([{ viaMembership: true }]);
+	});
+
+	it('a purchase anywhere in a PS4/PS5 group outranks its claims', () => {
+		const plan = planSync(
+			[
+				entry({ platform: 'PS4', titleId: 'CUSA_00', membership: 'PS_PLUS' }),
+				entry({ platform: 'PS5', titleId: 'PPSA01325_00' }),
+			],
+			emptyIndex(),
+		);
+		expect(plan.creates).toMatchObject([{ viaMembership: false }]);
+	});
+
+	it('skips WEBMAF web-app companion entitlements — not games (seed parity)', () => {
+		const plan = planSync(
+			[
+				entry({
+					name: 'IGN For PlayStation',
+					titleId: 'WEBAPP_00',
+					productId: 'IP9100-CUSA00003_00-WEBMAF302281APP0',
+					entitlementId: null,
+				}),
+			],
+			emptyIndex(),
+		);
+		expect(plan.skippedWebApps).toBe(1);
 		expect(plan.creates).toEqual([]);
 	});
 
@@ -113,6 +149,7 @@ describe('planSync', () => {
 			{
 				gameId: 'g1',
 				title: 'Astro Bot',
+				viaMembership: false,
 				externalIdsToAdd: ['PPSA01325_00'],
 				coverUrl: 'https://image.api.playstation.com/astro.png',
 				storeUrl: 'https://store.playstation.com/concept/10005478',
@@ -157,6 +194,7 @@ describe('planSync', () => {
 			{
 				gameId: 'g1',
 				title: 'Astro Bot',
+				viaMembership: false,
 				externalIdsToAdd: ['PPSA01325_00'],
 				coverUrl: 'https://image.api.playstation.com/astro.png',
 				storeUrl: 'https://store.playstation.com/concept/10005478',
@@ -223,6 +261,7 @@ describe('planSync', () => {
 			{
 				gameId: 'g1',
 				title: 'Astro Bot',
+				viaMembership: false,
 				externalIdsToAdd: [],
 				coverUrl: 'https://image.api.playstation.com/astro.png',
 				storeUrl: 'https://store.playstation.com/concept/10005478',
@@ -238,7 +277,7 @@ describe('planSync', () => {
 			'conflicts',
 			'creates',
 			'matches',
-			'skippedMembership',
+			'skippedWebApps',
 		]);
 	});
 

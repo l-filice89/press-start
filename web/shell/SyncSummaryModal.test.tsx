@@ -12,9 +12,13 @@ import { SyncSummaryModal } from './SyncSummaryModal';
  */
 
 const result = {
-	added: ['Astro Bot', 'Hades II'],
-	flipped: ['Hollow Knight'],
-	skippedMembership: 3,
+	added: [
+		{ title: 'Astro Bot', viaMembership: false },
+		{ title: 'Hades II', viaMembership: true },
+	],
+	flipped: [{ title: 'Hollow Knight', viaMembership: false }],
+	upgraded: ['Stray'],
+	skippedWebApps: 1,
 	needsAttention: [{ title: 'Doppelganger', reason: 'ambiguous match' }],
 };
 
@@ -32,10 +36,13 @@ describe('SyncSummaryModal', () => {
 		// Counts AND the game names — which games landed must never be a guess.
 		expect(counts).toHaveTextContent('Games added (2)');
 		expect(counts).toHaveTextContent('Astro Bot');
-		expect(counts).toHaveTextContent('Hades II');
+		// A claim is owned but tagged — the future subscription-cancel flow
+		// un-owns exactly these (FR-9 amended).
+		expect(counts).toHaveTextContent('Hades II PS+');
 		expect(counts).toHaveTextContent('Now owned (1)');
 		expect(counts).toHaveTextContent('Hollow Knight');
-		expect(counts).toHaveTextContent('Membership entries skipped: 3');
+		expect(counts).toHaveTextContent('Purchased (was a PS+ claim) (1)');
+		expect(counts).toHaveTextContent('Stray');
 		expect(screen.getByText('Needs attention (1)')).toBeInTheDocument();
 		expect(screen.getByText('Doppelganger')).toBeInTheDocument();
 	});
