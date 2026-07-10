@@ -2,7 +2,8 @@
 title: 'Backfill Epic 2 e2e flows (story 2.5.3)'
 type: 'feature'
 created: '2026-07-10'
-status: 'in-review'
+status: 'done'
+final_revision: 'f436da4b6bc7cac8657ec3906f2eec90505f6a77'
 review_loop_iteration: 0
 followup_review_recommended: true
 context: []
