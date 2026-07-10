@@ -5,6 +5,41 @@ import { useTrackingMutations } from './useTrackingMutations';
 import './card.css';
 
 /**
+ * The platinum badge: a stroke-only trophy in the app's neon outline style
+ * (the emoji renders full-color gold and a grayscale filter reads flat against
+ * the glow language). `currentColor` strokes so the flag's milestone-silver +
+ * glow apply; the small diamond in the cup echoes the owned ◆.
+ */
+function PlatinumTrophy() {
+	return (
+		<svg
+			viewBox="0 0 24 24"
+			width="1.2em"
+			height="1.2em"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth="1.8"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+			aria-hidden="true"
+			data-testid="platinum-trophy"
+		>
+			{/* cup */}
+			<path d="M7 4h10v4.5a5 5 0 0 1-10 0V4Z" />
+			{/* handles */}
+			<path d="M7 5.5H4.75V7a3 3 0 0 0 3 3" />
+			<path d="M17 5.5h2.25V7a3 3 0 0 1-3 3" />
+			{/* stem + base */}
+			<path d="M12 13.5V17" />
+			<path d="M8.5 20h7" />
+			<path d="M10 17h4" />
+			{/* the ◆, platinum-sized */}
+			<path d="m12 6 1.2 1.75L12 9.5l-1.2-1.75L12 6Z" />
+		</svg>
+	);
+}
+
+/**
  * A single shelf card. The cover is the open-detail trigger (Story 2.3): a
  * non-control press flips the card open into the DetailPanel dialog, and
  * closing it returns focus to the owning gridcell. The status pill is the
@@ -59,9 +94,9 @@ export function Card({
 	const showCover = !!game.coverUrl && !coverFailed;
 	const isPlaying = game.effectiveState === 'Playing';
 	const milestone = game.hasPlatinum
-		? { glyph: '🏆', label: 'Platinum achieved' }
+		? { glyph: <PlatinumTrophy />, label: 'Platinum achieved', platinum: true }
 		: game.hasCompleted
-			? { glyph: '✓', label: 'Story completed' }
+			? { glyph: '✓', label: 'Story completed', platinum: false }
 			: null;
 	// Release-state flag: only shown until a game is released.
 	const releaseFlag = game.released
@@ -158,7 +193,11 @@ export function Card({
 						</span>
 					)}
 					{milestone && (
-						<span className="card__flag card__flag--milestone">
+						<span
+							className={`card__flag card__flag--milestone${
+								milestone.platinum ? ' card__flag--platinum' : ''
+							}`}
+						>
 							<span aria-hidden="true">{milestone.glyph}</span>
 							<span className="sr-only">{milestone.label}</span>
 						</span>
