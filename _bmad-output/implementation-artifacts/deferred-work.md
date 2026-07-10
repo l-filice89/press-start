@@ -139,3 +139,6 @@ decision: 2026-07-08 Add requirement refs — Add bracketed FR/AR/UX-DR requirem
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-5-3-backfill-epic-2-e2e-flows.md`
   summary: An open DetailPanel unmounts whenever a write's shelf refetch re-chunks the grid rows and remounts its Card (dialog open-state lives in Card).
   evidence: Reproduced under parallel e2e (other actors' rows shift positions); solo user only sees it when their own write reorders the card across a row boundary. Upgrade path is hoisting the open-panel game id to Shelf level. E2e tests assert post-write truths on the card or after reopen as a workaround (comment in epic2-detail.spec.ts).
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-5-4-standing-rule-every-ui-ac-ships-with-a-playwright-test.md`
+  summary: The ORCHESTRATION CONSTRAINT fact ("NEVER delegate work to subagents") contradicts bmad-dev-auto's SKILL.md, which makes synchronous review subagents mandatory; sessions must reconcile the two ad hoc.
+  evidence: Surfaced during Epic 2.5 runs — the constraint targets bmad-loop's background-detection gap (retired on Windows), but its wording forbids all subagents. Reword to forbid only background/detached delegation, keeping synchronous subagents legal.
