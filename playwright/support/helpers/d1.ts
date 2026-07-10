@@ -60,6 +60,18 @@ export async function d1Query<T>(sql: string): Promise<T[]> {
 	return (await apiSql([sql]))[0] as T[];
 }
 
+/** Upserts one per-user setting row for the single e2e user (Story 4.1). */
+export async function seedSetting(key: string, value: string): Promise<void> {
+	await apiSql([
+		`INSERT OR REPLACE INTO setting (user_id, key, value)
+		 SELECT id, ${sq(key)}, ${sq(value)} FROM user LIMIT 1;`,
+	]);
+}
+
+export async function deleteSetting(key: string): Promise<void> {
+	await apiSql([`DELETE FROM setting WHERE key = ${sq(key)};`]);
+}
+
 /**
  * CLI fallback for global-setup steps that run BEFORE the dev server exists.
  * SQL is handed to wrangler as a file — large batches overflow the Windows

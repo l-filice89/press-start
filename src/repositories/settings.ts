@@ -22,6 +22,13 @@ export async function getSetting(db: Db, userId: string, key: string) {
  * overwrites a value the user may have edited (INSERT OR IGNORE, so the race
  * between two capture calls is harmless).
  */
+/** Remove a setting row entirely ("unset", distinct from an empty value). */
+export async function deleteSetting(db: Db, userId: string, key: string) {
+	await db
+		.delete(setting)
+		.where(and(eq(setting.userId, userId), eq(setting.key, key)));
+}
+
 export async function setSetting(
 	db: Db,
 	userId: string,

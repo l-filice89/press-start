@@ -13,3 +13,8 @@ BETTER_AUTH_SECRET=""
 
 # Resend API key; leave empty to use the console email fallback in dev.
 RESEND_API_KEY=""
+
+# Optional seed for the PlayStation session cookie (Story 4.1, FR-36). Only
+# used while no cookie has been saved in Settings; the in-app value always
+# wins. Production equivalent: bunx wrangler secret put PSN_SESSION_COOKIE
+PSN_SESSION_COOKIE=""

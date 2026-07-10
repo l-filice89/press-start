@@ -3,14 +3,21 @@ import { z } from 'zod';
 import { isValidTimeZone } from '../core';
 import { getSetting, setSetting } from '../repositories';
 import { createDb } from '../repositories/db';
-import { TIMEZONE_SETTING_KEY } from '../services/settings';
+import {
+	clearPsnAuthExpired,
+	getPsnCookie,
+	isPsnAuthExpired,
+	PSN_COOKIE_SETTING_KEY,
+	TIMEZONE_SETTING_KEY,
+} from '../services/settings';
 import { type AuthVariables, requireAuth } from './auth';
 
 /**
- * User settings (Epic 2 retro timezone policy). The SPA PUTs the browser's
- * IANA zone with `onlyIfUnset: true` after login (first-login capture); a
- * plain PUT overwrites (the future Settings surface edits through the same
- * endpoint). GET feeds that surface.
+ * User settings (Epic 2 retro timezone policy + Story 4.1 PSN cookie). The
+ * SPA PUTs the browser's IANA zone with `onlyIfUnset: true` after login
+ * (first-login capture); a plain PUT overwrites (the Settings panel edits
+ * through the same endpoint). GET feeds that surface — for the PSN cookie it
+ * reports PRESENCE only; the stored value is never echoed back to the client.
  */
 
 const timezoneBodySchema = z.object({
@@ -18,17 +25,65 @@ const timezoneBodySchema = z.object({
 	onlyIfUnset: z.boolean().optional(),
 });
 
+// The pasted value goes verbatim into an outbound Cookie header (via the PSN
+// provider), so this is a trust boundary: strip the most common paste mistake
+// (a leading `pdccws_p=` from copying the whole pair), then refuse anything
+// that could smuggle extra cookie pairs or break the header — semicolons,
+// commas, whitespace, control characters.
+const psnCookieBodySchema = z.object({
+	cookie: z
+		.string()
+		.trim()
+		.transform((value) => value.replace(/^pdccws_p=/, ''))
+		.pipe(
+			z
+				.string()
+				.min(1)
+				.max(4096)
+				// biome-ignore lint/suspicious/noControlCharactersInRegex: rejecting control characters is the point — they would corrupt the outbound Cookie header.
+				.regex(/^[^;,\s\x00-\x1f\x7f]+$/),
+		),
+});
+
 type SettingsEnv = { Bindings: Env; Variables: AuthVariables };
 
 export const settingsRoute = new Hono<SettingsEnv>();
 
 settingsRoute.get('/settings', requireAuth, async (c) => {
-	const timezone = await getSetting(
-		createDb(c.env.DB),
-		c.get('userId'),
-		TIMEZONE_SETTING_KEY,
+	const db = createDb(c.env.DB);
+	const userId = c.get('userId');
+	// Presence reflects the EFFECTIVE cookie (saved setting or the Wrangler
+	// secret seed) — a deployment running on the seed must not claim "no
+	// cookie" while sync works.
+	const [timezone, psnCookie, psnAuthExpired] = await Promise.all([
+		getSetting(db, userId, TIMEZONE_SETTING_KEY),
+		getPsnCookie(db, userId, c.env),
+		isPsnAuthExpired(db, userId),
+	]);
+	return c.json(
+		{
+			timezone: timezone ?? null,
+			psnCookieSet: Boolean(psnCookie),
+			psnAuthExpired,
+		},
+		200,
 	);
-	return c.json({ timezone: timezone ?? null }, 200);
+});
+
+settingsRoute.put('/settings/psn-cookie', requireAuth, async (c) => {
+	const body = psnCookieBodySchema.safeParse(
+		await c.req.json().catch(() => null),
+	);
+	if (!body.success) {
+		return c.json({ error: 'invalid cookie value' }, 400);
+	}
+
+	const db = createDb(c.env.DB);
+	const userId = c.get('userId');
+	await setSetting(db, userId, PSN_COOKIE_SETTING_KEY, body.data.cookie);
+	// A fresh cookie is the expired-banner's only exit (Story 4.1 AC3).
+	await clearPsnAuthExpired(db, userId);
+	return c.json({ psnCookieSet: true, psnAuthExpired: false }, 200);
 });
 
 settingsRoute.put('/settings/timezone', requireAuth, async (c) => {

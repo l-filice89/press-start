@@ -1,0 +1,101 @@
+/* Settings modal (Story 4.1): the confirm-dialog scaffold, sized for a form.
+   Neutral hairline accent — settings are chrome, not a state color. */
+
+.settings-panel__backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: var(--z-overlay);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: color-mix(in srgb, black 62%, transparent);
+}
+
+.settings-panel {
+	width: min(28rem, calc(100vw - 2 * var(--space-4)));
+	max-height: calc(100svh - 2 * var(--space-4));
+	overflow-y: auto;
+	margin: var(--space-4);
+	padding: var(--space-4);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface-raised);
+}
+
+.settings-panel__title {
+	margin: 0 0 var(--space-3);
+	color: var(--color-text-primary);
+	font-family: var(--font-ui);
+}
+
+.settings-panel__heading {
+	margin: 0 0 var(--space-2);
+	color: var(--color-text-primary);
+	font-family: var(--font-ui);
+	font-size: 1rem;
+}
+
+.settings-panel__status,
+.settings-panel__instructions {
+	margin: 0 0 var(--space-3);
+	color: var(--color-text-secondary);
+	font-size: 0.875rem;
+}
+
+.settings-panel__instructions {
+	padding-left: var(--space-4);
+	display: grid;
+	gap: var(--space-1);
+}
+
+.settings-panel__cookie-input {
+	width: 100%;
+	padding: var(--space-2);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-sm);
+	background: none;
+	color: var(--color-text-primary);
+	font-family: var(--font-mono);
+	font-size: 0.8125rem;
+	resize: vertical;
+}
+
+.settings-panel__feedback {
+	min-height: 1.25rem;
+	margin-top: var(--space-1);
+	color: var(--color-text-secondary);
+	font-size: 0.875rem;
+}
+
+.settings-panel__actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: var(--space-2);
+	margin-top: var(--space-3);
+}
+
+.settings-panel__close,
+.settings-panel__save {
+	padding: var(--space-2) var(--space-3);
+	border-radius: var(--radius-sm);
+	font: inherit;
+	font-family: var(--font-ui);
+	cursor: pointer;
+}
+
+.settings-panel__close {
+	border: 1px solid var(--color-border-hairline);
+	background: none;
+	color: var(--color-text-primary);
+}
+
+.settings-panel__save {
+	border: 1px solid var(--color-accent-electric);
+	background: color-mix(in srgb, var(--color-accent-electric) 18%, transparent);
+	color: var(--color-accent-electric);
+}
+
+.settings-panel__save:disabled {
+	opacity: 0.5;
+	cursor: default;
+}

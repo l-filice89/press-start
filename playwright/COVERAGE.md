@@ -97,3 +97,11 @@ Epic 1's deferred 1.5h (prefers-reduced-motion) is closed by
 | 3.6a every tracking write invalidates `['shelf']` AND `['shelf-search']` | jsdom `StatusPopover.test.tsx` › a status write invalidates the shelf-search query alongside the shelf (pins the invalidation; the refetch-on-invalidate of an active query is react-query's own contract. No e2e: the listbox is read-only and closes on blur — an open-listbox-during-write flow can't be driven deterministically) |
 | 3.6b stale toast UNDO cannot overwrite a newer settled write | jsdom `StatusPopover.test.tsx` › toast UNDO after a settled newer write expires and writes nothing (no reliable e2e flow: needs two writes + a live toast raced against the real Worker's response timing — same reason as 3.4e) |
 | 3.6c open status-popover menu survives a refetch re-chunk; retry loop removed | jsdom `Shelf.test.tsx` › keeps the status menu open… (menu identity asserted) + › does not resurrect a status menu…; the `epic2-tracking.spec.ts` helper now opens with a plain click (retry loop deleted) — regression signal is that suite flaking again |
+
+## Epic 4
+
+| AC | Coverage |
+|----|----------|
+| 4.1a all PSN access through `PsnProvider` (persisted query, auth inside the adapter) | skipped — wire-level adapter, no UI flow; pinned in Vitest `psn.test.ts` (persisted query/pagination/headers) + `psn-encapsulation.test.ts` (auth mechanics allowed nowhere else) |
+| 4.1b cookie in `SETTING`, editable from a settings surface, read fresh per call | `epic4-settings.spec.ts` › the header gear opens Settings; saving a cookie flips presence without echoing the value (fresh-per-call read pinned in Vitest `psn.test.ts`; secret-seed fallback in `settings.test.ts` integration) |
+| 4.1c 401/403 surfaces refresh instructions in the attention banner, no retry | `epic4-settings.spec.ts` › an expired PSN auth state feeds the attention banner until a fresh cookie is saved (banner seeded via the persisted `psn_auth` flag — the live PSN 401 → flag write is unreachable until 4.2's Sync button; the no-retry half is pinned in Vitest `psn.test.ts`) |

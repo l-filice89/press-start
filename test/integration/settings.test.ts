@@ -3,12 +3,18 @@ import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, inject, it } from 'vitest';
 import { todayInZone } from '../../src/core';
 import {
+	getSetting,
 	getTracking,
 	insertGame,
 	upsertTracking,
 } from '../../src/repositories';
 import { createDb } from '../../src/repositories/db';
 import { user } from '../../src/schema';
+import {
+	getPsnCookie,
+	markPsnAuthExpired,
+	PSN_COOKIE_SETTING_KEY,
+} from '../../src/services/settings';
 import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
 
 /**
@@ -47,6 +53,15 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 	it('requires auth', async () => {
 		expect((await appFetch('/api/settings')).status).toBe(401);
 		expect((await putTimezone({ timezone: 'Europe/Rome' })).status).toBe(401);
+		expect(
+			(
+				await appFetch('/api/settings/psn-cookie', {
+					method: 'PUT',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ cookie: 'x' }),
+				})
+			).status,
+		).toBe(401);
 	});
 
 	it('rejects an unresolvable timezone', async () => {
@@ -77,7 +92,101 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 			await (await appFetch('/api/settings', { headers: { cookie } })).json(),
 		).toEqual({
 			timezone: 'Europe/Berlin',
+			psnCookieSet: false,
+			psnAuthExpired: false,
 		});
+	});
+
+	it('PSN cookie: PUT saves per-user, GET reports presence only and never echoes the value (hazard)', async () => {
+		// The value lands in an outbound Cookie header — whitespace-only,
+		// pair-smuggling and control characters are refused at the boundary.
+		for (const bad of ['   ', 'a;b', 'a b', 'a,b', 'a\nb', 'pdccws_p=']) {
+			const rejected = await appFetch('/api/settings/psn-cookie', {
+				method: 'PUT',
+				headers: { 'content-type': 'application/json', cookie },
+				body: JSON.stringify({ cookie: bad }),
+			});
+			expect(rejected.status, `expected 400 for ${JSON.stringify(bad)}`).toBe(
+				400,
+			);
+		}
+
+		// The classic paste mistake — copying the whole `name=value` pair —
+		// is corrected, not stored verbatim.
+		const pasted = await appFetch('/api/settings/psn-cookie', {
+			method: 'PUT',
+			headers: { 'content-type': 'application/json', cookie },
+			body: JSON.stringify({ cookie: 'pdccws_p=pair-pasted-value' }),
+		});
+		expect(pasted.status).toBe(200);
+		expect(await getSetting(db(), userId, PSN_COOKIE_SETTING_KEY)).toBe(
+			'pair-pasted-value',
+		);
+
+		const saved = await appFetch('/api/settings/psn-cookie', {
+			method: 'PUT',
+			headers: { 'content-type': 'application/json', cookie },
+			body: JSON.stringify({ cookie: '  psn-secret-value  ' }),
+		});
+		expect(saved.status).toBe(200);
+		expect(await saved.json()).toEqual({
+			psnCookieSet: true,
+			psnAuthExpired: false,
+		});
+
+		// Stored trimmed; readable through the provider-facing service read.
+		expect(await getSetting(db(), userId, PSN_COOKIE_SETTING_KEY)).toBe(
+			'psn-secret-value',
+		);
+		expect(await getPsnCookie(db(), userId, {})).toBe('psn-secret-value');
+
+		// The hazard: the secret must never ride back to the client.
+		const res = await appFetch('/api/settings', { headers: { cookie } });
+		const body = await res.text();
+		expect(body).not.toContain('psn-secret-value');
+		expect(JSON.parse(body)).toMatchObject({
+			psnCookieSet: true,
+			psnAuthExpired: false,
+		});
+	});
+
+	it('PSN auth-expired flag: persists across requests, cleared only by a fresh cookie (hazard)', async () => {
+		await markPsnAuthExpired(db(), userId);
+
+		// Survives reloads — it is persisted state, not a dismissible toast.
+		const flagged = await (
+			await appFetch('/api/settings', { headers: { cookie } })
+		).json();
+		expect(flagged).toMatchObject({ psnAuthExpired: true });
+
+		// Saving a fresh cookie is the one exit.
+		await appFetch('/api/settings/psn-cookie', {
+			method: 'PUT',
+			headers: { 'content-type': 'application/json', cookie },
+			body: JSON.stringify({ cookie: 'fresh-cookie' }),
+		});
+		const cleared = await (
+			await appFetch('/api/settings', { headers: { cookie } })
+		).json();
+		expect(cleared).toMatchObject({ psnAuthExpired: false });
+	});
+
+	it('PSN cookie seed: the env secret is used only while no setting is saved', async () => {
+		// A saved setting always wins over the seed.
+		expect(
+			await getPsnCookie(db(), userId, { PSN_SESSION_COOKIE: 'env-seed' }),
+		).toBe('fresh-cookie');
+
+		// A user with no saved cookie falls back to the env seed, then to none.
+		const other = 'user-with-no-cookie';
+		expect(
+			await getPsnCookie(db(), other, { PSN_SESSION_COOKIE: 'env-seed' }),
+		).toBe('env-seed');
+		expect(await getPsnCookie(db(), other, {})).toBeUndefined();
+		// A whitespace-only secret (trailing-newline paste) is no seed at all.
+		expect(
+			await getPsnCookie(db(), other, { PSN_SESSION_COOKIE: ' \n' }),
+		).toBeUndefined();
 	});
 
 	it('stamps started_on as today IN THE USER ZONE, not the UTC day (hazard)', async () => {

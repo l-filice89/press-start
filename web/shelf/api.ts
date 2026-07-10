@@ -77,7 +77,10 @@ const shelfResponseSchema = z.object({
  * which is what lets the query client skip pointless retries on a 4xx and route
  * a 401 back to sign-in.
  */
-async function callApi(url: string, init?: RequestInit): Promise<unknown> {
+export async function callApi(
+	url: string,
+	init?: RequestInit,
+): Promise<unknown> {
 	const response = await fetch(url, {
 		credentials: 'same-origin',
 		...init,
