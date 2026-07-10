@@ -84,6 +84,62 @@ export function applyShelfFilter(
 	);
 }
 
+/** One rendered token of the summary sentence (Story 3.3, UX-DR23). */
+export type SummaryPart = {
+	text: string;
+	/** Set on the literal connector words so the UI can tint them (color redundant to the word). */
+	connector?: 'or' | 'and';
+};
+
+const joinWithOr = (terms: string[]): SummaryPart[] =>
+	terms.flatMap((text, i) =>
+		i === 0 ? [{ text }] : [{ text: 'or', connector: 'or' as const }, { text }],
+	);
+
+/**
+ * Plain-English readback of an active filter: OR within a group, AND across
+ * groups, as literal words. Reveals narrate inside the state group (they
+ * extend it) — with no explicit state selection they extend the DEFAULT set,
+ * so the sentence spells the live statuses out rather than claiming a
+ * reveal-only subset the shelf doesn't show. Groups are comma-separated
+ * before each "and" so two OR-groups can't misread as one. Empty filter → no
+ * parts.
+ */
+export function summarizeFilter(filter: ShelfFilter): SummaryPart[] {
+	const groups: SummaryPart[][] = [];
+	const stateTerms =
+		filter.states.length > 0
+			? [...filter.states, ...filter.reveals]
+			: filter.reveals.length > 0
+				? [...LIVE_STATUSES, ...filter.reveals]
+				: [];
+	if (stateTerms.length > 0) groups.push(joinWithOr(stateTerms));
+	if (filter.genres.length > 0) groups.push(joinWithOr(filter.genres));
+	for (const key of filter.flags) {
+		const flag = FLAGS.find((f) => f.key === key);
+		if (flag) groups.push([{ text: flag.label }]);
+	}
+	if (groups.length === 0) return [];
+	const parts: SummaryPart[] = [{ text: 'Showing' }];
+	groups.forEach((group, i) => {
+		if (i > 0) {
+			// Comma on the previous token scopes the groups audibly and visually.
+			parts[parts.length - 1].text += ',';
+			parts.push({ text: 'and', connector: 'and' });
+		}
+		parts.push(...group);
+	});
+	parts.push({ text: 'games.' });
+	return parts;
+}
+
+/** The summary as one plain string — feeds live-region announcements. */
+export function summarizeFilterText(filter: ShelfFilter): string {
+	return summarizeFilter(filter)
+		.map((p) => p.text)
+		.join(' ');
+}
+
 /** Toggle one value in a selection list, preserving insertion order. */
 export function toggleSelection<T>(selected: T[], value: T): T[] {
 	return selected.includes(value)

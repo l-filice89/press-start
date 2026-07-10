@@ -80,7 +80,7 @@ development_status:
   epic-3: in-progress
   3-1-filter-the-shelf-by-state-and-genre: done
   3-2-flag-pills-and-state-reveal-pills: done
-  3-3-live-filter-summary-empty-state-responsive-filters: backlog
+  3-3-live-filter-summary-empty-state-responsive-filters: done
   3-4-focus-interaction-hardening-deferred-work-sweep: backlog
   epic-3-retrospective: optional
 

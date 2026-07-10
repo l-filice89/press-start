@@ -166,3 +166,6 @@ decision: 2026-07-08 Add requirement refs — Add bracketed FR/AR/UX-DR requirem
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-2-flag-pills-and-state-reveal-pills.md`
   summary: Tracking mutations invalidate only ['shelf'], never ['shelf-search'] — a detail panel opened from a search result renders from a payload that goes stale after any write (fields shown stale; becameHidden transition check reads a stale before-state in that path).
   evidence: web/shelf/useTrackingMutations.ts onSuccess handlers invalidate queryKey ['shelf'] only; SearchBox owns ['shelf-search', q]. Pre-existing seam (all Story 2.x writes had it), surfaced by the 3.2 review's look at becameHidden.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-3-live-filter-summary-empty-state-responsive-filters.md`
+  summary: The portal + backdrop-dismiss + document-capture-Escape + Tab-trap modal scaffold is now hand-copied in three components (ConfirmDialog, DetailPanel, FilterSheet) — extract one shared hook/component so the traps can't drift.
+  evidence: web/components/ConfirmDialog.tsx, web/shelf/DetailPanel.tsx, and web/shelf/FilterRow.tsx FilterSheet each re-implement the same chrome nearly line for line; FilterSheet shipped with a trap hole ConfirmDialog had already solved, which is exactly the drift this duplication invites.

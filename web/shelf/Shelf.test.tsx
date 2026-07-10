@@ -177,6 +177,22 @@ describe('Shelf', () => {
 		expect(screen.getAllByTestId('shelf-card')).toHaveLength(3);
 	});
 
+	it('NO MATCH offers Clear filters, which restores the default set (Story 3.3)', async () => {
+		const user = userEvent.setup();
+		mockFetch([card('a', 'Apex', { effectiveState: 'Playing' })]);
+		renderShelf();
+		await screen.findAllByTestId('shelf-card');
+
+		await user.click(screen.getByRole('button', { name: 'State' }));
+		await user.click(screen.getByRole('menuitemcheckbox', { name: 'Paused' }));
+		await user.keyboard('{Escape}');
+		expect(screen.getByText('NO MATCH')).toBeInTheDocument();
+
+		await user.click(screen.getByRole('button', { name: 'Clear filters' }));
+		expect(screen.getAllByTestId('shelf-card')).toHaveLength(1);
+		expect(screen.queryByTestId('filter-summary')).not.toBeInTheDocument();
+	});
+
 	it('an all-hidden library with no filter shows INSERT GAMES, not NO MATCH', async () => {
 		// The payload now includes hidden games — an all-finished library is an
 		// empty backlog (insert-games), not a failed filter (no-match).

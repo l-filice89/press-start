@@ -11,6 +11,7 @@ import {
 	EMPTY_FILTER,
 	isFilterActive,
 	type ShelfFilter,
+	summarizeFilterText,
 } from './filters';
 import { useProgressiveList } from './useProgressiveList';
 import './shelf.css';
@@ -73,21 +74,36 @@ function FilteredShelf({ games }: { games: ShelfGame[] }) {
 		lastAnnounced.current = filter;
 		announce(
 			isFilterActive(filter)
-				? `Filters applied. Showing ${visible.length} of ${defaultCount} games.`
+				? `Filters applied. ${summarizeFilterText(filter)} ${visible.length} of ${defaultCount}.`
 				: 'Filters cleared.',
 		);
 	}, [filter, visible.length, defaultCount, announce]);
 
 	return (
 		<>
-			<FilterRow filter={filter} onChange={setFilter} />
+			<FilterRow
+				filter={filter}
+				onChange={setFilter}
+				visibleCount={visible.length}
+			/>
 			{visible.length === 0 ? (
 				// "NO MATCH" is a filter outcome; a library whose every game is
 				// hidden (all completed/dropped) with no filter active is an empty
-				// backlog, not a failed filter.
-				<EmptyState
-					variant={isFilterActive(filter) ? 'no-match' : 'insert-games'}
-				/>
+				// backlog, not a failed filter. The filter outcome offers the way
+				// back out (UX-DR18).
+				isFilterActive(filter) ? (
+					<EmptyState
+						variant="no-match"
+						actions={[
+							{
+								label: 'Clear filters',
+								onClick: () => setFilter(EMPTY_FILTER),
+							},
+						]}
+					/>
+				) : (
+					<EmptyState variant="insert-games" />
+				)
 			) : (
 				<ShelfGrid games={visible} />
 			)}

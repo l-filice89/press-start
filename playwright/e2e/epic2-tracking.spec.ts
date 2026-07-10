@@ -28,9 +28,17 @@ const cardFor = (page: Page, game: SeedGame) =>
 
 async function openStatusMenu(page: Page, game: SeedGame) {
 	const pill = cardFor(page, game).getByTestId('status-pill-button');
-	await pill.click();
 	const menu = page.getByTestId('status-menu');
-	await expect(menu).toBeVisible();
+	// A background refetch (parallel workers churning the shared DB) can
+	// re-chunk the grid and remount the card, which unmounts a just-opened
+	// menu. Retry until the menu survives a beat — Story 3.4 hardens the
+	// product side of this (transient UI vs re-chunk); then drop this loop.
+	await expect(async () => {
+		if (!(await menu.isVisible())) {
+			await pill.click({ timeout: 5_000 });
+		}
+		await expect(menu).toBeVisible({ timeout: 2_000 });
+	}).toPass({ timeout: 20_000 });
 	return { pill, menu };
 }
 

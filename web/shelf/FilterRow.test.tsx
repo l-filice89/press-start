@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FilterRow } from './FilterRow';
@@ -21,13 +21,18 @@ function mockGenres(genres: string[]) {
 function renderRow(
 	filter: ShelfFilter = EMPTY_FILTER,
 	onChange: (next: ShelfFilter) => void = () => {},
+	visibleCount = 5,
 ) {
 	const client = new QueryClient({
 		defaultOptions: { queries: { retry: false } },
 	});
 	return render(
 		<QueryClientProvider client={client}>
-			<FilterRow filter={filter} onChange={onChange} />
+			<FilterRow
+				filter={filter}
+				onChange={onChange}
+				visibleCount={visibleCount}
+			/>
 		</QueryClientProvider>,
 	);
 }
@@ -121,7 +126,7 @@ describe('FilterRow', () => {
 		});
 		rerender(
 			<QueryClientProvider client={client}>
-				<FilterRow filter={EMPTY_FILTER} onChange={() => {}} />
+				<FilterRow filter={EMPTY_FILTER} onChange={() => {}} visibleCount={5} />
 			</QueryClientProvider>,
 		);
 		expect(screen.getByRole('button', { name: 'State' })).toBeInTheDocument();
@@ -202,6 +207,101 @@ describe('FilterRow', () => {
 			...EMPTY_FILTER,
 			reveals: ['Platinum achieved'],
 		});
+	});
+
+	it('renders the live summary sentence with tinted literal connectors (Story 3.3)', () => {
+		mockGenres([]);
+		renderRow({
+			...EMPTY_FILTER,
+			states: ['Playing', 'Paused'],
+			flags: ['owned'],
+		});
+
+		const summary = screen.getByTestId('filter-summary');
+		expect(summary).toHaveTextContent(
+			'Showing Playing or Paused, and Owned games.',
+		);
+		// Color is redundant to the words: the connector spans carry the tint class.
+		expect(summary.querySelector('.filter-summary__or')).toHaveTextContent(
+			'or',
+		);
+		expect(summary.querySelector('.filter-summary__and')).toHaveTextContent(
+			'and',
+		);
+	});
+
+	it('renders no summary while the filter is empty', () => {
+		mockGenres([]);
+		renderRow();
+		expect(screen.queryByTestId('filter-summary')).not.toBeInTheDocument();
+	});
+
+	it('Filters button opens the grouped sheet; Show N games closes it (Story 3.3)', async () => {
+		const user = userEvent.setup();
+		mockGenres(['RPG']);
+		const onChange = vi.fn();
+		renderRow({ ...EMPTY_FILTER, states: ['Playing'] }, onChange, 3);
+
+		const trigger = screen.getByRole('button', {
+			name: 'Filters — 1 active',
+		});
+		expect(trigger).toHaveTextContent('1');
+		await user.click(trigger);
+
+		const sheet = screen.getByRole('dialog', { name: 'Filters' });
+		// Groups are labeled with their logic (UX-DR26).
+		expect(sheet).toHaveTextContent('State — any of (or)');
+		expect(sheet).toHaveTextContent('Genre — any of (or)');
+		expect(sheet).toHaveTextContent('Flags — all of (and)');
+		expect(sheet).toHaveTextContent('Reveal hidden states — also show (or)');
+
+		// Toggling inside the sheet drives the same filter state.
+		const paused = within(sheet).getByRole('button', { name: 'Paused' });
+		expect(
+			within(sheet).getByRole('button', { name: 'Playing' }),
+		).toHaveAttribute('aria-pressed', 'true');
+		await user.click(paused);
+		expect(onChange).toHaveBeenCalledWith({
+			...EMPTY_FILTER,
+			states: ['Playing', 'Paused'],
+		});
+
+		await user.click(
+			within(sheet).getByRole('button', { name: 'Show 3 games' }),
+		);
+		expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+		expect(trigger).toHaveFocus();
+	});
+
+	it('the sheet traps Tab, including Shift+Tab from the just-focused container', async () => {
+		const user = userEvent.setup();
+		mockGenres([]);
+		renderRow();
+
+		await user.click(screen.getByRole('button', { name: 'Filters' }));
+		const sheet = screen.getByRole('dialog', { name: 'Filters' });
+		expect(sheet).toHaveFocus();
+
+		// The hole ConfirmDialog avoids by focusing a button: Shift+Tab straight
+		// off the container must stay inside the aria-modal dialog.
+		await user.tab({ shift: true });
+		expect(sheet.contains(document.activeElement)).toBe(true);
+		await user.tab();
+		expect(sheet.contains(document.activeElement)).toBe(true);
+	});
+
+	it('Escape closes the sheet and returns focus to the Filters button', async () => {
+		const user = userEvent.setup();
+		mockGenres([]);
+		renderRow();
+
+		const trigger = screen.getByRole('button', { name: 'Filters' });
+		await user.click(trigger);
+		expect(screen.getByRole('dialog', { name: 'Filters' })).toBeInTheDocument();
+
+		await user.keyboard('{Escape}');
+		expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+		expect(trigger).toHaveFocus();
 	});
 
 	it('supports keyboard traversal and Escape returns focus to the trigger', async () => {

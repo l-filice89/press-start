@@ -167,9 +167,11 @@ test('milestone write on a revealed hidden game succeeds; panel reopens with it 
 		// retry the open if the first click lands on a remounting node.
 		const panel = page.getByRole('dialog', { name: dropped.title });
 		await expect(async () => {
-			await card
-				.getByRole('button', { name: `Open details — ${dropped.title}` })
-				.click({ timeout: 5_000 });
+			if (!(await panel.isVisible())) {
+				await card
+					.getByRole('button', { name: `Open details — ${dropped.title}` })
+					.click({ timeout: 5_000 });
+			}
 			await expect(panel).toBeVisible({ timeout: 2_000 });
 		}).toPass({ timeout: 20_000 });
 
@@ -192,9 +194,11 @@ test('milestone write on a revealed hidden game succeeds; panel reopens with it 
 			`${dropped.title} — Dropped`,
 		);
 		await expect(async () => {
-			await cardFor(page, dropped)
-				.getByRole('button', { name: `Open details — ${dropped.title}` })
-				.click({ timeout: 5_000 });
+			if (!(await panel.isVisible())) {
+				await cardFor(page, dropped)
+					.getByRole('button', { name: `Open details — ${dropped.title}` })
+					.click({ timeout: 5_000 });
+			}
 			await expect(panel).toBeVisible({ timeout: 2_000 });
 		}).toPass({ timeout: 20_000 });
 		await expect(

@@ -5,6 +5,7 @@ import {
 	EMPTY_FILTER,
 	isFilterActive,
 	type ShelfFilter,
+	summarizeFilter,
 	toggleSelection,
 } from './filters';
 
@@ -182,6 +183,57 @@ describe('isFilterActive', () => {
 		expect(isFilterActive(f({ genres: ['RPG'] }))).toBe(true);
 		expect(isFilterActive(f({ reveals: ['Dropped'] }))).toBe(true);
 		expect(isFilterActive(f({ flags: ['owned'] }))).toBe(true);
+	});
+});
+
+describe('summarizeFilter', () => {
+	const sentence = (filter: ShelfFilter) =>
+		summarizeFilter(filter)
+			.map((p) => p.text)
+			.join(' ');
+
+	it('returns no parts for the empty filter', () => {
+		expect(summarizeFilter(EMPTY_FILTER)).toEqual([]);
+	});
+
+	// HAZARD (UX-DR23): "or"/"and" are literal WORDS in the sentence — color
+	// tints are redundant to them, never a replacement.
+	it('joins a group with the literal word "or"', () => {
+		expect(sentence(f({ states: ['Playing', 'Paused'] }))).toBe(
+			'Showing Playing or Paused games.',
+		);
+		const parts = summarizeFilter(f({ states: ['Playing', 'Paused'] }));
+		expect(parts.find((p) => p.connector === 'or')?.text).toBe('or');
+	});
+
+	it('reveals narrate inside the state group (they extend it)', () => {
+		expect(sentence(f({ states: ['Playing'], reveals: ['Dropped'] }))).toBe(
+			'Showing Playing or Dropped games.',
+		);
+	});
+
+	// HAZARD: with no explicit state selection a reveal extends the DEFAULT
+	// set — the sentence must not claim a reveal-only subset.
+	it('a reveal with no state selection narrates the full default set', () => {
+		expect(sentence(f({ reveals: ['Dropped'] }))).toBe(
+			'Showing Not started or Up next or Playing or Paused or Dropped games.',
+		);
+	});
+
+	it('joins groups with the literal word "and", flags each their own group', () => {
+		expect(
+			sentence(
+				f({
+					states: ['Playing'],
+					genres: ['RPG', 'Racing'],
+					flags: ['owned', 'playableNow'],
+				}),
+			),
+		).toBe(
+			'Showing Playing, and RPG or Racing, and Owned, and Playable now games.',
+		);
+		const parts = summarizeFilter(f({ flags: ['owned', 'playableNow'] }));
+		expect(parts.filter((p) => p.connector === 'and')).toHaveLength(1);
 	});
 });
 

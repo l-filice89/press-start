@@ -1,11 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { FOCUSABLE_SELECTOR } from '../components/focusable';
 import { fetchGenreVocabulary } from './api';
 import {
+	EMPTY_FILTER,
 	FLAGS,
 	LIVE_STATUSES,
 	REVEAL_STATES,
 	type ShelfFilter,
+	summarizeFilter,
 	toggleSelection,
 } from './filters';
 import './filter-row.css';
@@ -27,9 +31,11 @@ import './filter-row.css';
 export function FilterRow({
 	filter,
 	onChange,
+	visibleCount,
 }: {
 	filter: ShelfFilter;
 	onChange: (next: ShelfFilter) => void;
+	visibleCount: number;
 }) {
 	const {
 		data: genres = [],
@@ -39,6 +45,8 @@ export function FilterRow({
 		queryKey: ['genres'],
 		queryFn: ({ signal }) => fetchGenreVocabulary(signal),
 	});
+	const [sheetOpen, setSheetOpen] = useState(false);
+	const sheetTriggerRef = useRef<HTMLButtonElement>(null);
 
 	// A selected genre missing from the vocabulary (last game untagged, then a
 	// refetch) must stay uncheckable-off — never a filter the user can't remove.
@@ -47,73 +55,361 @@ export function FilterRow({
 		...filter.genres.filter((g) => !genres.includes(g)),
 	];
 
+	const activeCount =
+		filter.states.length +
+		filter.genres.length +
+		filter.reveals.length +
+		filter.flags.length;
+
+	const closeSheet = useCallback(() => {
+		setSheetOpen(false);
+		sheetTriggerRef.current?.focus();
+	}, []);
+
 	return (
 		<div className="filter-row" data-testid="filter-row">
-			<FilterDropdown
-				label="State"
-				testid="filter-state"
-				options={LIVE_STATUSES}
-				selected={filter.states}
-				onToggle={(state) =>
-					onChange({ ...filter, states: toggleSelection(filter.states, state) })
+			{/* Phone-only entry point (UX-DR26): one button, active-count badge. */}
+			<button
+				ref={sheetTriggerRef}
+				type="button"
+				className="filter-row__sheet-trigger tap-target"
+				data-active={activeCount > 0 || undefined}
+				data-testid="filter-sheet-trigger"
+				aria-label={
+					activeCount > 0 ? `Filters — ${activeCount} active` : 'Filters'
 				}
-			/>
-			<FilterDropdown
-				label="Genre"
-				testid="filter-genre"
-				options={genreOptions}
-				selected={filter.genres}
-				// Failures surface, never silently: a dead vocabulary query must not
-				// read as "no genres exist".
-				emptyText={
-					isError
-						? 'Genres couldn’t load'
-						: isPending
-							? 'Loading genres…'
-							: 'No genres yet'
-				}
-				onToggle={(genre) =>
-					onChange({ ...filter, genres: toggleSelection(filter.genres, genre) })
-				}
-			/>
-			{FLAGS.map(({ key, label }) => (
-				<button
-					key={key}
-					type="button"
-					className="filter-row__pill filter-row__pill--flag tap-target"
-					aria-pressed={filter.flags.includes(key)}
-					data-active={filter.flags.includes(key) || undefined}
-					data-testid={`filter-flag-${key}`}
-					onClick={() =>
-						onChange({ ...filter, flags: toggleSelection(filter.flags, key) })
+				onClick={() => setSheetOpen(true)}
+			>
+				Filters
+				{activeCount > 0 && (
+					<span className="filter-row__count" aria-hidden="true">
+						{activeCount}
+					</span>
+				)}
+			</button>
+			{sheetOpen && (
+				<FilterSheet
+					filter={filter}
+					onChange={onChange}
+					genreOptions={genreOptions}
+					genreEmptyText={
+						isError
+							? 'Genres couldn’t load'
+							: isPending
+								? 'Loading genres…'
+								: 'No genres yet'
 					}
-				>
-					{label}
-				</button>
-			))}
-			{REVEAL_STATES.map((state) => (
-				<button
-					key={state}
-					type="button"
-					className="filter-row__pill filter-row__pill--reveal tap-target"
-					// The reveal semantics must be machine-readable, not shape-alone
-					// (UX-DR9 + the never-color-alone floor) — and "Show X" also keeps
-					// this button distinct from the milestone action named "X".
-					aria-label={`Show ${state} games`}
-					aria-pressed={filter.reveals.includes(state)}
-					data-active={filter.reveals.includes(state) || undefined}
-					data-testid={`filter-reveal-${state.toLowerCase().replace(/ /g, '-')}`}
-					onClick={() =>
+					visibleCount={visibleCount}
+					onClose={closeSheet}
+				/>
+			)}
+			{/* Full inline row — desktop only; the sheet is the phone surface. */}
+			<div className="filter-row__desktop">
+				<FilterDropdown
+					label="State"
+					testid="filter-state"
+					options={LIVE_STATUSES}
+					selected={filter.states}
+					onToggle={(state) =>
 						onChange({
 							...filter,
-							reveals: toggleSelection(filter.reveals, state),
+							states: toggleSelection(filter.states, state),
 						})
 					}
-				>
-					{state}
-				</button>
-			))}
+				/>
+				<FilterDropdown
+					label="Genre"
+					testid="filter-genre"
+					options={genreOptions}
+					selected={filter.genres}
+					// Failures surface, never silently: a dead vocabulary query must not
+					// read as "no genres exist".
+					emptyText={
+						isError
+							? 'Genres couldn’t load'
+							: isPending
+								? 'Loading genres…'
+								: 'No genres yet'
+					}
+					onToggle={(genre) =>
+						onChange({
+							...filter,
+							genres: toggleSelection(filter.genres, genre),
+						})
+					}
+				/>
+				{FLAGS.map(({ key, label }) => (
+					<button
+						key={key}
+						type="button"
+						className="filter-row__pill filter-row__pill--flag tap-target"
+						aria-pressed={filter.flags.includes(key)}
+						data-active={filter.flags.includes(key) || undefined}
+						data-testid={`filter-flag-${key}`}
+						onClick={() =>
+							onChange({ ...filter, flags: toggleSelection(filter.flags, key) })
+						}
+					>
+						{label}
+					</button>
+				))}
+				{REVEAL_STATES.map((state) => (
+					<button
+						key={state}
+						type="button"
+						className="filter-row__pill filter-row__pill--reveal tap-target"
+						// The reveal semantics must be machine-readable, not shape-alone
+						// (UX-DR9 + the never-color-alone floor) — and "Show X" also keeps
+						// this button distinct from the milestone action named "X".
+						aria-label={`Show ${state} games`}
+						aria-pressed={filter.reveals.includes(state)}
+						data-active={filter.reveals.includes(state) || undefined}
+						data-testid={`filter-reveal-${state.toLowerCase().replace(/ /g, '-')}`}
+						onClick={() =>
+							onChange({
+								...filter,
+								reveals: toggleSelection(filter.reveals, state),
+							})
+						}
+					>
+						{state}
+					</button>
+				))}
+			</div>
+			<FilterSummary filter={filter} />
 		</div>
+	);
+}
+
+/**
+ * Live plain-English readback of the active filter (Story 3.3, UX-DR23):
+ * literal "or"/"and" words, OR tinted glow-cyan and AND heat-magenta — color
+ * redundant to the words. Nothing renders while no filter is active.
+ */
+function FilterSummary({ filter }: { filter: ShelfFilter }) {
+	const parts = summarizeFilter(filter);
+	if (parts.length === 0) return null;
+	return (
+		<p className="filter-summary" data-testid="filter-summary">
+			{parts.map((part, i) => (
+				<span
+					// biome-ignore lint/suspicious/noArrayIndexKey: parts are positional tokens of one sentence, re-derived wholesale on every filter change
+					key={i}
+					className={
+						part.connector ? `filter-summary__${part.connector}` : undefined
+					}
+				>
+					{i > 0 ? ' ' : ''}
+					{part.text}
+				</span>
+			))}
+		</p>
+	);
+}
+
+/**
+ * Phone bottom sheet (UX-DR26): the same filter state as the inline row, in a
+ * grouped, logic-labeled layout. Focus-trapped modal dialog (ConfirmDialog
+ * pattern); filters apply live — "Show N games" is the exit, Escape/backdrop
+ * close the same way.
+ */
+function FilterSheet({
+	filter,
+	onChange,
+	genreOptions,
+	genreEmptyText,
+	visibleCount,
+	onClose,
+}: {
+	filter: ShelfFilter;
+	onChange: (next: ShelfFilter) => void;
+	genreOptions: string[];
+	genreEmptyText: string;
+	visibleCount: number;
+	onClose: () => void;
+}) {
+	const sheetRef = useRef<HTMLDivElement>(null);
+	const titleId = useId();
+
+	useEffect(() => {
+		sheetRef.current?.focus();
+	}, []);
+
+	// The page behind a modal sheet must not scroll under it (touch overscroll).
+	useEffect(() => {
+		const prev = document.body.style.overflow;
+		document.body.style.overflow = 'hidden';
+		return () => {
+			document.body.style.overflow = prev;
+		};
+	}, []);
+
+	// Crossing the breakpoint (rotate to landscape) hides the trigger and shows
+	// the inline row — a still-open sheet over it is stale chrome. Same class of
+	// problem the dropdowns solve by closing on resize.
+	useEffect(() => {
+		const mq = window.matchMedia?.('(min-width: 601px)');
+		if (!mq) return;
+		const onChangeMq = () => {
+			if (mq.matches) onCloseRef.current();
+		};
+		mq.addEventListener('change', onChangeMq);
+		return () => mq.removeEventListener('change', onChangeMq);
+	}, []);
+
+	// Escape closes no matter where focus sits (ConfirmDialog rationale).
+	const onCloseRef = useRef(onClose);
+	onCloseRef.current = onClose;
+	useEffect(() => {
+		const onDocKeyDown = (e: KeyboardEvent) => {
+			if (e.key !== 'Escape') return;
+			e.preventDefault();
+			e.stopPropagation();
+			onCloseRef.current();
+		};
+		document.addEventListener('keydown', onDocKeyDown, true);
+		return () => document.removeEventListener('keydown', onDocKeyDown, true);
+	}, []);
+
+	const onKeyDown = (e: React.KeyboardEvent) => {
+		if (e.key !== 'Tab') return;
+		const focusables =
+			sheetRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
+		if (!focusables?.length) return;
+		const first = focusables[0];
+		const last = focusables[focusables.length - 1];
+		// Focus starts on the container itself (tabIndex=-1): without this, an
+		// immediate Shift+Tab would walk out of the aria-modal dialog.
+		if (document.activeElement === sheetRef.current) {
+			e.preventDefault();
+			(e.shiftKey ? last : first).focus();
+			return;
+		}
+		if (e.shiftKey && document.activeElement === first) {
+			e.preventDefault();
+			last.focus();
+		} else if (!e.shiftKey && document.activeElement === last) {
+			e.preventDefault();
+			first.focus();
+		}
+	};
+
+	const toggleRow = <T extends string>(
+		value: T,
+		selected: boolean,
+		toggle: () => void,
+		ariaLabel?: string,
+	) => (
+		<button
+			key={value}
+			type="button"
+			className="filter-sheet__option tap-target"
+			aria-label={ariaLabel}
+			aria-pressed={selected}
+			data-active={selected || undefined}
+			onClick={toggle}
+		>
+			{value}
+		</button>
+	);
+
+	return createPortal(
+		// biome-ignore lint/a11y/noStaticElementInteractions: the backdrop is a dismiss surface, not a control — Escape and the Show-games button are the accessible paths.
+		<div
+			className="filter-sheet__backdrop"
+			data-testid="filter-sheet-backdrop"
+			onMouseDown={(e) => {
+				if (e.target === e.currentTarget) onClose();
+			}}
+		>
+			<div
+				ref={sheetRef}
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby={titleId}
+				tabIndex={-1}
+				className="filter-sheet"
+				data-testid="filter-sheet"
+				onKeyDown={onKeyDown}
+			>
+				<p id={titleId} className="filter-sheet__title">
+					Filters
+				</p>
+				<div className="filter-sheet__group">
+					<p className="filter-sheet__group-label">State — any of (or)</p>
+					{LIVE_STATUSES.map((state) =>
+						toggleRow(state, filter.states.includes(state), () =>
+							onChange({
+								...filter,
+								states: toggleSelection(filter.states, state),
+							}),
+						),
+					)}
+				</div>
+				<div className="filter-sheet__group">
+					<p className="filter-sheet__group-label">Genre — any of (or)</p>
+					{genreOptions.length === 0 && (
+						<p className="filter-sheet__empty">{genreEmptyText}</p>
+					)}
+					{genreOptions.map((genre) =>
+						toggleRow(genre, filter.genres.includes(genre), () =>
+							onChange({
+								...filter,
+								genres: toggleSelection(filter.genres, genre),
+							}),
+						),
+					)}
+				</div>
+				<div className="filter-sheet__group">
+					<p className="filter-sheet__group-label">Flags — all of (and)</p>
+					{FLAGS.map(({ key, label }) =>
+						toggleRow(label, filter.flags.includes(key), () =>
+							onChange({
+								...filter,
+								flags: toggleSelection(filter.flags, key),
+							}),
+						),
+					)}
+				</div>
+				<div className="filter-sheet__group">
+					<p className="filter-sheet__group-label">
+						Reveal hidden states — also show (or)
+					</p>
+					{REVEAL_STATES.map((state) =>
+						toggleRow(
+							state,
+							filter.reveals.includes(state),
+							() =>
+								onChange({
+									...filter,
+									reveals: toggleSelection(filter.reveals, state),
+								}),
+							// Same rationale as the desktop pills: machine-readable reveal
+							// semantics, distinct from the milestone actions named "X".
+							`Show ${state} games`,
+						),
+					)}
+				</div>
+				{visibleCount === 0 && (
+					<button
+						type="button"
+						className="filter-sheet__option tap-target"
+						onClick={() => onChange(EMPTY_FILTER)}
+					>
+						Clear filters
+					</button>
+				)}
+				<button
+					type="button"
+					className="filter-sheet__show tap-target"
+					data-testid="filter-sheet-show"
+					onClick={onClose}
+				>
+					Show {visibleCount} game{visibleCount === 1 ? '' : 's'}
+				</button>
+			</div>
+		</div>,
+		document.body,
 	);
 }
 
