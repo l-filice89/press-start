@@ -94,6 +94,7 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 			timezone: 'Europe/Berlin',
 			psnCookieSet: false,
 			psnAuthExpired: false,
+			syncAttention: [],
 		});
 	});
 
@@ -186,6 +187,37 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 		// A whitespace-only secret (trailing-newline paste) is no seed at all.
 		expect(
 			await getPsnCookie(db(), other, { PSN_SESSION_COOKIE: ' \n' }),
+		).toBeUndefined();
+	});
+
+	it('sync needs-attention: GET surfaces persisted items; corrupt JSON reads as empty (hazard)', async () => {
+		const { writeSyncAttention, SYNC_ATTENTION_SETTING_KEY } = await import(
+			'../../src/services/settings'
+		);
+		const { setSetting: rawSet } = await import('../../src/repositories');
+
+		await writeSyncAttention(db(), userId, [
+			{ title: 'Doppelganger', reason: 'ambiguous match' },
+		]);
+		const withItems = await (
+			await appFetch('/api/settings', { headers: { cookie } })
+		).json();
+		expect(withItems).toMatchObject({
+			syncAttention: [{ title: 'Doppelganger', reason: 'ambiguous match' }],
+		});
+
+		// Corrupt persisted JSON must degrade to "nothing needs attention",
+		// never a 500 — the next completed sync overwrites it.
+		await rawSet(db(), userId, SYNC_ATTENTION_SETTING_KEY, '{not json');
+		const corrupt = await (
+			await appFetch('/api/settings', { headers: { cookie } })
+		).json();
+		expect(corrupt).toMatchObject({ syncAttention: [] });
+
+		// Empty write deletes the row (self-resolution).
+		await writeSyncAttention(db(), userId, []);
+		expect(
+			await getSetting(db(), userId, SYNC_ATTENTION_SETTING_KEY),
 		).toBeUndefined();
 	});
 

@@ -43,14 +43,15 @@ function renderFab() {
 		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 	});
 	const invalidate = vi.spyOn(client, 'invalidateQueries');
+	const onSyncComplete = vi.fn();
 	render(
 		<QueryClientProvider client={client}>
 			<ToastHost>
-				<Fab />
+				<Fab onSyncComplete={onSyncComplete} />
 			</ToastHost>
 		</QueryClientProvider>,
 	);
-	return { invalidate };
+	return { invalidate, onSyncComplete };
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -72,9 +73,9 @@ describe('Fab', () => {
 		expect(screen.queryByTestId('fab-drawer')).not.toBeInTheDocument();
 	});
 
-	it('shows a spinner while the sync runs, then toasts the counts and invalidates the shelf', async () => {
+	it('shows a spinner while the sync runs, then hands the result to the summary and invalidates', async () => {
 		const { release } = deferredFetch(okResult);
-		const { invalidate } = renderFab();
+		const { invalidate, onSyncComplete } = renderFab();
 
 		await userEvent.click(screen.getByRole('button', { name: 'Chores' }));
 		await userEvent.click(screen.getByRole('button', { name: 'Sync library' }));
@@ -84,13 +85,19 @@ describe('Fab', () => {
 		expect(screen.getByRole('button', { name: 'Sync library' })).toBeDisabled();
 
 		release();
+		// The result goes to the summary modal (FR-37), not a toast.
 		await waitFor(() =>
-			expect(screen.getByTestId('toast')).toHaveTextContent(
-				'Sync complete: 2 added, 1 now owned, 3 membership entries skipped.',
-			),
+			expect(onSyncComplete).toHaveBeenCalledWith({
+				added: 2,
+				flipped: 1,
+				skippedMembership: 3,
+				needsAttention: [],
+			}),
 		);
+		expect(screen.queryByTestId('toast')).not.toBeInTheDocument();
 		expect(invalidate).toHaveBeenCalledWith({ queryKey: ['shelf'] });
 		expect(invalidate).toHaveBeenCalledWith({ queryKey: ['shelf-search'] });
+		expect(invalidate).toHaveBeenCalledWith({ queryKey: ['settings'] });
 		// Drawer closed after settling.
 		expect(screen.queryByTestId('fab-drawer')).not.toBeInTheDocument();
 	});

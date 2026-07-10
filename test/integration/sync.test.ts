@@ -16,6 +16,7 @@ import {
 	PSN_AUTH_EXPIRED,
 	PSN_AUTH_SETTING_KEY,
 	PSN_COOKIE_SETTING_KEY,
+	readSyncAttention,
 } from '../../src/services/settings';
 import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
 
@@ -234,10 +235,16 @@ describe('POST /api/sync (integration, real workerd + local D1)', () => {
 
 		stubPsn([psn({ name: 'Doppelganger', titleId: 'IMPOSTOR_00' })]);
 		const res = await postSync(cookie);
-		const body = (await res.json()) as { needsAttention: string[] };
+		const body = (await res.json()) as {
+			needsAttention: { title: string; reason: string }[];
+		};
 		expect(body).toMatchObject({ added: 0, flipped: 0 });
 		expect(body.needsAttention).toHaveLength(1);
-		expect(body.needsAttention[0]).toContain('Doppelganger');
+		expect(body.needsAttention[0].title).toBe('Doppelganger');
+
+		// AR-22 hazard: the items survive the response — persisted for the
+		// banner, and readable on the next settings fetch.
+		expect(await readSyncAttention(db(), userId)).toEqual(body.needsAttention);
 
 		// Nothing merged, nothing created.
 		expect(await listExternalLinks(db(), original.id)).toMatchObject([
@@ -249,7 +256,12 @@ describe('POST /api/sync (integration, real workerd + local D1)', () => {
 		).toBe(1);
 	});
 
-	it('a PSN 401 persists psn_auth=expired and answers 401 with the refresh message (hazard FR-36)', async () => {
+	it('a PSN 401 persists psn_auth=expired, answers 401, and leaves needs-attention untouched (hazard FR-36/AR-22)', async () => {
+		// Items persisted by the previous (conflict) sync must survive a failed
+		// run — only a COMPLETED sync may resolve them.
+		const before = await readSyncAttention(db(), userId);
+		expect(before.length).toBeGreaterThan(0);
+
 		stubPsn([], 401);
 		const res = await postSync(cookie);
 		expect(res.status).toBe(401);
@@ -258,5 +270,19 @@ describe('POST /api/sync (integration, real workerd + local D1)', () => {
 		expect(await getSetting(db(), userId, PSN_AUTH_SETTING_KEY)).toBe(
 			PSN_AUTH_EXPIRED,
 		);
+		expect(await readSyncAttention(db(), userId)).toEqual(before);
+	});
+
+	it('a clean completed sync clears persisted needs-attention (self-resolution, AR-22)', async () => {
+		expect((await readSyncAttention(db(), userId)).length).toBeGreaterThan(0);
+
+		// Remove the conflicting PSN entry: the next sync completes clean.
+		stubPsn([psn()]);
+		const res = await postSync(cookie);
+		expect(res.status).toBe(200);
+		expect(
+			((await res.json()) as { needsAttention: unknown[] }).needsAttention,
+		).toEqual([]);
+		expect(await readSyncAttention(db(), userId)).toEqual([]);
 	});
 });

@@ -56,3 +56,64 @@ export async function isPsnAuthExpired(
 		(await getSetting(db, userId, PSN_AUTH_SETTING_KEY)) === PSN_AUTH_EXPIRED
 	);
 }
+
+/**
+ * Sync needs-attention items (Story 4.3, FR-37/AR-22): persisted per-user as
+ * one JSON row so they survive dismissing the summary modal, reloads, and
+ * sessions. Written only by a COMPLETED sync — a clean run clears the row
+ * (self-resolution); a failed/auth-blocked run leaves it untouched.
+ */
+export const SYNC_ATTENTION_SETTING_KEY = 'sync_attention';
+
+export interface SyncAttentionItem {
+	title: string;
+	reason: string;
+}
+
+/** Persisted needs-attention items; corrupt/absent JSON reads as empty. */
+export async function readSyncAttention(
+	db: Db,
+	userId: string,
+): Promise<SyncAttentionItem[]> {
+	const raw = await getSetting(db, userId, SYNC_ATTENTION_SETTING_KEY);
+	if (!raw) return [];
+	try {
+		const parsed = JSON.parse(raw);
+		if (!Array.isArray(parsed)) throw new Error('not an array');
+		const items = parsed.filter(
+			(item): item is SyncAttentionItem =>
+				typeof item?.title === 'string' &&
+				item.title.trim() !== '' &&
+				typeof item?.reason === 'string',
+		);
+		if (items.length !== parsed.length) {
+			console.warn(
+				`sync_attention: dropped ${parsed.length - items.length} malformed item(s)`,
+			);
+		}
+		return items;
+	} catch (error) {
+		// Corrupt storage degrades to "nothing needs attention" (the next
+		// completed sync overwrites it) — but never silently.
+		console.warn('sync_attention: unreadable row treated as empty', error);
+		return [];
+	}
+}
+
+/** Replace the persisted items; an empty list deletes the row (resolved). */
+export async function writeSyncAttention(
+	db: Db,
+	userId: string,
+	items: SyncAttentionItem[],
+) {
+	if (items.length === 0) {
+		await deleteSetting(db, userId, SYNC_ATTENTION_SETTING_KEY);
+	} else {
+		await setSetting(
+			db,
+			userId,
+			SYNC_ATTENTION_SETTING_KEY,
+			JSON.stringify(items),
+		);
+	}
+}

@@ -12,7 +12,7 @@ describe('AttentionBanner', () => {
 				message="3 games couldn't be matched — resolve"
 			/>,
 		);
-		const banner = screen.getByTestId('attention-banner');
+		const banner = screen.getByTestId('attention-banner-stragglers');
 		expect(banner).toHaveTextContent("3 games couldn't be matched");
 		expect(banner).toHaveClass('attention-banner--stragglers');
 		// Persistent: it is a status region, present with no timer to remove it.
@@ -25,7 +25,7 @@ describe('AttentionBanner', () => {
 		['failed-refresh', 'attention-banner--failed-refresh'],
 	] as const)('maps variant %s to its tone class', (variant, cls) => {
 		render(<AttentionBanner variant={variant} message="x" />);
-		expect(screen.getByTestId('attention-banner')).toHaveClass(cls);
+		expect(screen.getByTestId(`attention-banner-${variant}`)).toHaveClass(cls);
 	});
 
 	it('renders an action button that fires its handler', async () => {

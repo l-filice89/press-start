@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
+import { useAnnounce } from '../components/LiveRegion';
 import { useToast } from '../components/Toast';
 import { runSync, type SyncResult } from '../settings/api';
 import './fab.css';
@@ -11,26 +12,33 @@ import './fab.css';
  * Long-op items show a spinner while running (UX-DR10). Escape and
  * outside-click close the drawer; icons-only on phone, icons+text desktop.
  */
-export function Fab() {
+export function Fab({
+	onSyncComplete,
+}: {
+	/** Receives every completed run's result — AppShell opens the summary modal (FR-37). */
+	onSyncComplete: (result: SyncResult) => void;
+}) {
 	const [open, setOpen] = useState(false);
 	const rootRef = useRef<HTMLDivElement>(null);
 	const syncPendingRef = useRef(false);
 	const menuId = useId();
 	const queryClient = useQueryClient();
 	const { toast } = useToast();
+	const announce = useAnnounce();
 
 	const sync = useMutation({
 		mutationFn: runSync,
 		onSuccess: (result: SyncResult) => {
-			// Full 4.3 summary modal comes next story; a toast reports the counts.
-			const attention = result.needsAttention.length
-				? ` ${result.needsAttention.length} need attention.`
-				: '';
-			toast({
-				message: `Sync complete: ${result.added} added, ${result.flipped} now owned, ${result.skippedMembership} membership entries skipped.${attention}`,
-			});
+			// Every completed run resolves into the summary modal (FR-37) —
+			// counts and needs-attention are not toast material (UX-DR13). The
+			// modal steals focus, so announce the completion politely too.
+			announce('Sync complete.');
+			onSyncComplete(result);
 			queryClient.invalidateQueries({ queryKey: ['shelf'] });
 			queryClient.invalidateQueries({ queryKey: ['shelf-search'] });
+			// needs-attention items were persisted server-side; refetch so the
+			// banner state matches this run.
+			queryClient.invalidateQueries({ queryKey: ['settings'] });
 		},
 		onError: (error: Error & { status?: number }) => {
 			if (error.status === 401) {

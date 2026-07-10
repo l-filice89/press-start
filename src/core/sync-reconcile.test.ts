@@ -112,6 +112,7 @@ describe('planSync', () => {
 		expect(plan.matches).toEqual([
 			{
 				gameId: 'g1',
+				title: 'Astro Bot',
 				externalIdsToAdd: ['PPSA01325_00'],
 				coverUrl: 'https://image.api.playstation.com/astro.png',
 				storeUrl: 'https://store.playstation.com/concept/10005478',
@@ -155,6 +156,7 @@ describe('planSync', () => {
 		expect(plan.matches).toEqual([
 			{
 				gameId: 'g1',
+				title: 'Astro Bot',
 				externalIdsToAdd: ['PPSA01325_00'],
 				coverUrl: 'https://image.api.playstation.com/astro.png',
 				storeUrl: 'https://store.playstation.com/concept/10005478',
@@ -220,6 +222,7 @@ describe('planSync', () => {
 		expect(plan.matches).toEqual([
 			{
 				gameId: 'g1',
+				title: 'Astro Bot',
 				externalIdsToAdd: [],
 				coverUrl: 'https://image.api.playstation.com/astro.png',
 				storeUrl: 'https://store.playstation.com/concept/10005478',

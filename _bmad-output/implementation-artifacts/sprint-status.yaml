@@ -87,10 +87,10 @@ development_status:
   epic-3-retrospective: done
 
   # Epic 4: Fill the Library from PlayStation (Sync)
-  epic-4: in-progress
+  epic-4: done # 2026-07-11 — 3/3 stories
   4-1-psn-provider-session-cookie-settings: done # 2026-07-11
   4-2-sync-the-playstation-library-append-only: done # 2026-07-11
-  4-3-sync-summary-needs-attention: backlog
+  4-3-sync-summary-needs-attention: done # 2026-07-11
   epic-4-retrospective: optional
 
   # Epic 5: Know What's Playable — PS+ Extra Awareness

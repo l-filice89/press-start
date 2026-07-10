@@ -1,0 +1,118 @@
+/* Post-sync summary modal (Story 4.3): the settings-panel scaffold with an
+   amber needs-attention section — the same tone as the stragglers banner. */
+
+.sync-summary__backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: var(--z-overlay);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: color-mix(in srgb, black 62%, transparent);
+}
+
+.sync-summary {
+	width: min(30rem, calc(100vw - 2 * var(--space-4)));
+	max-height: calc(100svh - 2 * var(--space-4));
+	overflow-y: auto;
+	margin: var(--space-4);
+	padding: var(--space-4);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface-raised);
+}
+
+.sync-summary__title {
+	margin: 0 0 var(--space-3);
+	color: var(--color-text-primary);
+	font-family: var(--font-ui);
+}
+
+.sync-summary__counts {
+	display: grid;
+	gap: var(--space-2);
+	margin: 0 0 var(--space-3);
+}
+
+.sync-summary__counts div {
+	display: flex;
+	justify-content: space-between;
+	gap: var(--space-3);
+}
+
+.sync-summary__counts dt {
+	color: var(--color-text-secondary);
+}
+
+.sync-summary__counts dd {
+	margin: 0;
+	color: var(--color-text-primary);
+	font-family: var(--font-mono);
+}
+
+.sync-summary__attention {
+	margin: 0 0 var(--space-3);
+	padding: var(--space-3);
+	border: 1px solid color-mix(in srgb, var(--state-paused) 45%, transparent);
+	border-radius: var(--radius-sm);
+}
+
+.sync-summary__attention-title {
+	margin: 0 0 var(--space-2);
+	color: var(--color-text-primary);
+	font-family: var(--font-ui);
+	font-size: 0.9375rem;
+}
+
+.sync-summary__attention-list {
+	display: grid;
+	gap: var(--space-2);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.sync-summary__attention-item {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-3);
+}
+
+.sync-summary__attention-text {
+	color: var(--color-text-secondary);
+	font-size: 0.875rem;
+}
+
+.sync-summary__attention-text strong {
+	color: var(--color-text-primary);
+}
+
+.sync-summary__jump {
+	flex-shrink: 0;
+	padding: var(--space-1) var(--space-3);
+	border: 1px solid var(--color-accent-electric);
+	border-radius: var(--radius-pill);
+	background: none;
+	color: var(--color-accent-electric);
+	font: inherit;
+	font-family: var(--font-ui);
+	font-size: 0.8125rem;
+	cursor: pointer;
+}
+
+.sync-summary__actions {
+	display: flex;
+	justify-content: flex-end;
+}
+
+.sync-summary__close {
+	padding: var(--space-2) var(--space-3);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-sm);
+	background: none;
+	color: var(--color-text-primary);
+	font: inherit;
+	font-family: var(--font-ui);
+	cursor: pointer;
+}

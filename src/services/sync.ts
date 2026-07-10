@@ -20,14 +20,20 @@ import {
 	listTrackingForUser,
 } from '../repositories';
 import type { Db } from '../repositories/db';
-import { getPsnCookie, markPsnAuthExpired, todayForUser } from './settings';
+import {
+	getPsnCookie,
+	markPsnAuthExpired,
+	type SyncAttentionItem,
+	todayForUser,
+	writeSyncAttention,
+} from './settings';
 import { changeOwnership } from './tracking';
 
 export interface SyncResult {
 	added: number;
 	flipped: number;
 	skippedMembership: number;
-	needsAttention: string[];
+	needsAttention: SyncAttentionItem[];
 }
 
 /** Sync failed before any write: expired/missing cookie (FR-36). */
@@ -107,7 +113,10 @@ export async function runSync(
 		added: 0,
 		flipped: 0,
 		skippedMembership: plan.skippedMembership,
-		needsAttention: plan.conflicts.map((c) => `${c.title}: ${c.reason}`),
+		needsAttention: plan.conflicts.map((c) => ({
+			title: c.title,
+			reason: c.reason,
+		})),
 	};
 
 	// FR-33 defaults for every row sync creates.
@@ -143,9 +152,10 @@ export async function runSync(
 			await insertTrackingIfAbsent(db, userId, created.id, newTracking);
 			result.added++;
 		} catch (error) {
-			result.needsAttention.push(
-				`${create.title}: could not be added (${error instanceof Error ? error.message : 'write failed'}) — re-run sync`,
-			);
+			result.needsAttention.push({
+				title: create.title,
+				reason: `could not be added (${error instanceof Error ? error.message : 'write failed'}) — re-run sync`,
+			});
 		}
 	}
 
@@ -197,10 +207,21 @@ export async function runSync(
 				if (outcome && outcome !== 'invalid') result.flipped++;
 			}
 		} catch (error) {
-			result.needsAttention.push(
-				`a matched game could not be updated (${error instanceof Error ? error.message : 'write failed'}) — re-run sync`,
-			);
+			result.needsAttention.push({
+				title: match.title,
+				reason: `could not be updated (${error instanceof Error ? error.message : 'write failed'}) — re-run sync`,
+			});
 		}
+	}
+
+	// Persist for the attention banner (AR-22): items survive the modal and
+	// reloads; a clean run clears them (self-resolution). Only a COMPLETED
+	// sync writes here — the auth path above returned before any write. A
+	// failed persist must not report the (fully applied) run as failed.
+	try {
+		await writeSyncAttention(db, userId, result.needsAttention);
+	} catch (error) {
+		console.error('sync: persisting needs-attention failed', error);
 	}
 
 	return { ok: true, result };

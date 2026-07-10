@@ -9,10 +9,20 @@ import { callApi } from '../shelf/api';
  * appears in this contract — the API reports presence only.
  */
 
+export const syncAttentionItemSchema = z.object({
+	title: z.string(),
+	reason: z.string(),
+});
+
+export type SyncAttentionItem = z.infer<typeof syncAttentionItemSchema>;
+
 export const settingsSchema = z.object({
 	timezone: z.string().nullable(),
 	psnCookieSet: z.boolean(),
 	psnAuthExpired: z.boolean(),
+	// Defaulted: a deploy-skewed/cached response without the field must not
+	// reject the whole settings payload (timezone + PSN banner ride on it).
+	syncAttention: z.array(syncAttentionItemSchema).default([]),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -35,7 +45,7 @@ export const syncResultSchema = z.object({
 	added: z.number(),
 	flipped: z.number(),
 	skippedMembership: z.number(),
-	needsAttention: z.array(z.string()),
+	needsAttention: z.array(syncAttentionItemSchema),
 });
 
 export type SyncResult = z.infer<typeof syncResultSchema>;

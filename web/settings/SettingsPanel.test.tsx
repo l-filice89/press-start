@@ -29,7 +29,7 @@ function mockFetch(settings: {
 			return {
 				ok: true,
 				status: 200,
-				json: async () => ({ timezone: null, ...settings }),
+				json: async () => ({ timezone: null, syncAttention: [], ...settings }),
 			};
 		},
 	);

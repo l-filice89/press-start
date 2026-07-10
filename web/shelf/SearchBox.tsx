@@ -4,6 +4,17 @@ import { searchShelf } from './api';
 import './search-box.css';
 
 /**
+ * Seed the whole-library search from anywhere (Story 4.3 jump-to-problem):
+ * fills the field, focuses it, and opens the listbox. A window event, not
+ * context — the SearchBox owns its state and callers shouldn't.
+ */
+export const SEED_SEARCH_EVENT = 'shelf:seed-search';
+
+export function seedSearch(query: string): void {
+	window.dispatchEvent(new CustomEvent(SEED_SEARCH_EVENT, { detail: query }));
+}
+
+/**
  * The persistent whole-library search (FR-19, UX-DR16). A combobox that queries
  * a dedicated `/api/shelf/search` endpoint — separate from the shelf query, so
  * it matches every game ignoring active filters and hidden states — and lists
@@ -34,6 +45,21 @@ export function SearchBox() {
 		queryFn: ({ signal }) => searchShelf(debounced, signal),
 		enabled: debounced !== '',
 	});
+
+	// Jump-to-problem seed (Story 4.3): fill, skip the debounce, focus, open.
+	useEffect(() => {
+		function onSeed(e: Event) {
+			const query = (e as CustomEvent<string>).detail?.trim();
+			if (!query) return;
+			setValue(query);
+			setDebounced(query);
+			setOpen(true);
+			setActiveIndex(-1);
+			inputRef.current?.focus();
+		}
+		window.addEventListener(SEED_SEARCH_EVENT, onSeed);
+		return () => window.removeEventListener(SEED_SEARCH_EVENT, onSeed);
+	}, []);
 
 	// Global "/" focus shortcut.
 	useEffect(() => {

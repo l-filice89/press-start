@@ -16,9 +16,10 @@ test.describe.configure({ mode: 'serial' });
 
 test.afterEach(async () => {
 	// Settings are keyed per user and shared across parallel workers — always
-	// return the two Story 4.1 keys to their absent baseline.
+	// return the Epic 4 keys to their absent baseline.
 	await deleteSetting('psn_cookie');
 	await deleteSetting('psn_auth');
+	await deleteSetting('sync_attention');
 });
 
 test('the header gear opens Settings; saving a cookie flips presence without echoing the value', async ({
@@ -59,7 +60,7 @@ test('an expired PSN auth state feeds the attention banner until a fresh cookie 
 	await page.goto('/');
 
 	// Persistent banner (UX-DR11) with the refresh path, not a dismissable toast.
-	const banner = page.getByTestId('attention-banner');
+	const banner = page.getByTestId('attention-banner-expired-cookie');
 	await expect(banner).toBeVisible();
 	await expect(banner).toHaveText(/library\.playstation\.com/);
 	await expect(banner).toHaveClass(/attention-banner--expired-cookie/);
@@ -78,7 +79,9 @@ test('an expired PSN auth state feeds the attention banner until a fresh cookie 
 	// And it stays gone across a reload — the flag was cleared server-side.
 	await page.reload();
 	await expect(page.getByRole('button', { name: 'Settings' })).toBeVisible();
-	await expect(page.getByTestId('attention-banner')).toHaveCount(0);
+	await expect(page.getByTestId('attention-banner-expired-cookie')).toHaveCount(
+		0,
+	);
 });
 
 test('Sync from the FAB with no cookie configured lights the expired-cookie banner (4.2 → 4.1c live wiring)', {
@@ -88,7 +91,9 @@ test('Sync from the FAB with no cookie configured lights the expired-cookie bann
 	// No psn_cookie setting and no env seed in the e2e Worker: the provider
 	// fails as PsnAuthError before any outbound PSN call — deterministic.
 	await page.goto('/');
-	await expect(page.getByTestId('attention-banner')).toHaveCount(0);
+	await expect(page.getByTestId('attention-banner-expired-cookie')).toHaveCount(
+		0,
+	);
 
 	const toggle = page.getByRole('button', { name: 'Chores' });
 	await expect(toggle).toHaveAttribute('aria-expanded', 'false');
@@ -97,10 +102,49 @@ test('Sync from the FAB with no cookie configured lights the expired-cookie bann
 
 	// The failure surfaces (toast) and the persisted flag feeds the banner.
 	await expect(page.getByTestId('toast')).toHaveText(/Sync failed/);
-	const banner = page.getByTestId('attention-banner');
+	const banner = page.getByTestId('attention-banner-expired-cookie');
 	await expect(banner).toBeVisible();
 	await expect(banner).toHaveClass(/attention-banner--expired-cookie/);
 	// Its action opens Settings — recovery is one tap from the failure.
 	await banner.getByRole('button', { name: 'Update cookie' }).click();
 	await expect(page.getByTestId('settings-panel')).toBeVisible();
+});
+
+test('persisted sync needs-attention feeds the amber banner; Review reopens the summary and jumps to search (4.3)', async ({
+	page,
+}) => {
+	// Items persisted by a sync run (seeded directly — a live conflicted sync
+	// needs PSN, which the e2e Worker cannot stub).
+	await seedSetting(
+		'sync_attention',
+		JSON.stringify([
+			{ title: 'Doppelganger', reason: 'ambiguous match — not merged' },
+		]),
+	);
+	await page.goto('/');
+
+	// Survives reloads and sessions: present on a fresh page load (AR-22).
+	const banner = page.getByTestId('attention-banner-stragglers');
+	await expect(banner).toBeVisible();
+	await expect(banner).toHaveClass(/attention-banner--stragglers/);
+	await expect(banner).toHaveText(/1 sync item needs attention/);
+
+	// Review reopens the items summary (no counts — banner-sourced).
+	await banner.getByRole('button', { name: 'Review' }).click();
+	const summary = page.getByTestId('sync-summary');
+	await expect(summary).toBeVisible();
+	await expect(summary).toHaveText(/Doppelganger/);
+	await expect(page.getByTestId('sync-counts')).toHaveCount(0);
+
+	// Jump-to-problem: the whole-library search is seeded and focused.
+	await summary.getByRole('button', { name: 'Find in library' }).click();
+	await expect(summary).toBeHidden();
+	const search = page.getByRole('combobox', { name: 'Search your library' });
+	await expect(search).toHaveValue('Doppelganger');
+	await expect(search).toBeFocused();
+
+	// No dismissal affordance exists by design — only a clean sync resolves
+	// the items, so the banner is still there on a fresh load.
+	await page.reload();
+	await expect(page.getByTestId('attention-banner-stragglers')).toBeVisible();
 });

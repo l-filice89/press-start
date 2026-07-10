@@ -48,6 +48,8 @@ export interface SyncCreate {
 /** An existing game a purchase entry matched: ensure owned + backfill. */
 export interface SyncMatch {
 	gameId: string;
+	/** The PSN entry's display name — names the game in failure reports. */
+	title: string;
 	/** Group ids not yet linked to the game. */
 	externalIdsToAdd: string[];
 	/** PSN facts for NULL-only backfill (never overwrite, FR-33/35). */
@@ -158,6 +160,7 @@ export function planSync(entries: SyncEntry[], index: SyncIndex): SyncPlan {
 			}
 			plan.matches.push({
 				gameId,
+				title: facts.name,
 				externalIdsToAdd: group.externalIds.filter(
 					(id) => index.linkedGameIdByExternalId[id] === undefined,
 				),
@@ -182,6 +185,7 @@ export function planSync(entries: SyncEntry[], index: SyncIndex): SyncPlan {
 			) {
 				plan.matches.push({
 					gameId: candidates[0].gameId,
+					title: facts.name,
 					externalIdsToAdd: group.externalIds,
 					coverUrl: facts.imageUrl,
 					storeUrl: facts.storeUrl,
