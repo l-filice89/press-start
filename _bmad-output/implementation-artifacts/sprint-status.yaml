@@ -179,6 +179,10 @@ action_items:
     owner: "Amelia"
     status: open
   - epic: 3
+    action: "Hoist status-popover menu open-state (survives refetch remount) + remove openStatusMenu e2e retry loop (required before story 4.2)"
+    owner: "Amelia"
+    status: open
+  - epic: 3
     action: "Extract single modal focus-trap (ConfirmDialog/DetailPanel/FilterSheet); bundle into story 3.5"
     owner: "Amelia"
     status: open
