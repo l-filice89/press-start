@@ -35,7 +35,7 @@ Everything the UI shows and filters derives from this model. The governing princ
 - **FR-1** — One per game. Defaults to `Not started`.
 - **FR-2** — May be **null** once a completion milestone exists (and only then). Logging a **platinum** auto-clears the status to null; a **story completion** leaves the status untouched — play usually continues toward the platinum, so the game stays on the shelf (amended 2026-07-09; was: any milestone auto-clears). The user may also clear it manually (replay ends, etc.). A replay sets it back to `Playing`.
 - **FR-3** — **Invariant: every game always has a play status or at least one completion milestone.** The detail view refuses any edit that would leave neither (clearing the last milestone requires setting a play status first).
-- **FR-4** — `Dropped` games are hidden from the default shelf, reachable via the `Dropped` reveal pill (§3).
+- **FR-4** — `Dropped` games are hidden from the default shelf, reachable via the `Dropped` reveal pill, which shows **only** `Dropped` games (exclusive view, §3; amended 2026-07-10 — was: revealed games ORed into the default set, which pushed them behind the FR-18 order + infinite scroll).
 
 ### Completion milestones (dates, not statuses)
 
@@ -87,11 +87,11 @@ One screen answers "what's my gaming life right now?" — the landing page is th
 | Group | UI | Members |
 |---|---|---|
 | State | Multiselect dropdown | `Not started`, `Up next`, `Playing`, `Paused` (live statuses only) |
-| State reveals | Individual pills | `Story completed`, `Platinum achieved`, `Dropped` — each ORs its state into the visible set (they extend the state group; AND across mutually exclusive states would always be empty) |
+| State reveals | Individual pills, **own group** (amended 2026-07-10; was: extended the state group additively) | `Story completed`, `Platinum achieved`, `Dropped` — OR among themselves; any selection **replaces the State group entirely** (state selections clear) and shows only the matching hidden games; Genre and Flags still AND |
 | Genre | Multiselect dropdown | All genres in the vocabulary |
 | Flags | Individual pills, **each its own group (AND)** | `Owned`, `Wishlisted`, `Released`, `Playable now` |
 
-**FR-21** — State-group selection rule: with nothing selected, the shelf shows the default visible set (all live statuses, FR-17). The moment *anything* in the state group is selected — dropdown entries or reveal pills — the shelf shows **exactly** the selected states. "Completed games only" is therefore a one-pill view.
+**FR-21** — Selection rules (amended 2026-07-10): with nothing selected in State or Reveals, the shelf shows the default visible set (all live statuses, FR-17). A State-dropdown selection shows **exactly** the selected live states. A reveal-pill selection is an **exclusive view**: only games in the selected hidden state(s), the State group cleared — "Completed games only" is a one-pill view that hides everything else. State dropdown and reveal pills are mutually exclusive; activating one clears the other.
 
 **FR-22** — Active pills are visually highlighted (toggle-on state).
 

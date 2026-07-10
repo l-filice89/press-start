@@ -24,7 +24,7 @@ This document provides the complete epic and story breakdown for ps-game-catalog
 - **FR-1** — Play status is one per game (`Not started` · `Up next` · `Playing` · `Paused` · `Dropped`) and defaults to `Not started`.
 - **FR-2** — Play status may be **null** only once a completion milestone exists. Logging a **platinum** auto-clears status to null; a **story completion** leaves it untouched (amended 2026-07-09); the user may also clear it manually; a replay sets it back to `Playing`.
 - **FR-3** — Invariant: every game always has a play status **or** at least one completion milestone. The detail view refuses any edit that would leave neither (clearing the last milestone requires setting a play status first).
-- **FR-4** — `Dropped` games are hidden from the default shelf, reachable via the `Dropped` reveal pill.
+- **FR-4** — `Dropped` games are hidden from the default shelf, reachable via the `Dropped` reveal pill (exclusive view — shows only `Dropped` games; amended 2026-07-10).
 
 **State model — completion milestones (§2)**
 
@@ -52,8 +52,8 @@ This document provides the complete epic and story breakdown for ps-game-catalog
 
 **The Shelf — filters (§3)**
 
-- **FR-20** — Filter semantics: OR within a group, AND across groups. Groups: State (multiselect dropdown of live statuses), State-reveals (individual reveal pills for Completed/Platinum/Dropped that OR into the visible set), Genre (multiselect dropdown), Flags (individual pills `Owned`/`Wishlisted`/`Released`/`Playable now`, each its own AND group).
-- **FR-21** — State-group selection rule: with nothing selected, the shelf shows the default visible set (FR-17); the moment anything in the state group is selected, the shelf shows exactly the selected states.
+- **FR-20** — Filter semantics: OR within a group, AND across groups. Groups: State (multiselect dropdown of live statuses), State-reveals (own group, amended 2026-07-10 — reveal pills for Completed/Platinum/Dropped OR among themselves and replace the State group entirely when active), Genre (multiselect dropdown), Flags (individual pills `Owned`/`Wishlisted`/`Released`/`Playable now`, each its own AND group).
+- **FR-21** — Selection rules (amended 2026-07-10): nothing selected → default visible set (FR-17); State-dropdown selection → exactly the selected live states; reveal-pill selection → exclusive view of the selected hidden state(s), State group cleared (State dropdown and reveal pills mutually exclusive).
 - **FR-22** — Active pills are visually highlighted (toggle-on state).
 
 **The Shelf — genre vocabulary (§3)**
