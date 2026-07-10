@@ -138,11 +138,14 @@ jobs:
 
       - name: Burn-in changed specs (5x, no retries)
         if: steps.changed.outputs.specs != ''
+        env:
+          # Security: diff-derived filenames passed through env, not shell-interpolated
+          SPECS: ${{ steps.changed.outputs.specs }}
         run: |
           # ponytail: --repeat-each replaces the classic bash burn-in loop; bump to 10 if flakes slip through
           # --workers 1: repeats of one spec must not run concurrently — the
           # auth-journey repeats would steal each other's single-use magic links
-          bunx playwright test ${{ steps.changed.outputs.specs }} --repeat-each 5 --retries 0 --workers 1
+          bunx playwright test $SPECS --repeat-each 5 --retries 0 --workers 1
 
       - name: Upload burn-in failure artifacts
         if: failure()

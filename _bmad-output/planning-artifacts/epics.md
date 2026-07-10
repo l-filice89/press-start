@@ -827,6 +827,14 @@ So that I can view owned/wishlisted/playable subsets and pull completed or dropp
 **When** it is toggled on
 **Then** it glows/highlights (FR-22)
 
+**Given** a revealed hidden-state card whose play status was auto-cleared by a milestone (previous status null)
+**When** I set it to `Dropped` and the toast shows
+**Then** UNDO restores the cleared (null) status through the milestone-invariant write path (FR-2, FR-3; deferred-work: 2.1 "no UNDO when previous status null" — reveal pills make this reachable)
+
+**Given** a detail panel open on an already-hidden game (Dropped or milestone-only, reached via reveal pill or search)
+**When** a milestone write completes without changing the card's visibility
+**Then** the panel stays open — auto-close fires only on a visible→hidden transition (FR-4, FR-17; deferred-work: platinum-only auto-hide "onHidden false-close")
+
 ### Story 3.3: Live filter summary, empty state & responsive filters
 
 As Luca,
@@ -847,6 +855,36 @@ So that the model never needs decoding and filtering works under the thumb.
 **When** filters are shown
 **Then** they collapse to a single Filters button + count badge opening a grouped bottom sheet with a "Show N games" action
 **And** desktop shows the full row inline with the summary sentence (UX-DR26)
+
+### Story 3.4: Focus & interaction hardening (deferred-work sweep)
+
+As Luca (keyboard/screen-reader user),
+I want focus to survive shelf re-renders and mutations to be race-safe,
+So that filtering and tracking never silently drop me to the top of the document or interleave writes.
+
+Bundles the open focus/interaction deferred-work items — placed in Epic 3 because filters and reveal pills churn the visible set constantly, turning each from a corner case into a daily path. Each AC cross-references its `deferred-work.md` entry.
+
+**Acceptance Criteria:**
+
+**Given** a card holding keyboard focus
+**When** a viewport resize changes the auto-fill column count and re-chunks the ARIA rows
+**Then** focus stays on that card (no unmount-to-body) (UX a11y floor; deferred-work: spec-dw-shelf-grid-aria-row-regrouping follow-up)
+
+**Given** the session gate swaps the authenticated shell for the login screen (401 re-auth or sign-out)
+**When** `<Login />` mounts
+**Then** focus moves into the login form and the change is announced to assistive tech (deferred-work: spec-dw-3-central-401-reauth-redirect follow-up)
+
+**Given** a card leaving the visible set after a write (e.g. marked `Dropped`)
+**When** the shelf refetch unmounts it
+**Then** focus lands on a deliberate target (neighbor card or shelf container) from which the toast's UNDO is reachable by keyboard (deferred-work: spec-2-1 focus item)
+
+**Given** an open detail panel
+**When** a write's shelf refetch re-chunks the grid rows
+**Then** the panel stays open (open-panel game id hoisted to Shelf level, not Card) (deferred-work: spec-2-5-3 item; also converts the epic2-detail.spec.ts workaround assertions back to direct ones)
+
+**Given** a pending tracking mutation on a game
+**When** a toast UNDO for that game is activated
+**Then** the UNDO respects the same in-flight guard as every other entry point (ref-backed, not render-scoped) (deferred-work: spec-2-4 UNDO-guard item)
 
 ---
 
