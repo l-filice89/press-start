@@ -21,6 +21,7 @@ function card(
 		owned: true,
 		released: true,
 		wishlisted: false,
+		playableNow: true,
 		psPlusExtra: false,
 		hasCompleted: false,
 		hasPlatinum: false,
@@ -174,6 +175,21 @@ describe('Shelf', () => {
 		await user.click(screen.getByRole('menuitemcheckbox', { name: 'Playing' }));
 		await user.click(screen.getByRole('menuitemcheckbox', { name: 'Paused' }));
 		expect(screen.getAllByTestId('shelf-card')).toHaveLength(3);
+	});
+
+	it('an all-hidden library with no filter shows INSERT GAMES, not NO MATCH', async () => {
+		// The payload now includes hidden games — an all-finished library is an
+		// empty backlog (insert-games), not a failed filter (no-match).
+		mockFetch([
+			card('a', 'Done', {
+				playStatus: null,
+				effectiveState: 'Story completed',
+			}),
+			card('b', 'Gone', { playStatus: 'Dropped', effectiveState: 'Dropped' }),
+		]);
+		renderShelf();
+		expect(await screen.findByText('INSERT GAMES')).toBeInTheDocument();
+		expect(screen.queryByText('NO MATCH')).not.toBeInTheDocument();
 	});
 
 	it('shows NO MATCH (never a blank shelf) when filters match nothing', async () => {

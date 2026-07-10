@@ -25,6 +25,7 @@ function game(over: Partial<ShelfGame> = {}): ShelfGame {
 		owned: true,
 		released: true,
 		wishlisted: false,
+		playableNow: true,
 		psPlusExtra: false,
 		hasCompleted: false,
 		hasPlatinum: false,
@@ -181,6 +182,36 @@ describe('StatusPopover', () => {
 		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
 		expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
 			playStatus: 'Paused',
+		});
+	});
+
+	// HAZARD (Story 3.2, FR-2/FR-3): a revealed milestone-only card has a null
+	// play status (auto-cleared). Dropping it must still offer UNDO, and the
+	// undo restores the cleared (null) status through the same write path.
+	it('offers UNDO for Dropped when the previous status was null, restoring null', async () => {
+		const user = userEvent.setup();
+		fetchMock.mockResolvedValue({
+			ok: true,
+			status: 200,
+			json: async () => ({ effectiveState: 'Dropped' }),
+		});
+		renderPopover(
+			game({
+				playStatus: null,
+				effectiveState: 'Story completed',
+				hasCompleted: true,
+				completedOn: '2024-01-01',
+			}),
+		);
+		await user.click(pill());
+		await user.click(screen.getByRole('menuitemradio', { name: 'Dropped' }));
+
+		const undo = await screen.findByRole('button', { name: 'Undo' });
+		await user.click(undo);
+
+		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+		expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
+			playStatus: null,
 		});
 	});
 

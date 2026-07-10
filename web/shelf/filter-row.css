@@ -99,6 +99,35 @@
 	width: 1ch;
 }
 
+/* Flag + reveal pills (Story 3.2, UX-DR9): shape encodes behavior — a solid
+   border narrows (AND), a dashed border reveals a hidden state. Active pills
+   share the trigger's glow treatment (FR-22). */
+.filter-row__pill {
+	display: inline-flex;
+	align-items: center;
+	padding: var(--space-2) var(--space-3);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-pill);
+	background: var(--color-surface-raised);
+	color: var(--color-text-primary);
+	font-family: var(--font-ui);
+	font-size: 0.9rem;
+	cursor: pointer;
+}
+
+.filter-row__pill--reveal {
+	border-style: dashed;
+	color: var(--color-text-secondary);
+}
+
+.filter-row__pill[data-active] {
+	border-color: var(--color-accent-glow);
+	background: color-mix(in srgb, var(--color-accent-glow) 18%, transparent);
+	color: var(--color-text-primary);
+	box-shadow: 0 0 12px
+		color-mix(in srgb, var(--color-accent-glow) 30%, transparent);
+}
+
 /* Inert placeholder menuitem (empty/pending/failed vocabulary). */
 .filter-row__empty {
 	padding: var(--space-2) var(--space-3);

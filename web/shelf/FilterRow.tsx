@@ -1,17 +1,25 @@
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { fetchGenreVocabulary } from './api';
-import { LIVE_STATUSES, type ShelfFilter, toggleSelection } from './filters';
+import {
+	FLAGS,
+	LIVE_STATUSES,
+	REVEAL_STATES,
+	type ShelfFilter,
+	toggleSelection,
+} from './filters';
 import './filter-row.css';
 
 /**
- * The shelf filter row (Story 3.1, FR-20/21/22): a State multiselect (the four
- * live statuses) and a Genre multiselect (the full vocabulary, reused from the
- * `['genres']` query). Each dropdown is an ARIA menu button with
- * `menuitemcheckbox` rows — toggling a row does NOT close the menu, so several
- * values can be picked in one visit. The trigger carries the selected count and
- * a highlighted active state (FR-22), with `aria-expanded`/`aria-checked`
- * making both machine-readable — never color alone.
+ * The shelf filter row (Stories 3.1/3.2, FR-20/21/22): a State multiselect
+ * (the four live statuses), a Genre multiselect (the full vocabulary, reused
+ * from the `['genres']` query), four solid Flag pills (each its own AND
+ * group), and three dashed reveal pills that OR a hidden state into the
+ * visible set. Shape encodes behavior (UX-DR9): solid narrows, dashed
+ * reveals. Each dropdown is an ARIA menu button with `menuitemcheckbox` rows —
+ * toggling a row does NOT close the menu, so several values can be picked in
+ * one visit. Active controls highlight/glow with machine-readable state
+ * (`aria-checked`/`aria-pressed`) — never color alone (FR-22).
  *
  * Filter state lives in `Shelf`; this row only renders and toggles it. It never
  * touches the whole-library search path (separate query by design).
@@ -68,6 +76,43 @@ export function FilterRow({
 					onChange({ ...filter, genres: toggleSelection(filter.genres, genre) })
 				}
 			/>
+			{FLAGS.map(({ key, label }) => (
+				<button
+					key={key}
+					type="button"
+					className="filter-row__pill filter-row__pill--flag tap-target"
+					aria-pressed={filter.flags.includes(key)}
+					data-active={filter.flags.includes(key) || undefined}
+					data-testid={`filter-flag-${key}`}
+					onClick={() =>
+						onChange({ ...filter, flags: toggleSelection(filter.flags, key) })
+					}
+				>
+					{label}
+				</button>
+			))}
+			{REVEAL_STATES.map((state) => (
+				<button
+					key={state}
+					type="button"
+					className="filter-row__pill filter-row__pill--reveal tap-target"
+					// The reveal semantics must be machine-readable, not shape-alone
+					// (UX-DR9 + the never-color-alone floor) — and "Show X" also keeps
+					// this button distinct from the milestone action named "X".
+					aria-label={`Show ${state} games`}
+					aria-pressed={filter.reveals.includes(state)}
+					data-active={filter.reveals.includes(state) || undefined}
+					data-testid={`filter-reveal-${state.toLowerCase().replace(/ /g, '-')}`}
+					onClick={() =>
+						onChange({
+							...filter,
+							reveals: toggleSelection(filter.reveals, state),
+						})
+					}
+				>
+					{state}
+				</button>
+			))}
 		</div>
 	);
 }

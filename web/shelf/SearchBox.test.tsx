@@ -17,6 +17,7 @@ function card(id: string, title: string): ShelfGame {
 		owned: true,
 		released: true,
 		wishlisted: false,
+		playableNow: true,
 		psPlusExtra: false,
 		hasCompleted: false,
 		hasPlatinum: false,

@@ -32,6 +32,7 @@ function game(over: Partial<ShelfGame> = {}): ShelfGame {
 		owned: true,
 		released: true,
 		wishlisted: false,
+		playableNow: true,
 		psPlusExtra: false,
 		hasCompleted: false,
 		hasPlatinum: false,
@@ -386,6 +387,29 @@ describe('DetailPanel', () => {
 		await waitFor(() =>
 			expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
 		);
+	});
+
+	// HAZARD (Story 3.2, FR-4/FR-17): a panel open on an ALREADY-hidden game
+	// (reached via reveal pill or search) must not auto-close on a milestone
+	// write that leaves visibility unchanged — hidden before AND after.
+	it('stays open logging a milestone on an already-hidden game (no visibility change)', async () => {
+		fetchMock.mockResolvedValue({
+			ok: true,
+			status: 200,
+			json: async () => ({ effectiveState: 'Dropped' }),
+		});
+		const user = await openPanel(
+			game({ playStatus: 'Dropped', effectiveState: 'Dropped' }),
+		);
+		await user.click(screen.getByRole('button', { name: /Story completed/ }));
+		await user.click(screen.getByRole('button', { name: 'Confirm' }));
+
+		await waitFor(() => expect(writes()).toHaveLength(1));
+		expect(await screen.findByTestId('toast')).toHaveTextContent(
+			'Bloodborne — Story completed',
+		);
+		// The panel survives: auto-close fires only on visible→hidden.
+		expect(screen.getByRole('dialog', { name: 'Bloodborne' })).toBeVisible();
 	});
 
 	it('Escape in the confirm gate cancels it without closing the panel', async () => {

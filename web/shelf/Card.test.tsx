@@ -19,6 +19,7 @@ function game(overrides: Partial<ShelfGame> = {}): ShelfGame {
 		owned: true,
 		released: true,
 		wishlisted: false,
+		playableNow: true,
 		psPlusExtra: false,
 		hasCompleted: false,
 		hasPlatinum: false,

@@ -57,6 +57,12 @@ function FilteredShelf({ games }: { games: ShelfGame[] }) {
 		() => applyShelfFilter(games, filter),
 		[games, filter],
 	);
+	// The payload is the whole library (hidden states included) — user-facing
+	// counts and the "is the backlog empty" judgment use the default set.
+	const defaultCount = useMemo(
+		() => applyShelfFilter(games, EMPTY_FILTER).length,
+		[games],
+	);
 
 	// Announce filter changes from the one filtered result the grid renders —
 	// a second applyShelfFilter call here would be duplicated logic waiting to
@@ -67,16 +73,21 @@ function FilteredShelf({ games }: { games: ShelfGame[] }) {
 		lastAnnounced.current = filter;
 		announce(
 			isFilterActive(filter)
-				? `Filters applied. Showing ${visible.length} of ${games.length} games.`
+				? `Filters applied. Showing ${visible.length} of ${defaultCount} games.`
 				: 'Filters cleared.',
 		);
-	}, [filter, visible.length, games.length, announce]);
+	}, [filter, visible.length, defaultCount, announce]);
 
 	return (
 		<>
 			<FilterRow filter={filter} onChange={setFilter} />
 			{visible.length === 0 ? (
-				<EmptyState variant="no-match" />
+				// "NO MATCH" is a filter outcome; a library whose every game is
+				// hidden (all completed/dropped) with no filter active is an empty
+				// backlog, not a failed filter.
+				<EmptyState
+					variant={isFilterActive(filter) ? 'no-match' : 'insert-games'}
+				/>
 			) : (
 				<ShelfGrid games={visible} />
 			)}

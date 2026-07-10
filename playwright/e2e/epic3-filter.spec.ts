@@ -6,6 +6,7 @@ import {
 	type SeedGame,
 } from '../support/factories/game-factory';
 import { d1Execute, deleteGames, seedGames, sq } from '../support/helpers/d1';
+import { loadAllPages } from '../support/helpers/shelf';
 import { expect, test } from '../support/merged-fixtures';
 
 /**
@@ -45,24 +46,6 @@ async function deleteGenres(genreIds: string[]): Promise<void> {
 		await d1Execute(
 			`DELETE FROM genre WHERE id IN (${genreIds.map(sq).join(', ')});`,
 		);
-	}
-}
-
-/** Reveal every progressive page so absence/order assertions see the full set. */
-async function loadAllPages(page: Page): Promise<void> {
-	const sentinel = page.locator('.shelf__sentinel');
-	for (;;) {
-		if ((await sentinel.count()) === 0) return;
-		const cards = page.getByTestId('shelf-card');
-		const before = await cards.count();
-		await sentinel.scrollIntoViewIfNeeded();
-		await expect
-			.poll(
-				async () =>
-					(await cards.count()) > before || (await sentinel.count()) === 0,
-				{ message: 'next page to render', timeout: 10_000 },
-			)
-			.toBe(true);
 	}
 }
 

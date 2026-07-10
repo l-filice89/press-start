@@ -1,15 +1,12 @@
 import type { PlayStatus, ShelfGame } from './api';
 
 /**
- * Shelf filter model (Story 3.1, FR-20/21). OR within a group, AND across
- * groups; an empty group applies no constraint, so the empty filter yields the
- * default visible set unchanged. Filtering is a pure, order-preserving subset
- * of the already server-ordered `/api/shelf` payload — FR-18 ordering survives
- * because a subset of a sorted list stays sorted (never re-sort here).
- *
- * The State group offers the four LIVE statuses only — Dropped and the
- * milestone states are hidden by default and only reachable via Story 3.2's
- * reveal pills, which extend this type.
+ * Shelf filter model (Stories 3.1/3.2, FR-20/21). OR within a group, AND
+ * across groups. The payload is the whole server-ordered library (live
+ * statuses first, hidden states ranked after — FR-18); the filter derives the
+ * visible set: the state group (selected states, or the live default set)
+ * unioned with the reveal pills, then each active flag ANDs. Filtering is a
+ * pure, order-preserving subset — never re-sort here.
  */
 
 export const LIVE_STATUSES = [
@@ -21,32 +18,69 @@ export const LIVE_STATUSES = [
 
 export type LiveStatus = (typeof LIVE_STATUSES)[number];
 
+/** The backlog-hidden states, reachable only via their reveal pill (FR-4/17). */
+export const REVEAL_STATES = [
+	'Story completed',
+	'Platinum achieved',
+	'Dropped',
+] as const;
+
+export type RevealState = (typeof REVEAL_STATES)[number];
+
+/** Derived-flag pills — each active one is its own AND group (FR-20). */
+export const FLAGS = [
+	{ key: 'owned', label: 'Owned' },
+	{ key: 'wishlisted', label: 'Wishlisted' },
+	{ key: 'released', label: 'Released' },
+	{ key: 'playableNow', label: 'Playable now' },
+] as const;
+
+export type FlagKey = (typeof FLAGS)[number]['key'];
+
 export type ShelfFilter = {
 	states: LiveStatus[];
 	genres: string[];
+	reveals: RevealState[];
+	flags: FlagKey[];
 };
 
-export const EMPTY_FILTER: ShelfFilter = { states: [], genres: [] };
+export const EMPTY_FILTER: ShelfFilter = {
+	states: [],
+	genres: [],
+	reveals: [],
+	flags: [],
+};
 
 export function isFilterActive(filter: ShelfFilter): boolean {
-	return filter.states.length > 0 || filter.genres.length > 0;
+	return (
+		filter.states.length > 0 ||
+		filter.genres.length > 0 ||
+		filter.reveals.length > 0 ||
+		filter.flags.length > 0
+	);
 }
 
 /**
- * The filter predicate consumes the server-computed `effectiveState` and
- * `genres` on each game — never recomputed client-side (AD-7).
+ * The filter predicate consumes the server-computed `effectiveState`, `genres`,
+ * and derived flags on each game — never recomputed client-side (AD-7).
+ * The empty filter yields the default visible set (live statuses only).
  */
 export function applyShelfFilter(
 	games: ShelfGame[],
 	filter: ShelfFilter,
 ): ShelfGame[] {
-	if (!isFilterActive(filter)) return games;
-	const states: readonly string[] = filter.states;
+	// State group: the selected states (else the live default set), plus every
+	// revealed hidden state (reveal pills extend the group — FR-21).
+	const allowedStates: readonly string[] = [
+		...(filter.states.length > 0 ? filter.states : LIVE_STATUSES),
+		...filter.reveals,
+	];
 	return games.filter(
 		(game) =>
-			(states.length === 0 || states.includes(game.effectiveState)) &&
+			allowedStates.includes(game.effectiveState) &&
 			(filter.genres.length === 0 ||
-				game.genres.some((genre) => filter.genres.includes(genre))),
+				game.genres.some((genre) => filter.genres.includes(genre))) &&
+			filter.flags.every((flag) => game[flag]),
 	);
 }
 

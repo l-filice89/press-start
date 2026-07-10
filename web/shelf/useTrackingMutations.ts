@@ -15,15 +15,13 @@ import {
 	removeGenre,
 	type ShelfGame,
 } from './api';
+import { REVEAL_STATES } from './filters';
 
 // UI-orchestration mirror of the server's default-shelf filter (AD-7 computes
 // state server-side; this only predicts "the card is about to unmount" so an
 // open detail panel can close itself instead of vanishing mid-interaction).
-const HIDDEN_STATES: readonly EffectiveState[] = [
-	'Dropped',
-	'Story completed',
-	'Platinum achieved',
-];
+// One client-side list: the hidden states ARE the revealable states.
+const HIDDEN_STATES: readonly EffectiveState[] = REVEAL_STATES;
 
 /** Labels for the two milestone actions, keyed off the wire vocabulary. */
 export const MILESTONE_LABELS: Record<Milestone, string> = {
@@ -65,12 +63,19 @@ export function useTrackingMutations(
 	const queryClient = useQueryClient();
 	const { toast } = useToast();
 
+	// `onHidden` fires only on a visible→hidden TRANSITION (Story 3.2, FR-4/17):
+	// a write on an already-hidden game (reached via reveal pill or search) that
+	// leaves it hidden must not auto-close the panel — visibility never changed.
+	const becameHidden = (state: EffectiveState) =>
+		!HIDDEN_STATES.includes(game.effectiveState) &&
+		HIDDEN_STATES.includes(state);
+
 	const mutation = useMutation({
 		mutationFn: (status: PlayStatus | null) =>
 			changePlayStatus(game.id, status),
 		onSuccess: (state) => {
 			queryClient.invalidateQueries({ queryKey: ['shelf'] });
-			if (HIDDEN_STATES.includes(state)) onHidden?.();
+			if (becameHidden(state)) onHidden?.();
 		},
 		// A 401 routes to sign-in centrally (query-client.ts). Everything else must
 		// say so — a status change that silently did nothing is worse than an
@@ -97,7 +102,7 @@ export function useTrackingMutations(
 		mutationFn: (milestone: Milestone) => logMilestone(game.id, milestone),
 		onSuccess: (state) => {
 			queryClient.invalidateQueries({ queryKey: ['shelf'] });
-			if (HIDDEN_STATES.includes(state)) onHidden?.();
+			if (becameHidden(state)) onHidden?.();
 		},
 		onError: () =>
 			toast({ message: `Couldn’t update ${game.title}. Try again.` }),
@@ -125,9 +130,12 @@ export function useTrackingMutations(
 				onSuccess: () => {
 					// Dropped — and clearing to a milestone state — hide the card from
 					// the default shelf: reversible risky actions, so both get an UNDO
-					// (EXPERIENCE.md feedback rules).
+					// (EXPERIENCE.md feedback rules). A null previous status (auto-
+					// cleared by a milestone) restores through the same write path —
+					// the route accepts null and the milestone satisfies the
+					// completion invariant (Story 3.2, FR-2/FR-3).
 					const undo =
-						(next === 'Dropped' || next === null) && previous
+						next === 'Dropped' || next === null
 							? { onUndo: () => mutate(previous) }
 							: undefined;
 					toast({

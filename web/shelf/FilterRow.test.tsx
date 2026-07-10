@@ -81,7 +81,10 @@ describe('FilterRow', () => {
 		await user.click(screen.getByRole('button', { name: 'State' }));
 		await user.click(screen.getByRole('menuitemcheckbox', { name: 'Playing' }));
 
-		expect(onChange).toHaveBeenCalledWith({ states: ['Playing'], genres: [] });
+		expect(onChange).toHaveBeenCalledWith({
+			...EMPTY_FILTER,
+			states: ['Playing'],
+		});
 		// Multiselect: the menu stays open for further picks.
 		expect(screen.getByRole('menu')).toBeInTheDocument();
 	});
@@ -89,7 +92,7 @@ describe('FilterRow', () => {
 	it('an active group highlights its trigger with count and checked rows', async () => {
 		const user = userEvent.setup();
 		mockGenres([]);
-		renderRow({ states: ['Playing', 'Paused'], genres: [] });
+		renderRow({ ...EMPTY_FILTER, states: ['Playing', 'Paused'] });
 
 		const trigger = screen.getByRole('button', {
 			name: 'State — 2 selected',
@@ -108,7 +111,7 @@ describe('FilterRow', () => {
 
 	it('deactivating restores the plain accessible name', () => {
 		mockGenres([]);
-		const { rerender } = renderRow({ states: ['Playing'], genres: [] });
+		const { rerender } = renderRow({ ...EMPTY_FILTER, states: ['Playing'] });
 		expect(
 			screen.getByRole('button', { name: 'State — 1 selected' }),
 		).toBeInTheDocument();
@@ -127,7 +130,7 @@ describe('FilterRow', () => {
 	it('a selected genre missing from the vocabulary stays listed so it can be untoggled', async () => {
 		const user = userEvent.setup();
 		mockGenres(['RPG']);
-		renderRow({ states: [], genres: ['Ghost Genre'] });
+		renderRow({ ...EMPTY_FILTER, genres: ['Ghost Genre'] });
 
 		await user.click(screen.getByRole('button', { name: /Genre/ }));
 		const ghost = await screen.findByRole('menuitemcheckbox', {
@@ -152,6 +155,53 @@ describe('FilterRow', () => {
 		trigger.focus();
 		await user.keyboard('{Escape}');
 		expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+	});
+
+	it('renders the four flag pills and three reveal pills with pressed state (Story 3.2)', async () => {
+		const user = userEvent.setup();
+		mockGenres([]);
+		const onChange = vi.fn();
+		renderRow({ ...EMPTY_FILTER, reveals: ['Dropped'] }, onChange);
+
+		for (const label of ['Owned', 'Wishlisted', 'Released', 'Playable now']) {
+			expect(screen.getByRole('button', { name: label })).toHaveAttribute(
+				'aria-pressed',
+				'false',
+			);
+		}
+		// Solid vs dashed encoding is carried by the modifier class (UX-DR9).
+		expect(screen.getByRole('button', { name: 'Owned' })).toHaveClass(
+			'filter-row__pill--flag',
+		);
+		const dropped = screen.getByRole('button', {
+			name: 'Show Dropped games',
+		});
+		expect(dropped).toHaveClass('filter-row__pill--reveal');
+		// Active reveal pill: pressed + highlighted (FR-22).
+		expect(dropped).toHaveAttribute('aria-pressed', 'true');
+		expect(dropped).toHaveAttribute('data-active');
+
+		await user.click(screen.getByRole('button', { name: 'Owned' }));
+		expect(onChange).toHaveBeenCalledWith({
+			...EMPTY_FILTER,
+			reveals: ['Dropped'],
+			flags: ['owned'],
+		});
+	});
+
+	it('toggling a reveal pill reports it into the filter (FR-21)', async () => {
+		const user = userEvent.setup();
+		mockGenres([]);
+		const onChange = vi.fn();
+		renderRow(EMPTY_FILTER, onChange);
+
+		await user.click(
+			screen.getByRole('button', { name: 'Show Platinum achieved games' }),
+		);
+		expect(onChange).toHaveBeenCalledWith({
+			...EMPTY_FILTER,
+			reveals: ['Platinum achieved'],
+		});
 	});
 
 	it('supports keyboard traversal and Escape returns focus to the trigger', async () => {

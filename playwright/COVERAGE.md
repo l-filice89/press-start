@@ -73,3 +73,9 @@ Epic 1's deferred 1.5h (prefers-reduced-motion) is closed by
 | 3.1d active filter entry visually highlighted | `epic3-filter.spec.ts` › state filter… (data-active trigger + aria-checked row asserted) |
 | 3.1 FR-18 ordering holds in filtered views | `epic3-filter.spec.ts` › a filtered view keeps state → owned → alpha ordering |
 | 3.1 search isolation (filters never leak into whole-library search) | `epic3-filter.spec.ts` › whole-library search ignores active shelf filters |
+| 3.2a Flag pills Owned/Wishlisted/Released/Playable now, each its own AND group | `epic3-reveal.spec.ts` › flag pills are their own AND groups (Wishlisted + State AND asserted; all four pills' pressed state pinned in jsdom `FilterRow.test.tsx`) |
+| 3.2b reveal pill ORs its hidden state into the visible set | `epic3-reveal.spec.ts` › a reveal pill ORs its hidden state into the shelf (Dropped; Story completed exercised by the UNDO test; all three pills pinned in jsdom + `filters.test.ts`) |
+| 3.2c solid pills narrow, dashed pills reveal | `epic3-reveal.spec.ts` › a reveal pill… / › flag pills… (modifier classes asserted; the dashed border itself is static CSS) |
+| 3.2d active pill glows/highlights | `epic3-reveal.spec.ts` › a reveal pill… (aria-pressed + data-active asserted; glow itself is static CSS) |
+| 3.2e UNDO restores auto-cleared (null) status through the invariant write path | `epic3-reveal.spec.ts` › UNDO after dropping a revealed milestone-only card restores the null status |
+| 3.2f panel on already-hidden game survives a no-visibility-change milestone write | transition logic pinned in jsdom `DetailPanel.test.tsx` (stays open, hidden→hidden); `epic3-reveal.spec.ts` › milestone write on a revealed hidden game… drives the flow e2e with reopen-based asserts — a direct stays-open assert is unreliable until Story 3.4 hoists panel state (epic2-detail NOTE convention) and 3.4 converts it |
