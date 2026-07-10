@@ -886,6 +886,60 @@ Bundles the open focus/interaction deferred-work items — placed in Epic 3 beca
 **When** a toast UNDO for that game is activated
 **Then** the UNDO respects the same in-flight guard as every other entry point (ref-backed, not render-scoped) (deferred-work: spec-2-4 UNDO-guard item)
 
+### Story 3.5: Reveal-pill exclusive mode
+
+As Luca (backlog reviewer),
+I want a dotted reveal pill to show only the matching hidden games,
+So that Completed/Platinum/Dropped games are immediately visible instead of appended behind the infinite scroll.
+
+Semantics change decided at the Epic 3 retro (2026-07-10, Significant Discovery — see epic-3-retro-2026-07-10.md): additive reveals push hidden games to the end of the FR-18 order, behind infinite scroll. Requires FR-4/FR-20 amendment in the PRD before implementation (John). Bundles three assigned deferred-work items touching the same surfaces.
+
+**Acceptance Criteria:**
+
+**Given** any dotted reveal pill selected
+**When** the shelf renders
+**Then** the visible set contains only games in the selected hidden state(s) — the State group is replaced entirely (state pills clear) (FR-4, FR-20 as amended)
+
+**Given** two or more dotted pills selected
+**Then** they OR among themselves (Completed + Platinum = either)
+
+**Given** an active exclusive reveal view
+**When** Genre or Flag selections are also active
+**Then** they still AND with it (e.g. Completed + RPG + Owned → only completed, owned RPGs)
+
+**Given** an active exclusive reveal view
+**Then** the summary sentence states it literally ("Showing Completed games.") — the additive-semantics live-status enumeration is removed (FR-21)
+
+**Given** an exclusive reveal view with zero matching games
+**When** ShelfGrid unmounts for the empty state
+**Then** focus lands on a deliberate target (Clear filters or the empty-state heading), never `<body>` (deferred-work: spec-3-4 last-visible-card boundary entry)
+
+**Given** the three modal surfaces (ConfirmDialog, DetailPanel, FilterSheet)
+**Then** they share one extracted focus-trap implementation (deferred-work: spec-3-3 trap-triplication entry)
+
+**Given** the e2e suites rewritten for the new reveal contract
+**Then** epic2-detail.spec.ts:127 and epic2-tracking.spec.ts:165 also get the loadAllPages fold-position fix (deferred-work: spec-3-1 parallel-flake entry)
+
+### Story 3.6: Write-path hardening (pre-sync)
+
+As Luca (soon syncing from PSN),
+I want every client write path safe against stale reads and stale intent,
+So that Epic 4's automated sync writes cannot render stale panels, be clobbered by old UNDO toasts, or kill open menus.
+
+Bundles the three write-path deferred-work items assigned at the Epic 3 retro triage. Must land before Story 4.2 introduces sync as a new write source.
+
+**Acceptance Criteria:**
+
+**Given** any tracking write settles
+**Then** both `['shelf']` and `['shelf-search']` query keys are invalidated — a detail panel opened from search never renders stale (deferred-work: spec-3-2 search-staleness entry)
+
+**Given** a toast UNDO activated after a newer write on the same game has settled
+**Then** the stale UNDO cannot overwrite the newer intent (latest-write token, or stale undo toasts dismissed on newer writes) (deferred-work: spec-3-4 stale-UNDO entry)
+
+**Given** an open status-popover menu
+**When** a refetch re-chunks the grid and remounts its Card
+**Then** the menu survives (open-state hoisted like the 3.4 detail-panel fix) AND the `openStatusMenu` retry loop in epic2-tracking.spec.ts is removed in the same change (deferred-work: spec-3-4 popover-remount entry)
+
 ---
 
 ## Epic 4: Fill the Library from PlayStation (Sync)

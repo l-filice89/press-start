@@ -77,11 +77,13 @@ development_status:
   epic-2-5-retrospective: done
 
   # Epic 3: Filter & Focus the Backlog
-  epic-3: done
+  epic-3: in-progress # reopened 2026-07-10: stories 3.5/3.6 added post-retro (reveal-pill Significant Discovery + ledger triage)
   3-1-filter-the-shelf-by-state-and-genre: done
   3-2-flag-pills-and-state-reveal-pills: done
   3-3-live-filter-summary-empty-state-responsive-filters: done
   3-4-focus-interaction-hardening-deferred-work-sweep: done
+  3-5-reveal-pill-exclusive-mode: backlog
+  3-6-write-path-hardening-pre-sync: backlog
   epic-3-retrospective: done
 
   # Epic 4: Fill the Library from PlayStation (Sync)
@@ -171,15 +173,15 @@ action_items:
     owner: "John + Amelia"
     status: open
   - epic: 3
-    action: "Invalidate ['shelf-search'] on all writes (staleness seam; required before story 4.2)"
+    action: "Invalidate ['shelf-search'] on all writes (staleness seam; story 3.6 AC1)"
     owner: "Amelia"
     status: open
   - epic: 3
-    action: "Latest-write token for UNDO — stale-intent guard atop IN_FLIGHT (required before story 4.2)"
+    action: "Latest-write token for UNDO — stale-intent guard atop IN_FLIGHT (story 3.6 AC2)"
     owner: "Amelia"
     status: open
   - epic: 3
-    action: "Hoist status-popover menu open-state (survives refetch remount) + remove openStatusMenu e2e retry loop (required before story 4.2)"
+    action: "Hoist status-popover menu open-state + remove openStatusMenu e2e retry loop (story 3.6 AC3)"
     owner: "Amelia"
     status: open
   - epic: 3
