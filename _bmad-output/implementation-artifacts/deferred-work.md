@@ -72,53 +72,91 @@ decision: 2026-07-08 Add requirement refs — Add bracketed FR/AR/UX-DR requirem
 - source_spec: `_bmad-output/implementation-artifacts/spec-dw-shelf-grid-aria-row-regrouping.md`
   summary: Shelf resize that changes the auto-fill column count remounts the focused card (row `div`s keyed by index; a card moves to a different parent when re-chunked), dropping browser focus.
   evidence: React reconciles keyed children per parent — moving a `game.id`-keyed `Card` from one index-keyed `role="row"` div to another forces unmount+remount, so a card holding keyboard focus loses it and its `cardRefs` entry resets during a viewport resize crossing a column boundary. Roving-tabindex/reading-order invariants still hold, but active keyboard focus is lost mid-resize. Inherent to the mandated `display:contents` row grouping; not trivially fixable without restructuring the ARIA grouping.
+  decision: 2026-07-10 Assigned to Story 3.4 (Focus & interaction hardening) — deferred-work triage sweep; Epic 3 filter churn promotes this from corner case to daily path.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-dw-3-central-401-reauth-redirect.md`
   summary: An auth-state transition swaps the authenticated shell for `<Login />` with no focus management and no live-region announcement, so a keyboard or screen-reader user is silently dropped at the document start.
   evidence: `web/App.tsx`'s session gate re-renders a different subtree when `session` becomes `null` (on a 401 re-auth redirect, and equally on an explicit sign-out — so this predates the 401 work). React unmounts the focused element and focus falls back to `document.body`; nothing moves focus into the Login form or announces the change. Both entry points into `<Login />` share the gate, so a single focus/announcement fix at the gate covers them.
+  decision: 2026-07-10 Assigned to Story 3.4 (Focus & interaction hardening) — deferred-work triage sweep.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-1-change-play-status-from-the-shelf.md`
   summary: Marking a game `Dropped` unmounts its card on the shelf refetch, dropping keyboard focus to `document.body` — including focus needed to reach the toast's UNDO.
   evidence: `StatusPopover.select()` calls `close()`, which refocuses the pill; the mutation then invalidates `['shelf']`, the server filters the Dropped game out (FR-4), and React unmounts the card that owns the pill. Same defect class as DW-4 (shelf-grid focus on re-chunk) and the auth-gate focus item — a deliberate focus-restoration strategy for cards leaving the shelf, not an inline patch.
+  decision: 2026-07-10 Assigned to Story 3.4 (Focus & interaction hardening) — deferred-work triage sweep.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-1-change-play-status-from-the-shelf.md`
   summary: The `Dropped` toast offers no UNDO when the game's previous play status was null (status cleared by a completion milestone).
   evidence: `StatusPopover.select()` gates the undo on `next === 'Dropped' && previous`, and `previous` is `game.playStatus`, which is null for any game whose status was auto-cleared by a milestone (FR-2). Restoring that state means writing `play_status = null`, which Story 2.1's route deliberately cannot express (it accepts only the five play statuses; clearing goes through the FR-3/AD-12 invariant guard in Story 2.2/2.3). Unreachable on the default shelf today — milestone games are hidden (FR-17) — but reachable as soon as Epic 3's state-reveal pills or Story 2.3's detail panel render those cards. Fix alongside the milestone write path.
+  decision: 2026-07-10 Assigned to Story 3.2 as an AC (reveal pills make it reachable) — deferred-work triage sweep; cross-referenced in epics.md.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-1-change-play-status-from-the-shelf.md`
   summary: Lifecycle dates are stamped from the Worker's UTC clock, so an evening status change west of Greenwich records tomorrow's date, permanently.
   evidence: `src/routes/tracking.ts` computes `today` as `new Date().toISOString().slice(0, 10)`. `started_on` is write-once through automatic flows and explicitly unreconstructable (FR-44/FR-45, AD-11), so a wrong value never self-corrects. No PRD, architecture, or UX document picks a timezone policy, and the same choice binds `completed_on`/`platinum_on` (Story 2.2) and `bought_on` (Story 2.4) — an app-wide decision (store the user's zone in `SETTING`? stamp client-side?) rather than a per-route patch.
+  decision: 2026-07-09 Policy decided by the Epic 2 retro — capture the browser timezone into `SETTING` at first login, user-editable in Settings; all four date-stamp sites compute "today" in that zone. Implement early Epic 3 (kept out of Epic 2.5, which is Playwright-only per 2026-07-09 scoping).
+  resolution: done 2026-07-10 — `setting` table (migration 0003), browser zone captured via `PUT /api/settings/timezone` (`onlyIfUnset`) from `App.tsx` on login, all stamp sites route through `todayForUser` → `todayInZone` (core, unit-tested); endpoint supports plain-PUT edits, the Settings-page UI hooks in at Story 6.3.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-2-log-completion-milestones-confirm-gated.md`
   summary: Milestone dates (`completed_on`/`platinum_on`) are stamped from the Worker's UTC clock — same undecided timezone policy as the 2.1 deferral, but now the wrong date is user-visible (shown on the achieved milestone row) and immutable (FR-6).
   evidence: `src/routes/tracking.ts` computes `today` as `new Date().toISOString().slice(0, 10)` on the milestone POST, mirroring the play-status PATCH. The 2.1 deferral already names this an app-wide policy decision binding Stories 2.2 and 2.4; 2.2 raises its stakes because the achieved row displays the stamped date and write-once means it never self-corrects. Resolve once, app-wide (user timezone in `SETTING`, or client-supplied date), not per route.
+  decision: 2026-07-09 Same policy as the 2.1 entry — browser timezone in `SETTING` at first login, editable in Settings, used at all stamp sites; implement early Epic 3.
+  resolution: done 2026-07-10 — same fix as the 2.1 entry (the milestone POST stamps through `todayForUser`).
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-3-flip-a-card-to-its-detail-view.md`
   summary: Three hand-rolled focus traps (ConfirmDialog, DetailPanel, and their shared technique) each duplicate ~20 lines and key off a `querySelectorAll('button…, a[href]')` selector that will silently miss the `<input>`/`<select>` controls Stories 2.4/2.5 add to the detail panel.
   evidence: `web/components/ConfirmDialog.tsx` and `web/shelf/DetailPanel.tsx` both implement first/last-focusable Tab cycling with near-identical code but already-drifted selectors (`button` vs `button:not([tabindex="-1"]), a[href]`). When date/ownership/genre editing lands in the panel (2.4/2.5), form controls become focusable but invisible to the trap boundary — Tab can escape the modal at the new controls. Consolidate into one trap helper (or adopt native `<dialog>.showModal()`) before 2.4 adds inputs.
+  resolution: done 2026-07-10 (triage sweep) — the hazard was fixed in Story 2.4: both dialogs import the shared `FOCUSABLE_SELECTOR` from `web/components/focusable.ts`, which covers `input`/`select`, so Tab cannot escape at form controls and the selectors can no longer drift. The residual ~20-line trap-loop duplication is accepted as-is (YAGNI) — revisit only if a third dialog appears.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-4-edit-ownership-and-lifecycle-dates-in-detail.md`
   summary: Every tracking write is an untransacted read-decide-write (`getTracking` → core → `upsertTracking`), so concurrent PATCHes can interleave — double-stamping write-once `bought_on`, persisting a type on an un-owned row, or breaking the completion invariant via a status-clear racing a milestone-date-clear; the "deleted underneath us" comment on the post-upsert guard is also wrong (the upsert is insert-or-update and always returns a row — a concurrent delete is silently resurrected, not 404'd).
   evidence: `src/services/tracking.ts` (all four write functions, pattern established in 2.1) and `src/repositories/tracking.ts:30` (`onConflictDoUpdate` + `returning()`). D1 has no interactive transactions from Drizzle here; a fix is conditional UPDATEs (`WHERE bought_on IS NULL`, invariant re-checked in SQL) — a seam-wide change, not a per-route patch. Single-user app today, so exposure is one person's own racing tabs.
   decision: 2026-07-09 Fix now — promoted by the Epic 2 retro; Luca triages and schedules the fix post-retro (conditional UPDATEs enforcing write-once/invariants in SQL).
+  resolution: done 2026-07-10 — all four write paths now go through guarded UPDATEs in `repositories/tracking.ts`: write-once dates via `COALESCE`/`CASE` in the SET, completion invariant and owned-only type switches re-checked in the WHERE; the update never inserts, so a row deleted underneath us answers 404 instead of being resurrected (misleading comment gone with the upsert calls).
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-4-edit-ownership-and-lifecycle-dates-in-detail.md`
   summary: Toast UNDO callbacks (`Dropped` status since 2.1, un-own in 2.4) call the raw mutation directly, bypassing the in-flight pending guard every other entry point gets, so an UNDO can interleave with a pending write on the same game.
   evidence: `web/shelf/useTrackingMutations.ts` — `onUndo: () => mutate(previous)` and `onUndo: () => mutateOwnership(...)` skip the `isPending` check because the guard value is a stale render-scoped closure. Last-write-wins, no corruption; fix once with a ref-backed guard shared by all mutation entry points.
+  decision: 2026-07-10 Assigned to Story 3.4 (Focus & interaction hardening) — deferred-work triage sweep.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-4-edit-ownership-and-lifecycle-dates-in-detail.md`
   summary: `bash.exe.stackdump` is a tracked crash-dump junk file that keeps riding into diffs as line-ending churn; delete it and gitignore `*.stackdump`.
   evidence: `git ls-files` lists it at the repo root; it re-appeared in this story's working tree as CRLF churn (reverted during review). Not this story's artifact — a one-commit cleanup.
+  resolution: done 2026-07-10 (verified in triage sweep) — file no longer tracked (`git ls-files` empty) and `.gitignore:48` carries `*.stackdump`.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-5-edit-genres-in-detail.md`
   summary: Case-insensitive genre dedup is check-then-insert in the service; the `genre.name` unique constraint is case-sensitive, so two concurrent adds of case-variants ("Action"/"action") can still mint the near-duplicate FR-24 forbids.
   evidence: `src/services/genres.ts` (`findGenreByNameInsensitive` → `upsertGenre`) with `src/schema/catalog.ts` `genre.name` `unique()` on BINARY collation. Fix is a `lower(name)` (or COLLATE NOCASE) unique index via a migration — same untransacted-write-seam family as the 2.4 deferral; single-user exposure only.
   decision: 2026-07-09 Fix now — promoted by the Epic 2 retro; Luca triages and schedules the fix post-retro (NOCASE unique index migration).
+  resolution: done 2026-07-10 — migration 0003 merges any pre-existing case-variant genres (links repointed via INSERT OR IGNORE, losers deleted) then creates the `lower(name)` unique index; schema carries `genre_name_nocase_uidx`.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-shelf-order-owned-tier.md`
   summary: Decide whether the FR-18 ownership tier also applies to Epic 3 filtered/reveal-pill shelf views (they flow through the same orderShelf), and document it in the Epic 3 spec.
   evidence: orderShelf is the single ordering seam (AD-7); any future filtered view silently inherits owned-first with no artifact stating whether that is intended.
+  decision: 2026-07-09 Decided by the Epic 2 retro — the owned-before-wishlisted tier applies to ALL shelf views, filtered/reveal included. Document the FR-18 amendment in epics.md/PRD before Story 3.1 (kept out of Epic 2.5, which is Playwright-only).
+  resolution: done 2026-07-09 — FR-18 amended in prd.md, epics.md, and EXPERIENCE.md (retro action item closed 2026-07-09; verified in the 2026-07-10 triage sweep).
+
+- source_spec: `_bmad-output/implementation-artifacts/epic-2-retro-2026-07-09.md`
+  summary: Local integration test runs email Luca a real magic link — `vitest-pool-workers` loads `.dev.vars` as bindings, so tests get a real `RESEND_API_KEY` and `providers/email.ts` selects the real Resend provider; the `vitest.config.ts` comment claiming secrets "don't exist in the test environment" is only true in CI.
+  evidence: Epic 2 retro challenge #2 and action item 4. Fix: force `RESEND_API_KEY: ''` in the vitest miniflare bindings so the console provider always wins in tests, and correct the misleading comment. Success criterion: full local `bun test` run, zero emails received.
+  decision: 2026-07-09 Fix scoped by the Epic 2 retro; kept out of Epic 2.5 (Playwright-only per 2026-07-09 scoping) — schedule as standalone fix or early Epic 3.
+  resolution: done 2026-07-10 — `RESEND_API_KEY: ''` forced in the vitest miniflare bindings (console provider always wins), misleading comment corrected; full local `bun test` run passes with zero real emails.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-platinum-only-auto-hide.md`
   summary: A detail panel opened from search on an already-hidden game (Dropped, or milestone-only) auto-closes on any milestone log because `onHidden` keys off the returned state being in `HIDDEN_STATES`, even when the write never changed the card's visibility.
   evidence: `web/shelf/useTrackingMutations.ts` milestone `onSuccess` — logging `completed` on a Dropped or platinum-first game returns `Dropped`/`Platinum achieved`, firing `onHidden` though the game was hidden before and after. Pre-existing (the old auto-clear path behaved the same); fix is comparing visibility before/after rather than testing the new state alone.
+  decision: 2026-07-10 Assigned to Story 3.2 as an AC (reveal pills make detail-on-hidden a daily path) — deferred-work triage sweep; cross-referenced in epics.md.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-5-1-playwright-framework-auth-smoke-test.md`
+  summary: CI burn-in job interpolates git-diff-derived spec filenames directly into a shell command (`bunx playwright test ${{ steps.changed.outputs.specs }}`).
+  evidence: Pre-existing from dae7d7f but now merge-relevant via the ci-ok gate; a hostile filename under playwright/e2e/ would be shell-interpolated. Mitigated today by pull_request read-only fork tokens and a single-maintainer repo.
+  resolution: done 2026-07-10 (triage sweep) — spec list now passed through an env var (`SPECS`) instead of `${{ }}` interpolation in the run script, matching the existing `BASE_REF` pattern in the same job.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-5-2-backfill-epic-1-e2e-flows.md`
+  summary: Owned-toggle 44px hit-area overlay is diagonally clipped at the card cover's rounded corner (border-radius ~11px), so the extreme corner of the WCAG target square is not clickable.
+  evidence: The overlay sits flush to the cover edge (offset = (44-22)/2) and .card__cover has overflow:hidden + border-radius; cardinal probes pass but a diagonal probe at the corner would fail. Upgrade path: move the toggle out of .card__cover (ponytail comment in web/shelf/card.css names it).
+  decision: 2026-07-10 Discarded (accepted as-is) — triage sweep: only the extreme diagonal sliver of the 44px square is clipped, all cardinal probes pass, and the ponytail comment in card.css preserves the upgrade path. Revisit only on a real reported miss.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-5-3-backfill-epic-2-e2e-flows.md`
+  summary: An open DetailPanel unmounts whenever a write's shelf refetch re-chunks the grid rows and remounts its Card (dialog open-state lives in Card).
+  evidence: Reproduced under parallel e2e (other actors' rows shift positions); solo user only sees it when their own write reorders the card across a row boundary. Upgrade path is hoisting the open-panel game id to Shelf level. E2e tests assert post-write truths on the card or after reopen as a workaround (comment in epic2-detail.spec.ts).
+  decision: 2026-07-10 Assigned to Story 3.4 (Focus & interaction hardening) — deferred-work triage sweep; includes converting the epic2-detail.spec.ts workaround assertions back to direct ones.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-5-4-standing-rule-every-ui-ac-ships-with-a-playwright-test.md`
+  summary: The ORCHESTRATION CONSTRAINT fact ("NEVER delegate work to subagents") contradicts bmad-dev-auto's SKILL.md, which makes synchronous review subagents mandatory; sessions must reconcile the two ad hoc.
+  evidence: Surfaced during Epic 2.5 runs — the constraint targets bmad-loop's background-detection gap (retired on Windows), but its wording forbids all subagents. Reword to forbid only background/detached delegation, keeping synchronous subagents legal.
+  resolution: done 2026-07-10 (triage sweep) — fact reworded in `_bmad/custom/bmad-dev-auto.toml`: forbids only background/detached delegation and explicitly blesses same-turn synchronous subagents (TaskOutput block:true), matching SKILL.md's mandatory review subagents.

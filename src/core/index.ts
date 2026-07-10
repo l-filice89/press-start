@@ -11,4 +11,5 @@ export * from './seed-reconcile';
 export * from './shelf';
 export * from './status-transition';
 export * from './title-normalizer';
+export * from './today';
 export * from './types';

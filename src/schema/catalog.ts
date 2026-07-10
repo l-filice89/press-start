@@ -11,6 +11,7 @@
  * `text({ enum })`.
  */
 
+import { sql } from 'drizzle-orm';
 import {
 	index,
 	integer,
@@ -90,13 +91,24 @@ export const gameTracking = sqliteTable(
 	],
 );
 
-/** GENRE — IGDB vocabulary (FR-23). `name` is unique so auto-create is idempotent. */
-export const genre = sqliteTable('genre', {
-	id: text('id')
-		.primaryKey()
-		.$defaultFn(() => crypto.randomUUID()),
-	name: text('name').notNull().unique(),
-});
+/**
+ * GENRE — IGDB vocabulary (FR-23). `name` is unique so auto-create is
+ * idempotent; the `lower(name)` unique index makes that uniqueness
+ * case-insensitive in the DB itself, closing the check-then-insert race that
+ * could mint "Action"/"action" near-duplicates (FR-24, Epic 2 retro item 8).
+ */
+export const genre = sqliteTable(
+	'genre',
+	{
+		id: text('id')
+			.primaryKey()
+			.$defaultFn(() => crypto.randomUUID()),
+		name: text('name').notNull().unique(),
+	},
+	(table) => [
+		uniqueIndex('genre_name_nocase_uidx').on(sql`lower(${table.name})`),
+	],
+);
 
 /** GAME_GENRE — many-to-many join; the composite PK is its identity. */
 export const gameGenre = sqliteTable(
@@ -137,6 +149,23 @@ export const externalLink = sqliteTable(
 		),
 		index('external_link_game_id_idx').on(table.gameId),
 	],
+);
+
+/**
+ * SETTING — per-user key-value config (spine: `USER ||--o{ SETTING`). First
+ * tenant: `timezone` (IANA zone captured from the browser at first login,
+ * user-editable — Epic 2 retro timezone policy); Epic 5 adds region/PS+ keys.
+ */
+export const setting = sqliteTable(
+	'setting',
+	{
+		userId: text('user_id')
+			.notNull()
+			.references(() => user.id, { onDelete: 'cascade' }),
+		key: text('key').notNull(),
+		value: text('value').notNull(),
+	},
+	(table) => [primaryKey({ columns: [table.userId, table.key] })],
 );
 
 /**
