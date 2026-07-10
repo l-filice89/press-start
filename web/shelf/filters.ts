@@ -1,12 +1,14 @@
 import type { PlayStatus, ShelfGame } from './api';
 
 /**
- * Shelf filter model (Stories 3.1/3.2, FR-20/21). OR within a group, AND
- * across groups. The payload is the whole server-ordered library (live
- * statuses first, hidden states ranked after — FR-18); the filter derives the
- * visible set: the state group (selected states, or the live default set)
- * unioned with the reveal pills, then each active flag ANDs. Filtering is a
- * pure, order-preserving subset — never re-sort here.
+ * Shelf filter model (Stories 3.1/3.2/3.5, FR-20/21 as amended 2026-07-10).
+ * OR within a group, AND across groups. The payload is the whole
+ * server-ordered library (live statuses first, hidden states ranked after —
+ * FR-18); the filter derives the visible set: the selected states (else the
+ * live default set), or — exclusively — the revealed hidden states (a reveal
+ * REPLACES the state group; the toggle handlers keep `states` and `reveals`
+ * mutually exclusive), then each active flag ANDs. Filtering is a pure,
+ * order-preserving subset — never re-sort here.
  */
 
 export const LIVE_STATUSES = [
@@ -69,12 +71,16 @@ export function applyShelfFilter(
 	games: ShelfGame[],
 	filter: ShelfFilter,
 ): ShelfGame[] {
-	// State group: the selected states (else the live default set), plus every
-	// revealed hidden state (reveal pills extend the group — FR-21).
-	const allowedStates: readonly string[] = [
-		...(filter.states.length > 0 ? filter.states : LIVE_STATUSES),
-		...filter.reveals,
-	];
+	// Reveals are an EXCLUSIVE view (FR-21 amended): any reveal selection shows
+	// only the revealed hidden states. Otherwise the selected states, else the
+	// live default set. Reveals win even if `states` is somehow non-empty —
+	// defense in depth behind the mutually-exclusive toggle handlers.
+	const allowedStates: readonly string[] =
+		filter.reveals.length > 0
+			? filter.reveals
+			: filter.states.length > 0
+				? filter.states
+				: LIVE_STATUSES;
 	return games.filter(
 		(game) =>
 			allowedStates.includes(game.effectiveState) &&
@@ -98,21 +104,16 @@ const joinWithOr = (terms: string[]): SummaryPart[] =>
 
 /**
  * Plain-English readback of an active filter: OR within a group, AND across
- * groups, as literal words. Reveals narrate inside the state group (they
- * extend it) — with no explicit state selection they extend the DEFAULT set,
- * so the sentence spells the live statuses out rather than claiming a
- * reveal-only subset the shelf doesn't show. Groups are comma-separated
- * before each "and" so two OR-groups can't misread as one. Empty filter → no
- * parts.
+ * groups, as literal words. An active reveal view narrates literally —
+ * "Showing Story completed games." — exactly the exclusive subset the shelf
+ * shows (FR-21 amended; the live-status enumeration went with the additive
+ * semantics). Groups are comma-separated before each "and" so two OR-groups
+ * can't misread as one. Empty filter → no parts.
  */
 export function summarizeFilter(filter: ShelfFilter): SummaryPart[] {
 	const groups: SummaryPart[][] = [];
 	const stateTerms =
-		filter.states.length > 0
-			? [...filter.states, ...filter.reveals]
-			: filter.reveals.length > 0
-				? [...LIVE_STATUSES, ...filter.reveals]
-				: [];
+		filter.reveals.length > 0 ? [...filter.reveals] : [...filter.states];
 	if (stateTerms.length > 0) groups.push(joinWithOr(stateTerms));
 	if (filter.genres.length > 0) groups.push(joinWithOr(filter.genres));
 	for (const key of filter.flags) {

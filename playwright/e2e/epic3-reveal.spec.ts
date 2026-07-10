@@ -10,16 +10,18 @@ import { loadAllPages } from '../support/helpers/shelf';
 import { expect, test } from '../support/merged-fixtures';
 
 /**
- * Story 3.2 (FR-4/20/21/22, UX-DR9): flag pills + state-reveal pills, and the
- * two deferred Epic 2 bugs reveal pills make reachable (null-status UNDO,
- * detail-panel false-close). Seeds are run-unique; assertions target seeded
- * titles, never global counts (parallel workers share the e2e DB).
+ * Stories 3.2/3.5 (FR-4/20/21/22 as amended 2026-07-10, UX-DR9): flag pills +
+ * state-reveal pills — reveals are an EXCLUSIVE view (they replace the State
+ * group; the two are mutually exclusive) — and the two deferred Epic 2 bugs
+ * reveal pills make reachable (null-status UNDO, detail-panel false-close).
+ * Seeds are run-unique; assertions target seeded titles, never global counts
+ * (parallel workers share the e2e DB).
  */
 
 const cardFor = (page: Page, game: SeedGame) =>
 	page.getByTestId('shelf-card').filter({ hasText: game.title });
 
-test('a reveal pill ORs its hidden state into the shelf: dashed, glows when active (FR-21/22, UX-DR9)', async ({
+test('a reveal pill is an exclusive view: only the hidden state(s) show, states clear (FR-4/21 amended)', async ({
 	page,
 }) => {
 	const run = randomUUID().slice(0, 8);
@@ -27,12 +29,26 @@ test('a reveal pill ORs its hidden state into the shelf: dashed, glows when acti
 		title: `Reveal Dropped ${run}`,
 		tracking: { playStatus: 'Dropped' },
 	});
+	const completed = createGame({
+		title: `Reveal Done ${run}`,
+		tracking: { playStatus: null, completedOn: '2026-01-01' },
+	});
+	const playing = createGame({
+		title: `Reveal Live ${run}`,
+		tracking: { playStatus: 'Playing' },
+	});
 	try {
-		await seedGames([dropped]);
+		await seedGames([dropped, completed, playing]);
 		await page.goto('/');
 		await loadAllPages(page);
-		// Hidden by default.
+		// Hidden by default; the live game shows.
+		await expect(cardFor(page, playing)).toBeVisible();
 		await expect(cardFor(page, dropped)).toHaveCount(0);
+
+		// Start from an explicit state selection — the reveal must clear it.
+		await page.getByTestId('filter-state').click();
+		await page.getByRole('menuitemcheckbox', { name: 'Playing' }).click();
+		await page.keyboard.press('Escape');
 
 		const pill = page.getByTestId('filter-reveal-dropped');
 		// Shape encodes behavior: the reveal pill is the dashed modifier.
@@ -42,15 +58,35 @@ test('a reveal pill ORs its hidden state into the shelf: dashed, glows when acti
 		await pill.click();
 		await expect(pill).toHaveAttribute('aria-pressed', 'true');
 		await expect(pill).toHaveAttribute('data-active', 'true');
+		// The State group was replaced entirely: selection cleared, trigger plain.
+		await expect(page.getByTestId('filter-state')).toHaveAccessibleName(
+			'State',
+		);
+		await loadAllPages(page);
+		// EXCLUSIVE: only the revealed hidden state — the live game is gone.
+		await expect(cardFor(page, dropped)).toBeVisible();
+		await expect(cardFor(page, playing)).toHaveCount(0);
+
+		// A second reveal ORs with the first (Completed + Dropped = either).
+		await page.getByTestId('filter-reveal-story-completed').click();
 		await loadAllPages(page);
 		await expect(cardFor(page, dropped)).toBeVisible();
+		await expect(cardFor(page, completed)).toBeVisible();
+		await expect(cardFor(page, playing)).toHaveCount(0);
 
-		// Toggling off restores the default set.
-		await pill.click();
+		// Mutual exclusion, other direction: a state pick leaves the reveal view.
+		await page.getByTestId('filter-state').click();
+		await page.getByRole('menuitemcheckbox', { name: 'Playing' }).click();
+		await page.keyboard.press('Escape');
+		await expect(pill).toHaveAttribute('aria-pressed', 'false');
+		await expect(
+			page.getByTestId('filter-reveal-story-completed'),
+		).toHaveAttribute('aria-pressed', 'false');
 		await loadAllPages(page);
+		await expect(cardFor(page, playing)).toBeVisible();
 		await expect(cardFor(page, dropped)).toHaveCount(0);
 	} finally {
-		await deleteGames([dropped.id]);
+		await deleteGames([dropped.id, completed.id, playing.id]);
 	}
 });
 
@@ -87,6 +123,40 @@ test('flag pills are their own AND groups: Wishlisted narrows out owned games (F
 		await expect(cardFor(page, wishlisted)).toHaveCount(0);
 	} finally {
 		await deleteGames([owned.id, wishlisted.id]);
+	}
+});
+
+test('flag selections AND with an exclusive reveal view (FR-20 amended)', async ({
+	page,
+}) => {
+	const run = randomUUID().slice(0, 8);
+	const ownedDropped = createGame({
+		title: `RevealAnd Owned ${run}`,
+		tracking: { playStatus: 'Dropped' },
+	});
+	const wishDropped = createWishlistedGame({
+		title: `RevealAnd Wish ${run}`,
+		tracking: { playStatus: 'Dropped' },
+	});
+	try {
+		await seedGames([ownedDropped, wishDropped]);
+		await page.goto('/');
+		await page.getByTestId('filter-reveal-dropped').click();
+		await loadAllPages(page);
+		await expect(cardFor(page, ownedDropped)).toBeVisible();
+		await expect(cardFor(page, wishDropped)).toBeVisible();
+
+		// The flag narrows the reveal view — it does not leave it.
+		await page.getByTestId('filter-flag-wishlisted').click();
+		await loadAllPages(page);
+		await expect(cardFor(page, wishDropped)).toBeVisible();
+		await expect(cardFor(page, ownedDropped)).toHaveCount(0);
+		await expect(page.getByTestId('filter-reveal-dropped')).toHaveAttribute(
+			'aria-pressed',
+			'true',
+		);
+	} finally {
+		await deleteGames([ownedDropped.id, wishDropped.id]);
 	}
 });
 

@@ -223,6 +223,156 @@ describe('Shelf', () => {
 		expect(screen.getByText('NO MATCH')).toBeInTheDocument();
 	});
 
+	// HAZARD (Story 3.5, FR-4/FR-21 amended): a reveal pill is an EXCLUSIVE
+	// view — it replaces the State group (the selection clears), shows only the
+	// revealed hidden state, and a new state selection leaves the reveal view.
+	it('a reveal pill shows only revealed games and clears the state selection (Story 3.5)', async () => {
+		const user = userEvent.setup();
+		mockFetch([
+			card('a', 'Apex', { effectiveState: 'Playing', playStatus: 'Playing' }),
+			card('b', 'Bolt', { effectiveState: 'Paused', playStatus: 'Paused' }),
+			card('c', 'Cyan', { playStatus: 'Dropped', effectiveState: 'Dropped' }),
+		]);
+		renderShelf();
+		await screen.findAllByTestId('shelf-card');
+
+		await user.click(screen.getByRole('button', { name: 'State' }));
+		await user.click(screen.getByRole('menuitemcheckbox', { name: 'Playing' }));
+		await user.keyboard('{Escape}');
+		expect(screen.getAllByTestId('shelf-card')).toHaveLength(1);
+
+		await user.click(
+			screen.getByRole('button', { name: 'Show only Dropped games' }),
+		);
+		const cards = screen.getAllByTestId('shelf-card');
+		expect(cards).toHaveLength(1);
+		expect(cards[0]).toHaveTextContent('Cyan');
+		// The state selection cleared — trigger back to its plain name.
+		expect(screen.getByRole('button', { name: 'State' })).toBeInTheDocument();
+
+		// And the other direction: a state pick leaves the reveal view.
+		await user.click(screen.getByRole('button', { name: 'State' }));
+		await user.click(screen.getByRole('menuitemcheckbox', { name: 'Paused' }));
+		expect(screen.getAllByTestId('shelf-card')[0]).toHaveTextContent('Bolt');
+		expect(
+			screen.getByRole('button', { name: 'Show only Dropped games' }),
+		).toHaveAttribute('aria-pressed', 'false');
+	});
+
+	// HAZARD (Story 3.5; deferred from 3.4): when the LAST visible card leaves
+	// the shelf, ShelfGrid unmounts entirely — focus must land on the empty
+	// state's deliberate target (Clear filters), never fall to <body>.
+	it('hands focus to the empty state when the last visible card leaves the shelf', async () => {
+		const user = userEvent.setup();
+		const a = card('a', 'Apex', {
+			effectiveState: 'Playing',
+			playStatus: 'Playing',
+		});
+		const b = card('b', 'Bolt', {
+			effectiveState: 'Paused',
+			playStatus: 'Paused',
+		});
+		let games = [a, b];
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (_url: string, init?: RequestInit) => {
+				if (init?.method === 'PATCH') {
+					games = [
+						{ ...a, playStatus: 'Dropped', effectiveState: 'Dropped' },
+						b,
+					];
+					return {
+						ok: true,
+						status: 200,
+						json: async () => ({ effectiveState: 'Dropped' }),
+					};
+				}
+				return { ok: true, status: 200, json: async () => ({ games }) };
+			}),
+		);
+		renderShelf();
+		await screen.findAllByTestId('shelf-card');
+
+		// Narrow to Playing only — Apex is now the last visible card.
+		await user.click(screen.getByRole('button', { name: 'State' }));
+		await user.click(screen.getByRole('menuitemcheckbox', { name: 'Playing' }));
+		await user.keyboard('{Escape}');
+		const cards = screen.getAllByTestId('shelf-card');
+		expect(cards).toHaveLength(1);
+
+		// Drop it from the card's status menu (focus is inside the grid).
+		cards[0].focus();
+		await user.keyboard('{Enter}');
+		await user.keyboard('{Enter}');
+		await user.click(screen.getByRole('menuitemradio', { name: 'Dropped' }));
+
+		await screen.findByText('NO MATCH');
+		expect(screen.getByRole('button', { name: 'Clear filters' })).toHaveFocus();
+
+		// Reverse handoff: activating Clear filters unmounts the empty state
+		// under the focused button — focus lands back on the grid, never <body>.
+		await user.click(screen.getByRole('button', { name: 'Clear filters' }));
+		await screen.findAllByTestId('shelf-card');
+		expect(screen.getByTestId('shelf-grid')).toHaveFocus();
+	});
+
+	it('toggling the last reveal pill off restores the default set', async () => {
+		const user = userEvent.setup();
+		mockFetch([
+			card('a', 'Apex', { effectiveState: 'Playing', playStatus: 'Playing' }),
+			card('c', 'Cyan', { playStatus: 'Dropped', effectiveState: 'Dropped' }),
+		]);
+		renderShelf();
+		await screen.findAllByTestId('shelf-card');
+
+		const pill = screen.getByRole('button', {
+			name: 'Show only Dropped games',
+		});
+		await user.click(pill);
+		expect(screen.getAllByTestId('shelf-card')[0]).toHaveTextContent('Cyan');
+		await user.click(pill);
+		const cards = screen.getAllByTestId('shelf-card');
+		expect(cards).toHaveLength(1);
+		expect(cards[0]).toHaveTextContent('Apex');
+	});
+
+	// The actionless variant (all-hidden library, no filter → INSERT GAMES has
+	// no Clear filters): the handoff falls back to the focusable headline.
+	it('hands focus to the empty-state headline when no action button is rendered', async () => {
+		const user = userEvent.setup();
+		const a = card('a', 'Apex', {
+			effectiveState: 'Playing',
+			playStatus: 'Playing',
+		});
+		let games = [a];
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (_url: string, init?: RequestInit) => {
+				if (init?.method === 'PATCH') {
+					games = [{ ...a, playStatus: 'Dropped', effectiveState: 'Dropped' }];
+					return {
+						ok: true,
+						status: 200,
+						json: async () => ({ effectiveState: 'Dropped' }),
+					};
+				}
+				return { ok: true, status: 200, json: async () => ({ games }) };
+			}),
+		);
+		renderShelf();
+		const cards = await screen.findAllByTestId('shelf-card');
+
+		// No filter active: dropping the only live game leaves an all-hidden
+		// library → insert-games variant, which renders no action buttons.
+		cards[0].focus();
+		await user.keyboard('{Enter}');
+		await user.keyboard('{Enter}');
+		await user.click(screen.getByRole('menuitemradio', { name: 'Dropped' }));
+
+		const headline = await screen.findByText('INSERT GAMES');
+		expect(headline).toHaveFocus();
+	});
+
 	// HAZARD (Story 3.4, AC3 + AC1): when the focused card unmounts — leaving
 	// the visible set after a write, or moving across row parents on a
 	// re-chunk — focus must land on a deliberate neighbor, never <body>.

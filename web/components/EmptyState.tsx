@@ -35,7 +35,12 @@ export function EmptyState({
 	const { headline, subtext } = COPY[variant];
 	return (
 		<div className="empty-state" data-testid="empty-state">
-			<p className="empty-state__headline">{headline}</p>
+			{/* tabIndex={-1}: the programmatic focus target when the shelf grid
+			    unmounts to this state while holding focus (Story 3.5) and no action
+			    button is rendered — focus must land somewhere deliberate, not <body>. */}
+			<p className="empty-state__headline" tabIndex={-1}>
+				{headline}
+			</p>
 			<p className="empty-state__subtext">{subtext}</p>
 			{actions && actions.length > 0 && (
 				<div className="empty-state__actions">

@@ -6,6 +6,7 @@ import {
 	type SeedGame,
 } from '../support/factories/game-factory';
 import { d1Execute, deleteGames, seedGames, sq } from '../support/helpers/d1';
+import { loadAllPages } from '../support/helpers/shelf';
 import { expect, test } from '../support/merged-fixtures';
 
 /**
@@ -115,6 +116,9 @@ test('backdrop click dismisses the panel without writing (2.3e)', async ({
 			.getByTestId('detail-backdrop')
 			.click({ position: { x: 10, y: 10 } });
 		await expect(panel).toHaveCount(0);
+		// The seeded card can sit past the progressive fold under parallel-suite
+		// load (deferred-work: 3.1 parallel-flake) — page it in before asserting.
+		await loadAllPages(page);
 		await expect(cardFor(page, game)).toHaveAttribute(
 			'aria-label',
 			`${game.title} — Paused`,
@@ -142,7 +146,10 @@ test('wishlisted game links to the PS Store; owned game does not (2.3c)', async 
 		).toHaveCount(0);
 		await page.keyboard.press('Escape');
 
-		// Unowned tier can sit past the fold — find it via its own card
+		// Unowned tier can sit past the progressive fold — page everything in
+		// first (deferred-work: 3.1 parallel-flake); scrollIntoViewIfNeeded on an
+		// unrendered locator just times out.
+		await loadAllPages(page);
 		await cardFor(page, wished).scrollIntoViewIfNeeded();
 		panel = await openDetail(page, wished);
 		await expect(

@@ -2,15 +2,17 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
 import { createGame, type SeedGame } from '../support/factories/game-factory';
-import { deleteGames, seedGames } from '../support/helpers/d1';
+import { d1Execute, deleteGames, seedGames, sq } from '../support/helpers/d1';
 import { loadAllPages } from '../support/helpers/shelf';
 import { expect, test } from '../support/merged-fixtures';
 import { E2E_EMAIL, MAGIC_LINK_RE, SERVER_LOG } from '../support/server';
 
 /**
- * Story 3.4 (focus & interaction hardening): focus survives grid re-chunks,
- * lands deliberately when a card leaves the shelf, and the login swap takes
- * focus into the form. Seeds are run-unique (parallel workers share the DB).
+ * Stories 3.4/3.5 (focus & interaction hardening): focus survives grid
+ * re-chunks, lands deliberately when a card leaves the shelf — including when
+ * the LAST visible card leaves and the grid unmounts to the empty state — and
+ * the login swap takes focus into the form. Seeds are run-unique (parallel
+ * workers share the DB).
  */
 
 const cardFor = (page: Page, game: SeedGame) =>
@@ -111,6 +113,58 @@ test('focus lands on a neighbor after Dropped removes the focused card; UNDO is 
 		expect(reachedUndo).toBe(true);
 	} finally {
 		await deleteGames([first.id, second.id]);
+	}
+});
+
+// HAZARD (Story 3.5; the 3.4 AC3 boundary): dropping the LAST visible card
+// unmounts ShelfGrid entirely — its restore effect dies with it, so the
+// FilteredShelf-level handoff must land focus on the empty state's Clear
+// filters, never <body>. A run-unique genre makes "last visible card"
+// deterministic under parallel workers.
+test('focus hands off to Clear filters when the last visible card leaves the shelf (Story 3.5)', async ({
+	page,
+}) => {
+	const run = randomUUID().slice(0, 8);
+	const genre = `Focus Genre ${run}`;
+	const genreId = randomUUID();
+	const only = createGame({
+		title: `LastCard ${run}`,
+		tracking: { playStatus: 'Playing' },
+	});
+	try {
+		await seedGames([only]);
+		await d1Execute(
+			`INSERT INTO genre (id, name) VALUES (${sq(genreId)}, ${sq(genre)});`,
+			`INSERT INTO game_genre (game_id, genre_id) VALUES (${sq(only.id)}, ${sq(genreId)});`,
+		);
+		await page.goto('/');
+		await expect(cardFor(page, only)).toBeVisible();
+
+		// Narrow to the run-unique genre: this card is the whole visible set.
+		await page.getByTestId('filter-genre').click();
+		await page.getByRole('menuitemcheckbox', { name: genre }).click();
+		await page.keyboard.press('Escape');
+		const card = cardFor(page, only);
+		await expect(card).toBeVisible();
+		await card.focus();
+
+		// Drop the focused (and last visible) card via the keyboard path.
+		await page.keyboard.press('Enter');
+		await page.keyboard.press('Enter');
+		await page
+			.getByTestId('status-menu')
+			.getByRole('menuitemradio', { name: 'Dropped' })
+			.click();
+
+		// The grid unmounted to NO MATCH — focus landed on Clear filters.
+		const empty = page.getByTestId('empty-state');
+		await expect(empty).toContainText('NO MATCH');
+		await expect(
+			empty.getByRole('button', { name: 'Clear filters' }),
+		).toBeFocused();
+	} finally {
+		await d1Execute(`DELETE FROM genre WHERE id = ${sq(genreId)};`);
+		await deleteGames([only.id]);
 	}
 });
 

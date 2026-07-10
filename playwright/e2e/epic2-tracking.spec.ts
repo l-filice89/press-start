@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Page } from '@playwright/test';
 import { createGame, type SeedGame } from '../support/factories/game-factory';
 import { deleteGames, seedGames } from '../support/helpers/d1';
+import { loadAllPages } from '../support/helpers/shelf';
 import { expect, test } from '../support/merged-fixtures';
 
 /**
@@ -160,6 +161,9 @@ test('Dropped shows an UNDO toast, the card leaves the shelf, Undo restores it (
 			.getByTestId('toast')
 			.getByRole('button', { name: 'Undo', exact: true })
 			.evaluate((el) => (el as HTMLElement).click());
+		// The restored card can reappear past the progressive fold under
+		// parallel-suite load (deferred-work: 3.1 parallel-flake) — page it in.
+		await loadAllPages(page);
 		await expect(cardFor(page, game)).toBeVisible();
 		await expect(cardFor(page, game)).toHaveAttribute(
 			'aria-label',

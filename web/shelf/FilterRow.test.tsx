@@ -179,7 +179,7 @@ describe('FilterRow', () => {
 			'filter-row__pill--flag',
 		);
 		const dropped = screen.getByRole('button', {
-			name: 'Show Dropped games',
+			name: 'Show only Dropped games',
 		});
 		expect(dropped).toHaveClass('filter-row__pill--reveal');
 		// Active reveal pill: pressed + highlighted (FR-22).
@@ -201,11 +201,66 @@ describe('FilterRow', () => {
 		renderRow(EMPTY_FILTER, onChange);
 
 		await user.click(
-			screen.getByRole('button', { name: 'Show Platinum achieved games' }),
+			screen.getByRole('button', { name: 'Show only Platinum achieved games' }),
 		);
 		expect(onChange).toHaveBeenCalledWith({
 			...EMPTY_FILTER,
 			reveals: ['Platinum achieved'],
+		});
+	});
+
+	// HAZARD (FR-21 amended): State and reveals are mutually exclusive —
+	// activating one group clears the other, in both directions.
+	it('activating a reveal pill clears the state selection', async () => {
+		const user = userEvent.setup();
+		mockGenres([]);
+		const onChange = vi.fn();
+		renderRow({ ...EMPTY_FILTER, states: ['Playing', 'Paused'] }, onChange);
+
+		await user.click(
+			screen.getByRole('button', { name: 'Show only Dropped games' }),
+		);
+		expect(onChange).toHaveBeenCalledWith({
+			...EMPTY_FILTER,
+			states: [],
+			reveals: ['Dropped'],
+		});
+	});
+
+	it('selecting a state clears the reveal selection', async () => {
+		const user = userEvent.setup();
+		mockGenres([]);
+		const onChange = vi.fn();
+		renderRow({ ...EMPTY_FILTER, reveals: ['Dropped'] }, onChange);
+
+		await user.click(screen.getByRole('button', { name: 'State' }));
+		await user.click(screen.getByRole('menuitemcheckbox', { name: 'Playing' }));
+		expect(onChange).toHaveBeenCalledWith({
+			...EMPTY_FILTER,
+			reveals: [],
+			states: ['Playing'],
+		});
+	});
+
+	it('the sheet enforces the same mutual exclusion (FR-21 amended)', async () => {
+		const user = userEvent.setup();
+		mockGenres([]);
+		const onChange = vi.fn();
+		renderRow({ ...EMPTY_FILTER, states: ['Playing'] }, onChange);
+
+		await user.click(
+			screen.getByRole('button', { name: 'Filters — 1 active' }),
+		);
+		const sheet = screen.getByRole('dialog', { name: 'Filters' });
+		await user.click(
+			within(sheet).getByRole('button', {
+				name: 'Show only Story completed games',
+			}),
+		);
+		expect(onChange).toHaveBeenCalledWith({
+			...EMPTY_FILTER,
+			states: [],
+			reveals: ['Story completed'],
 		});
 	});
 
@@ -253,7 +308,7 @@ describe('FilterRow', () => {
 		expect(sheet).toHaveTextContent('State — any of (or)');
 		expect(sheet).toHaveTextContent('Genre — any of (or)');
 		expect(sheet).toHaveTextContent('Flags — all of (and)');
-		expect(sheet).toHaveTextContent('Reveal hidden states — also show (or)');
+		expect(sheet).toHaveTextContent('Reveal hidden states — show only (or)');
 
 		// Toggling inside the sheet drives the same filter state.
 		const paused = within(sheet).getByRole('button', { name: 'Paused' });

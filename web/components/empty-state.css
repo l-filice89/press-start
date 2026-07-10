@@ -18,6 +18,14 @@
 	text-shadow: 0 0 18px rgba(53, 224, 255, 0.4);
 }
 
+/* The headline is a programmatic focus target (shelf→empty handoff, Story
+ * 3.5). Programmatic .focus() doesn't reliably match :focus-visible, so the
+ * focus floor (UX-DR19/20) is applied on plain :focus here. */
+.empty-state__headline:focus {
+	outline: 2px solid var(--color-accent-electric);
+	outline-offset: 2px;
+}
+
 .empty-state__subtext {
 	font-family: var(--font-body);
 	color: var(--text-meta);

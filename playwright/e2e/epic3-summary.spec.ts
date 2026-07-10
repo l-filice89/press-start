@@ -50,6 +50,37 @@ test('desktop shows the inline row with a live summary of literal or/and words (
 	}
 });
 
+test('an exclusive reveal view is stated literally in the summary (FR-21 amended)', async ({
+	page,
+}) => {
+	const run = randomUUID().slice(0, 8);
+	const completed = createGame({
+		title: `Summary Done ${run}`,
+		tracking: { playStatus: null, completedOn: '2026-01-01' },
+	});
+	try {
+		await seedGames([completed]);
+		await page.setViewportSize(DESKTOP);
+		await page.goto('/');
+		await expect(
+			page.getByTestId('filter-reveal-story-completed'),
+		).toBeVisible();
+
+		await page.getByTestId('filter-reveal-story-completed').click();
+		// Literal readback — no live-status enumeration alongside the reveal.
+		await expect(page.getByTestId('filter-summary')).toHaveText(
+			'Showing Story completed games.',
+		);
+
+		await page.getByTestId('filter-reveal-dropped').click();
+		await expect(page.getByTestId('filter-summary')).toHaveText(
+			'Showing Story completed or Dropped games.',
+		);
+	} finally {
+		await deleteGames([completed.id]);
+	}
+});
+
 test('NO MATCH offers Clear filters and it restores the default set (UX-DR18)', async ({
 	page,
 }) => {

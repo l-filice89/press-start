@@ -66,6 +66,36 @@ function FilteredShelf({ games }: { games: ShelfGame[] }) {
 		[games],
 	);
 
+	// Grid↔empty-state focus handoff (Story 3.5; deferred from 3.4): when the
+	// visible set empties, ShelfGrid unmounts WITH its focus-restore effect —
+	// the browser silently drops focus to <body>. Land it deliberately on the
+	// empty state's action (Clear filters) or its headline. Symmetrically,
+	// activating Clear filters unmounts the empty state under the focused
+	// button — land back on the grid. `shelfHadFocus` is armed by focus/blur
+	// capture on the wrapper below (same technique as ShelfGrid's restore):
+	// a node unmounting fires NO blur, so the flag survives exactly when focus
+	// died with the swap — and a user parked in the filter row, on a toast, or
+	// on dead page background never gets focus stolen.
+	const shelfHadFocus = useRef(false);
+	const prevView = useRef<'none' | 'grid' | 'empty'>('none');
+	useEffect(() => {
+		const view = visible.length > 0 ? 'grid' : 'empty';
+		const focusFell =
+			shelfHadFocus.current && document.activeElement === document.body;
+		if (view === 'empty' && prevView.current === 'grid' && focusFell) {
+			const empty = document.querySelector('[data-testid="empty-state"]');
+			const target =
+				empty?.querySelector<HTMLElement>('.empty-state__action') ??
+				empty?.querySelector<HTMLElement>('.empty-state__headline');
+			target?.focus();
+		} else if (view === 'grid' && prevView.current === 'empty' && focusFell) {
+			document
+				.querySelector<HTMLElement>('[data-testid="shelf-grid"]')
+				?.focus();
+		}
+		prevView.current = view;
+	}, [visible.length]);
+
 	// Announce filter changes from the one filtered result the grid renders —
 	// a second applyShelfFilter call here would be duplicated logic waiting to
 	// diverge. Skips mount; refetches with an unchanged filter stay silent.
@@ -73,12 +103,16 @@ function FilteredShelf({ games }: { games: ShelfGame[] }) {
 	useEffect(() => {
 		if (lastAnnounced.current === filter) return;
 		lastAnnounced.current = filter;
+		// Denominator: a reveal view selects from the WHOLE library (hidden
+		// states included) — "3 of 12" against the default set would exclude the
+		// very games being shown. Non-reveal filters narrow the default set.
+		const total = filter.reveals.length > 0 ? games.length : defaultCount;
 		announce(
 			isFilterActive(filter)
-				? `Filters applied. ${summarizeFilterText(filter)} ${visible.length} of ${defaultCount}.`
+				? `Filters applied. ${summarizeFilterText(filter)} ${visible.length} of ${total}.`
 				: 'Filters cleared.',
 		);
-	}, [filter, visible.length, defaultCount, announce]);
+	}, [filter, visible.length, defaultCount, games.length, announce]);
 
 	return (
 		<>
@@ -87,27 +121,43 @@ function FilteredShelf({ games }: { games: ShelfGame[] }) {
 				onChange={setFilter}
 				visibleCount={visible.length}
 			/>
-			{visible.length === 0 ? (
-				// "NO MATCH" is a filter outcome; a library whose every game is
-				// hidden (all completed/dropped) with no filter active is an empty
-				// backlog, not a failed filter. The filter outcome offers the way
-				// back out (UX-DR18).
-				isFilterActive(filter) ? (
-					<EmptyState
-						variant="no-match"
-						actions={[
-							{
-								label: 'Clear filters',
-								onClick: () => setFilter(EMPTY_FILTER),
-							},
-						]}
-					/>
+			{/* display:contents wrapper: arms the handoff flag while focus lives
+			    anywhere in the grid OR the empty state (Clear filters included, so
+			    the reverse handoff works). Unmounts fire no blur — that's the
+			    signal the handoff effect reads. */}
+			<div
+				style={{ display: 'contents' }}
+				onFocusCapture={() => {
+					shelfHadFocus.current = true;
+				}}
+				onBlurCapture={(e) => {
+					if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+						shelfHadFocus.current = false;
+					}
+				}}
+			>
+				{visible.length === 0 ? (
+					// "NO MATCH" is a filter outcome; a library whose every game is
+					// hidden (all completed/dropped) with no filter active is an empty
+					// backlog, not a failed filter. The filter outcome offers the way
+					// back out (UX-DR18).
+					isFilterActive(filter) ? (
+						<EmptyState
+							variant="no-match"
+							actions={[
+								{
+									label: 'Clear filters',
+									onClick: () => setFilter(EMPTY_FILTER),
+								},
+							]}
+						/>
+					) : (
+						<EmptyState variant="insert-games" />
+					)
 				) : (
-					<EmptyState variant="insert-games" />
-				)
-			) : (
-				<ShelfGrid games={visible} />
-			)}
+					<ShelfGrid games={visible} />
+				)}
+			</div>
 		</>
 	);
 }

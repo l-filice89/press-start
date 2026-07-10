@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { FOCUSABLE_SELECTOR } from '../components/focusable';
+import { useModalTrap } from '../components/useModalTrap';
 import { fetchGenreVocabulary } from './api';
 import {
 	EMPTY_FILTER,
@@ -15,12 +15,14 @@ import {
 import './filter-row.css';
 
 /**
- * The shelf filter row (Stories 3.1/3.2, FR-20/21/22): a State multiselect
- * (the four live statuses), a Genre multiselect (the full vocabulary, reused
- * from the `['genres']` query), four solid Flag pills (each its own AND
- * group), and three dashed reveal pills that OR a hidden state into the
- * visible set. Shape encodes behavior (UX-DR9): solid narrows, dashed
- * reveals. Each dropdown is an ARIA menu button with `menuitemcheckbox` rows —
+ * The shelf filter row (Stories 3.1/3.2/3.5, FR-20/21/22 as amended): a State
+ * multiselect (the four live statuses), a Genre multiselect (the full
+ * vocabulary, reused from the `['genres']` query), four solid Flag pills
+ * (each its own AND group), and three dashed reveal pills — an EXCLUSIVE view
+ * of the selected hidden state(s). State and reveals are mutually exclusive:
+ * toggling one group on clears the other (FR-21 amended); Genre/Flags still
+ * AND. Shape encodes behavior (UX-DR9): solid narrows, dashed reveals.
+ * Each dropdown is an ARIA menu button with `menuitemcheckbox` rows —
  * toggling a row does NOT close the menu, so several values can be picked in
  * one visit. Active controls highlight/glow with machine-readable state
  * (`aria-checked`/`aria-pressed`) — never color alone (FR-22).
@@ -111,8 +113,11 @@ export function FilterRow({
 					options={LIVE_STATUSES}
 					selected={filter.states}
 					onToggle={(state) =>
+						// A state selection leaves any exclusive reveal view (FR-21
+						// amended: the two groups are mutually exclusive).
 						onChange({
 							...filter,
+							reveals: [],
 							states: toggleSelection(filter.states, state),
 						})
 					}
@@ -161,13 +166,16 @@ export function FilterRow({
 						// The reveal semantics must be machine-readable, not shape-alone
 						// (UX-DR9 + the never-color-alone floor) — and "Show X" also keeps
 						// this button distinct from the milestone action named "X".
-						aria-label={`Show ${state} games`}
+						aria-label={`Show only ${state} games`}
 						aria-pressed={filter.reveals.includes(state)}
 						data-active={filter.reveals.includes(state) || undefined}
 						data-testid={`filter-reveal-${state.toLowerCase().replace(/ /g, '-')}`}
 						onClick={() =>
+							// Exclusive view: activating a reveal replaces the State group
+							// entirely — state selections clear (FR-4/FR-21 amended).
 							onChange({
 								...filter,
+								states: [],
 								reveals: toggleSelection(filter.reveals, state),
 							})
 						}
@@ -231,9 +239,9 @@ function FilterSheet({
 	const sheetRef = useRef<HTMLDivElement>(null);
 	const titleId = useId();
 
-	useEffect(() => {
-		sheetRef.current?.focus();
-	}, []);
+	// Shared modal scaffold (Story 3.5): focus-on-open (the container itself —
+	// tabIndex=-1), document-capture Escape, and the Tab cycle.
+	const onKeyDown = useModalTrap(sheetRef, onClose);
 
 	// The page behind a modal sheet must not scroll under it (touch overscroll).
 	useEffect(() => {
@@ -247,6 +255,8 @@ function FilterSheet({
 	// Crossing the breakpoint (rotate to landscape) hides the trigger and shows
 	// the inline row — a still-open sheet over it is stale chrome. Same class of
 	// problem the dropdowns solve by closing on resize.
+	const onCloseRef = useRef(onClose);
+	onCloseRef.current = onClose;
 	useEffect(() => {
 		const mq = window.matchMedia?.('(min-width: 601px)');
 		if (!mq) return;
@@ -256,43 +266,6 @@ function FilterSheet({
 		mq.addEventListener('change', onChangeMq);
 		return () => mq.removeEventListener('change', onChangeMq);
 	}, []);
-
-	// Escape closes no matter where focus sits (ConfirmDialog rationale).
-	const onCloseRef = useRef(onClose);
-	onCloseRef.current = onClose;
-	useEffect(() => {
-		const onDocKeyDown = (e: KeyboardEvent) => {
-			if (e.key !== 'Escape') return;
-			e.preventDefault();
-			e.stopPropagation();
-			onCloseRef.current();
-		};
-		document.addEventListener('keydown', onDocKeyDown, true);
-		return () => document.removeEventListener('keydown', onDocKeyDown, true);
-	}, []);
-
-	const onKeyDown = (e: React.KeyboardEvent) => {
-		if (e.key !== 'Tab') return;
-		const focusables =
-			sheetRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
-		if (!focusables?.length) return;
-		const first = focusables[0];
-		const last = focusables[focusables.length - 1];
-		// Focus starts on the container itself (tabIndex=-1): without this, an
-		// immediate Shift+Tab would walk out of the aria-modal dialog.
-		if (document.activeElement === sheetRef.current) {
-			e.preventDefault();
-			(e.shiftKey ? last : first).focus();
-			return;
-		}
-		if (e.shiftKey && document.activeElement === first) {
-			e.preventDefault();
-			last.focus();
-		} else if (!e.shiftKey && document.activeElement === last) {
-			e.preventDefault();
-			first.focus();
-		}
-	};
 
 	const toggleRow = <T extends string>(
 		value: T,
@@ -339,8 +312,10 @@ function FilterSheet({
 					<p className="filter-sheet__group-label">State — any of (or)</p>
 					{LIVE_STATUSES.map((state) =>
 						toggleRow(state, filter.states.includes(state), () =>
+							// Mirrors the desktop dropdown: leaves any reveal view.
 							onChange({
 								...filter,
+								reveals: [],
 								states: toggleSelection(filter.states, state),
 							}),
 						),
@@ -373,20 +348,22 @@ function FilterSheet({
 				</div>
 				<div className="filter-sheet__group">
 					<p className="filter-sheet__group-label">
-						Reveal hidden states — also show (or)
+						Reveal hidden states — show only (or)
 					</p>
 					{REVEAL_STATES.map((state) =>
 						toggleRow(
 							state,
 							filter.reveals.includes(state),
 							() =>
+								// Exclusive view — state selections clear (FR-21 amended).
 								onChange({
 									...filter,
+									states: [],
 									reveals: toggleSelection(filter.reveals, state),
 								}),
 							// Same rationale as the desktop pills: machine-readable reveal
 							// semantics, distinct from the milestone actions named "X".
-							`Show ${state} games`,
+							`Show only ${state} games`,
 						),
 					)}
 				</div>

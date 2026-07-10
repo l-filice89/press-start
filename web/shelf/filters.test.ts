@@ -88,17 +88,29 @@ describe('applyShelfFilter', () => {
 		expect(ids(out)).toEqual(['a', 'b', 'c']);
 	});
 
-	it('a reveal pill ORs its hidden state into the default set (FR-21)', () => {
+	// HAZARD (FR-4/FR-21 amended 2026-07-10): a reveal is an EXCLUSIVE view —
+	// only the revealed hidden state shows, never the default set around it.
+	it('a reveal pill shows only its hidden state (exclusive view, FR-21)', () => {
 		const out = applyShelfFilter(SHELF, f({ reveals: ['Dropped'] }));
-		expect(ids(out)).toEqual(['a', 'b', 'c', 'd', 'e', 'h']);
+		expect(ids(out)).toEqual(['h']);
 	});
 
-	it('a reveal pill extends an explicit state selection', () => {
+	it('multiple reveal pills OR among themselves', () => {
+		const out = applyShelfFilter(
+			SHELF,
+			f({ reveals: ['Story completed', 'Platinum achieved'] }),
+		);
+		expect(ids(out)).toEqual(['f', 'g']);
+	});
+
+	// HAZARD: the handlers keep states/reveals mutually exclusive, but the pure
+	// layer must hold the contract even against an inconsistent filter object.
+	it('reveals replace the state group even if states are non-empty', () => {
 		const out = applyShelfFilter(
 			SHELF,
 			f({ states: ['Playing'], reveals: ['Platinum achieved'] }),
 		);
-		expect(ids(out)).toEqual(['a', 'b', 'g']);
+		expect(ids(out)).toEqual(['g']);
 	});
 
 	it('each active flag is its own AND group (FR-20)', () => {
@@ -136,12 +148,36 @@ describe('applyShelfFilter', () => {
 		expect(ids(out)).toEqual(['a', 'b', 'c', 'e']);
 	});
 
-	it('genre filtering applies to revealed cards too', () => {
-		const out = applyShelfFilter(
-			SHELF,
-			f({ genres: ['RPG'], reveals: ['Story completed'] }),
-		);
-		expect(ids(out)).toEqual(['a', 'c', 'f']);
+	// HAZARD (FR-20 amended): Genre and Flags still AND with an exclusive
+	// reveal view — Completed + RPG + Owned = only completed, owned RPGs.
+	it('genre and flag selections AND with an exclusive reveal view', () => {
+		expect(
+			ids(
+				applyShelfFilter(
+					SHELF,
+					f({ genres: ['RPG'], reveals: ['Story completed'] }),
+				),
+			),
+		).toEqual(['f']);
+		expect(
+			ids(
+				applyShelfFilter(
+					SHELF,
+					f({
+						genres: ['RPG'],
+						flags: ['owned'],
+						reveals: ['Story completed'],
+					}),
+				),
+			),
+		).toEqual(['f']);
+		// The flag can empty the reveal view: no wishlisted Story-completed games.
+		expect(
+			applyShelfFilter(
+				SHELF,
+				f({ flags: ['wishlisted'], reveals: ['Story completed'] }),
+			),
+		).toEqual([]);
 	});
 
 	it('returns empty on zero match, never throws', () => {
@@ -162,11 +198,17 @@ describe('applyShelfFilter', () => {
 	it('preserves payload order in every filtered view, reveals included', () => {
 		const out = applyShelfFilter(
 			SHELF,
-			f({ states: ['Playing', 'Not started', 'Paused'], reveals: ['Dropped'] }),
+			f({ states: ['Playing', 'Not started', 'Paused'] }),
 		);
-		expect(ids(out)).toEqual(['a', 'b', 'c', 'e', 'h']);
+		expect(ids(out)).toEqual(['a', 'b', 'c', 'e']);
 		// owned 'a' still precedes wishlisted 'b' — the payload's owned tier held.
 		expect(ids(out).indexOf('a')).toBeLessThan(ids(out).indexOf('b'));
+		// Reveal views subset in payload order too (hidden states rank after).
+		expect(
+			ids(
+				applyShelfFilter(SHELF, f({ reveals: ['Story completed', 'Dropped'] })),
+			),
+		).toEqual(['f', 'h']);
 	});
 
 	it('does not mutate the input array', () => {
@@ -206,18 +248,29 @@ describe('summarizeFilter', () => {
 		expect(parts.find((p) => p.connector === 'or')?.text).toBe('or');
 	});
 
-	it('reveals narrate inside the state group (they extend it)', () => {
+	// HAZARD (FR-21 amended): an exclusive reveal view is stated literally —
+	// no live-status enumeration alongside it, exactly the subset shown.
+	it('a reveal view narrates literally, no live-status enumeration', () => {
+		expect(sentence(f({ reveals: ['Story completed'] }))).toBe(
+			'Showing Story completed games.',
+		);
+		expect(
+			sentence(f({ reveals: ['Story completed', 'Platinum achieved'] })),
+		).toBe('Showing Story completed or Platinum achieved games.');
+	});
+
+	it('reveals silence any lingering state terms (exclusive view)', () => {
 		expect(sentence(f({ states: ['Playing'], reveals: ['Dropped'] }))).toBe(
-			'Showing Playing or Dropped games.',
+			'Showing Dropped games.',
 		);
 	});
 
-	// HAZARD: with no explicit state selection a reveal extends the DEFAULT
-	// set — the sentence must not claim a reveal-only subset.
-	it('a reveal with no state selection narrates the full default set', () => {
-		expect(sentence(f({ reveals: ['Dropped'] }))).toBe(
-			'Showing Not started or Up next or Playing or Paused or Dropped games.',
-		);
+	it('genre and flag groups AND onto a reveal view in the sentence', () => {
+		expect(
+			sentence(
+				f({ reveals: ['Story completed'], genres: ['RPG'], flags: ['owned'] }),
+			),
+		).toBe('Showing Story completed, and RPG, and Owned games.');
 	});
 
 	it('joins groups with the literal word "and", flags each their own group', () => {

@@ -1,6 +1,6 @@
-import { useEffect, useId, useRef } from 'react';
+import { useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { FOCUSABLE_SELECTOR } from './focusable';
+import { useModalTrap } from './useModalTrap';
 import './confirm-dialog.css';
 
 /**
@@ -25,43 +25,11 @@ export function ConfirmDialog({
 	const cancelRef = useRef<HTMLButtonElement>(null);
 	const titleId = useId();
 
-	useEffect(() => {
-		cancelRef.current?.focus();
-	}, []);
-
-	// Escape must work no matter where focus sits — if the user round-trips
-	// through browser chrome and focus lands outside the dialog, a keydown
-	// handler on the dialog div alone would go deaf.
-	const onCancelRef = useRef(onCancel);
-	onCancelRef.current = onCancel;
-	useEffect(() => {
-		const onDocKeyDown = (e: KeyboardEvent) => {
-			if (e.key !== 'Escape') return;
-			e.preventDefault();
-			e.stopPropagation();
-			onCancelRef.current();
-		};
-		document.addEventListener('keydown', onDocKeyDown, true);
-		return () => document.removeEventListener('keydown', onDocKeyDown, true);
-	}, []);
-
-	const onKeyDown = (e: React.KeyboardEvent) => {
-		if (e.key !== 'Tab') return;
-		// Tab cycles inside the dialog, never out of it — the shared selector
-		// (focusable.ts) keeps both dialogs' trap boundaries from drifting.
-		const focusables =
-			dialogRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
-		if (!focusables?.length) return;
-		const first = focusables[0];
-		const last = focusables[focusables.length - 1];
-		if (e.shiftKey && document.activeElement === first) {
-			e.preventDefault();
-			last.focus();
-		} else if (!e.shiftKey && document.activeElement === last) {
-			e.preventDefault();
-			first.focus();
-		}
-	};
+	// Shared modal scaffold (Story 3.5): Cancel takes focus on open (the
+	// destructive-lite default); Escape resolves to onCancel from anywhere.
+	const onKeyDown = useModalTrap(dialogRef, onCancel, {
+		initialFocusRef: cancelRef,
+	});
 
 	// Portaled to <body>: consumers render this from inside ARIA composites
 	// (gridcells, menus) where a dialog is invalid content.
