@@ -82,3 +82,8 @@ Epic 1's deferred 1.5h (prefers-reduced-motion) is closed by
 | 3.3a live summary sentence with literal or/and words, tinted connectors | `epic3-summary.spec.ts` › desktop shows the inline row with a live summary… (words + both connector tint classes asserted; exact colors are static CSS) |
 | 3.3b NO MATCH empty state with Clear filters | `epic3-summary.spec.ts` › NO MATCH offers Clear filters and it restores the default set |
 | 3.3c phone Filters button + badge → grouped bottom sheet with Show N games; desktop full row inline | `epic3-summary.spec.ts` › phone: Filters button + badge opens the grouped sheet…; desktop delta asserted in the summary test |
+| 3.4a focus survives resize re-chunk | `epic3-focus.spec.ts` › keyboard focus survives a viewport resize that re-chunks the ARIA rows (restoration path also jsdom-pinned in `Shelf.test.tsx`) |
+| 3.4b login swap focuses the form + announces | `epic3-focus.spec.ts` › signing out moves focus into the login form and announces the swap (fresh-session isolation; 401 path shares the same gate — jsdom `Login.test.tsx` pins the mount effect) |
+| 3.4c focus lands deliberately when a card leaves the shelf; UNDO Tab-reachable | `epic3-focus.spec.ts` › focus lands on a neighbor after Dropped removes the focused card |
+| 3.4d open panel survives refetch re-chunk | direct stays-open asserts converted across `epic2-detail.spec.ts` (dates/ownership/genres) and `epic3-reveal.spec.ts`; jsdom `Shelf.test.tsx` pins the hoist |
+| 3.4e toast UNDO respects the in-flight guard | jsdom `StatusPopover.test.tsx` › toast UNDO during a pending write toasts Still saving (no reliable e2e flow: needs a write held in flight, which the real Worker answers too fast to pin) |

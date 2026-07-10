@@ -5,6 +5,7 @@ import { useAnnounce } from '../components/LiveRegion';
 import { SkeletonGrid } from '../components/Skeleton';
 import { fetchShelf, type ShelfGame } from './api';
 import { Card } from './Card';
+import { DetailPanel } from './DetailPanel';
 import { FilterRow } from './FilterRow';
 import {
 	applyShelfFilter,
@@ -152,6 +153,54 @@ function ShelfGrid({ games }: { games: ShelfGame[] }) {
 	const sentinelRef = useRef<HTMLDivElement | null>(null);
 	// Only steal focus after a keyboard move — never on mount or refetch.
 	const pendingFocus = useRef(false);
+
+	// Open-detail state lives HERE, not in Card (Story 3.4): a refetch that
+	// re-chunks the rows remounts Cards, and a panel owned by one would die
+	// mid-interaction. One panel renders below, looked up by id — so it also
+	// re-renders with fresh data after every refetch.
+	const [openGameId, setOpenGameId] = useState<string | null>(null);
+	// Look up in the FULL list, not the progressive window: a write that
+	// reorders the open game past the rendered page must not kill its panel.
+	const openGame = openGameId
+		? games.find((g) => g.id === openGameId)
+		: undefined;
+	const closeDetail = useCallback(() => {
+		// Return focus to the owning gridcell (UX-DR19) — by game id, not a
+		// captured index: the grid may have re-chunked while the panel was open.
+		// Focus first, then clear state (no side effects inside the updater).
+		const cell = openGameId
+			? gridRef.current?.querySelector<HTMLElement>(
+					`[role="gridcell"][data-game-id="${CSS.escape(openGameId)}"]`,
+				)
+			: null;
+		(cell ?? gridRef.current)?.focus();
+		setOpenGameId(null);
+	}, [openGameId]);
+
+	// A lookup miss (the open game left the filtered list outside the onHidden
+	// path — e.g. removed by another actor's refetch) must CLOSE deliberately:
+	// clearing the stale id stops the dialog resurrecting when the game
+	// reappears, and the focus handoff keeps the user off <body>.
+	useEffect(() => {
+		if (openGameId && !openGame) closeDetail();
+	}, [openGameId, openGame, closeDetail]);
+
+	// Focus restoration (Story 3.4, AC1+AC3): when the focused card unmounts —
+	// a resize re-chunk moving it across row parents, or a write removing it
+	// from the visible set — browsers drop focus to <body> with NO blur event,
+	// so the armed flag survives the unmount and this post-commit effect can
+	// land focus deliberately: the same/neighbor card at the clamped index, or
+	// the grid container itself. Tab-ing away (toast, panel, header) fires blur
+	// capture and disarms it, so this never steals focus from other surfaces.
+	const gridHadFocus = useRef(false);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: visible/columnCount identity changes are the re-chunk/unmount triggers this effect exists to observe.
+	useEffect(() => {
+		if (!gridHadFocus.current) return;
+		if (gridRef.current?.contains(document.activeElement)) return;
+		const target = cardRefs.current[Math.min(focusedIndex, visible.length - 1)];
+		if (target) target.focus();
+		else gridRef.current?.focus();
+	}, [visible, columnCount, focusedIndex]);
 
 	// Keep the focused index in range as the visible window shrinks/grows.
 	useEffect(() => {
@@ -304,6 +353,27 @@ function ShelfGrid({ games }: { games: ShelfGame[] }) {
 				role="grid"
 				aria-label="Your game shelf"
 				data-testid="shelf-grid"
+				tabIndex={-1}
+				onFocusCapture={(e) => {
+					gridHadFocus.current = true;
+					// Keep the roving index synced with REAL focus: a pointer click
+					// focuses a gridcell without going through moveFocus, and the
+					// restore-on-unmount path relies on focusedIndex being truthful.
+					const cell = (e.target as HTMLElement).closest<HTMLDivElement>(
+						'[role="gridcell"]',
+					);
+					if (cell) {
+						const index = cardRefs.current.indexOf(cell);
+						if (index !== -1) setFocusedIndex(index);
+					}
+				}}
+				onBlurCapture={(e) => {
+					// Deliberate focus moves (toast, panel, header) disarm restoration;
+					// an unmount of the focused node fires NO blur, leaving it armed.
+					if (!gridRef.current?.contains(e.relatedTarget as Node | null)) {
+						gridHadFocus.current = false;
+					}
+				}}
 			>
 				{rows.map((rowGames, rowIndex) => (
 					/* biome-ignore lint/a11y/useSemanticElements: ARIA grid row, not a table row */
@@ -325,6 +395,7 @@ function ShelfGrid({ games }: { games: ShelfGame[] }) {
 										cardRefs.current[index] = el;
 									}}
 									onKeyDown={onCardKeyDown(index)}
+									onOpenDetail={setOpenGameId}
 								/>
 							);
 						})}
@@ -334,6 +405,10 @@ function ShelfGrid({ games }: { games: ShelfGame[] }) {
 			{supportsObserver && progressive.hasMore && (
 				<div ref={sentinelRef} className="shelf__sentinel" aria-hidden="true" />
 			)}
+			{/* One panel for the whole grid: it survives any row re-chunk, and the
+			    id lookup feeds it fresh data after every refetch. A lookup miss
+			    (game left the visible set outside the onHidden path) unmounts it. */}
+			{openGame && <DetailPanel game={openGame} onClose={closeDetail} />}
 		</div>
 	);
 }

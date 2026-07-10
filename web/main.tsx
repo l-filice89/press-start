@@ -9,6 +9,7 @@ import './tokens.css';
 import './index.css';
 import './components/hit-area.css';
 import App from './App.tsx';
+import { LiveRegionProvider } from './components/LiveRegion';
 import { createQueryClient } from './query-client';
 
 const queryClient = createQueryClient();
@@ -25,7 +26,11 @@ registerSW({ immediate: true });
 createRoot(rootElement).render(
 	<StrictMode>
 		<QueryClientProvider client={queryClient}>
-			<App />
+			{/* Above the session gate (Story 3.4, AC2): the live region must
+			    survive the shell <-> login swap so the swap itself can announce. */}
+			<LiveRegionProvider>
+				<App />
+			</LiveRegionProvider>
 		</QueryClientProvider>
 	</StrictMode>,
 );

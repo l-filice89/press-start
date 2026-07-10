@@ -1,5 +1,6 @@
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { authClient } from './auth-client';
+import { useAnnounce } from './components/LiveRegion';
 import { Background } from './shell/Background';
 import { Wordmark } from './shell/Wordmark';
 import './login.css';
@@ -41,6 +42,21 @@ function Login() {
 	const [phase, setPhase] = useState<Phase>('idle');
 	const [email, setEmail] = useState('');
 	const [error, setError] = useState<string | null>(verifyErrorFromUrl);
+	const emailRef = useRef<HTMLInputElement>(null);
+	const announce = useAnnounce();
+
+	// Story 3.4 (AC2): the session gate swaps the whole shell for this screen
+	// (401 re-auth or sign-out) and React drops focus to <body> silently. Move
+	// focus into the form and announce the screen — one fix here covers both
+	// entry points (and a cold load, where focusing the only input is what a
+	// login page should do anyway, hence the condition-neutral copy). A
+	// verify-error mount announces the error itself instead. Depends on the
+	// hoisted LiveRegionProvider in main.tsx.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: mount-only — re-announcing on re-render would spam.
+	useEffect(() => {
+		emailRef.current?.focus();
+		announce(error ?? 'Sign in with your email to continue.');
+	}, []);
 
 	async function onSubmit(event: FormEvent) {
 		event.preventDefault();
@@ -87,6 +103,7 @@ function Login() {
 								Sign in with a magic link — no password
 							</label>
 							<input
+								ref={emailRef}
 								id="login-email"
 								className="login__input"
 								type="email"

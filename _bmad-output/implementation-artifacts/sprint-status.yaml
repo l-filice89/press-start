@@ -77,11 +77,11 @@ development_status:
   epic-2-5-retrospective: done
 
   # Epic 3: Filter & Focus the Backlog
-  epic-3: in-progress
+  epic-3: done
   3-1-filter-the-shelf-by-state-and-genre: done
   3-2-flag-pills-and-state-reveal-pills: done
   3-3-live-filter-summary-empty-state-responsive-filters: done
-  3-4-focus-interaction-hardening-deferred-work-sweep: backlog
+  3-4-focus-interaction-hardening-deferred-work-sweep: done
   epic-3-retrospective: optional
 
   # Epic 4: Fill the Library from PlayStation (Sync)

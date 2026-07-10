@@ -72,7 +72,7 @@ decision: 2026-07-08 Add requirement refs — Add bracketed FR/AR/UX-DR requirem
 - source_spec: `_bmad-output/implementation-artifacts/spec-dw-shelf-grid-aria-row-regrouping.md`
   summary: Shelf resize that changes the auto-fill column count remounts the focused card (row `div`s keyed by index; a card moves to a different parent when re-chunked), dropping browser focus.
   evidence: React reconciles keyed children per parent — moving a `game.id`-keyed `Card` from one index-keyed `role="row"` div to another forces unmount+remount, so a card holding keyboard focus loses it and its `cardRefs` entry resets during a viewport resize crossing a column boundary. Roving-tabindex/reading-order invariants still hold, but active keyboard focus is lost mid-resize. Inherent to the mandated `display:contents` row grouping; not trivially fixable without restructuring the ARIA grouping.
-  decision: 2026-07-10 Assigned to Story 3.4 (Focus & interaction hardening) — deferred-work triage sweep; Epic 3 filter churn promotes this from corner case to daily path.
+  decision: 2026-07-10 Assigned to Story 3.4 (Focus & interaction hardening) — deferred-work triage sweep; Epic 3 filter churn promotes this from corner case to daily path. DONE 2026-07-10 (story 3.4): grid-level focus restoration effect (gridHadFocus + roving-index sync); pinned by Shelf.test.tsx + epic3-focus.spec.ts AC1.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-dw-3-central-401-reauth-redirect.md`
   summary: An auth-state transition swaps the authenticated shell for `<Login />` with no focus management and no live-region announcement, so a keyboard or screen-reader user is silently dropped at the document start.
@@ -82,7 +82,7 @@ decision: 2026-07-08 Add requirement refs — Add bracketed FR/AR/UX-DR requirem
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-1-change-play-status-from-the-shelf.md`
   summary: Marking a game `Dropped` unmounts its card on the shelf refetch, dropping keyboard focus to `document.body` — including focus needed to reach the toast's UNDO.
   evidence: `StatusPopover.select()` calls `close()`, which refocuses the pill; the mutation then invalidates `['shelf']`, the server filters the Dropped game out (FR-4), and React unmounts the card that owns the pill. Same defect class as DW-4 (shelf-grid focus on re-chunk) and the auth-gate focus item — a deliberate focus-restoration strategy for cards leaving the shelf, not an inline patch.
-  decision: 2026-07-10 Assigned to Story 3.4 (Focus & interaction hardening) — deferred-work triage sweep.
+  decision: 2026-07-10 Assigned to Story 3.4 (Focus & interaction hardening) — deferred-work triage sweep. DONE 2026-07-10 (story 3.4): same restoration effect lands focus on the clamped-index neighbor; UNDO Tab-reachable. Pinned by Shelf.test.tsx + epic3-focus.spec.ts AC3.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-1-change-play-status-from-the-shelf.md`
   summary: The `Dropped` toast offers no UNDO when the game's previous play status was null (status cleared by a completion milestone).
@@ -115,7 +115,7 @@ decision: 2026-07-08 Add requirement refs — Add bracketed FR/AR/UX-DR requirem
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-4-edit-ownership-and-lifecycle-dates-in-detail.md`
   summary: Toast UNDO callbacks (`Dropped` status since 2.1, un-own in 2.4) call the raw mutation directly, bypassing the in-flight pending guard every other entry point gets, so an UNDO can interleave with a pending write on the same game.
   evidence: `web/shelf/useTrackingMutations.ts` — `onUndo: () => mutate(previous)` and `onUndo: () => mutateOwnership(...)` skip the `isPending` check because the guard value is a stale render-scoped closure. Last-write-wins, no corruption; fix once with a ref-backed guard shared by all mutation entry points.
-  decision: 2026-07-10 Assigned to Story 3.4 (Focus & interaction hardening) — deferred-work triage sweep.
+  decision: 2026-07-10 Assigned to Story 3.4 (Focus & interaction hardening) — deferred-work triage sweep. DONE 2026-07-10 (story 3.4): single ref-backed guardPending shared by every entry point incl. both UNDO closures. Pinned by StatusPopover.test.tsx.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-4-edit-ownership-and-lifecycle-dates-in-detail.md`
   summary: `bash.exe.stackdump` is a tracked crash-dump junk file that keeps riding into diffs as line-ending churn; delete it and gitignore `*.stackdump`.
@@ -155,7 +155,7 @@ decision: 2026-07-08 Add requirement refs — Add bracketed FR/AR/UX-DR requirem
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-5-3-backfill-epic-2-e2e-flows.md`
   summary: An open DetailPanel unmounts whenever a write's shelf refetch re-chunks the grid rows and remounts its Card (dialog open-state lives in Card).
   evidence: Reproduced under parallel e2e (other actors' rows shift positions); solo user only sees it when their own write reorders the card across a row boundary. Upgrade path is hoisting the open-panel game id to Shelf level. E2e tests assert post-write truths on the card or after reopen as a workaround (comment in epic2-detail.spec.ts).
-  decision: 2026-07-10 Assigned to Story 3.4 (Focus & interaction hardening) — deferred-work triage sweep; includes converting the epic2-detail.spec.ts workaround assertions back to direct ones.
+  decision: 2026-07-10 Assigned to Story 3.4 (Focus & interaction hardening) — deferred-work triage sweep; includes converting the epic2-detail.spec.ts workaround assertions back to direct ones. DONE 2026-07-10 (story 3.4): openGameId hoisted to ShelfGrid, one panel looked up by id; epic2-detail + epic3-reveal asserts converted to direct stays-open. Pinned by Shelf.test.tsx + the converted e2e.
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-5-4-standing-rule-every-ui-ac-ships-with-a-playwright-test.md`
   summary: The ORCHESTRATION CONSTRAINT fact ("NEVER delegate work to subagents") contradicts bmad-dev-auto's SKILL.md, which makes synchronous review subagents mandatory; sessions must reconcile the two ad hoc.
   evidence: Surfaced during Epic 2.5 runs — the constraint targets bmad-loop's background-detection gap (retired on Windows), but its wording forbids all subagents. Reword to forbid only background/detached delegation, keeping synchronous subagents legal.
@@ -169,3 +169,12 @@ decision: 2026-07-08 Add requirement refs — Add bracketed FR/AR/UX-DR requirem
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-3-live-filter-summary-empty-state-responsive-filters.md`
   summary: The portal + backdrop-dismiss + document-capture-Escape + Tab-trap modal scaffold is now hand-copied in three components (ConfirmDialog, DetailPanel, FilterSheet) — extract one shared hook/component so the traps can't drift.
   evidence: web/components/ConfirmDialog.tsx, web/shelf/DetailPanel.tsx, and web/shelf/FilterRow.tsx FilterSheet each re-implement the same chrome nearly line for line; FilterSheet shipped with a trap hole ConfirmDialog had already solved, which is exactly the drift this duplication invites.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-4-focus-interaction-hardening-deferred-work-sweep.md`
+  summary: An OPEN status-popover menu still dies when its Card remounts on a refetch re-chunk (menu open-state is Card-local, unlike the hoisted detail panel); the openStatusMenu e2e retry loop in epic2-tracking.spec.ts papers over it.
+  evidence: StatusPopover keeps `open` in component state inside Card; Story 3.4 hoisted the detail panel and restores focus, but a transient menu open at the exact refetch moment closes. Rare for a solo user (only their own writes refetch); visible under parallel e2e load. When fixed, ALSO remove the openStatusMenu retry loop in epic2-tracking.spec.ts (it papers over this and would outlive the fix unnoticed).
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-4-focus-interaction-hardening-deferred-work-sweep.md`
+  summary: AC3 boundary — dropping the LAST visible card unmounts ShelfGrid entirely (EmptyState renders), so the focus-restoration effect dies with it and focus falls to <body> with the toast UNDO not deliberately reachable.
+  evidence: FilteredShelf swaps ShelfGrid for EmptyState at visible.length === 0; the restoration effect lives inside ShelfGrid. Needs a cross-component handoff (e.g. focus the empty state or its Clear-filters action) — deliberately out of 3.4's shipped scope.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-4-focus-interaction-hardening-deferred-work-sweep.md`
+  summary: A toast UNDO clicked AFTER a later write on the same game has settled silently overwrites the newer deliberate status with the stale `previous` — the in-flight guard only blocks concurrent writes, not stale intent.
+  evidence: useTrackingMutations onUndo closures capture `previous` at toast time; a user who drops a game, immediately sets it to Playing, then clicks the still-visible drop-toast's Undo writes the pre-drop status over Playing. Needs a latest-write token or dismissing stale undo toasts on newer writes.

@@ -1,10 +1,11 @@
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ShelfGame } from './api';
 import { chunkIntoRows, countColumns, Shelf } from './Shelf';
+import { resetInFlightWrites } from './useTrackingMutations';
 
 function card(
 	id: string,
@@ -61,6 +62,7 @@ function renderShelf() {
 
 afterEach(() => {
 	vi.unstubAllGlobals();
+	resetInFlightWrites();
 });
 
 describe('Shelf', () => {
@@ -219,6 +221,111 @@ describe('Shelf', () => {
 
 		expect(screen.queryAllByTestId('shelf-card')).toHaveLength(0);
 		expect(screen.getByText('NO MATCH')).toBeInTheDocument();
+	});
+
+	// HAZARD (Story 3.4, AC3 + AC1): when the focused card unmounts — leaving
+	// the visible set after a write, or moving across row parents on a
+	// re-chunk — focus must land on a deliberate neighbor, never <body>.
+	it('lands focus on a neighbor card when the focused card leaves the shelf after a write', async () => {
+		const user = userEvent.setup();
+		const a = card('a', 'Apex', {
+			effectiveState: 'Playing',
+			playStatus: 'Playing',
+		});
+		const b = card('b', 'Bolt', {
+			effectiveState: 'Playing',
+			playStatus: 'Playing',
+		});
+		const c = card('c', 'Cyan', {
+			effectiveState: 'Playing',
+			playStatus: 'Playing',
+		});
+		let games = [a, b, c];
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (_url: string, init?: RequestInit) => {
+				if (init?.method === 'PATCH') {
+					games = [a, c];
+					return {
+						ok: true,
+						status: 200,
+						json: async () => ({ effectiveState: 'Dropped' }),
+					};
+				}
+				return { ok: true, status: 200, json: async () => ({ games }) };
+			}),
+		);
+		renderShelf();
+		const cards = await screen.findAllByTestId('shelf-card');
+
+		// Reach Bolt the roving way (ArrowRight updates the roving index — a
+		// direct .focus() wouldn't, and the restore lands on the roving index).
+		cards[0].focus();
+		await user.keyboard('{ArrowRight}');
+		expect(cards[1]).toHaveFocus();
+		await user.keyboard('{Enter}'); // widget mode → status pill
+		await user.keyboard('{Enter}'); // open the status menu
+		await user.click(screen.getByRole('menuitemradio', { name: 'Dropped' }));
+
+		// The refetch removes Bolt; every remaining card shifts row parents
+		// (cols=1 in jsdom), remounting them all — the restore must still land
+		// on the card at the clamped index, not <body>.
+		await waitFor(() =>
+			expect(screen.getAllByTestId('shelf-card')).toHaveLength(2),
+		);
+		const remaining = screen.getAllByTestId('shelf-card');
+		expect(remaining[1]).toHaveFocus();
+		expect(remaining[1]).toHaveTextContent('Cyan');
+	});
+
+	// HAZARD (Story 3.4, AC4): the open panel's state lives in the grid, not
+	// the Card — a refetch that reorders/re-chunks the rows (remounting every
+	// Card in jsdom's one-column layout) must not close it.
+	it('keeps the detail panel open across a refetch that re-chunks the grid', async () => {
+		const user = userEvent.setup();
+		const a = card('a', 'Apex', {
+			effectiveState: 'Playing',
+			playStatus: 'Playing',
+		});
+		const b = card('b', 'Bolt', {
+			effectiveState: 'Playing',
+			playStatus: 'Playing',
+		});
+		let games = [a, b];
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (url: string, init?: RequestInit) => {
+				if (init?.method === 'PATCH') {
+					// The write reorders the shelf — Bolt moves to another row parent.
+					games = [b, a];
+					return {
+						ok: true,
+						status: 200,
+						json: async () => ({ effectiveState: 'Paused' }),
+					};
+				}
+				if (url.includes('/genres')) {
+					return { ok: true, status: 200, json: async () => ({ genres: [] }) };
+				}
+				return { ok: true, status: 200, json: async () => ({ games }) };
+			}),
+		);
+		renderShelf();
+		await screen.findAllByTestId('shelf-card');
+
+		await user.click(
+			screen.getByRole('button', { name: 'Open details — Bolt' }),
+		);
+		const panel = screen.getByRole('dialog', { name: 'Bolt' });
+		expect(panel).toBeVisible();
+
+		// Write from inside the panel; the refetch reorders the grid.
+		await user.click(within(panel).getByRole('radio', { name: 'Paused' }));
+		await waitFor(() =>
+			expect(screen.getAllByTestId('shelf-card')[0]).toHaveTextContent('Bolt'),
+		);
+		// The panel survived the re-chunk.
+		expect(screen.getByRole('dialog', { name: 'Bolt' })).toBeVisible();
 	});
 
 	it('shows an alert if the shelf fails to load', async () => {

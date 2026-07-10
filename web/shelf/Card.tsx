@@ -1,6 +1,5 @@
-import { type KeyboardEvent, useCallback, useRef, useState } from 'react';
+import { type KeyboardEvent, useRef, useState } from 'react';
 import type { ShelfGame } from './api';
-import { DetailPanel } from './DetailPanel';
 import { StatusPopover } from './StatusPopover';
 import { useTrackingMutations } from './useTrackingMutations';
 import './card.css';
@@ -15,35 +14,32 @@ import './card.css';
  * and the whole card is a single roving tab stop in the grid (UX-DR19).
  *
  * `tabIndex` and the rest of the roving-focus wiring are owned by the parent
- * grid (Shelf); the card just forwards the ref and keydown handler.
+ * grid (Shelf); the card just forwards the ref and keydown handler. The
+ * open-detail state is ALSO owned by the grid (Story 3.4): a Card can remount
+ * whenever a refetch re-chunks the rows, so a panel it owned would die
+ * mid-interaction — the cover button only reports the intent upward.
  */
 export function Card({
 	game,
 	tabIndex,
 	cardRef,
 	onKeyDown,
+	onOpenDetail,
 }: {
 	game: ShelfGame;
 	tabIndex: number;
 	cardRef?: (el: HTMLDivElement | null) => void;
 	onKeyDown?: (e: KeyboardEvent<HTMLDivElement>) => void;
+	onOpenDetail?: (gameId: string) => void;
 }) {
 	// A persisted cover_url that 404s / fails to load falls back to the same
 	// graceful mark as a missing cover — never a broken-image glyph, no network.
 	const [coverFailed, setCoverFailed] = useState(false);
-	const [detailOpen, setDetailOpen] = useState(false);
 	const coverRef = useRef<HTMLButtonElement>(null);
 
 	// Ownership writes go through the same shared seam as every other tracking
 	// mutation (AR-13) — un-owning toasts with UNDO, owning toasts plainly.
 	const { setOwnership } = useTrackingMutations(game);
-
-	// Closing the panel returns focus to the originating card's gridcell
-	// (UX-DR19) — the panel itself doesn't know where it was opened from.
-	const closeDetail = useCallback(() => {
-		setDetailOpen(false);
-		coverRef.current?.closest<HTMLElement>('[role="gridcell"]')?.focus();
-	}, []);
 
 	const onCoverKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
 		if (e.key === 'Escape') {
@@ -76,6 +72,7 @@ export function Card({
 			tabIndex={tabIndex}
 			aria-label={`${game.title} — ${game.effectiveState}`}
 			data-testid="shelf-card"
+			data-game-id={game.id}
 			onKeyDown={onKeyDown}
 		>
 			<div className="card__cover">
@@ -89,7 +86,7 @@ export function Card({
 					tabIndex={-1}
 					aria-label={`Open details — ${game.title}`}
 					data-testid="card-cover-button"
-					onClick={() => setDetailOpen(true)}
+					onClick={() => onOpenDetail?.(game.id)}
 					onKeyDown={onCoverKeyDown}
 				>
 					{showCover ? (
@@ -183,8 +180,6 @@ export function Card({
 					</span>
 				</p>
 			</div>
-
-			{detailOpen && <DetailPanel game={game} onClose={closeDetail} />}
 		</div>
 	);
 }

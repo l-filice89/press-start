@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ToastHost } from '../components/Toast';
 import type { ShelfGame } from './api';
 import { StatusPopover } from './StatusPopover';
+import { resetInFlightWrites } from './useTrackingMutations';
 
 /**
  * The named a11y hazard of Story 2.1: the popover is a *menu* — haspopup/
@@ -67,6 +68,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	vi.unstubAllGlobals();
+	resetInFlightWrites();
 });
 
 const pill = () => screen.getByTestId('status-pill-button');
@@ -213,6 +215,42 @@ describe('StatusPopover', () => {
 		expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
 			playStatus: null,
 		});
+	});
+
+	// HAZARD (Story 3.4, AC5): the UNDO closure must respect the same
+	// call-time in-flight guard as every other entry point — previously it
+	// called the mutation directly with a stale render-scoped guard.
+	it('toast UNDO during a pending write toasts Still saving and writes nothing', async () => {
+		const user = userEvent.setup();
+		let call = 0;
+		fetchMock.mockImplementation(() => {
+			call += 1;
+			if (call === 1) {
+				return Promise.resolve({
+					ok: true,
+					status: 200,
+					json: async () => ({ effectiveState: 'Dropped' }),
+				});
+			}
+			return new Promise(() => {}); // the second write never settles
+		});
+		renderPopover(game({ playStatus: 'Paused', effectiveState: 'Paused' }));
+
+		await user.click(pill());
+		await user.click(screen.getByRole('menuitemradio', { name: 'Dropped' }));
+		const undo = await screen.findByRole('button', { name: 'Undo' });
+
+		// Start a second write that stays in flight.
+		await user.click(pill());
+		await user.click(screen.getByRole('menuitemradio', { name: 'Playing' }));
+		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+		await user.click(undo);
+		expect(
+			await screen.findByText(/Still saving Bloodborne/),
+		).toBeInTheDocument();
+		// The undo write never fired.
+		expect(fetchMock).toHaveBeenCalledTimes(2);
 	});
 
 	it('surfaces a failed status change instead of silently doing nothing', async () => {

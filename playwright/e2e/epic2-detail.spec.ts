@@ -153,26 +153,31 @@ test('wishlisted game links to the PS Store; owned game does not (2.3c)', async 
 	}
 });
 
-test('lifecycle date commits on blur and survives reopen (2.4c)', async ({
+test('lifecycle date commits on blur; the open panel survives the refetch (2.4c / 3.4)', async ({
 	page,
 }) => {
 	const game = uniqueGame('Date Edit', { tracking: { playStatus: 'Paused' } });
 	try {
 		await seedGames([game]);
 		await page.goto('/');
-		let panel = await openDetail(page, game);
+		const panel = await openDetail(page, game);
 		const started = panel.getByLabel('Started');
 		await started.fill('2026-03-15');
 		await started.blur(); // DateRow commits on blur, not per keystroke
-		// The save toast is the commit signal — Escape before the PATCH lands
-		// would race the reopen against stale data
 		await expect(
 			page.getByTestId('toast').getByText(`${game.title} — date saved`),
 		).toBeVisible();
-		await page.keyboard.press('Escape');
 
-		panel = await openDetail(page, game);
+		// Direct assert (Story 3.4): the panel outlived the write's refetch and
+		// shows the committed value.
+		await expect(panel).toBeVisible();
 		await expect(panel.getByLabel('Started')).toHaveValue('2026-03-15');
+
+		// One reload-based persistence check stays: the value survives a fresh
+		// fetch, not just the client cache.
+		await page.goto('/');
+		const reopened = await openDetail(page, game);
+		await expect(reopened.getByLabel('Started')).toHaveValue('2026-03-15');
 	} finally {
 		await deleteGames([game.id]);
 	}
@@ -184,11 +189,10 @@ test('lifecycle date commits on blur and survives reopen (2.4c)', async ({
 // card — the flow is unreachable until Epic 3 reveal pills. Listed as skipped
 // in COVERAGE.md; the jsdom DetailPanel test pins the toast wiring.
 
-// NOTE (panel-internal asserts after writes): every write invalidates the
-// shelf; the refetched order can re-chunk the grid rows and remount the Card,
-// which unmounts its DetailPanel (dialog state lives in the Card). Post-write
-// truths are therefore asserted on the CARD or after a fresh reopen — never
-// inside the possibly-unmounted panel. Logged as deferred product finding.
+// NOTE (Story 3.4): the open-panel state now lives at the grid level, so a
+// write's refetch re-chunking the rows no longer unmounts the panel. The old
+// reopen-based workaround asserts below were converted back to direct
+// on-open-panel asserts — they double as the AC4 regression pins.
 
 test('ownership: un-own offers UNDO and restores; type switches physical/digital (2.4a/2.4b)', async ({
 	page,
@@ -197,7 +201,7 @@ test('ownership: un-own offers UNDO and restores; type switches physical/digital
 	try {
 		await seedGames([game]);
 		await page.goto('/');
-		let panel = await openDetail(page, game);
+		const panel = await openDetail(page, game);
 
 		// Type pair only renders while owned
 		await panel
@@ -205,9 +209,8 @@ test('ownership: un-own offers UNDO and restores; type switches physical/digital
 			.getByRole('button', { name: 'digital' })
 			.click();
 
-		// Reopen-based assert: the switch persisted server-side (2.4b)
-		await page.goto('/');
-		panel = await openDetail(page, game);
+		// Direct assert (Story 3.4): the panel survives the write's refetch and
+		// reflects the persisted switch (2.4b).
 		await expect(
 			panel
 				.getByRole('group', { name: `Ownership type for ${game.title}` })
@@ -231,13 +234,11 @@ test('ownership: un-own offers UNDO and restores; type switches physical/digital
 			.getByRole('button', { name: 'Undo', exact: true })
 			.evaluate((el) => (el as HTMLElement).click());
 
-		// Card-level assert survives any remount: owned flag restored
+		// Direct asserts (Story 3.4): the still-open panel shows the restored
+		// flag AND the previous type surviving the round trip.
 		await expect(
-			cardFor(page, game).getByTestId('card-owned-toggle'),
+			panel.getByRole('button', { name: 'Owned', exact: true }),
 		).toHaveAttribute('aria-pressed', 'true');
-		// And the previous type survived the round trip
-		await page.goto('/');
-		panel = await openDetail(page, game);
 		await expect(
 			panel
 				.getByRole('group', { name: `Ownership type for ${game.title}` })
@@ -256,16 +257,14 @@ test('genres: novel name auto-creates, chip removes, no merge/rename UI (2.5a/2.
 	try {
 		await seedGames([game]);
 		await page.goto('/');
-		let panel = await openDetail(page, game);
+		const panel = await openDetail(page, game);
 
 		const input = panel.getByLabel(`Add genre to ${game.title}`);
 		await input.fill(genreName);
 		await panel.getByRole('button', { name: 'Add', exact: true }).click();
 
-		// Reopen-based assert (see NOTE above): the chip persisted — the
-		// vocabulary row was auto-created server-side (2.5b)
-		await page.goto('/');
-		panel = await openDetail(page, game);
+		// Direct assert (Story 3.4): the chip appears on the still-open panel —
+		// the vocabulary row was auto-created server-side (2.5b).
 		const chip = panel.getByRole('button', { name: `Remove ${genreName}` });
 		await expect(chip).toBeVisible();
 
@@ -277,11 +276,20 @@ test('genres: novel name auto-creates, chip removes, no merge/rename UI (2.5a/2.
 		await expect(panel.getByText(/merge|rename/i)).toHaveCount(0);
 
 		await chip.click();
-		// Reopen again: the removal persisted (2.5a many-to-many update)
-		await page.goto('/');
-		panel = await openDetail(page, game);
+		// Direct assert: the removal lands on the still-open panel (2.5a) —
+		// visibility first, so the count(0) can't pass vacuously on a detached
+		// panel.
+		await expect(panel).toBeVisible();
 		await expect(
 			panel.getByRole('button', { name: `Remove ${genreName}` }),
+		).toHaveCount(0);
+
+		// One reload-based persistence check stays: direct asserts prove the
+		// live panel, this proves the server round trip.
+		await page.goto('/');
+		const reopened = await openDetail(page, game);
+		await expect(
+			reopened.getByRole('button', { name: `Remove ${genreName}` }),
 		).toHaveCount(0);
 	} finally {
 		// allSettled: a failing game delete must not leak the vocabulary row

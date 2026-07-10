@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ToastHost } from '../components/Toast';
 import type { ShelfGame } from './api';
 import { Card } from './Card';
+import { resetInFlightWrites } from './useTrackingMutations';
 
 function game(overrides: Partial<ShelfGame> = {}): ShelfGame {
 	return {
@@ -128,6 +129,7 @@ describe('Card', () => {
 
 	describe('owned toggle (Story 2.4)', () => {
 		afterEach(() => {
+			resetInFlightWrites();
 			vi.unstubAllGlobals();
 		});
 

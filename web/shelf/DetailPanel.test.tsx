@@ -8,11 +8,14 @@ import {
 	within,
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FOCUSABLE_SELECTOR } from '../components/focusable';
 import { ToastHost } from '../components/Toast';
 import type { ShelfGame } from './api';
 import { Card } from './Card';
+import { DetailPanel } from './DetailPanel';
+import { resetInFlightWrites } from './useTrackingMutations';
 
 /**
  * Story 2.3: the flip-to-detail dialog. Opened from the card's cover trigger,
@@ -48,6 +51,27 @@ function game(over: Partial<ShelfGame> = {}): ShelfGame {
 	};
 }
 
+/**
+ * Mirrors ShelfGrid's ownership (Story 3.4): the open-game id lives OUTSIDE
+ * the Card and the single panel is looked up by it, so the open-from-cover
+ * and focus-return-to-gridcell contracts exercised here are the real ones.
+ */
+function GridHarness({ g }: { g: ShelfGame }) {
+	const [openId, setOpenId] = useState<string | null>(null);
+	const close = () => {
+		setOpenId(null);
+		document
+			.querySelector<HTMLElement>(`[role="gridcell"][data-game-id="${g.id}"]`)
+			?.focus();
+	};
+	return (
+		<>
+			<Card game={g} tabIndex={0} onOpenDetail={setOpenId} />
+			{openId === g.id && <DetailPanel game={g} onClose={close} />}
+		</>
+	);
+}
+
 function renderCard(g: ShelfGame = game()) {
 	const client = new QueryClient({
 		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -55,7 +79,7 @@ function renderCard(g: ShelfGame = game()) {
 	return render(
 		<QueryClientProvider client={client}>
 			<ToastHost>
-				<Card game={g} tabIndex={0} />
+				<GridHarness g={g} />
 			</ToastHost>
 		</QueryClientProvider>,
 	);
@@ -84,6 +108,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	vi.unstubAllGlobals();
+	resetInFlightWrites();
 });
 
 const cover = () => screen.getByTestId('card-cover-button');

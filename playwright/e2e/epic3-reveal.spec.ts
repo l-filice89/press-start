@@ -142,13 +142,10 @@ test('UNDO after dropping a revealed milestone-only card restores the null statu
 });
 
 // HAZARD (FR-4/FR-17, deferred-work: platinum-only auto-hide false-close): a
-// milestone write on an already-hidden game must not fire the auto-close.
-// The stays-open transition itself is jsdom-pinned (DetailPanel.test.tsx) —
-// per the suite convention (epic2-detail.spec.ts NOTE), a post-write
-// panel-visibility assert is unreliable until Story 3.4 hoists panel state
-// out of the Card, so this test asserts the flow through a reopen instead.
-// Story 3.4 converts it to a direct stays-open assert.
-test('milestone write on a revealed hidden game succeeds; panel reopens with it logged', async ({
+// milestone write on an already-hidden game must not fire the auto-close —
+// and with the panel state hoisted to the grid (Story 3.4), the panel also
+// survives the write's refetch, so this asserts stays-open DIRECTLY.
+test('detail panel on a revealed hidden game stays open through a milestone write', async ({
 	page,
 }) => {
 	const run = randomUUID().slice(0, 8);
@@ -186,24 +183,19 @@ test('milestone write on a revealed hidden game succeeds; panel reopens with it 
 			`${dropped.title} — Story completed`,
 		);
 
-		// Reopen-based assert (post-write, remount-safe): the card is still on
-		// the revealed shelf as Dropped, and the milestone stuck.
-		await loadAllPages(page);
+		// Direct stays-open asserts (Story 3.4, AC4 + 3.2 AC-6): the panel
+		// outlived the refetch, visibility never changed (hidden before and
+		// after), and the milestone reads back logged.
+		await expect(panel).toBeVisible();
+		await expect(
+			panel.getByRole('button', { name: /Story completed/ }),
+		).toHaveAttribute('aria-disabled', 'true');
+		// The card behind it is still on the revealed shelf as Dropped — the
+		// milestone write didn't flip its state.
 		await expect(cardFor(page, dropped)).toHaveAttribute(
 			'aria-label',
 			`${dropped.title} — Dropped`,
 		);
-		await expect(async () => {
-			if (!(await panel.isVisible())) {
-				await cardFor(page, dropped)
-					.getByRole('button', { name: `Open details — ${dropped.title}` })
-					.click({ timeout: 5_000 });
-			}
-			await expect(panel).toBeVisible({ timeout: 2_000 });
-		}).toPass({ timeout: 20_000 });
-		await expect(
-			panel.getByRole('button', { name: /Story completed/ }),
-		).toHaveAttribute('aria-disabled', 'true');
 	} finally {
 		await deleteGames([dropped.id]);
 	}
