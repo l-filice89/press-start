@@ -2,7 +2,8 @@
 title: 'Standing rule — every UI AC ships with a Playwright test (story 2.5.4)'
 type: 'chore'
 created: '2026-07-10'
-status: 'in-review'
+status: 'done'
+final_revision: 'd3dfd3a48656cccece39d57548c336586ae4b055'
 review_loop_iteration: 0
 followup_review_recommended: false
 context: []
