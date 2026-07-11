@@ -83,6 +83,7 @@ status: open
   summary: An auth-state transition swaps the authenticated shell for `<Login />` with no focus management and no live-region announcement, so a keyboard or screen-reader user is silently dropped at the document start.
   evidence: `web/App.tsx`'s session gate re-renders a different subtree when `session` becomes `null` (on a 401 re-auth redirect, and equally on an explicit sign-out — so this predates the 401 work). React unmounts the focused element and focus falls back to `document.body`; nothing moves focus into the Login form or announces the change. Both entry points into `<Login />` share the gate, so a single focus/announcement fix at the gate covers them.
   decision: 2026-07-10 Assigned to Story 3.4 (Focus & interaction hardening) — deferred-work triage sweep.
+  resolution: done (verified 2026-07-11, stamp backfilled) — fixed in `web/Login.tsx` (mount effect at :56 focuses the email input and announces the swap via the hoisted LiveRegionProvider), landing at the destination rather than the gate so a single fix covers both entry points (401 re-auth + explicit sign-out) and a cold load. Pinned by `web/Login.test.tsx` ("focuses the email input and announces the swap on mount").
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-1-change-play-status-from-the-shelf.md`
   summary: Marking a game `Dropped` unmounts its card on the shelf refetch, dropping keyboard focus to `document.body` — including focus needed to reach the toast's UNDO.
@@ -93,6 +94,7 @@ status: open
   summary: The `Dropped` toast offers no UNDO when the game's previous play status was null (status cleared by a completion milestone).
   evidence: `StatusPopover.select()` gates the undo on `next === 'Dropped' && previous`, and `previous` is `game.playStatus`, which is null for any game whose status was auto-cleared by a milestone (FR-2). Restoring that state means writing `play_status = null`, which Story 2.1's route deliberately cannot express (it accepts only the five play statuses; clearing goes through the FR-3/AD-12 invariant guard in Story 2.2/2.3). Unreachable on the default shelf today — milestone games are hidden (FR-17) — but reachable as soon as Epic 3's state-reveal pills or Story 2.3's detail panel render those cards. Fix alongside the milestone write path.
   decision: 2026-07-10 Assigned to Story 3.2 as an AC (reveal pills make it reachable) — deferred-work triage sweep; cross-referenced in epics.md.
+  resolution: done (verified 2026-07-11, stamp backfilled) — the undo now fires for `next === null` as well as `Dropped` (`web/shelf/useTrackingMutations.ts:203`); the restore mutates `previous` (nullable) back through the write path, which accepts null and satisfies the completion invariant via the milestone. Reachable via reveal pills as planned.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-1-change-play-status-from-the-shelf.md`
   summary: Lifecycle dates are stamped from the Worker's UTC clock, so an evening status change west of Greenwich records tomorrow's date, permanently.
