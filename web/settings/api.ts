@@ -29,12 +29,28 @@ export const settingsSchema = z.object({
 	// Story 5.3: date (YYYY-MM-DD, user zone) of the last successful refresh,
 	// null until the first one. Feeds the header "PS+ CATALOG AS OF" readout.
 	psPlusRefreshedAt: z.string().nullable().default(null),
+	// Games needing a games-DB match (import stragglers + name-only adds) —
+	// feeds the amber "enrich" banner (Story 6.2). Defaulted for the same reason.
+	stragglerCount: z.number().default(0),
+	// FAB placement (Story 6.3, UX-DR10). Defaulted so a cached response is safe.
+	fabHandedness: z.enum(['left', 'right']).default('right'),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
 
 export async function fetchSettings(signal?: AbortSignal): Promise<Settings> {
 	return settingsSchema.parse(await callApi('/api/settings', { signal }));
+}
+
+/** Move the FAB to the left/right hand (Story 6.3, UX-DR10). */
+export async function saveFabHandedness(
+	handedness: 'left' | 'right',
+): Promise<void> {
+	await callApi('/api/settings/fab-handedness', {
+		method: 'PUT',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ handedness }),
+	});
 }
 
 /** Save a fresh PSN session cookie; the server clears the expired flag. */

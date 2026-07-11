@@ -16,6 +16,20 @@ export async function todayForUser(db: Db, userId: string): Promise<string> {
 	return todayInZone(timeZone, new Date());
 }
 
+/** FAB placement (Story 6.3, UX-DR10): `'left'`|`'right'`, absent = `'right'`. */
+export const FAB_HANDEDNESS_SETTING_KEY = 'fab_handedness';
+export type FabHandedness = 'left' | 'right';
+
+/** This user's FAB handedness; defaults to right-handed when unset. */
+export async function readFabHandedness(
+	db: Db,
+	userId: string,
+): Promise<FabHandedness> {
+	return (await getSetting(db, userId, FAB_HANDEDNESS_SETTING_KEY)) === 'left'
+		? 'left'
+		: 'right';
+}
+
 /** Live PlayStation session cookie (Story 4.1, FR-36) — read fresh per call. */
 export const PSN_COOKIE_SETTING_KEY = 'psn_cookie';
 

@@ -5,14 +5,17 @@ import { getSetting, setSetting } from '../repositories';
 import { createDb } from '../repositories/db';
 import {
 	clearPsnAuthExpired,
+	FAB_HANDEDNESS_SETTING_KEY,
 	getPsnCookie,
 	getPsPlusRefreshedAt,
 	isPsnAuthExpired,
 	isPsPlusRefreshFailed,
 	PSN_COOKIE_SETTING_KEY,
+	readFabHandedness,
 	readSyncAttention,
 	TIMEZONE_SETTING_KEY,
 } from '../services/settings';
+import { countStragglers } from '../services/stragglers';
 import { type AuthVariables, requireAuth } from './auth';
 
 /**
@@ -65,6 +68,8 @@ settingsRoute.get('/settings', requireAuth, async (c) => {
 		syncAttention,
 		psPlusRefreshFailed,
 		psPlusRefreshedAt,
+		stragglerCount,
+		fabHandedness,
 	] = await Promise.all([
 		getSetting(db, userId, TIMEZONE_SETTING_KEY),
 		getPsnCookie(db, userId, c.env),
@@ -72,6 +77,8 @@ settingsRoute.get('/settings', requireAuth, async (c) => {
 		readSyncAttention(db, userId),
 		isPsPlusRefreshFailed(db, userId),
 		getPsPlusRefreshedAt(db, userId),
+		countStragglers(db, userId),
+		readFabHandedness(db, userId),
 	]);
 	return c.json(
 		{
@@ -81,6 +88,10 @@ settingsRoute.get('/settings', requireAuth, async (c) => {
 			syncAttention,
 			psPlusRefreshFailed,
 			psPlusRefreshedAt,
+			// Drives the amber "needs a match" banner (Story 6.2, AR-22).
+			stragglerCount,
+			// FAB placement (Story 6.3, UX-DR10).
+			fabHandedness,
 		},
 		200,
 	);
@@ -119,4 +130,25 @@ settingsRoute.put('/settings/timezone', requireAuth, async (c) => {
 	// earlier value, not the one just sent.
 	const timezone = await getSetting(db, userId, TIMEZONE_SETTING_KEY);
 	return c.json({ timezone: timezone ?? null }, 200);
+});
+
+const handednessBodySchema = z.object({
+	handedness: z.enum(['left', 'right']),
+});
+
+settingsRoute.put('/settings/fab-handedness', requireAuth, async (c) => {
+	const body = handednessBodySchema.safeParse(
+		await c.req.json().catch(() => null),
+	);
+	if (!body.success) {
+		return c.json({ error: 'invalid handedness' }, 400);
+	}
+	const db = createDb(c.env.DB);
+	await setSetting(
+		db,
+		c.get('userId'),
+		FAB_HANDEDNESS_SETTING_KEY,
+		body.data.handedness,
+	);
+	return c.json({ fabHandedness: body.data.handedness }, 200);
 });

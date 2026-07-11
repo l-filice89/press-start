@@ -1,11 +1,14 @@
 import { Hono } from 'hono';
 import { authRoute, meRoute } from './auth';
 import { e2eRoute } from './e2e';
+import { exportRoute } from './export';
+import { gamesRoute } from './games';
 import { genresRoute } from './genres';
 import { healthRoute } from './health';
 import { psPlusRoute } from './psplus';
 import { settingsRoute } from './settings';
 import { shelfRoute } from './shelf';
+import { stragglersRoute } from './stragglers';
 import { syncRoute } from './sync';
 import { trackingRoute } from './tracking';
 
@@ -21,6 +24,9 @@ apiRoutes.route('/', authRoute);
 apiRoutes.route('/', meRoute);
 apiRoutes.route('/', shelfRoute);
 apiRoutes.route('/', trackingRoute);
+apiRoutes.route('/', gamesRoute);
+apiRoutes.route('/', stragglersRoute);
+apiRoutes.route('/', exportRoute);
 apiRoutes.route('/', genresRoute);
 apiRoutes.route('/', settingsRoute);
 apiRoutes.route('/', syncRoute);

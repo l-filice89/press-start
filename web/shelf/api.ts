@@ -237,3 +237,142 @@ export function searchShelf(
 ): Promise<ShelfGame[]> {
 	return fetchGames(`/api/shelf/search?q=${encodeURIComponent(query)}`, signal);
 }
+
+/* ---- Add a game by name (Story 6.1) ---- */
+
+const addPreviewSchema = z.object({
+	available: z.boolean(),
+	candidate: z
+		.object({
+			igdbId: z.string(),
+			name: z.string(),
+			coverUrl: z.string().nullable(),
+			releaseDate: z.string().nullable(),
+			genres: z.array(z.string()),
+		})
+		.nullable(),
+});
+
+export type AddPreview = z.infer<typeof addPreviewSchema>;
+
+/** IGDB candidate for the add dialog; `available: false` = games DB down. */
+export async function fetchAddPreview(
+	title: string,
+	signal?: AbortSignal,
+): Promise<AddPreview> {
+	const body = await callApi(
+		`/api/games/preview?title=${encodeURIComponent(title)}`,
+		{ signal },
+	);
+	return addPreviewSchema.parse(body);
+}
+
+export interface AddGamePayload {
+	title: string;
+	igdbId?: string;
+	coverUrl?: string | null;
+	releaseDate?: string | null;
+	genres?: string[];
+	owned?: boolean;
+}
+
+export type AddGameResult = { kind: 'created' | 'duplicate'; gameId: string };
+
+const addGameResponseSchema = z.object({ gameId: z.string() });
+
+/**
+ * Create the game (FR-41). A 409 is not an error to the UI — it carries the
+ * existing game's id so the caller opens its detail view instead (FR-42), so
+ * this is a raw fetch rather than `callApi` (which throws on any non-OK).
+ */
+export async function addGame(payload: AddGamePayload): Promise<AddGameResult> {
+	const response = await fetch('/api/games', {
+		method: 'POST',
+		credentials: 'same-origin',
+		headers: { accept: 'application/json', 'content-type': 'application/json' },
+		body: JSON.stringify(payload),
+	});
+	if (response.status === 409) {
+		return {
+			kind: 'duplicate',
+			gameId: addGameResponseSchema.parse(await response.json()).gameId,
+		};
+	}
+	if (!response.ok) {
+		const error = new Error(`Request failed (${response.status})`);
+		(error as Error & { status?: number }).status = response.status;
+		throw error;
+	}
+	return {
+		kind: 'created',
+		gameId: addGameResponseSchema.parse(await response.json()).gameId,
+	};
+}
+
+/* ---- Straggler resolution (Story 6.2) ---- */
+
+const stragglersSchema = z.object({
+	stragglers: z.array(
+		z.object({
+			id: z.string(),
+			kind: z.enum(['import', 'unenriched']),
+			title: z.string(),
+		}),
+	),
+});
+
+export type Straggler = z.infer<typeof stragglersSchema>['stragglers'][number];
+
+/** Both straggler kinds as one list for the resolution dialog. */
+export async function fetchStragglers(
+	signal?: AbortSignal,
+): Promise<Straggler[]> {
+	const body = await callApi('/api/stragglers', { signal });
+	return stragglersSchema.parse(body).stragglers;
+}
+
+const igdbCandidateSchema = z.object({
+	igdbId: z.string(),
+	name: z.string(),
+	coverUrl: z.string().nullable(),
+	releaseDate: z.string().nullable(),
+	genres: z.array(z.string()),
+});
+
+export type IgdbCandidate = z.infer<typeof igdbCandidateSchema>;
+
+const searchSchema = z.object({ candidates: z.array(igdbCandidateSchema) });
+
+/** Manual IGDB search for a match; empty when the games DB is down/unset. */
+export async function searchIgdb(
+	title: string,
+	signal?: AbortSignal,
+): Promise<IgdbCandidate[]> {
+	const body = await callApi(
+		`/api/games/search?title=${encodeURIComponent(title)}`,
+		{ signal },
+	);
+	return searchSchema.parse(body).candidates;
+}
+
+export interface ResolveStragglerPayload {
+	id: string;
+	kind: 'import' | 'unenriched';
+	igdbId: string;
+	name?: string;
+	coverUrl?: string | null;
+	releaseDate?: string | null;
+	genres?: string[];
+}
+
+/** Resolve a straggler onto the chosen IGDB match; returns the game id. */
+export async function resolveStraggler(
+	payload: ResolveStragglerPayload,
+): Promise<{ gameId: string }> {
+	const body = await callApi('/api/stragglers/resolve', {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify(payload),
+	});
+	return z.object({ gameId: z.string() }).parse(body);
+}

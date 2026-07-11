@@ -145,6 +145,36 @@ export async function setPsPlusExtraFlags(
 }
 
 /**
+ * Enrich a name-only (`unenriched`) game once a manual IGDB match is confirmed
+ * (Story 6.2, FR-28): fill the facts the add-by-name save lacked and clear the
+ * flag. Straight `set` (not COALESCE) — resolution is the user deliberately
+ * choosing this match, so it overwrites the empty name-only placeholders.
+ */
+export async function enrichGame(
+	db: Db,
+	gameId: string,
+	facts: {
+		coverUrl: string | null;
+		releaseDate: string | null;
+		/** Correct the name-only title to the chosen IGDB match, when given. */
+		title?: string;
+		titleNormalized?: string;
+	},
+) {
+	await db
+		.update(game)
+		.set({
+			coverUrl: facts.coverUrl,
+			releaseDate: facts.releaseDate,
+			unenriched: false,
+			...(facts.title
+				? { title: facts.title, titleNormalized: facts.titleNormalized }
+				: {}),
+		})
+		.where(eq(game.id, gameId));
+}
+
+/**
  * A game joined with one user's tracking row — the row shape the shelf/search
  * services bake into a card DTO.
  */

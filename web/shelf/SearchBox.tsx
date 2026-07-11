@@ -1,6 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
+import { useAnnounce } from '../components/LiveRegion';
+import { AddGameDialog } from './AddGameDialog';
 import { searchShelf } from './api';
+import { openDetail } from './open-detail';
 import './search-box.css';
 
 /**
@@ -15,12 +18,12 @@ export function seedSearch(query: string): void {
 }
 
 /**
- * The persistent whole-library search (FR-19, UX-DR16). A combobox that queries
- * a dedicated `/api/shelf/search` endpoint — separate from the shelf query, so
- * it matches every game ignoring active filters and hidden states — and lists
- * the matches in a popup listbox. Read-only in this epic: there is no detail
- * view yet (Epic 2), so selecting an option is a no-op; the value is that
- * matches are found and keyboard-reachable.
+ * The persistent whole-library search (FR-19, UX-DR16) — and the sole Add
+ * entry point (Story 6.1, FR-41/42). A combobox querying the dedicated
+ * `/api/shelf/search` endpoint (matches every game, ignoring active filters
+ * and hidden states). Picking a match opens its detail view instead of ever
+ * creating a duplicate; when nothing matches, the one option is
+ * `＋ Add "<name>"`, which opens the IGDB-prefilled preview dialog.
  *
  * A global "/" shortcut focuses the field (unless the user is already typing in
  * a form control), per the accessibility floor.
@@ -30,8 +33,10 @@ export function SearchBox() {
 	const [debounced, setDebounced] = useState('');
 	const [open, setOpen] = useState(false);
 	const [activeIndex, setActiveIndex] = useState(-1);
+	const [addTitle, setAddTitle] = useState<string | null>(null);
 	const inputRef = useRef<HTMLInputElement | null>(null);
 	const listboxId = useId();
+	const announce = useAnnounce();
 
 	// Debounce so a dedicated query fires per pause, not per keystroke.
 	useEffect(() => {
@@ -78,19 +83,53 @@ export function SearchBox() {
 
 	const showPopup = open && debounced !== '';
 	const hasMatches = matches.length > 0;
-	// Only declare NO MATCH once the query has actually settled — otherwise the
-	// empty result flashes while the dedicated search request is still in flight.
-	const showNoMatch = !hasMatches && !isFetching;
+	// Only offer Add once the query has actually settled — otherwise the row
+	// flashes while the dedicated search request is still in flight (FR-41:
+	// the row appears only when there is NO library match).
+	const showAddRow = showPopup && !hasMatches && !isFetching;
+	// One flat option list: library matches, or the single Add row.
+	const optionCount = hasMatches ? matches.length : showAddRow ? 1 : 0;
+
+	// Announce the settled result set via the polite live region (UX-DR16):
+	// listbox contents alone aren't spoken while typing.
+	const lastAnnounced = useRef('');
+	useEffect(() => {
+		if (!showPopup || isFetching || debounced === '') return;
+		const message = hasMatches
+			? `${matches.length} ${matches.length === 1 ? 'match' : 'matches'}.`
+			: `No library match. Add "${debounced}" available.`;
+		if (lastAnnounced.current === message) return;
+		lastAnnounced.current = message;
+		announce(message);
+	}, [showPopup, isFetching, hasMatches, matches.length, debounced, announce]);
+
+	function selectOption(index: number) {
+		if (hasMatches) {
+			const game = matches[index];
+			if (!game) return;
+			// A library match opens its detail view — never a duplicate (FR-42).
+			openDetail(game.id);
+		} else {
+			setAddTitle(debounced);
+		}
+		setOpen(false);
+		setActiveIndex(-1);
+	}
 
 	function onInputKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
 		if (e.key === 'ArrowDown') {
 			e.preventDefault();
 			setOpen(true);
-			if (matches.length > 0)
-				setActiveIndex((i) => Math.min(i + 1, matches.length - 1));
+			if (optionCount > 0)
+				setActiveIndex((i) => Math.min(i + 1, optionCount - 1));
 		} else if (e.key === 'ArrowUp') {
 			e.preventDefault();
-			if (matches.length > 0) setActiveIndex((i) => Math.max(i - 1, 0));
+			if (optionCount > 0) setActiveIndex((i) => Math.max(i - 1, 0));
+		} else if (e.key === 'Enter') {
+			if (showPopup && activeIndex >= 0) {
+				e.preventDefault();
+				selectOption(activeIndex);
+			}
 		} else if (e.key === 'Escape') {
 			setOpen(false);
 			setActiveIndex(-1);
@@ -121,8 +160,8 @@ export function SearchBox() {
 					setActiveIndex(-1);
 				}}
 				onFocus={() => setOpen(true)}
-				// Close the listbox when focus leaves the field (selecting is a no-op
-				// this epic, so no option can steal the blur).
+				// Close the listbox when focus leaves the field. Option activation
+				// happens on mousedown (with preventDefault), so it wins over this.
 				onBlur={() => setOpen(false)}
 				onKeyDown={onInputKeyDown}
 			/>
@@ -136,18 +175,44 @@ export function SearchBox() {
 							tabIndex={-1}
 							aria-selected={index === activeIndex}
 							className={`search-box__option${index === activeIndex ? ' search-box__option--active' : ''}`}
+							// mousedown, not click: it runs before the input's blur closes
+							// the listbox, and preventDefault keeps focus in the field.
+							onMouseDown={(e) => {
+								e.preventDefault();
+								selectOption(index);
+							}}
 						>
 							{game.title}
 						</div>
 					))}
-					{showNoMatch && (
-						// A status message, not a selectable option — so AT doesn't
-						// count "NO MATCH" as a choosable listbox entry.
-						<div className="search-box__empty" role="presentation">
-							NO MATCH
+					{showAddRow && (
+						// The one selectable row when nothing matches (FR-41): a real
+						// option, keyboard-reachable via the combobox.
+						<div
+							id={`${listboxId}-opt-0`}
+							role="option"
+							tabIndex={-1}
+							aria-selected={activeIndex === 0}
+							className={`search-box__option search-box__option--add${activeIndex === 0 ? ' search-box__option--active' : ''}`}
+							data-testid="search-add-option"
+							onMouseDown={(e) => {
+								e.preventDefault();
+								selectOption(0);
+							}}
+						>
+							＋ Add “{debounced}”
 						</div>
 					)}
 				</div>
+			)}
+			{addTitle !== null && (
+				<AddGameDialog
+					title={addTitle}
+					onClose={() => {
+						setAddTitle(null);
+						inputRef.current?.focus();
+					}}
+				/>
 			)}
 		</div>
 	);

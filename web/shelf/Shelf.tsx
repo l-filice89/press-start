@@ -14,6 +14,7 @@ import {
 	type ShelfFilter,
 	summarizeFilterText,
 } from './filters';
+import { OPEN_DETAIL_EVENT } from './open-detail';
 import { useProgressiveList } from './useProgressiveList';
 import './shelf.css';
 
@@ -55,6 +56,34 @@ export function Shelf() {
 function FilteredShelf({ games }: { games: ShelfGame[] }) {
 	const [filter, setFilter] = useState<ShelfFilter>(EMPTY_FILTER);
 	const announce = useAnnounce();
+
+	// Search-pick detail view (Story 6.1, FR-42): the combobox lives in the
+	// header, outside the grid — the window event carries the game id here,
+	// where the WHOLE library payload (hidden states included) is in hand, so
+	// a completed/dropped game found by search still opens. Rendered as its
+	// own panel: ShelfGrid's panel only knows the filtered visible set.
+	const [searchGameId, setSearchGameId] = useState<string | null>(null);
+	useEffect(() => {
+		function onOpen(e: Event) {
+			const id = (e as CustomEvent<string>).detail;
+			if (id) setSearchGameId(id);
+		}
+		window.addEventListener(OPEN_DETAIL_EVENT, onOpen);
+		return () => window.removeEventListener(OPEN_DETAIL_EVENT, onOpen);
+	}, []);
+	const searchGame = searchGameId
+		? games.find((g) => g.id === searchGameId)
+		: undefined;
+	// Stale-id cleanup (3.4 pattern): an id the payload doesn't hold (yet)
+	// clears instead of resurrecting a dialog later.
+	useEffect(() => {
+		if (searchGameId && !searchGame) setSearchGameId(null);
+	}, [searchGameId, searchGame]);
+	const closeSearchDetail = useCallback(() => {
+		setSearchGameId(null);
+		// Focus returns to the search field that opened it (UX-DR19).
+		document.querySelector<HTMLElement>('.search-box__input')?.focus();
+	}, []);
 	const visible = useMemo(
 		() => applyShelfFilter(games, filter),
 		[games, filter],
@@ -159,6 +188,9 @@ function FilteredShelf({ games }: { games: ShelfGame[] }) {
 					<ShelfGrid games={visible} />
 				)}
 			</div>
+			{searchGame && (
+				<DetailPanel game={searchGame} onClose={closeSearchDetail} />
+			)}
 		</>
 	);
 }

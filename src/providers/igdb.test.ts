@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { __resetIgdbTokenCache, createIgdbProvider } from './igdb';
 
 /**
- * Wire-level IGDB adapter tests over a mocked fetch. Two axes:
+ * Wire-level IGDB adapter tests over a mocked fetch. Axes:
  *  - failure-mode fixtures are the REAL payloads captured from a live probe
  *    (2026-07-11, igdb-failure-mode-probe-2026-07-11.md), not hand-written
  *    shapes (PROBE-BEFORE-YOU-MAP). The DEGENERATE-RESPONSE GUARD row is
@@ -10,6 +10,9 @@ import { __resetIgdbTokenCache, createIgdbProvider } from './igdb';
  *  - auth is client-credentials: the app mints/caches a Twitch token from the
  *    permanent id+secret and self-heals a 401 by minting a fresh one — no
  *    manual 60-day rotation. Those rows assert the mint/cache/refresh path.
+ *  - the add-by-name preview (Story 6.1): `searchCandidate` prefers the
+ *    exact-normalized match but falls back to IGDB's top relevance hit (unlike
+ *    `enrich`, which stays exact-or-null).
  */
 
 const HADES = {
@@ -19,6 +22,12 @@ const HADES = {
 	cover: { image_id: 'cob9kr' },
 	genres: [{ name: 'Role-playing (RPG)' }, { name: 'Indie' }],
 };
+
+const igdbGame = (
+	id: number,
+	name: string,
+	extra: Record<string, unknown> = {},
+) => ({ id, name, ...extra });
 
 function jsonResponse(body: unknown, status = 200): Response {
 	return new Response(JSON.stringify(body), {
@@ -124,6 +133,62 @@ describe('createIgdbProvider auth (client-credentials, self-healing)', () => {
 			games: () => jsonResponse([HADES]),
 		});
 		await expect(provider().enrich('Hades')).rejects.toThrow(
+			/IGDB_CLIENT_SECRET/,
+		);
+	});
+});
+
+describe('createIgdbProvider.searchCandidate', () => {
+	it('prefers the exact-normalized match over the top relevance hit', async () => {
+		stubFetch({
+			games: () =>
+				jsonResponse([
+					igdbGame(1, 'Hades II'),
+					igdbGame(2, 'Hades', {
+						first_release_date: 1600300800,
+						cover: { image_id: 'abc' },
+						genres: [{ name: 'Roguelike' }],
+					}),
+				]),
+		});
+
+		const candidate = await provider().searchCandidate('Hades');
+
+		expect(candidate).toEqual({
+			igdbId: '2',
+			name: 'Hades',
+			coverUrl: 'https://images.igdb.com/igdb/image/upload/t_cover_big/abc.jpg',
+			releaseDate: '2020-09-17',
+			genres: ['Roguelike'],
+		});
+	});
+
+	it('falls back to the first result when no normalized-exact match exists', async () => {
+		stubFetch({
+			games: () =>
+				jsonResponse([
+					igdbGame(7, 'Elden Ring: Shadow of the Erdtree'),
+					igdbGame(8, 'Elden Ring II'),
+				]),
+		});
+
+		const candidate = await provider().searchCandidate('elden rin');
+
+		expect(candidate?.igdbId).toBe('7');
+		expect(candidate?.name).toBe('Elden Ring: Shadow of the Erdtree');
+	});
+
+	it('returns null for an empty result set', async () => {
+		stubFetch({ games: () => jsonResponse([]) });
+		expect(await provider().searchCandidate('zzz nothing')).toBeNull();
+	});
+
+	it('throws when auth fails so the caller can degrade (never persists a guess)', async () => {
+		// A persistent 401 self-heals once, then surfaces a credential error.
+		stubFetch({
+			games: () => jsonResponse({ message: 'expired' }, 401),
+		});
+		await expect(provider().searchCandidate('Hades')).rejects.toThrow(
 			/IGDB_CLIENT_SECRET/,
 		);
 	});

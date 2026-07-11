@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseCsv } from './csv';
+import { parseCsv, toCsv } from './csv';
 
 describe('parseCsv (Story 1.6 seed CSV parsing)', () => {
 	it('parses a simple header + rows into keyed records', () => {
@@ -50,5 +50,41 @@ describe('parseCsv (Story 1.6 seed CSV parsing)', () => {
 
 	it('returns an empty array for empty input', () => {
 		expect(parseCsv('')).toEqual([]);
+	});
+});
+
+describe('toCsv (Story 6.3 export, RFC-4180)', () => {
+	it('serializes a grid with CRLF line endings, quoting only when needed', () => {
+		expect(
+			toCsv([
+				['Title', 'Genres'],
+				['Hades', 'Roguelike; Action'],
+			]),
+		).toBe('Title,Genres\r\nHades,Roguelike; Action');
+	});
+
+	it('quotes fields with commas, quotes, or newlines and doubles embedded quotes', () => {
+		expect(toCsv([['Warhammer 40,000: Boltgun']])).toBe(
+			'"Warhammer 40,000: Boltgun"',
+		);
+		expect(toCsv([['She said "hi"']])).toBe('"She said ""hi"""');
+		expect(toCsv([['line1\nline2']])).toBe('"line1\nline2"');
+	});
+
+	it('round-trips with parseCsv', () => {
+		const grid = [
+			['Title', 'Note'],
+			['Celeste', 'has, comma'],
+			['Braid', 'plain'],
+			['Multi', 'line1\nline2'],
+			['Quoted', 'she said "hi"'],
+		];
+		expect(parseCsv(toCsv(grid))).toEqual([
+			{ Title: 'Celeste', Note: 'has, comma' },
+			{ Title: 'Braid', Note: 'plain' },
+			// The quoted-newline cell reassembles — the one case quoting exists for.
+			{ Title: 'Multi', Note: 'line1\nline2' },
+			{ Title: 'Quoted', Note: 'she said "hi"' },
+		]);
 	});
 });

@@ -6,7 +6,7 @@
  * date` column are NOT imported (genres/release come exclusively from IGDB).
  */
 
-import type { PlayStatus } from './types';
+import type { OwnershipType, PlayStatus } from './types';
 
 /** Exact status strings the Notion export emits (see project-context.md). */
 export type NotionStatus =
@@ -46,6 +46,50 @@ export function mapNotionStatus(raw: string): MappedNotionStatus {
 	const mapped = STATUS_MAP[raw.trim() as NotionStatus];
 	if (!mapped) return { known: false };
 	return { known: true, ...mapped };
+}
+
+/** Tracking fields a straggler's raw Notion payload carries onto its game. */
+export interface NotionTracking {
+	owned: boolean;
+	ownershipType: OwnershipType | null;
+	playStatus: PlayStatus | null;
+	completedOn: string | null;
+	startedOn: string | null;
+}
+
+/**
+ * Map a raw Notion row (as stored on an import straggler) onto tracking fields
+ * for payload carry (Story 6.2, FR-28). Pure — the standalone (no-PS) slice of
+ * `seed-reconcile.buildSeedPlan`. Completion invariant is preserved: a usable
+ * finish date lands as `completedOn` with `playStatus` null; an unknown status
+ * or a Completed row with no finish date degrades to `Not started` on the
+ * backlog (exactly how the seed left those), carrying owned + started_on.
+ */
+export function notionRowToTracking(
+	row: Record<string, string>,
+): NotionTracking {
+	// Coerce: the payload is stored JSON, so a hand-written or drifted row could
+	// carry a non-string cell — String() keeps a bad value from throwing a 500.
+	const cell = (key: string) => String(row[key] ?? '');
+	const status = mapNotionStatus(cell('Status'));
+	const owned = cell('Owned').trim().toLowerCase() === 'yes';
+	const startedOn = parseNotionDate(cell('Date started'));
+	const completedOn =
+		status.known && status.completed
+			? parseNotionDate(cell('Date finished'))
+			: null;
+	const playStatus = completedOn
+		? null
+		: status.known && !status.completed
+			? status.playStatus
+			: 'Not started';
+	return {
+		owned,
+		ownershipType: owned ? 'physical' : null,
+		playStatus,
+		completedOn,
+		startedOn,
+	};
 }
 
 const MONTHS: Record<string, string> = {

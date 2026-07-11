@@ -101,11 +101,11 @@ development_status:
   epic-5-retrospective: done # 2026-07-11
 
   # Epic 6: Add at the Moment of Discovery + Chores
-  epic-6: backlog
-  6-1-add-a-game-by-name-the-wishlist-moment: backlog
-  6-2-name-only-fallback-straggler-resolution: backlog
-  6-3-chores-csv-export-settings: backlog
-  6-4-ownership-source-purchased-vs-claimed-un-claim-on-cancel: backlog # added 2026-07-11 (retro item #5 + owned_via manual-set)
+  epic-6: in-progress # 6.1–6.3 (v1) merged 2026-07-11; 6.4 is post-v1
+  6-1-add-a-game-by-name-the-wishlist-moment: done # 2026-07-11
+  6-2-name-only-fallback-straggler-resolution: done # 2026-07-11
+  6-3-chores-csv-export-settings: done # 2026-07-11
+  6-4-ownership-source-purchased-vs-claimed-un-claim-on-cancel: backlog # added 2026-07-11 (retro item #5 + owned_via manual-set); post-v1
   epic-6-retrospective: optional
 
   # Epic 7: Browse the PS+ Catalog & Add — POST-v1.0.0 (not in the v1 milestone)

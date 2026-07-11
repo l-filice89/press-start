@@ -39,7 +39,7 @@ const okResult = () =>
 		),
 	);
 
-function renderFab() {
+function renderFab(handedness: 'left' | 'right' = 'right') {
 	const client = new QueryClient({
 		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 	});
@@ -52,6 +52,7 @@ function renderFab() {
 				<Fab
 					onSyncComplete={onSyncComplete}
 					onPsPlusCheckComplete={onPsPlusCheckComplete}
+					handedness={handedness}
 				/>
 			</ToastHost>
 		</QueryClientProvider>,
@@ -186,5 +187,57 @@ describe('Fab', () => {
 			expect(screen.getByTestId('toast')).toHaveTextContent(/Sync failed/),
 		);
 		expect(invalidate).toHaveBeenCalledWith({ queryKey: ['settings'] });
+	});
+
+	it('Export CSV downloads the 200 body as a file (Story 6.3)', async () => {
+		const { release, fetchMock } = deferredFetch(() =>
+			Promise.resolve(
+				new Response('Title\r\nHades', {
+					status: 200,
+					headers: { 'content-type': 'text/csv' },
+				}),
+			),
+		);
+		// jsdom lacks createObjectURL; the download rides a synthetic anchor click.
+		const createObjectURL = vi.fn(() => 'blob:csv');
+		URL.createObjectURL = createObjectURL;
+		URL.revokeObjectURL = vi.fn();
+		const click = vi
+			.spyOn(HTMLAnchorElement.prototype, 'click')
+			.mockImplementation(() => {});
+		renderFab();
+
+		await userEvent.click(screen.getByRole('button', { name: 'Chores' }));
+		await userEvent.click(screen.getByTestId('fab-export'));
+		release();
+
+		await waitFor(() => expect(click).toHaveBeenCalled());
+		expect(fetchMock).toHaveBeenCalledWith('/api/export.csv');
+		expect(createObjectURL).toHaveBeenCalled();
+		click.mockRestore();
+	});
+
+	it('a failed export toasts instead of saving the error body (Story 6.3)', async () => {
+		const { release } = deferredFetch(() =>
+			Promise.resolve(
+				new Response(JSON.stringify({ error: 'unauthorized' }), {
+					status: 401,
+				}),
+			),
+		);
+		renderFab();
+
+		await userEvent.click(screen.getByRole('button', { name: 'Chores' }));
+		await userEvent.click(screen.getByTestId('fab-export'));
+		release();
+
+		await waitFor(() =>
+			expect(screen.getByTestId('toast')).toHaveTextContent(/Export failed/),
+		);
+	});
+
+	it('places the FAB left-handed when handedness is left (UX-DR10)', () => {
+		renderFab('left');
+		expect(screen.getByTestId('fab')).toHaveClass('fab--left');
 	});
 });

@@ -68,6 +68,18 @@ function splitRows(text: string): string[][] {
 }
 
 /**
+ * Serialize a 2D grid to RFC-4180 CSV — the inverse of `parseCsv` (Story 6.3,
+ * FR-49: the library's user-held second copy). A cell is quoted only when it
+ * contains a comma, a double-quote, or a newline; embedded quotes are doubled.
+ * CRLF line endings, no trailing newline. Pure (AD-3). `rows[0]` is the header.
+ */
+export function toCsv(rows: readonly (readonly string[])[]): string {
+	const quoteCell = (cell: string) =>
+		/[",\r\n]/.test(cell) ? `"${cell.replace(/"/g, '""')}"` : cell;
+	return rows.map((row) => row.map(quoteCell).join(',')).join('\r\n');
+}
+
+/**
  * Parse CSV text into records keyed by the header row. Header names are used
  * verbatim (trimmed); the seed maps them to columns explicitly. Rows shorter
  * than the header are padded with empty strings; extra cells are ignored.

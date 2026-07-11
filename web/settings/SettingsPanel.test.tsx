@@ -37,16 +37,16 @@ function mockFetch(settings: {
 	return fetchMock;
 }
 
-function renderPanel(onClose = vi.fn()) {
+function renderPanel(onClose = vi.fn(), onSignOut = vi.fn()) {
 	const client = new QueryClient({
 		defaultOptions: { queries: { retry: false } },
 	});
 	render(
 		<QueryClientProvider client={client}>
-			<SettingsPanel onClose={onClose} />
+			<SettingsPanel onClose={onClose} onSignOut={onSignOut} />
 		</QueryClientProvider>,
 	);
-	return onClose;
+	return { onClose, onSignOut };
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -91,10 +91,39 @@ describe('SettingsPanel', () => {
 
 	it('disables Save while the field is blank and closes via the Close button', async () => {
 		mockFetch({ psnCookieSet: false, psnAuthExpired: false });
-		const onClose = renderPanel();
+		const { onClose } = renderPanel();
 
 		expect(screen.getByRole('button', { name: 'Save cookie' })).toBeDisabled();
 		await userEvent.click(screen.getByRole('button', { name: 'Close' }));
 		expect(onClose).toHaveBeenCalledTimes(1);
+	});
+
+	it('signs out and offers About/Help (Story 6.3, FR-47)', async () => {
+		mockFetch({ psnCookieSet: false, psnAuthExpired: false });
+		const { onSignOut } = renderPanel();
+
+		expect(screen.getByText(/About & Help/)).toBeInTheDocument();
+		await userEvent.click(screen.getByTestId('settings-sign-out'));
+		expect(onSignOut).toHaveBeenCalledTimes(1);
+	});
+
+	it('toggles FAB handedness, PUTting the chosen side (Story 6.3, UX-DR10)', async () => {
+		const fetchMock = mockFetch({ psnCookieSet: false, psnAuthExpired: false });
+		renderPanel();
+
+		// Default right is pressed; picking left PUTs left.
+		await waitFor(() =>
+			expect(screen.getByTestId('handedness-right')).toHaveAttribute(
+				'aria-pressed',
+				'true',
+			),
+		);
+		await userEvent.click(screen.getByTestId('handedness-left'));
+		await waitFor(() =>
+			expect(fetchMock).toHaveBeenCalledWith(
+				'/api/settings/fab-handedness',
+				expect.objectContaining({ method: 'PUT' }),
+			),
+		);
 	});
 });

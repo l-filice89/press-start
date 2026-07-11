@@ -18,3 +18,12 @@ RESEND_API_KEY=""
 # used while no cookie has been saved in Settings; the in-app value always
 # wins. Production equivalent: bunx wrangler secret put PSN_SESSION_COOKIE
 PSN_SESSION_COOKIE=""
+
+# IGDB (Twitch app) credentials for the add-by-name preview (Story 6.1).
+# Same values as the seed script's .env pair — see .env.example for how to
+# mint them. OPTIONAL: when absent the preview degrades to name-only adds.
+# Production equivalents:
+#   bunx wrangler secret put IGDB_CLIENT_ID
+#   bunx wrangler secret put IGDB_ACCESS_TOKEN
+IGDB_CLIENT_ID=""
+IGDB_ACCESS_TOKEN=""
