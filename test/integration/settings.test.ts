@@ -95,6 +95,7 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 			psnCookieSet: false,
 			psnAuthExpired: false,
 			syncAttention: [],
+			stragglerCount: 0,
 		});
 	});
 

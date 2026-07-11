@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { mapNotionStatus, parseNotionDate } from './notion-status';
+import {
+	mapNotionStatus,
+	notionRowToTracking,
+	parseNotionDate,
+} from './notion-status';
 
 describe('mapNotionStatus (FR-30)', () => {
 	it('maps Completed to a milestone (null play status, completed)', () => {
@@ -57,5 +61,59 @@ describe('parseNotionDate (FR-31/32, AD-8)', () => {
 		expect(parseNotionDate('   ')).toBeNull();
 		expect(parseNotionDate('sometime in 2024')).toBeNull();
 		expect(parseNotionDate('Smarch 4, 2024')).toBeNull();
+	});
+});
+
+describe('notionRowToTracking (Story 6.2, FR-28 payload carry)', () => {
+	it('carries a live status + owned + started date', () => {
+		expect(
+			notionRowToTracking({
+				Status: 'Playing',
+				Owned: 'Yes',
+				'Date started': 'March 3, 2021',
+			}),
+		).toEqual({
+			owned: true,
+			ownershipType: 'physical',
+			playStatus: 'Playing',
+			completedOn: null,
+			startedOn: '2021-03-03',
+		});
+	});
+
+	it('not owned → no ownership type', () => {
+		expect(
+			notionRowToTracking({ Status: 'Paused', Owned: 'no' }),
+		).toMatchObject({
+			owned: false,
+			ownershipType: null,
+			playStatus: 'Paused',
+		});
+	});
+
+	it('unknown status degrades to Not started on the backlog', () => {
+		expect(
+			notionRowToTracking({ Status: 'Wishlist', Owned: 'Yes' }),
+		).toMatchObject({ playStatus: 'Not started', completedOn: null });
+	});
+
+	it('Completed with no finish date → Not started, never a dateless completion (invariant safe)', () => {
+		expect(notionRowToTracking({ Status: 'Completed', Owned: 'Yes' })).toEqual({
+			owned: true,
+			ownershipType: 'physical',
+			playStatus: 'Not started',
+			completedOn: null,
+			startedOn: null,
+		});
+	});
+
+	it('Completed with a finish date → completedOn set, play status null (milestone)', () => {
+		expect(
+			notionRowToTracking({
+				Status: 'Completed',
+				Owned: 'Yes',
+				'Date finished': 'January 2, 2022',
+			}),
+		).toMatchObject({ playStatus: null, completedOn: '2022-01-02' });
 	});
 });

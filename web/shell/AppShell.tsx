@@ -10,6 +10,7 @@ import {
 import { SettingsPanel } from '../settings/SettingsPanel';
 import { SearchBox } from '../shelf/SearchBox';
 import { Shelf } from '../shelf/Shelf';
+import { StragglersDialog } from '../shelf/StragglersDialog';
 import { Background } from './Background';
 import { Fab } from './Fab';
 import { Header } from './Header';
@@ -40,6 +41,7 @@ export function AppShell({
 	signOutFailed?: boolean;
 }) {
 	const [settingsOpen, setSettingsOpen] = useState(false);
+	const [stragglersOpen, setStragglersOpen] = useState(false);
 	// The summary surface has two sources (UX-DR13): a completed sync run
 	// (with counts) or the banner reopening the persisted items (no counts).
 	// Both snapshot their items at open time — a background settings refetch
@@ -53,6 +55,7 @@ export function AppShell({
 		queryFn: ({ signal }) => fetchSettings(signal),
 	});
 	const syncAttention = settings?.syncAttention ?? [];
+	const stragglerCount = settings?.stragglerCount ?? 0;
 
 	// LiveRegionProvider is mounted above the session gate (main.tsx) so the
 	// login swap can announce — the shell only hosts the toast layer now.
@@ -88,6 +91,16 @@ export function AppShell({
 						}}
 					/>
 				)}
+				{stragglerCount > 0 && (
+					<AttentionBanner
+						variant="enrich"
+						message={`${stragglerCount} ${stragglerCount === 1 ? 'game needs' : 'games need'} a games-DB match.`}
+						action={{
+							label: 'Resolve',
+							onClick: () => setStragglersOpen(true),
+						}}
+					/>
+				)}
 				<main className="app-shell__main" id="shelf">
 					<Shelf />
 				</main>
@@ -98,6 +111,9 @@ export function AppShell({
 				}
 			/>
 			{settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
+			{stragglersOpen && (
+				<StragglersDialog onClose={() => setStragglersOpen(false)} />
+			)}
 			{summary && (
 				<SyncSummaryModal
 					result={summary.result}

@@ -1,5 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { d1Query, deleteGames } from '../support/helpers/d1';
+import { createGame } from '../support/factories/game-factory';
+import {
+	d1Execute,
+	d1Query,
+	deleteGames,
+	seedGame,
+} from '../support/helpers/d1';
 import { expect, test } from '../support/merged-fixtures';
 
 /**
@@ -98,4 +104,44 @@ test('add-by-name: ＋ Add row → editable preview → Save → toast → on th
 	expect(saved[0].wishlisted_on).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 
 	await deleteGames([saved[0].id]);
+});
+
+test('stragglers: amber banner surfaces both kinds, the dialog lists them, and a resolve attempt degrades without IGDB creds (6.2)', async ({
+	page,
+}) => {
+	// An import staging row (kind (a)) and a name-only unenriched game (kind (b)).
+	const importId = randomUUID();
+	const importTitle = `E2E Import ${importId.slice(0, 8)}`;
+	const nameOnly = createGame({
+		title: `E2E Name Only ${randomUUID().slice(0, 8)}`,
+		tracking: { owned: false, playStatus: 'Not started' },
+	});
+	await d1Execute(
+		`INSERT INTO import_straggler (id, source_title, notion_payload) VALUES ('${importId}', '${importTitle}', '{}');`,
+	);
+	await seedGame(nameOnly);
+	await d1Execute(
+		`UPDATE game SET unenriched = 1 WHERE id = '${nameOnly.id}';`,
+	);
+
+	await page.goto('/');
+
+	// Amber "enrich" banner (distinct from the sync 'stragglers' variant).
+	const banner = page.getByTestId('attention-banner-enrich');
+	await expect(banner).toBeVisible();
+	await banner.getByRole('button', { name: 'Resolve' }).click();
+
+	const dialog = page.getByTestId('stragglers-dialog');
+	await expect(dialog).toBeVisible();
+	await expect(dialog.getByText(importTitle)).toBeVisible();
+	await expect(dialog.getByText(nameOnly.title)).toBeVisible();
+
+	// Pick one → the dialog auto-searches the games DB; e2e carries no IGDB
+	// creds, so the search returns nothing and says so (NFR-4). The actual
+	// IGDB pick + resolve is pinned in integration (stragglers.test.ts).
+	await dialog.getByRole('button', { name: 'Find a match' }).first().click();
+	await expect(dialog.getByText(/No games-DB match found/)).toBeVisible();
+
+	await d1Execute(`DELETE FROM import_straggler WHERE id = '${importId}';`);
+	await deleteGames([nameOnly.id]);
 });

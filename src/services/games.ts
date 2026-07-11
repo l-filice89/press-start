@@ -32,7 +32,7 @@ export interface AddGamePreview {
 
 /** IGDB preview for the add dialog. Failures degrade, never throw (AD-14). */
 export async function previewAddGame(
-	igdb: IgdbSearch | null,
+	igdb: Pick<IgdbSearch, 'searchCandidate'> | null,
 	title: string,
 ): Promise<AddGamePreview> {
 	if (!igdb) return { available: false, candidate: null };

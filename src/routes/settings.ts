@@ -11,6 +11,7 @@ import {
 	readSyncAttention,
 	TIMEZONE_SETTING_KEY,
 } from '../services/settings';
+import { countStragglers } from '../services/stragglers';
 import { type AuthVariables, requireAuth } from './auth';
 
 /**
@@ -56,12 +57,13 @@ settingsRoute.get('/settings', requireAuth, async (c) => {
 	// Presence reflects the EFFECTIVE cookie (saved setting or the Wrangler
 	// secret seed) — a deployment running on the seed must not claim "no
 	// cookie" while sync works.
-	const [timezone, psnCookie, psnAuthExpired, syncAttention] =
+	const [timezone, psnCookie, psnAuthExpired, syncAttention, stragglerCount] =
 		await Promise.all([
 			getSetting(db, userId, TIMEZONE_SETTING_KEY),
 			getPsnCookie(db, userId, c.env),
 			isPsnAuthExpired(db, userId),
 			readSyncAttention(db, userId),
+			countStragglers(db, userId),
 		]);
 	return c.json(
 		{
@@ -69,6 +71,8 @@ settingsRoute.get('/settings', requireAuth, async (c) => {
 			psnCookieSet: Boolean(psnCookie),
 			psnAuthExpired,
 			syncAttention,
+			// Drives the amber "needs a match" banner (Story 6.2, AR-22).
+			stragglerCount,
 		},
 		200,
 	);

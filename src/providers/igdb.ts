@@ -41,6 +41,11 @@ export interface IgdbCandidate extends IgdbEnrichment {
  */
 export interface IgdbSearch {
 	searchCandidate(title: string): Promise<IgdbCandidate | null>;
+	/**
+	 * Up to `limit` candidates for the straggler-resolution pick list (Story
+	 * 6.2) — a wrong top hit shouldn't be a dead end, so the user chooses.
+	 */
+	searchCandidates(title: string, limit?: number): Promise<IgdbCandidate[]>;
 }
 
 export interface IgdbConfig {
@@ -162,6 +167,21 @@ export function createIgdbProvider(
 			// of the response schema throwing a 500.
 			if (game.id === undefined || !game.name) return null;
 			return { igdbId: String(game.id), name: game.name, ...enrichment(game) };
+		},
+
+		async searchCandidates(title, limit = 10) {
+			const games = await searchGames(title);
+			const candidates: IgdbCandidate[] = [];
+			for (const game of games) {
+				if (game.id === undefined || !game.name) continue;
+				candidates.push({
+					igdbId: String(game.id),
+					name: game.name,
+					...enrichment(game),
+				});
+				if (candidates.length >= limit) break;
+			}
+			return candidates;
 		},
 	};
 }

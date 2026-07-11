@@ -6,6 +6,7 @@ import { genresRoute } from './genres';
 import { healthRoute } from './health';
 import { settingsRoute } from './settings';
 import { shelfRoute } from './shelf';
+import { stragglersRoute } from './stragglers';
 import { syncRoute } from './sync';
 import { trackingRoute } from './tracking';
 
@@ -22,6 +23,7 @@ apiRoutes.route('/', meRoute);
 apiRoutes.route('/', shelfRoute);
 apiRoutes.route('/', trackingRoute);
 apiRoutes.route('/', gamesRoute);
+apiRoutes.route('/', stragglersRoute);
 apiRoutes.route('/', genresRoute);
 apiRoutes.route('/', settingsRoute);
 apiRoutes.route('/', syncRoute);

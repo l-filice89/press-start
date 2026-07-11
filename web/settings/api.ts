@@ -23,6 +23,9 @@ export const settingsSchema = z.object({
 	// Defaulted: a deploy-skewed/cached response without the field must not
 	// reject the whole settings payload (timezone + PSN banner ride on it).
 	syncAttention: z.array(syncAttentionItemSchema).default([]),
+	// Games needing a games-DB match (import stragglers + name-only adds) —
+	// feeds the amber "enrich" banner (Story 6.2). Defaulted for the same reason.
+	stragglerCount: z.number().default(0),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;

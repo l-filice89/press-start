@@ -103,7 +103,7 @@ development_status:
   # Epic 6: Add at the Moment of Discovery + Chores
   epic-6: in-progress
   6-1-add-a-game-by-name-the-wishlist-moment: done # 2026-07-11
-  6-2-name-only-fallback-straggler-resolution: backlog
+  6-2-name-only-fallback-straggler-resolution: done # 2026-07-11
   6-3-chores-csv-export-settings: backlog
   epic-6-retrospective: optional
 

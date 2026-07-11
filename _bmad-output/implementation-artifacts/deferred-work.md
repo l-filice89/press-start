@@ -210,3 +210,6 @@ status: open
 - source_spec: `_bmad-output/implementation-artifacts/spec-6-1-add-a-game-by-name.md`
   summary: Search-pick detail open assumes the `['shelf']` query holds the ENTIRE library — if the shelf payload ever becomes server-paginated/filtered, picking a valid search hit outside the loaded page silently opens nothing.
   evidence: web/shelf/Shelf.tsx FilteredShelf resolves searchGameId via games.find() over the shelf payload and a cleanup effect clears an id it can't find; /api/shelf/search is a separate whole-library endpoint. Correct today (shelf payload is the full set, client-paginated); becomes a silent no-op the day the shelf query gains server-side paging.
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-2-name-only-fallback-straggler-resolution.md`
+  summary: Resolving an `unenriched` straggler to an igdbId already linked to a DIFFERENT game enriches + de-flags the game but writes no IGDB link (anchorIgdb no-ops), leaving two catalog rows for one IGDB game — the duplicate FR-29 aims to prevent.
+  evidence: src/services/stragglers.ts resolveStraggler unenriched branch fixes gameRow to input.id; anchorIgdb only links when the id is unlinked. Only reachable when the same IGDB game is already in the catalog under another row. Rare in the single-user catalog; needs a conflict outcome (merge or 409) surfaced to the resolve UI.

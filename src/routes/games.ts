@@ -1,9 +1,34 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { createIgdbProvider } from '../providers';
+import { createIgdbProvider, type IgdbSearch } from '../providers';
 import { createDb } from '../repositories/db';
-import { addGame, previewAddGame, todayForUser } from '../services';
+import {
+	addGame,
+	previewAddGame,
+	searchGamesForResolve,
+	todayForUser,
+} from '../services';
 import { type AuthVariables, requireAuth } from './auth';
+
+/**
+ * IGDB creds are Wrangler secrets (absent in e2e/dev until set) — the generated
+ * Env type only knows secrets present in `.dev.vars`, so read them loosely.
+ * Missing creds return null and every caller degrades to name-only (NFR-4).
+ * ponytail: static access token, no Twitch refresh — an expired token degrades
+ * the same way; refresh in-Worker if that ever starts biting.
+ */
+function igdbFromEnv(rawEnv: Env): IgdbSearch | null {
+	const env = rawEnv as Env & {
+		IGDB_CLIENT_ID?: string;
+		IGDB_ACCESS_TOKEN?: string;
+	};
+	return env.IGDB_CLIENT_ID && env.IGDB_ACCESS_TOKEN
+		? createIgdbProvider({
+				clientId: env.IGDB_CLIENT_ID,
+				accessToken: env.IGDB_ACCESS_TOKEN,
+			})
+		: null;
+}
 
 /**
  * The add-by-name boundary (Story 6.1, FR-41/42/43): a preview GET that asks
@@ -63,24 +88,32 @@ gamesRoute.get('/games/preview', requireAuth, async (c) => {
 		return c.json({ error: 'invalid title' }, 400);
 	}
 
-	// IGDB creds are Wrangler secrets (absent in e2e/dev until set) — the
-	// generated Env type only knows secrets present in .dev.vars, so read
-	// them loosely. Missing creds degrade to a name-only preview (NFR-4).
-	const env = c.env as Env & {
-		IGDB_CLIENT_ID?: string;
-		IGDB_ACCESS_TOKEN?: string;
-	};
-	// ponytail: static access token, no Twitch refresh — an expired token
-	// degrades to name-only adds; refresh in-Worker if that starts biting.
-	const igdb =
-		env.IGDB_CLIENT_ID && env.IGDB_ACCESS_TOKEN
-			? createIgdbProvider({
-					clientId: env.IGDB_CLIENT_ID,
-					accessToken: env.IGDB_ACCESS_TOKEN,
-				})
-			: null;
-	const preview = await previewAddGame(igdb, title);
+	const preview = await previewAddGame(igdbFromEnv(c.env), title);
 	return c.json(previewResponseSchema.parse(preview), 200);
+});
+
+const searchResponseSchema = z.object({
+	candidates: z.array(
+		z.object({
+			igdbId: z.string(),
+			name: z.string(),
+			coverUrl: z.string().nullable(),
+			releaseDate: z.string().nullable(),
+			genres: z.array(z.string()),
+		}),
+	),
+});
+
+// Multi-result IGDB search for straggler resolution (Story 6.2): the user
+// picks the right match, so this returns a list (empty when creds are absent
+// or IGDB is down — the caller shows the degraded notice).
+gamesRoute.get('/games/search', requireAuth, async (c) => {
+	const title = (c.req.query('title') ?? '').trim();
+	if (!title || title.length > 200) {
+		return c.json({ error: 'invalid title' }, 400);
+	}
+	const candidates = await searchGamesForResolve(igdbFromEnv(c.env), title);
+	return c.json(searchResponseSchema.parse({ candidates }), 200);
 });
 
 gamesRoute.post('/games', requireAuth, async (c) => {

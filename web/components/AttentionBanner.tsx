@@ -7,10 +7,13 @@ import './attention-banner.css';
  * visible. Reusable seam; rendered with no live data in this shell.
  *
  * Variants map to a tone (DESIGN.md): stragglers = amber, expired-cookie =
- * magenta, failed-refresh = steel.
+ * magenta, failed-refresh = steel. `enrich` (Story 6.2) is a second amber
+ * source — games needing a games-DB match — kept distinct from `stragglers`
+ * (sync conflicts) so the two attention sources address unambiguously.
  */
 export type AttentionVariant =
 	| 'stragglers'
+	| 'enrich'
 	| 'expired-cookie'
 	| 'failed-refresh';
 
