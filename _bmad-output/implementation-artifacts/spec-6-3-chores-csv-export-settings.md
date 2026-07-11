@@ -2,9 +2,10 @@
 title: 'Story 6.3: Chores — CSV export & settings'
 type: 'feature'
 created: '2026-07-11'
-status: 'in-review'
+status: 'done'
 baseline_revision: '0b544b9'
-review_loop_iteration: 0
+review_loop_iteration: 1
+final_revision: '6b0f875'
 followup_review_recommended: false
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-6-context.md'
