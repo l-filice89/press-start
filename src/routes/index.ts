@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { authRoute, meRoute } from './auth';
 import { e2eRoute } from './e2e';
+import { gamesRoute } from './games';
 import { genresRoute } from './genres';
 import { healthRoute } from './health';
 import { settingsRoute } from './settings';
@@ -20,6 +21,7 @@ apiRoutes.route('/', authRoute);
 apiRoutes.route('/', meRoute);
 apiRoutes.route('/', shelfRoute);
 apiRoutes.route('/', trackingRoute);
+apiRoutes.route('/', gamesRoute);
 apiRoutes.route('/', genresRoute);
 apiRoutes.route('/', settingsRoute);
 apiRoutes.route('/', syncRoute);

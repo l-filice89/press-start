@@ -58,6 +58,13 @@
 	background: rgba(18, 179, 255, 0.16);
 }
 
+/* The `＋ Add "<name>"` row (Story 6.1): selectable, visually an action. */
+.search-box__option--add {
+	color: var(--color-success-green);
+	cursor: pointer;
+	font-weight: 600;
+}
+
 .search-box__empty {
 	padding: var(--space-3);
 	text-align: center;

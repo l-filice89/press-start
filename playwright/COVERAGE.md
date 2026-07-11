@@ -29,7 +29,7 @@ it, or `skipped` with the reason. Epic 2 rows land with story 2.5.3.
 | 1.7a card content (cover/title/pill/owned/flags; genres desktop-only) | `epic1-shelf.spec.ts` › shelf renders card content (title/state/OWNED/cover-fallback/PS+ flag; release + milestone flags jsdom-pinned in `Card.test.tsx`); genres delta in `epic1-responsive.spec.ts` |
 | 1.7b default visible set + ordering (state → owned → alpha) | `epic1-shelf.spec.ts` › default shelf hides finished states and orders by state → owned → alpha |
 | 1.7c progressive render / infinite scroll | `epic1-shelf.spec.ts` › infinite scroll reveals the next page (first fold = PAGE_SIZE + one growth event; full-set exhaustion exercised by loadAllPages in the ordering test) |
-| 1.7d whole-library search ignoring filters/hidden states | `epic1-shelf.spec.ts` › whole-library search matches games hidden from the shelf (match visibility only — selecting a result is a known open deviation from the Epic 2 retro, not yet a shipped behavior to pin) |
+| 1.7d whole-library search ignoring filters/hidden states | `epic1-shelf.spec.ts` › whole-library search matches games hidden from the shelf (match visibility); selecting a result now opens detail — shipped by Story 6.1, pinned in `epic6.spec.ts` › picking an existing library match opens its detail view |
 | 1.7e skeleton first load + INSERT GAMES empty state | `epic1-shelf.spec.ts` › first load shows skeletons; › empty library shows INSERT GAMES |
 | 1.7f covers from persisted data, no third-party fetch on render | skipped — architecture NFR, unverified in e2e (no fixture seeds a cover_url; networkErrorMonitor only catches 4xx/5xx, not successful third-party fetches) |
 | 1.7g focusable grid with arrow traversal in reading order | `epic1-shelf.spec.ts` › shelf grid supports arrow traversal in reading order |
@@ -115,3 +115,17 @@ Epic 1's deferred 1.5h (prefers-reduced-motion) is closed by
 | 4.3b needs-action items seed the persistent attention banner, surviving the modal and reloads | `epic4-settings.spec.ts` › persisted sync needs-attention feeds the amber banner… (fresh-load banner + reload persistence; the sync-run→persist write and self-resolution in `sync.test.ts` integration hazards) |
 | 4.3c summary offers a button jumping to the problem | `epic4-settings.spec.ts` › persisted sync needs-attention… ("Find in library" → search seeded + focused); seed mechanics also jsdom-pinned in `SearchBox.test.tsx` and `SyncSummaryModal.test.tsx` |
 | ad-hoc FR-9 amendment: claimed games show a PS+ tag on the OWNED chip | `epic4-settings.spec.ts` › a game owned via PS+ claim carries the PS+ tag on its card (purchase negative asserted; chip content also jsdom-pinned in `Card.test.tsx`; the detail panel's acquisition-source line — claim/purchase/silent-NULL — jsdom-pinned in `DetailPanel.test.tsx`, same DTO field the e2e already drives) |
+
+## Epic 6
+
+The e2e env carries no IGDB creds (`.dev.vars.e2e`), so Playwright drives the
+name-only path; the IGDB-prefill half is pinned in Vitest (`igdb.test.ts` wire
+rows, `games.test.ts` integration).
+
+| AC | Coverage |
+|----|----------|
+| 6.1a library match → detail view, no duplicate created | `epic6.spec.ts` › picking an existing library match opens its detail view — no duplicate |
+| 6.1b no match → `＋ Add` row → preview prefilled, all editable, nothing persisted before Save | `epic6.spec.ts` › add-by-name … (Add row, editable title, name-only notice, pre-Save DB count = 0); IGDB prefill pinned in `games.test.ts` › preview/enriched-add integration (no external calls in e2e) |
+| 6.1c save owned off/on → CTA "Add to wishlist"/"Add as owned" + matching defaults | `epic6.spec.ts` › add-by-name … (CTA follows the owned toggle; wishlist defaults asserted in D1); owned-as-purchase defaults pinned in `games.test.ts` › add-as-owned |
+| 6.1d unknown IGDB genres auto-created + linked on save | pinned in `games.test.ts` › genre auto-create (e2e runs the name-only path with no IGDB genres — unreachable there) |
+| 6.1e successful add → toast + game on the shelf without reload | `epic6.spec.ts` › add-by-name … (toast + gridcell appear post-Save) |

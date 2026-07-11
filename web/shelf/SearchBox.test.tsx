@@ -40,6 +40,14 @@ function mockSearch(games: ShelfGame[]) {
 		'fetch',
 		vi.fn(async (url: string) => {
 			calls.push(url);
+			// The add dialog's preview call (Story 6.1) rides the same stub.
+			if (url.startsWith('/api/games/preview')) {
+				return {
+					ok: true,
+					status: 200,
+					json: async () => ({ available: false, candidate: null }),
+				};
+			}
 			return { ok: true, status: 200, json: async () => ({ games }) };
 		}),
 	);
@@ -76,7 +84,7 @@ describe('SearchBox', () => {
 		expect(input).toHaveAttribute('aria-expanded', 'true');
 	});
 
-	it('shows NO MATCH when the whole-library query returns nothing', async () => {
+	it('offers ＋ Add when the whole-library query returns nothing (Story 6.1)', async () => {
 		const user = userEvent.setup();
 		mockSearch([]);
 		renderSearch();
@@ -85,7 +93,9 @@ describe('SearchBox', () => {
 			screen.getByRole('combobox', { name: 'Search your library' }),
 			'zzz',
 		);
-		expect(await screen.findByText('NO MATCH')).toBeInTheDocument();
+		expect(await screen.findByTestId('search-add-option')).toHaveTextContent(
+			'Add “zzz”',
+		);
 	});
 
 	it('focuses the field on the global "/" shortcut', async () => {
@@ -97,6 +107,67 @@ describe('SearchBox', () => {
 		expect(input).not.toHaveFocus();
 		await user.keyboard('/');
 		expect(input).toHaveFocus();
+	});
+
+	it('picking a match dispatches the open-detail event — never a create (Story 6.1, FR-42)', async () => {
+		const user = userEvent.setup();
+		mockSearch([card('g-42', 'Apex Legends')]);
+		renderSearch();
+		const opened: string[] = [];
+		const { OPEN_DETAIL_EVENT } = await import('./open-detail');
+		const onOpen = (e: Event) => opened.push((e as CustomEvent<string>).detail);
+		window.addEventListener(OPEN_DETAIL_EVENT, onOpen);
+
+		await user.type(
+			screen.getByRole('combobox', { name: 'Search your library' }),
+			'apex',
+		);
+		const option = await screen.findByRole('option', { name: 'Apex Legends' });
+		// mousedown activates (it must beat the input's blur) — pointer covers it.
+		await user.pointer({ keys: '[MouseLeft]', target: option });
+
+		expect(opened).toEqual(['g-42']);
+		// The listbox closed; nothing was POSTed.
+		expect(screen.queryByRole('option')).not.toBeInTheDocument();
+		window.removeEventListener(OPEN_DETAIL_EVENT, onOpen);
+	});
+
+	it('keyboard ArrowDown+Enter selects the active match', async () => {
+		const user = userEvent.setup();
+		mockSearch([card('g-1', 'Hades')]);
+		renderSearch();
+		const opened: string[] = [];
+		const { OPEN_DETAIL_EVENT } = await import('./open-detail');
+		const onOpen = (e: Event) => opened.push((e as CustomEvent<string>).detail);
+		window.addEventListener(OPEN_DETAIL_EVENT, onOpen);
+
+		const input = screen.getByRole('combobox', { name: 'Search your library' });
+		await user.type(input, 'hades');
+		await screen.findByRole('option', { name: 'Hades' });
+		await user.keyboard('{ArrowDown}{Enter}');
+
+		expect(opened).toEqual(['g-1']);
+		window.removeEventListener(OPEN_DETAIL_EVENT, onOpen);
+	});
+
+	it('no library match → the one option is ＋ Add, which opens the preview dialog (FR-41)', async () => {
+		const user = userEvent.setup();
+		mockSearch([]);
+		renderSearch();
+
+		await user.type(
+			screen.getByRole('combobox', { name: 'Search your library' }),
+			'Tunic',
+		);
+		const addRow = await screen.findByTestId('search-add-option');
+		expect(addRow).toHaveAttribute('role', 'option');
+		expect(addRow).toHaveTextContent('Add “Tunic”');
+
+		await user.pointer({ keys: '[MouseLeft]', target: addRow });
+		const dialog = await screen.findByTestId('add-game-dialog');
+		expect(dialog).toBeInTheDocument();
+		// Pre-filled with the typed name; nothing committed until Save.
+		expect(screen.getByLabelText('Title')).toHaveValue('Tunic');
 	});
 
 	it('a seed event fills the field, focuses it, and opens the matches (Story 4.3 jump)', async () => {

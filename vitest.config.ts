@@ -41,6 +41,10 @@ export default defineConfig({
 								BETTER_AUTH_SECRET:
 									'vitest-only-better-auth-secret-0123456789abcdef',
 								RESEND_API_KEY: '',
+								// Same isolation for IGDB (Story 6.1): tests must never
+								// reach the live API — the preview route degrades instead.
+								IGDB_CLIENT_ID: '',
+								IGDB_ACCESS_TOKEN: '',
 							},
 						},
 					}),
