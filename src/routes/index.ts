@@ -3,6 +3,7 @@ import { authRoute, meRoute } from './auth';
 import { e2eRoute } from './e2e';
 import { genresRoute } from './genres';
 import { healthRoute } from './health';
+import { psPlusRoute } from './psplus';
 import { settingsRoute } from './settings';
 import { shelfRoute } from './shelf';
 import { syncRoute } from './sync';
@@ -23,4 +24,5 @@ apiRoutes.route('/', trackingRoute);
 apiRoutes.route('/', genresRoute);
 apiRoutes.route('/', settingsRoute);
 apiRoutes.route('/', syncRoute);
+apiRoutes.route('/', psPlusRoute);
 apiRoutes.route('/', e2eRoute); // 404s unless E2E_TEST_HOOKS=1 (local e2e env only)

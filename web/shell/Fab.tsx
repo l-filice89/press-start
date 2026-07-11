@@ -2,21 +2,29 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useAnnounce } from '../components/LiveRegion';
 import { useToast } from '../components/Toast';
-import { runSync, type SyncResult } from '../settings/api';
+import {
+	type PsPlusCheckResult,
+	runPsPlusCheck,
+	runSync,
+	type SyncResult,
+} from '../settings/api';
 import './fab.css';
 
 /**
  * The FAB drawer (Story 4.2, EXPERIENCE.md "chores only"): a fixed
- * bottom-right toggle opening an upward item list. Need-scoped — Sync is the
- * only item; Epic 5/6 add their own (PS+ check, export, settings, about).
+ * bottom-right toggle opening an upward item list. Need-scoped — Sync (4.2)
+ * and Check PS+ Extra (5.1); Epic 6 adds its own (export, settings, about).
  * Long-op items show a spinner while running (UX-DR10). Escape and
  * outside-click close the drawer; icons-only on phone, icons+text desktop.
  */
 export function Fab({
 	onSyncComplete,
+	onPsPlusCheckComplete,
 }: {
 	/** Receives every completed run's result — AppShell opens the summary modal (FR-37). */
 	onSyncComplete: (result: SyncResult) => void;
+	/** Receives every completed PS+ check's result — AppShell opens its readout (FR-38). */
+	onPsPlusCheckComplete: (result: PsPlusCheckResult) => void;
 }) {
 	const [open, setOpen] = useState(false);
 	const rootRef = useRef<HTMLDivElement>(null);
@@ -55,7 +63,23 @@ export function Fab({
 		},
 		onSettled: () => setOpen(false),
 	});
-	syncPendingRef.current = sync.isPending;
+
+	const check = useMutation({
+		mutationFn: runPsPlusCheck,
+		onSuccess: (result: PsPlusCheckResult) => {
+			announce('PS plus check complete.');
+			onPsPlusCheckComplete(result);
+			// Flags feed playableNow — the shelf must re-derive.
+			queryClient.invalidateQueries({ queryKey: ['shelf'] });
+			queryClient.invalidateQueries({ queryKey: ['shelf-search'] });
+		},
+		onError: () => {
+			toast({ message: 'PS+ check failed — try again later.' });
+		},
+		onSettled: () => setOpen(false),
+	});
+
+	syncPendingRef.current = sync.isPending || check.isPending;
 
 	useEffect(() => {
 		if (!open) return;
@@ -84,7 +108,7 @@ export function Fab({
 						type="button"
 						className="fab__item tap-target"
 						onClick={() => sync.mutate()}
-						disabled={sync.isPending}
+						disabled={sync.isPending || check.isPending}
 						aria-label="Sync library"
 						data-testid="fab-sync"
 					>
@@ -97,6 +121,28 @@ export function Fab({
 						</span>
 						<span className="fab__item-label">
 							{sync.isPending ? 'Syncing…' : 'Sync library'}
+						</span>
+					</button>
+					<button
+						type="button"
+						className="fab__item tap-target"
+						onClick={() => check.mutate()}
+						disabled={sync.isPending || check.isPending}
+						aria-label="Check PS+ Extra"
+						data-testid="fab-psplus-check"
+					>
+						<span className="fab__item-icon" aria-hidden="true">
+							{check.isPending ? (
+								<span
+									className="fab__spinner"
+									data-testid="fab-psplus-spinner"
+								/>
+							) : (
+								'✦'
+							)}
+						</span>
+						<span className="fab__item-label">
+							{check.isPending ? 'Checking…' : 'Check PS+ Extra'}
 						</span>
 					</button>
 				</div>

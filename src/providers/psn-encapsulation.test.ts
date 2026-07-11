@@ -37,6 +37,11 @@ const PSN_AUTH_PATTERNS: {
 		allowed: [PROVIDER],
 	},
 	{
+		label: 'the persisted categoryGridRetrieve query (PS+ catalog, 5.1)',
+		pattern: /categoryGridRetrieve|4ce7d410a4db2c8b/,
+		allowed: [PROVIDER],
+	},
+	{
 		// The NAME may appear where the user is told what to copy (panel
 		// instructions) and where the paste is sanitized (settings route's
 		// leading-`pdccws_p=` strip) — copy and input hygiene, not mechanics.

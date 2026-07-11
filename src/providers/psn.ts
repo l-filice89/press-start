@@ -18,6 +18,20 @@ const PSN_TIMEOUT_MS = 30_000;
 // 4,000 games, safely inside the 50-external-subrequests budget (AD-15).
 const MAX_PAGES = 40;
 
+// PS+ Game Catalog (Story 5.1, FR-38/39): the public store-browse category
+// grid — persisted query + category id pinned from the store web app
+// (research 2026-07-11, mrt1m/playstation-store-api). No auth: region rides
+// the `x-psn-store-locale-override` header.
+const CATALOG_OPERATION = 'categoryGridRetrieve';
+const CATALOG_QUERY_HASH =
+	'4ce7d410a4db2c8b635a48c1dcec375906ff63b19dadd87e073f8fd0c0481d35';
+/** "PS Plus Game Catalog — All games" store category (region-independent id). */
+const PS_PLUS_CATALOG_CATEGORY = '3a7006fe-e26f-49fe-87e5-4473d7ed0fb2';
+const CATALOG_PAGE_SIZE = 100;
+// ~500-catalog fits in 5-6 pages even if the server caps pages at 24; the cap
+// keeps a totalCount regression inside the 50-subrequest budget (AD-15).
+const CATALOG_MAX_PAGES = 30;
+
 /**
  * Cookie missing or rejected (401/403). Thrown after exactly ONE attempt —
  * the caller surfaces the refresh instructions, never retries (NFR-4, AD-14).
@@ -55,6 +69,12 @@ export interface PsnGame {
 export interface PsnProvider {
 	/** The full purchased list, paginated until `pageInfo.isLast`. */
 	fetchPurchasedGames(): Promise<PsnGame[]>;
+	/**
+	 * Product names currently in the region's PS+ Game Catalog (Story 5.1,
+	 * FR-38). Public store-browse endpoint — no session cookie involved, so
+	 * `PsnAuthError` semantics don't apply; any failure is a plain error.
+	 */
+	fetchPsPlusExtraCatalog(region: string): Promise<string[]>;
 }
 
 interface RawPsnGame {
@@ -93,6 +113,30 @@ function toPsnGame(game: RawPsnGame): PsnGame {
 		imageUrl: game.image?.url ?? null,
 		storeUrl: storeUrl(game),
 	};
+}
+
+interface CatalogPage {
+	products: { name?: string }[];
+	pageInfo: { totalCount?: number };
+}
+
+function catalogPageUrl(offset: number): string {
+	const variables = {
+		id: PS_PLUS_CATALOG_CATEGORY,
+		pageArgs: { size: CATALOG_PAGE_SIZE, offset },
+		sortBy: { name: 'productReleaseDate', isAscending: false },
+		filterBy: [],
+		facetOptions: [],
+	};
+	const extensions = {
+		persistedQuery: { version: 1, sha256Hash: CATALOG_QUERY_HASH },
+	};
+	const query = new URLSearchParams({
+		operationName: CATALOG_OPERATION,
+		variables: JSON.stringify(variables),
+		extensions: JSON.stringify(extensions),
+	});
+	return `${API_URL}?${query}`;
 }
 
 function pageUrl(start: number): string {
@@ -176,6 +220,49 @@ export function createPsnProvider({
 		return page;
 	}
 
+	async function fetchCatalogPage(
+		region: string,
+		offset: number,
+	): Promise<CatalogPage> {
+		const response = await fetch(catalogPageUrl(offset), {
+			headers: {
+				accept: 'application/json',
+				'content-type': 'application/json',
+				'x-psn-store-locale-override': region,
+			},
+			signal: AbortSignal.timeout(PSN_TIMEOUT_MS),
+		});
+		if (!response.ok) {
+			throw new Error(
+				`PS+ catalog request failed: ${response.status} ${(await response.text()).slice(0, 500)}`,
+			);
+		}
+		const text = await response.text();
+		let payload: {
+			errors?: unknown;
+			data?: { categoryGridRetrieve?: CatalogPage };
+		};
+		try {
+			payload = JSON.parse(text);
+		} catch {
+			throw new Error(
+				`PS+ catalog returned non-JSON (${response.status}): ${text.slice(0, 200)}`,
+			);
+		}
+		if (payload.errors) {
+			throw new Error(
+				`PS+ catalog GraphQL error: ${JSON.stringify(payload.errors)}`,
+			);
+		}
+		const page = payload.data?.categoryGridRetrieve;
+		if (!page || !Array.isArray(page.products) || !page.pageInfo) {
+			throw new Error(
+				'PS+ catalog response missing a well-formed categoryGridRetrieve page',
+			);
+		}
+		return page;
+	}
+
 	return {
 		async fetchPurchasedGames() {
 			const cookie = await getCookie();
@@ -195,6 +282,29 @@ export function createPsnProvider({
 				start += page.games.length;
 			}
 			return games;
+		},
+
+		async fetchPsPlusExtraCatalog(region: string) {
+			const names: string[] = [];
+			let offset = 0;
+			for (let pageCount = 0; ; pageCount++) {
+				if (pageCount >= CATALOG_MAX_PAGES) {
+					throw new Error(
+						`PS+ catalog pagination exceeded ${CATALOG_MAX_PAGES} pages — aborting instead of looping.`,
+					);
+				}
+				const page = await fetchCatalogPage(region, offset);
+				for (const product of page.products) {
+					if (typeof product.name === 'string') names.push(product.name);
+				}
+				// The server may cap the page below the requested size — advance by
+				// what actually arrived, or a capped page would skip catalog rows.
+				if (page.products.length === 0) break;
+				offset += page.products.length;
+				const total = page.pageInfo.totalCount;
+				if (typeof total === 'number' && offset >= total) break;
+			}
+			return names;
 		},
 	};
 }

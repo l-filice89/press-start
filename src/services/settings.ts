@@ -37,6 +37,27 @@ export async function getPsnCookie(
 	return stored || env.PSN_SESSION_COOKIE?.trim() || undefined;
 }
 
+/**
+ * PSN store region (Story 5.1, AR-18/23): the locale the PS+ Extra catalog is
+ * checked against. `SETTING` wins; the `PSN_REGION` Wrangler var only seeds —
+ * and the seed is PERSISTED on first read so the button and the cron (5.2)
+ * can never diverge on a config change between runs.
+ */
+export const PSN_REGION_SETTING_KEY = 'psn_region';
+
+export async function getPsnRegion(
+	db: Db,
+	userId: string,
+	env: { PSN_REGION?: string },
+): Promise<string | undefined> {
+	const stored = await getSetting(db, userId, PSN_REGION_SETTING_KEY);
+	if (stored) return stored;
+	const seed = env.PSN_REGION?.trim();
+	if (!seed) return undefined;
+	await setSetting(db, userId, PSN_REGION_SETTING_KEY, seed);
+	return seed;
+}
+
 /** Persist the PSN-rejected state so the banner survives reloads (NFR-4). */
 export async function markPsnAuthExpired(db: Db, userId: string) {
 	await setSetting(db, userId, PSN_AUTH_SETTING_KEY, PSN_AUTH_EXPIRED);

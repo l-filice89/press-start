@@ -4,6 +4,7 @@ import { AttentionBanner } from '../components/AttentionBanner';
 import { ToastHost } from '../components/Toast';
 import {
 	fetchSettings,
+	type PsPlusCheckResult,
 	type SyncAttentionItem,
 	type SyncResult,
 } from '../settings/api';
@@ -13,6 +14,7 @@ import { Shelf } from '../shelf/Shelf';
 import { Background } from './Background';
 import { Fab } from './Fab';
 import { Header } from './Header';
+import { PsPlusCheckModal } from './PsPlusCheckModal';
 import { SyncSummaryModal } from './SyncSummaryModal';
 import './app-shell.css';
 
@@ -48,6 +50,10 @@ export function AppShell({
 		result: SyncResult | null;
 		attention: SyncAttentionItem[];
 	} | null>(null);
+	// The PS+ check readout (5.1) — snapshot semantics match `summary`.
+	const [psPlusResult, setPsPlusResult] = useState<PsPlusCheckResult | null>(
+		null,
+	);
 	const { data: settings } = useQuery({
 		queryKey: ['settings'],
 		queryFn: ({ signal }) => fetchSettings(signal),
@@ -96,8 +102,15 @@ export function AppShell({
 				onSyncComplete={(result) =>
 					setSummary({ result, attention: result.needsAttention })
 				}
+				onPsPlusCheckComplete={setPsPlusResult}
 			/>
 			{settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
+			{psPlusResult && (
+				<PsPlusCheckModal
+					result={psPlusResult}
+					onClose={() => setPsPlusResult(null)}
+				/>
+			)}
 			{summary && (
 				<SyncSummaryModal
 					result={summary.result}

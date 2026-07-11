@@ -115,3 +115,14 @@ Epic 1's deferred 1.5h (prefers-reduced-motion) is closed by
 | 4.3b needs-action items seed the persistent attention banner, surviving the modal and reloads | `epic4-settings.spec.ts` › persisted sync needs-attention feeds the amber banner… (fresh-load banner + reload persistence; the sync-run→persist write and self-resolution in `sync.test.ts` integration hazards) |
 | 4.3c summary offers a button jumping to the problem | `epic4-settings.spec.ts` › persisted sync needs-attention… ("Find in library" → search seeded + focused); seed mechanics also jsdom-pinned in `SearchBox.test.tsx` and `SyncSummaryModal.test.tsx` |
 | ad-hoc FR-9 amendment: claimed games show a PS+ tag on the OWNED chip | `epic4-settings.spec.ts` › a game owned via PS+ claim carries the PS+ tag on its card (purchase negative asserted; chip content also jsdom-pinned in `Card.test.tsx`; the detail panel's acquisition-source line — claim/purchase/silent-NULL — jsdom-pinned in `DetailPanel.test.tsx`, same DTO field the e2e already drives) |
+
+## Epic 5
+
+| AC | Coverage |
+|----|----------|
+| 5.1a region persisted in `SETTING` (config-seeded) and read by the check | skipped e2e — no UI flow (config seed + server read); pinned in `psplus.test.ts` integration › seeds the region setting from config on first run |
+| 5.1b FAB "Check PS+ Extra" runs the check with a spinner | drawer item + spinner + result handoff pinned in jsdom `Fab.test.tsx` (a live check needs a store-catalog response the e2e Worker cannot stub — same constraint as 4.2b) |
+| 5.1c flags set/cleared on tracked non-owned games only, both directions; never auto-added | skipped e2e — same stubbed-PSN constraint; hazards pinned in `psplus.test.ts` integration (set, clear, owned untouched, no auto-add, normalization match, failed fetch writes nothing) |
+| 5.1d owned games ignore/hide the PS+ flag | `epic5-psplus.spec.ts` › a flagged non-owned released game is Playable now; owned games hide the flag… |
+| 5.1e stored membership lights Playable now (card flag + filter pill) for released games | `epic5-psplus.spec.ts` › … (released in-catalog visible under the pill, unreleased excluded) |
+| 5.1f summary modal reports the flag changes | modal content pinned in jsdom `PsPlusCheckModal.test.tsx`; run→modal handoff in `Fab.test.tsx` (live-run constraint as 5.1b) |

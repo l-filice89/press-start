@@ -68,3 +68,23 @@ export type SyncResult = z.infer<typeof syncResultSchema>;
 export async function runSync(): Promise<SyncResult> {
 	return syncResultSchema.parse(await callApi('/api/sync', { method: 'POST' }));
 }
+
+/** Result of a PS+ Extra catalog check (Story 5.1, FR-38). */
+export const psPlusCheckResultSchema = z.object({
+	/** Titles newly flagged as in the catalog this run. */
+	flagged: z.array(z.string()),
+	/** Titles whose flag was cleared (left the catalog). */
+	cleared: z.array(z.string()),
+	/** Tracked non-owned games examined. */
+	checked: z.number(),
+	region: z.string(),
+});
+
+export type PsPlusCheckResult = z.infer<typeof psPlusCheckResultSchema>;
+
+/** Trigger the in-Worker PS+ Extra catalog check. */
+export async function runPsPlusCheck(): Promise<PsPlusCheckResult> {
+	return psPlusCheckResultSchema.parse(
+		await callApi('/api/ps-plus-check', { method: 'POST' }),
+	);
+}
