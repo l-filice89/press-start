@@ -99,3 +99,18 @@ test('a failed monthly refresh surfaces the failed-refresh attention banner (5.2
 		await deleteSetting('psplus_refresh_failed');
 	}
 });
+
+test('the header shows "PS+ CATALOG AS OF {date}" after a refresh (5.3)', async ({
+	page,
+}) => {
+	try {
+		// Story 5.3 stamps this on a successful check; seed it to drive the readout.
+		await seedSetting('psplus_refreshed_at', '2026-07-11');
+		await page.goto('/');
+		await expect(page.getByTestId('readout')).toContainText(
+			'PS+ CATALOG AS OF 2026-07-11',
+		);
+	} finally {
+		await deleteSetting('psplus_refreshed_at');
+	}
+});

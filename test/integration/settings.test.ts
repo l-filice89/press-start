@@ -96,6 +96,7 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 			psnAuthExpired: false,
 			syncAttention: [],
 			psPlusRefreshFailed: false,
+			psPlusRefreshedAt: null,
 		});
 	});
 
@@ -236,6 +237,17 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 		expect(
 			await (await appFetch('/api/settings', { headers: { cookie } })).json(),
 		).toMatchObject({ psPlusRefreshFailed: false });
+	});
+
+	it('PS+ refreshed-at (5.3): GET exposes the stamped date', async () => {
+		const { stampPsPlusRefreshedAt } = await import(
+			'../../src/services/settings'
+		);
+		await stampPsPlusRefreshedAt(db(), userId);
+		const body = (await (
+			await appFetch('/api/settings', { headers: { cookie } })
+		).json()) as { psPlusRefreshedAt: string | null };
+		expect(body.psPlusRefreshedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 	});
 
 	it('stamps started_on as today IN THE USER ZONE, not the UTC day (hazard)', async () => {

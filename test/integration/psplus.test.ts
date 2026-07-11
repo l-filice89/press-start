@@ -172,4 +172,24 @@ describe('POST /api/ps-plus-check (integration, real workerd + local D1)', () =>
 		expect(res.status).toBe(502);
 		expect(await flagOf(flagged.id)).toBe(true);
 	});
+
+	// Story 5.3: a successful check stamps the freshness date; a failed one
+	// leaves the prior stamp (stale-but-real beats wrong).
+	it('stamps psplus_refreshed_at on success and leaves it on failure', async () => {
+		const { PSPLUS_REFRESHED_AT_SETTING_KEY } = await import(
+			'../../src/services/settings'
+		);
+		const stampedAt = () =>
+			getSetting(db(), userId, PSPLUS_REFRESHED_AT_SETTING_KEY);
+
+		stubCatalog(['Anything In Catalog']);
+		expect((await postCheck(cookie)).status).toBe(200);
+		const afterSuccess = await stampedAt();
+		expect(afterSuccess).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
+		// A failed run must not overwrite the last good stamp.
+		stubCatalog([], 500);
+		expect((await postCheck(cookie)).status).toBe(502);
+		expect(await stampedAt()).toBe(afterSuccess);
+	});
 });

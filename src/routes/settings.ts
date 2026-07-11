@@ -6,6 +6,7 @@ import { createDb } from '../repositories/db';
 import {
 	clearPsnAuthExpired,
 	getPsnCookie,
+	getPsPlusRefreshedAt,
 	isPsnAuthExpired,
 	isPsPlusRefreshFailed,
 	PSN_COOKIE_SETTING_KEY,
@@ -63,12 +64,14 @@ settingsRoute.get('/settings', requireAuth, async (c) => {
 		psnAuthExpired,
 		syncAttention,
 		psPlusRefreshFailed,
+		psPlusRefreshedAt,
 	] = await Promise.all([
 		getSetting(db, userId, TIMEZONE_SETTING_KEY),
 		getPsnCookie(db, userId, c.env),
 		isPsnAuthExpired(db, userId),
 		readSyncAttention(db, userId),
 		isPsPlusRefreshFailed(db, userId),
+		getPsPlusRefreshedAt(db, userId),
 	]);
 	return c.json(
 		{
@@ -77,6 +80,7 @@ settingsRoute.get('/settings', requireAuth, async (c) => {
 			psnAuthExpired,
 			syncAttention,
 			psPlusRefreshFailed,
+			psPlusRefreshedAt,
 		},
 		200,
 	);

@@ -26,6 +26,9 @@ export const settingsSchema = z.object({
 	// Story 5.2: the last monthly PS+ Extra cron refresh failed. Defaulted for
 	// the same deploy-skew reason as syncAttention.
 	psPlusRefreshFailed: z.boolean().default(false),
+	// Story 5.3: date (YYYY-MM-DD, user zone) of the last successful refresh,
+	// null until the first one. Feeds the header "PS+ CATALOG AS OF" readout.
+	psPlusRefreshedAt: z.string().nullable().default(null),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;

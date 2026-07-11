@@ -72,6 +72,7 @@ export function AppShell({
 					onOpenSettings={() => setSettingsOpen(true)}
 					signOutFailed={signOutFailed}
 					search={<SearchBox />}
+					psPlusRefreshedAt={settings?.psPlusRefreshedAt ?? null}
 				/>
 				{settings?.psnAuthExpired && (
 					<AttentionBanner

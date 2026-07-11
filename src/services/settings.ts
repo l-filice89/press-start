@@ -91,6 +91,32 @@ export async function isPsPlusRefreshFailed(
 	);
 }
 
+/**
+ * Last successful PS+ Extra refresh date (Story 5.3, FR-40/AR-18). Written on
+ * every successful `runPsPlusCheck` (button or cron) as `todayForUser` — the
+ * same user-zone date source as every tracking stamp — and read by the header
+ * "PS+ CATALOG AS OF {date}" readout. A failed run leaves the prior value.
+ */
+export const PSPLUS_REFRESHED_AT_SETTING_KEY = 'psplus_refreshed_at';
+
+export async function stampPsPlusRefreshedAt(db: Db, userId: string) {
+	await setSetting(
+		db,
+		userId,
+		PSPLUS_REFRESHED_AT_SETTING_KEY,
+		await todayForUser(db, userId),
+	);
+}
+
+export async function getPsPlusRefreshedAt(
+	db: Db,
+	userId: string,
+): Promise<string | null> {
+	return (
+		(await getSetting(db, userId, PSPLUS_REFRESHED_AT_SETTING_KEY)) ?? null
+	);
+}
+
 /** Persist the PSN-rejected state so the banner survives reloads (NFR-4). */
 export async function markPsnAuthExpired(db: Db, userId: string) {
 	await setSetting(db, userId, PSN_AUTH_SETTING_KEY, PSN_AUTH_EXPIRED);

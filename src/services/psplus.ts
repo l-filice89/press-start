@@ -22,6 +22,7 @@ import {
 	getPsnCookie,
 	getPsnRegion,
 	markPsPlusRefreshFailed,
+	stampPsPlusRefreshedAt,
 } from './settings';
 
 export interface PsPlusCheckResult {
@@ -97,9 +98,19 @@ export async function runPsPlusCheck(
 		false,
 	);
 
-	// A successful refresh — by ANY trigger — resolves a prior failed-cron
-	// notice (Story 5.2, AR-14): the button is thus also a resolution path.
-	await clearPsPlusRefreshFailed(db, userId);
+	// Post-write bookkeeping (5.2 failed-flag clear + 5.3 freshness stamp) is
+	// non-critical: the flags above already applied, so a write failure here
+	// must NOT flip a genuine success to failed (which would light the cron
+	// banner and 502 the button). Same posture as sync.ts's attention persist.
+	try {
+		// A successful refresh — by ANY trigger — resolves a prior failed-cron
+		// notice (Story 5.2, AR-14): the button is thus also a resolution path.
+		await clearPsPlusRefreshFailed(db, userId);
+		// Record freshness for the header "PS+ CATALOG AS OF {date}" readout (5.3).
+		await stampPsPlusRefreshedAt(db, userId);
+	} catch (error) {
+		console.error('ps+ check: post-success bookkeeping write failed', error);
+	}
 
 	return {
 		ok: true,
