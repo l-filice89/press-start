@@ -104,7 +104,7 @@ development_status:
   epic-6: in-progress
   6-1-add-a-game-by-name-the-wishlist-moment: done # 2026-07-11
   6-2-name-only-fallback-straggler-resolution: done # 2026-07-11
-  6-3-chores-csv-export-settings: backlog
+  6-3-chores-csv-export-settings: done # 2026-07-11
   epic-6-retrospective: optional
 
 action_items:

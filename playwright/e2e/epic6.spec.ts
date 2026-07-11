@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { createGame } from '../support/factories/game-factory';
 import {
 	d1Execute,
@@ -144,4 +145,51 @@ test('stragglers: amber banner surfaces both kinds, the dialog lists them, and a
 
 	await d1Execute(`DELETE FROM import_straggler WHERE id = '${importId}';`);
 	await deleteGames([nameOnly.id]);
+});
+
+test('Export CSV: the FAB item downloads the library as a CSV file (6.3)', async ({
+	page,
+}) => {
+	await page.goto('/');
+	await page.getByRole('button', { name: 'Chores' }).click();
+
+	const [download] = await Promise.all([
+		page.waitForEvent('download'),
+		page.getByTestId('fab-export').click(),
+	]);
+	expect(download.suggestedFilename()).toBe('press-start-library.csv');
+	// The body is real CSV, not an error payload saved under a .csv name.
+	const content = await readFile((await download.path()) as string, 'utf-8');
+	expect(content.startsWith('Title,State,')).toBe(true);
+});
+
+test('Settings: sign out and About/Help are available (6.3)', async ({
+	page,
+}) => {
+	await page.goto('/');
+	await page.getByRole('button', { name: 'Settings' }).click();
+	const panel = page.getByTestId('settings-panel');
+	await expect(panel.getByText(/About & Help/)).toBeVisible();
+	// The affordance only — CLICKING sign-out revokes the one shared
+	// storage-state session and every parallel test 401s off the shelf.
+	// The click → onSignOut wiring is pinned in SettingsPanel.test.tsx.
+	await expect(panel.getByTestId('settings-sign-out')).toBeVisible();
+});
+
+test('Settings: FAB handedness moves the button and persists across a reload (6.3)', async ({
+	page,
+}) => {
+	await page.goto('/');
+	await page.getByRole('button', { name: 'Settings' }).click();
+	await page.getByTestId('handedness-left').click();
+	// The FAB moves to the left immediately.
+	await expect(page.getByTestId('fab')).toHaveClass(/fab--left/);
+
+	await page.reload();
+	await expect(page.getByTestId('fab')).toHaveClass(/fab--left/);
+
+	// Reset to the default so a shared-DB sibling test isn't left left-handed.
+	await page.getByRole('button', { name: 'Settings' }).click();
+	await page.getByTestId('handedness-right').click();
+	await expect(page.getByTestId('fab')).not.toHaveClass(/fab--left/);
 });

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useModalTrap } from '../components/useModalTrap';
-import { fetchSettings, savePsnCookie } from './api';
+import { fetchSettings, saveFabHandedness, savePsnCookie } from './api';
 import './settings-panel.css';
 
 /**
@@ -11,7 +11,13 @@ import './settings-panel.css';
  * always empty and saving replaces the cookie wholesale. Epic 6 moves the
  * entry point into the FAB drawer's gear; until then the header gear opens it.
  */
-export function SettingsPanel({ onClose }: { onClose: () => void }) {
+export function SettingsPanel({
+	onClose,
+	onSignOut,
+}: {
+	onClose: () => void;
+	onSignOut: () => void;
+}) {
 	const dialogRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 	const titleId = useId();
@@ -30,6 +36,12 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 			setCookie('');
 			queryClient.invalidateQueries({ queryKey: ['settings'] });
 		},
+	});
+
+	const handedness = settings?.fabHandedness ?? 'right';
+	const setHandedness = useMutation({
+		mutationFn: saveFabHandedness,
+		onSuccess: () => queryClient.invalidateQueries({ queryKey: ['settings'] }),
 	});
 
 	const onKeyDown = useModalTrap(dialogRef, onClose, {
@@ -112,6 +124,51 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 						{save.isSuccess && 'Cookie saved.'}
 						{save.isError && 'Saving failed — try again.'}
 					</div>
+				</section>
+
+				<section className="settings-panel__section">
+					<h3 className="settings-panel__heading">FAB placement</h3>
+					<p className="settings-panel__status">
+						Put the chores button on your dominant side.
+					</p>
+					{/* biome-ignore lint/a11y/useSemanticElements: this is a two-option toggle group, not a form radiogroup; aria-pressed buttons carry the state. */}
+					<div
+						className="settings-panel__handedness"
+						role="group"
+						aria-label="FAB placement"
+					>
+						{(['left', 'right'] as const).map((side) => (
+							<button
+								key={side}
+								type="button"
+								className="settings-panel__hand-option tap-target"
+								aria-pressed={handedness === side}
+								disabled={setHandedness.isPending}
+								data-testid={`handedness-${side}`}
+								onClick={() => setHandedness.mutate(side)}
+							>
+								{side === 'left' ? 'Bottom-left' : 'Bottom-right'}
+							</button>
+						))}
+					</div>
+				</section>
+
+				<section className="settings-panel__section">
+					<h3 className="settings-panel__heading">About &amp; Help</h3>
+					<p className="settings-panel__status">
+						Press Start is your personal game library — search to add a game,
+						track what you own and play, and export your library to CSV as your
+						own backup. Add a game by name from the search bar; games needing a
+						match surface in the amber banner.
+					</p>
+					<button
+						type="button"
+						className="settings-panel__signout tap-target"
+						data-testid="settings-sign-out"
+						onClick={onSignOut}
+					>
+						Sign out
+					</button>
 				</section>
 
 				<div className="settings-panel__actions">

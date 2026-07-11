@@ -14,9 +14,12 @@ import './fab.css';
  */
 export function Fab({
 	onSyncComplete,
+	handedness = 'right',
 }: {
 	/** Receives every completed run's result — AppShell opens the summary modal (FR-37). */
 	onSyncComplete: (result: SyncResult) => void;
+	/** FAB placement (Story 6.3, UX-DR10) — bottom-right (default) or bottom-left. */
+	handedness?: 'left' | 'right';
 }) {
 	const [open, setOpen] = useState(false);
 	const rootRef = useRef<HTMLDivElement>(null);
@@ -57,6 +60,27 @@ export function Fab({
 	});
 	syncPendingRef.current = sync.isPending;
 
+	const exportCsv = useMutation({
+		// A bare <a download> can't see the HTTP status: a lapsed session would
+		// silently save the 401 JSON body as "press-start-library.csv" and the
+		// user would believe they hold a backup. Fetch first, download only a 200.
+		mutationFn: async () => {
+			const res = await fetch('/api/export.csv');
+			if (!res.ok) throw new Error(`export failed (${res.status})`);
+			return res.blob();
+		},
+		onSuccess: (blob) => {
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = 'press-start-library.csv';
+			a.click();
+			URL.revokeObjectURL(url);
+		},
+		onError: () => toast({ message: 'Export failed — try again later.' }),
+		onSettled: () => setOpen(false),
+	});
+
 	useEffect(() => {
 		if (!open) return;
 		const onDocKeyDown = (e: KeyboardEvent) => {
@@ -77,7 +101,11 @@ export function Fab({
 	}, [open]);
 
 	return (
-		<div className="fab" ref={rootRef} data-testid="fab">
+		<div
+			className={`fab${handedness === 'left' ? ' fab--left' : ''}`}
+			ref={rootRef}
+			data-testid="fab"
+		>
 			{open && (
 				<div className="fab__drawer" id={menuId} data-testid="fab-drawer">
 					<button
@@ -97,6 +125,27 @@ export function Fab({
 						</span>
 						<span className="fab__item-label">
 							{sync.isPending ? 'Syncing…' : 'Sync library'}
+						</span>
+					</button>
+					<button
+						type="button"
+						className="fab__item tap-target"
+						onClick={() => exportCsv.mutate()}
+						disabled={exportCsv.isPending}
+						data-testid="fab-export"
+					>
+						<span className="fab__item-icon" aria-hidden="true">
+							{exportCsv.isPending ? (
+								<span
+									className="fab__spinner"
+									data-testid="fab-export-spinner"
+								/>
+							) : (
+								'⤓'
+							)}
+						</span>
+						<span className="fab__item-label">
+							{exportCsv.isPending ? 'Exporting…' : 'Export CSV'}
 						</span>
 					</button>
 				</div>

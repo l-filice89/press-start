@@ -96,6 +96,7 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 			psnAuthExpired: false,
 			syncAttention: [],
 			stragglerCount: 0,
+			fabHandedness: 'right',
 		});
 	});
 
@@ -220,6 +221,32 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 		expect(
 			await getSetting(db(), userId, SYNC_ATTENTION_SETTING_KEY),
 		).toBeUndefined();
+	});
+
+	it('FAB handedness: defaults right, PUT persists, bad value 400 (Story 6.3)', async () => {
+		// Default when unset.
+		const other = 'handedness-fresh-user';
+		const { readFabHandedness } = await import('../../src/services/settings');
+		expect(await readFabHandedness(db(), other)).toBe('right');
+
+		// PUT persists and rides the GET payload.
+		const put = await appFetch('/api/settings/fab-handedness', {
+			method: 'PUT',
+			headers: { 'content-type': 'application/json', cookie },
+			body: JSON.stringify({ handedness: 'left' }),
+		});
+		expect(put.status).toBe(200);
+		expect(
+			await (await appFetch('/api/settings', { headers: { cookie } })).json(),
+		).toMatchObject({ fabHandedness: 'left' });
+
+		// Bad value rejected at the boundary.
+		const bad = await appFetch('/api/settings/fab-handedness', {
+			method: 'PUT',
+			headers: { 'content-type': 'application/json', cookie },
+			body: JSON.stringify({ handedness: 'sideways' }),
+		});
+		expect(bad.status).toBe(400);
 	});
 
 	it('stamps started_on as today IN THE USER ZONE, not the UTC day (hazard)', async () => {

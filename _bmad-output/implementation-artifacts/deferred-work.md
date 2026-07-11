@@ -213,3 +213,12 @@ status: open
 - source_spec: `_bmad-output/implementation-artifacts/spec-6-2-name-only-fallback-straggler-resolution.md`
   summary: Resolving an `unenriched` straggler to an igdbId already linked to a DIFFERENT game enriches + de-flags the game but writes no IGDB link (anchorIgdb no-ops), leaving two catalog rows for one IGDB game — the duplicate FR-29 aims to prevent.
   evidence: src/services/stragglers.ts resolveStraggler unenriched branch fixes gameRow to input.id; anchorIgdb only links when the id is unlinked. Only reachable when the same IGDB game is already in the catalog under another row. Rare in the single-user catalog; needs a conflict outcome (merge or 409) surfaced to the resolve UI.
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-3-chores-csv-export-settings.md`
+  summary: A failed FAB-handedness PUT is swallowed — no toast/rollback; the toggle silently stays where the server left it and the user gets no signal their choice didn't persist.
+  evidence: web/settings/SettingsPanel.tsx setHandedness mutation handles only onSuccess (invalidate). Not optimistic, so the UI never lies about the stored value — the failure is silent, not corrupting. Add an onError toast when settings writes grow beyond this one cosmetic flag.
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-3-chores-csv-export-settings.md`
+  summary: Sign-out has two entry points (Header button + SettingsPanel) and the settings copy files it under the "About & Help" section heading — misgrouped for screen-reader landmarks and inconsistent with the "entry points move into the drawer" narrative.
+  evidence: web/shell/Header.tsx still renders onSignOut; web/settings/SettingsPanel.tsx adds a second inside the About & Help <section>. Decide one home (own "Account" section in settings, drop the header button) in a UX pass; both work today.
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-3-chores-csv-export-settings.md`
+  summary: Handedness value is defaulted in three layers (zod .default('right'), AppShell ?? 'right', Fab prop default) and the PUT response body { fabHandedness } is unused (client invalidates the whole settings query instead of setQueryData).
+  evidence: web/settings/api.ts:33, web/shell/AppShell.tsx:109, web/shell/Fab.tsx prop default; src/routes/settings.ts PUT return vs web/settings/api.ts saveFabHandedness(): Promise<void>. Harmless redundancy — collapse to the zod default and setQueryData if this surface is ever touched again.

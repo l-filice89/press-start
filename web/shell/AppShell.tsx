@@ -106,11 +106,17 @@ export function AppShell({
 				</main>
 			</div>
 			<Fab
+				handedness={settings?.fabHandedness ?? 'right'}
 				onSyncComplete={(result) =>
 					setSummary({ result, attention: result.needsAttention })
 				}
 			/>
-			{settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
+			{settingsOpen && (
+				<SettingsPanel
+					onClose={() => setSettingsOpen(false)}
+					onSignOut={onSignOut}
+				/>
+			)}
 			{stragglersOpen && (
 				<StragglersDialog onClose={() => setStragglersOpen(false)} />
 			)}
