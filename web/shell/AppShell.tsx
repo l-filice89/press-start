@@ -90,7 +90,7 @@ export function AppShell({
 				{syncAttention.length > 0 && (
 					<AttentionBanner
 						variant="stragglers"
-						message={`${syncAttention.length} sync ${syncAttention.length === 1 ? 'item needs' : 'items need'} attention.`}
+						message={`${syncAttention.length} sync ${syncAttention.length === 1 ? 'item needs' : 'items need'} attention — review, fix it in your library, then re-sync to clear this.`}
 						action={{
 							label: 'Review',
 							onClick: () =>
@@ -107,7 +107,7 @@ export function AppShell({
 				{stragglerCount > 0 && (
 					<AttentionBanner
 						variant="enrich"
-						message={`${stragglerCount} ${stragglerCount === 1 ? 'game needs' : 'games need'} a games-DB match.`}
+						message={`${stragglerCount} ${stragglerCount === 1 ? 'game needs' : 'games need'} a games-DB match — Resolve to search and link each one, which clears this.`}
 						action={{
 							label: 'Resolve',
 							onClick: () => setStragglersOpen(true),
