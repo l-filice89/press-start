@@ -263,7 +263,7 @@ test('shelf grid supports arrow traversal in reading order with roving tabindex 
 		// ArrowRight only in a true multi-column layout
 		await page.keyboard.press('ArrowDown');
 		const focusedIndex = await cards.evaluateAll((cells) =>
-			cells.findIndex((c) => c === document.activeElement),
+			cells.indexOf(document.activeElement as HTMLElement),
 		);
 		expect(focusedIndex).toBe(1 + columns);
 	} finally {

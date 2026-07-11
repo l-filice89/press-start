@@ -120,6 +120,7 @@ function FilteredShelf({ games }: { games: ShelfGame[] }) {
 				filter={filter}
 				onChange={setFilter}
 				visibleCount={visible.length}
+				showPsPlus={games.some((g) => g.psPlusExtra && !g.owned)}
 			/>
 			{/* display:contents wrapper: arms the handoff flag while focus lives
 			    anywhere in the grid OR the empty state (Clear filters included, so

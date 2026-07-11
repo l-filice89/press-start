@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-06
-last_updated: 2026-07-10
+last_updated: 2026-07-11
 project: ps-game-catalog
 project_key: NOKEY
 tracking_system: file-system
@@ -94,18 +94,27 @@ development_status:
   epic-4-retrospective: done # 2026-07-11
 
   # Epic 5: Know What's Playable — PS+ Extra Awareness
-  epic-5: backlog
-  5-1-region-setting-ps-extra-check-button: backlog
-  5-2-scheduled-monthly-refresh-cron-trigger: backlog
-  5-3-ps-catalog-as-of-date-timestamp: backlog
-  epic-5-retrospective: optional
+  epic-5: done # 2026-07-11 — 3/3 stories
+  5-1-region-setting-ps-extra-check-button: done
+  5-2-scheduled-monthly-refresh-cron-trigger: done
+  5-3-ps-catalog-as-of-date-timestamp: done
+  epic-5-retrospective: done # 2026-07-11
 
   # Epic 6: Add at the Moment of Discovery + Chores
   epic-6: backlog
   6-1-add-a-game-by-name-the-wishlist-moment: backlog
   6-2-name-only-fallback-straggler-resolution: backlog
   6-3-chores-csv-export-settings: backlog
+  6-4-ownership-source-purchased-vs-claimed-un-claim-on-cancel: backlog # added 2026-07-11 (retro item #5 + owned_via manual-set)
   epic-6-retrospective: optional
+
+  # Epic 7: Browse the PS+ Catalog & Add — POST-v1.0.0 (not in the v1 milestone)
+  epic-7: backlog # post-v1; scheduled after Epic 6
+  7-0-foundation-architecture-ux-design-gate: backlog # gate: signed-off arch + UX before any 7.x code
+  7-1-persist-the-ps-plus-catalog-as-browsable-data: backlog
+  7-2-browse-the-catalog-genre-filter-search: backlog
+  7-3-add-or-claim-a-game-from-the-catalog: backlog
+  epic-7-retrospective: optional
 
 action_items:
   - epic: 1
@@ -195,20 +204,36 @@ action_items:
   - epic: 4
     action: "Commit the PSN 200-denial fix + ceiling comments; merge feat/epic-4/fill-library-psn-sync to main through the CI OK gate"
     owner: "Luca"
-    status: open
+    status: done # 2026-07-11: 514df10 committed; merged via PR #8 (a0a599a)
   - epic: 4
     action: "Standing rule 'probe before you map': external-provider error handling starts with a live probe of real failure modes; hazard fixtures use captured payloads. Wire into bmad-dev-auto.toml"
     owner: "Murat + Winston"
-    status: open
+    status: done # 2026-07-11: PROBE-BEFORE-YOU-MAP fact in bmad-dev-auto.toml (162277c)
   - epic: 4
     action: "Re-home the follow-up-review contract into bmad-dev-auto.toml: a story with followup_review_recommended true gets an independent review pass (or recorded decline) before the epic merge gate (bmad-loop policy.toml rule died with the tool)"
     owner: "Amelia"
-    status: open
+    status: done # 2026-07-11: FOLLOW-UP-REVIEW CONTRACT fact in bmad-dev-auto.toml (162277c); all 3 epic-5 specs shipped followup_review_recommended:false so the gate had nothing to fire on
   - epic: 4
     action: "Epic 5 prep: probe the PS+ Extra catalog PSN endpoint (persisted query, response shape, region behavior, failure modes) before 5.1 is specced"
     owner: "Luca + Amelia"
-    status: open
+    status: done # 2026-07-11: wire protocol (persistedQuery hash, category id, pagination cap, region header) pinned in spec-5-1; public store endpoint so no cookie/auth-failure path applies
   - epic: 4
     action: "Decide whether the subscription-cancel un-own flow (owned_via) joins Epic 5 scope or stays deferred"
     owner: "Luca + John"
-    status: open
+    status: done # 2026-07-11: decided STAYS DEFERRED — no epic-5 story picked it up; natural home is an Epic 6 Settings action. Decision recorded on the deferred-work.md entry.
+  - epic: 5
+    action: "Standing invariant — guard the degenerate response: any external-data → automated-write path fails closed on the empty/valid-but-nothing provider response, with a captured-payload hazard test. Wire into bmad-dev-auto.toml beside PROBE-BEFORE-YOU-MAP"
+    owner: "Winston + Murat"
+    status: done # 2026-07-11: DEGENERATE-RESPONSE GUARD RULE added as a persistent fact in _bmad/custom/bmad-dev-auto.toml
+  - epic: 5
+    action: "Probe IGDB failure modes (error, empty, rate-limit, missing-title) against captured payloads; verify Epic 6's worktree IGDB integration against them when that branch merges"
+    owner: "Luca + Amelia"
+    status: in-progress # 2026-07-11: live probe done → igdb-failure-mode-probe-2026-07-11.md (captured 200/[]/400/401/429 payloads; IGDB uses honest status codes unlike PSN; 429 has no Retry-After). Main-tree provider hardened with the DEGENERATE-RESPONSE array-guard + src/providers/igdb.test.ts (5 hazard rows). REMAINING: port the same guard into the worktree searchGames + verify add-by-name degrades (not 500) at Epic 6 merge — checklist in the probe artifact
+  - epic: 5
+    action: "Triage the two Epic-5 deferrals: modal focus-restore (shared with SyncSummaryModal); global ps_plus_extra column vs per-user ownership"
+    owner: "Amelia"
+    status: done # 2026-07-11: focus-restore fixed at useModalTrap level (opt-in restoreFocus + preventRestoreRef, opener captured pre-steal) + restore test; global column accepted as multi-user publication blocker (deferred-work.md)
+  - epic: 5
+    action: "Merge feat/epic-5/know-whats-playable to main through the CI gate; confirm the v1.0.0 merge + release plan (Epic 6 = last v1 epic)"
+    owner: "Luca"
+    status: open # critical path

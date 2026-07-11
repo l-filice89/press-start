@@ -25,10 +25,12 @@ export interface IgdbProvider {
 }
 
 export interface IgdbConfig {
-	/** Twitch app client id. */
+	/** Twitch app client id (permanent). */
 	clientId: string;
-	/** Twitch app access token (`Bearer`). */
-	accessToken: string;
+	/** Twitch app client secret (permanent). The short-lived app access token
+	 * is minted from id+secret on demand and refreshed automatically — no
+	 * manual 60-day token rotation (contrast the PSN cookie). */
+	clientSecret: string;
 	/** Min ms between calls (IGDB allows ~4 req/s). Default 260. */
 	minIntervalMs?: number;
 }
@@ -41,7 +43,66 @@ interface IgdbGame {
 }
 
 const IGDB_GAMES_ENDPOINT = 'https://api.igdb.com/v4/games';
+const TWITCH_TOKEN_ENDPOINT = 'https://id.twitch.tv/oauth2/token';
 const IGDB_TIMEOUT_MS = 15_000;
+
+/**
+ * Twitch app-access-token cache, keyed by client id. The token is a
+ * client-credentials grant (~60-day TTL) minted from the permanent id+secret;
+ * caching it means we mint once and reuse, refreshing on expiry or on a 401.
+ *
+ * ponytail: in-memory, per-isolate — an *app* token, not user data. A cold
+ * Worker isolate re-mints once on its first IGDB call; warm requests reuse it.
+ * The route builds the provider per request, so this MUST be module-level (a
+ * closure cache would never survive across requests). Persist to KV only if
+ * cold-start mint latency is ever measured as a problem.
+ */
+const tokenCache = new Map<string, { token: string; expiresAt: number }>();
+
+/** Test-only: drop cached tokens so mint behaviour is observable per test. */
+export function __resetIgdbTokenCache(): void {
+	tokenCache.clear();
+}
+
+async function getAccessToken(
+	clientId: string,
+	clientSecret: string,
+	forceRefresh: boolean,
+): Promise<string> {
+	const cached = tokenCache.get(clientId);
+	// 60s skew: never hand out a token about to expire mid-request.
+	if (!forceRefresh && cached && cached.expiresAt > Date.now() + 60_000) {
+		return cached.token;
+	}
+	const url =
+		`${TWITCH_TOKEN_ENDPOINT}?client_id=${encodeURIComponent(clientId)}` +
+		`&client_secret=${encodeURIComponent(clientSecret)}&grant_type=client_credentials`;
+	const res = await fetch(url, {
+		method: 'POST',
+		signal: AbortSignal.timeout(IGDB_TIMEOUT_MS),
+	});
+	if (!res.ok) {
+		throw new Error(
+			`Twitch token request failed (HTTP ${res.status}) — check IGDB_CLIENT_ID / IGDB_CLIENT_SECRET: ${await res.text()}`,
+		);
+	}
+	const body = (await res.json()) as {
+		access_token?: string;
+		expires_in?: number;
+	};
+	if (!body.access_token) {
+		throw new Error(
+			`Twitch token response missing access_token: ${JSON.stringify(body).slice(0, 200)}`,
+		);
+	}
+	const ttlMs =
+		(typeof body.expires_in === 'number' ? body.expires_in : 3600) * 1000;
+	tokenCache.set(clientId, {
+		token: body.access_token,
+		expiresAt: Date.now() + ttlMs,
+	});
+	return body.access_token;
+}
 
 function coverUrl(game: IgdbGame): string | null {
 	const id = game.cover?.image_id;
@@ -68,6 +129,28 @@ export function createIgdbProvider(config: IgdbConfig): IgdbProvider {
 		nextAllowed = Math.max(now, nextAllowed) + minInterval;
 	}
 
+	async function fetchGames(query: string, forceRefresh: boolean) {
+		const token = await getAccessToken(
+			config.clientId,
+			config.clientSecret,
+			forceRefresh,
+		);
+		return fetch(IGDB_GAMES_ENDPOINT, {
+			method: 'POST',
+			headers: {
+				'Client-ID': config.clientId,
+				Authorization: `Bearer ${token}`,
+				Accept: 'application/json',
+			},
+			// 50, not IGDB's default 15 (verified live): a base game (e.g.
+			// "Genshin Impact") can rank behind dozens of same-named
+			// DLC/event entries, dropping out of a shorter candidate list
+			// entirely and leaving a real, released game unenriched.
+			body: `search "${query}"; fields name, first_release_date, cover.image_id, genres.name; limit 50;`,
+			signal: AbortSignal.timeout(IGDB_TIMEOUT_MS),
+		});
+	}
+
 	return {
 		async enrich(title) {
 			// Trademark glyphs break IGDB's own search matching outright (a
@@ -77,24 +160,17 @@ export function createIgdbProvider(config: IgdbConfig): IgdbProvider {
 			if (!query) return null;
 			await throttle();
 
-			const response = await fetch(IGDB_GAMES_ENDPOINT, {
-				method: 'POST',
-				headers: {
-					'Client-ID': config.clientId,
-					Authorization: `Bearer ${config.accessToken}`,
-					Accept: 'application/json',
-				},
-				// 50, not IGDB's default 15 (verified live): a base game (e.g.
-				// "Genshin Impact") can rank behind dozens of same-named
-				// DLC/event entries, dropping out of a shorter candidate list
-				// entirely and leaving a real, released game unenriched.
-				body: `search "${query}"; fields name, first_release_date, cover.image_id, genres.name; limit 50;`,
-				signal: AbortSignal.timeout(IGDB_TIMEOUT_MS),
-			});
-
+			// A cached token that Twitch has expired/revoked answers 401/403 —
+			// mint a fresh one and retry ONCE, so a 60-day rotation self-heals
+			// with no manual refresh. A second 401 means the id/secret itself is
+			// bad, not a stale token.
+			let response = await fetchGames(query, false);
+			if (response.status === 401 || response.status === 403) {
+				response = await fetchGames(query, true);
+			}
 			if (response.status === 401 || response.status === 403) {
 				throw new Error(
-					`IGDB rejected the request (HTTP ${response.status}) — the access token has likely expired. Refresh IGDB_ACCESS_TOKEN and re-run the seed.`,
+					`IGDB rejected the request (HTTP ${response.status}) even with a freshly minted token — check IGDB_CLIENT_ID / IGDB_CLIENT_SECRET.`,
 				);
 			}
 			if (!response.ok) {
@@ -103,7 +179,20 @@ export function createIgdbProvider(config: IgdbConfig): IgdbProvider {
 				);
 			}
 
-			const games = (await response.json()) as IgdbGame[];
+			// DEGENERATE-RESPONSE GUARD (Epic 5 retro rule): a 200 is only trusted
+			// if the body is actually the game array. Live probe (2026-07-11)
+			// confirmed IGDB returns arrays on 200 and objects on error (401
+			// `{message,…}`, 429 `{"message":"Too Many Requests"}`, 400 is a
+			// `[{title,status}]` array) — but an API/proxy change handing back a
+			// non-array 200 would otherwise throw a raw TypeError in `.map` and
+			// surface as a 500 instead of a clean, fail-closed provider error.
+			const parsed = await response.json();
+			if (!Array.isArray(parsed)) {
+				throw new Error(
+					`IGDB returned a 200 with a non-array body: ${JSON.stringify(parsed).slice(0, 200)}`,
+				);
+			}
+			const games = parsed as IgdbGame[];
 			const index = pickIgdbMatch(
 				title,
 				games.map((g) => g.name),

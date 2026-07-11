@@ -23,14 +23,33 @@ export function useModalTrap(
 	{
 		enabled = true,
 		initialFocusRef,
+		restoreFocus = false,
+		preventRestoreRef,
 	}: {
 		enabled?: boolean;
 		initialFocusRef?: RefObject<HTMLElement | null>;
+		/** Restore focus to the opener on unmount. Opt-in: grid-owned surfaces
+		 * (DetailPanel) already have their focus returned by the grid's roving
+		 * restoration; only surfaces that auto-open and steal focus with no
+		 * external owner (the summary modals) need this. */
+		restoreFocus?: boolean;
+		/** Read at unmount when restoreFocus is on: if truthy, focus is NOT
+		 * restored (a deliberate hand-off elsewhere, e.g. jumping to search). */
+		preventRestoreRef?: RefObject<boolean>;
 	} = {},
 ): (e: React.KeyboardEvent) => void {
 	// biome-ignore lint/correctness/useExhaustiveDependencies: mount-only by design — focus moves into the dialog once, on open.
 	useEffect(() => {
+		// Capture the opener BEFORE the trap steals focus — else the modal's own
+		// Close button is already active and restore falls to <body> on close.
+		const opener =
+			restoreFocus && document.activeElement instanceof HTMLElement
+				? document.activeElement
+				: null;
 		(initialFocusRef?.current ?? containerRef.current)?.focus();
+		return () => {
+			if (restoreFocus && !preventRestoreRef?.current) opener?.focus();
+		};
 	}, []);
 
 	const onDismissRef = useRef(onDismiss);

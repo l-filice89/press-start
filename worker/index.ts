@@ -1,5 +1,7 @@
 import { Hono } from 'hono';
+import { createDb } from '../src/repositories/db';
 import { apiRoutes } from '../src/routes';
+import { runScheduledPsPlusCheck } from '../src/services/psplus';
 
 /**
  * The Worker is the composition root (AD-1): one deploy serves both the
@@ -26,4 +28,15 @@ app.all('/api/*', (c) => c.json({ error: 'not found' }, 404));
 
 app.all('*', (c) => c.env.ASSETS.fetch(c.req.raw));
 
-export default app;
+/**
+ * `{ fetch, scheduled }` — `fetch` is the Hono app unchanged; `scheduled` is
+ * the Story 5.2 monthly PS+ Extra refresh. The cron work is awaited (not
+ * `waitUntil`-detached) so a failure is caught and persisted as the
+ * failed-refresh flag rather than lost.
+ */
+export default {
+	fetch: app.fetch,
+	async scheduled(_controller, env: Env, _ctx) {
+		await runScheduledPsPlusCheck(createDb(env.DB), env);
+	},
+} satisfies ExportedHandler<Env>;

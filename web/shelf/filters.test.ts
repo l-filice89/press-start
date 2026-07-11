@@ -136,6 +136,17 @@ describe('applyShelfFilter', () => {
 		]);
 	});
 
+	it('PS+ flag matches the badge set: in-catalog AND not owned', () => {
+		const shelf = [
+			game({ id: 'p', psPlusExtra: true, owned: false }), // badge shows
+			game({ id: 'q', psPlusExtra: true, owned: true }), // owned → no badge
+			game({ id: 'r', psPlusExtra: false, owned: false }), // not in catalog
+		];
+		expect(ids(applyShelfFilter(shelf, f({ flags: ['psPlusExtra'] })))).toEqual(
+			['p'],
+		);
+	});
+
 	it('flags AND against state and genre groups', () => {
 		const out = applyShelfFilter(
 			SHELF,

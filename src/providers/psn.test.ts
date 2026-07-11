@@ -257,3 +257,125 @@ describe('createPsnProvider', () => {
 		).rejects.toThrow(/500/);
 	});
 });
+
+/** Catalog page response (Story 5.1). */
+function catalogPage(names: string[], totalCount: number) {
+	return jsonResponse({
+		data: {
+			categoryGridRetrieve: {
+				products: names.map((name) => ({ name })),
+				pageInfo: { totalCount },
+			},
+		},
+	});
+}
+
+describe('fetchPsPlusExtraCatalog', () => {
+	it('sends the catalog persisted query with the region header and NO cookie', async () => {
+		const fetchMock = vi.fn().mockResolvedValue(catalogPage([], 0));
+		vi.stubGlobal('fetch', fetchMock);
+
+		await provider(['unused']).provider.fetchPsPlusExtraCatalog('it-it');
+
+		const [url, init] = fetchMock.mock.calls[0];
+		expect(url).toContain('operationName=categoryGridRetrieve');
+		expect(url).toContain(
+			'4ce7d410a4db2c8b635a48c1dcec375906ff63b19dadd87e073f8fd0c0481d35',
+		);
+		// The PS+ Game Catalog category id rides the variables.
+		expect(decodeURIComponent(url)).toContain(
+			'3a7006fe-e26f-49fe-87e5-4473d7ed0fb2',
+		);
+		expect(init.headers['x-psn-store-locale-override']).toBe('it-it');
+		// Public endpoint — the session cookie must never leak onto it.
+		expect(init.headers.cookie).toBeUndefined();
+		expect(init.method ?? 'GET').toBe('GET');
+	});
+
+	it('advances the offset by what actually arrived (hazard: server caps the page size)', async () => {
+		// size=100 requested, server caps at 2 per page; totalCount 5.
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(catalogPage(['A', 'B'], 5))
+			.mockResolvedValueOnce(catalogPage(['C', 'D'], 5))
+			.mockResolvedValueOnce(catalogPage(['E'], 5));
+		vi.stubGlobal('fetch', fetchMock);
+
+		const names = await provider(['x']).provider.fetchPsPlusExtraCatalog(
+			'en-us',
+		);
+
+		expect(names).toEqual(['A', 'B', 'C', 'D', 'E']);
+		expect(fetchMock).toHaveBeenCalledTimes(3);
+		expect(decodeURIComponent(fetchMock.mock.calls[1][0])).toContain(
+			'"offset":2',
+		);
+		expect(decodeURIComponent(fetchMock.mock.calls[2][0])).toContain(
+			'"offset":4',
+		);
+	});
+
+	it('stops on an empty page when totalCount is missing', async () => {
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(
+				jsonResponse({
+					data: {
+						categoryGridRetrieve: {
+							products: [{ name: 'Only' }],
+							pageInfo: {},
+						},
+					},
+				}),
+			)
+			.mockResolvedValueOnce(
+				jsonResponse({
+					data: { categoryGridRetrieve: { products: [], pageInfo: {} } },
+				}),
+			);
+		vi.stubGlobal('fetch', fetchMock);
+
+		expect(
+			await provider(['x']).provider.fetchPsPlusExtraCatalog('en-us'),
+		).toEqual(['Only']);
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
+
+	it('aborts a runaway catalog pagination instead of looping forever', async () => {
+		vi.stubGlobal(
+			'fetch',
+			// totalCount always ahead of the offset — the brake must trip.
+			vi.fn().mockImplementation(async () => catalogPage(['Loop'], 999999)),
+		);
+
+		await expect(
+			provider(['x']).provider.fetchPsPlusExtraCatalog('en-us'),
+		).rejects.toThrow(/exceeded 30 pages/);
+	});
+
+	it('surfaces catalog GraphQL errors and malformed pages readably', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi
+				.fn()
+				.mockResolvedValue(
+					jsonResponse({ errors: [{ message: 'PersistedQueryNotFound' }] }),
+				),
+		);
+		await expect(
+			provider(['x']).provider.fetchPsPlusExtraCatalog('en-us'),
+		).rejects.toThrow(/PersistedQueryNotFound/);
+
+		vi.stubGlobal(
+			'fetch',
+			vi
+				.fn()
+				.mockResolvedValue(
+					jsonResponse({ data: { categoryGridRetrieve: {} } }),
+				),
+		);
+		await expect(
+			provider(['x']).provider.fetchPsPlusExtraCatalog('en-us'),
+		).rejects.toThrow(/well-formed/);
+	});
+});

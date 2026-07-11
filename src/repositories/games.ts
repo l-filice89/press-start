@@ -4,7 +4,7 @@
  * title return an array (non-unique candidate key) while lookups by external
  * link return a single game.
  */
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import {
 	type EXTERNAL_LINK_SOURCES,
 	externalLink,
@@ -125,6 +125,23 @@ export async function backfillGameFacts(
 			storeUrl: sql`COALESCE(${game.storeUrl}, ${facts.storeUrl})`,
 		})
 		.where(eq(game.id, gameId));
+}
+
+/**
+ * Set/clear the PS+ Extra catalog flag on a batch of games (Story 5.1,
+ * FR-38). Caller scopes the ids to tracked, non-owned games — this is a dumb
+ * batched write.
+ */
+export async function setPsPlusExtraFlags(
+	db: Db,
+	gameIds: string[],
+	value: boolean,
+) {
+	if (gameIds.length === 0) return;
+	await db
+		.update(game)
+		.set({ psPlusExtra: value })
+		.where(inArray(game.id, gameIds));
 }
 
 /**
