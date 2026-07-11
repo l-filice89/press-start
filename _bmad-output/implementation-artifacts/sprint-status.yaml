@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-06
-last_updated: 2026-07-10
+last_updated: 2026-07-11
 project: ps-game-catalog
 project_key: NOKEY
 tracking_system: file-system
@@ -98,7 +98,7 @@ development_status:
   5-1-region-setting-ps-extra-check-button: done
   5-2-scheduled-monthly-refresh-cron-trigger: done
   5-3-ps-catalog-as-of-date-timestamp: done
-  epic-5-retrospective: optional
+  epic-5-retrospective: done # 2026-07-11
 
   # Epic 6: Add at the Moment of Discovery + Chores
   epic-6: backlog
@@ -221,3 +221,19 @@ action_items:
     action: "Decide whether the subscription-cancel un-own flow (owned_via) joins Epic 5 scope or stays deferred"
     owner: "Luca + John"
     status: done # 2026-07-11: decided STAYS DEFERRED — no epic-5 story picked it up; natural home is an Epic 6 Settings action. Decision recorded on the deferred-work.md entry.
+  - epic: 5
+    action: "Standing invariant — guard the degenerate response: any external-data → automated-write path fails closed on the empty/valid-but-nothing provider response, with a captured-payload hazard test. Wire into bmad-dev-auto.toml beside PROBE-BEFORE-YOU-MAP"
+    owner: "Winston + Murat"
+    status: done # 2026-07-11: DEGENERATE-RESPONSE GUARD RULE added as a persistent fact in _bmad/custom/bmad-dev-auto.toml
+  - epic: 5
+    action: "Probe IGDB failure modes (error, empty, rate-limit, missing-title) against captured payloads; verify Epic 6's worktree IGDB integration against them when that branch merges"
+    owner: "Luca + Amelia"
+    status: in-progress # 2026-07-11: live probe done → igdb-failure-mode-probe-2026-07-11.md (captured 200/[]/400/401/429 payloads; IGDB uses honest status codes unlike PSN; 429 has no Retry-After). Main-tree provider hardened with the DEGENERATE-RESPONSE array-guard + src/providers/igdb.test.ts (5 hazard rows). REMAINING: port the same guard into the worktree searchGames + verify add-by-name degrades (not 500) at Epic 6 merge — checklist in the probe artifact
+  - epic: 5
+    action: "Triage the two Epic-5 deferrals: modal focus-restore (shared with SyncSummaryModal); global ps_plus_extra column vs per-user ownership"
+    owner: "Amelia"
+    status: done # 2026-07-11: focus-restore fixed at useModalTrap level (opt-in restoreFocus + preventRestoreRef, opener captured pre-steal) + restore test; global column accepted as multi-user publication blocker (deferred-work.md)
+  - epic: 5
+    action: "Merge feat/epic-5/know-whats-playable to main through the CI gate; confirm the v1.0.0 merge + release plan (Epic 6 = last v1 epic)"
+    owner: "Luca"
+    status: open # critical path

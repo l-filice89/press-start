@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from 'react';
+import { useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useModalTrap } from '../components/useModalTrap';
 import type { SyncAttentionItem, SyncResult, SyncTitle } from '../settings/api';
@@ -66,24 +66,16 @@ export function SyncSummaryModal({
 	const closeRef = useRef<HTMLButtonElement>(null);
 	const titleId = useId();
 
+	// This dialog auto-opens on async sync completion — a focus steal. The trap
+	// captures the opener before focusing Close and restores it on unmount; a
+	// jump instead hands focus to the search box deliberately (jumpedRef stands
+	// the restore down).
+	const jumpedRef = useRef(false);
 	const onKeyDown = useModalTrap(dialogRef, onClose, {
 		initialFocusRef: closeRef,
+		restoreFocus: true,
+		preventRestoreRef: jumpedRef,
 	});
-
-	// This dialog auto-opens on async sync completion — a focus steal. Return
-	// focus to wherever the user was on Close/Escape; a jump instead hands
-	// focus to the search box deliberately (jumpedRef stands the restore down).
-	const openerRef = useRef<HTMLElement | null>(null);
-	const jumpedRef = useRef(false);
-	useEffect(() => {
-		openerRef.current =
-			document.activeElement instanceof HTMLElement
-				? document.activeElement
-				: null;
-		return () => {
-			if (!jumpedRef.current) openerRef.current?.focus();
-		};
-	}, []);
 
 	function jumpTo(title: string) {
 		jumpedRef.current = true;

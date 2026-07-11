@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { PsPlusCheckModal } from './PsPlusCheckModal';
 
@@ -53,5 +54,35 @@ describe('PsPlusCheckModal', () => {
 
 		await userEvent.keyboard('{Escape}');
 		expect(onClose).toHaveBeenCalledTimes(2);
+	});
+
+	it('restores focus to the opener on close (it auto-opens as a focus steal)', async () => {
+		function Harness() {
+			const [open, setOpen] = useState(false);
+			return (
+				<>
+					<button
+						type="button"
+						data-testid="opener"
+						onClick={() => setOpen(true)}
+					>
+						open
+					</button>
+					{open && (
+						<PsPlusCheckModal result={result} onClose={() => setOpen(false)} />
+					)}
+				</>
+			);
+		}
+		render(<Harness />);
+		const opener = screen.getByTestId('opener');
+
+		// Click focuses the opener, then mounts the modal — the trap must snapshot
+		// the opener, not the Close button it immediately focuses.
+		await userEvent.click(opener);
+		expect(screen.getByRole('button', { name: 'Close' })).toHaveFocus();
+
+		await userEvent.keyboard('{Escape}');
+		expect(opener).toHaveFocus();
 	});
 });

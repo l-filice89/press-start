@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from 'react';
+import { useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useModalTrap } from '../components/useModalTrap';
 import type { PsPlusCheckResult } from '../settings/api';
@@ -40,19 +40,12 @@ export function PsPlusCheckModal({
 	const closeRef = useRef<HTMLButtonElement>(null);
 	const titleId = useId();
 
+	// Auto-opens on async completion — a focus steal; the trap captures the
+	// opener before focusing Close and restores it on unmount.
 	const onKeyDown = useModalTrap(dialogRef, onClose, {
 		initialFocusRef: closeRef,
+		restoreFocus: true,
 	});
-
-	// Auto-opens on async completion — a focus steal; give focus back on close.
-	const openerRef = useRef<HTMLElement | null>(null);
-	useEffect(() => {
-		openerRef.current =
-			document.activeElement instanceof HTMLElement
-				? document.activeElement
-				: null;
-		return () => openerRef.current?.focus();
-	}, []);
 
 	const noChanges = result.flagged.length === 0 && result.cleared.length === 0;
 

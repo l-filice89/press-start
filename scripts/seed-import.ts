@@ -16,7 +16,7 @@
  *   bun run seed:local   (writes to the local D1 `bun dev` already uses)
  *   bun run seed         (writes to remote D1 over the Cloudflare API)
  *
- * Required env (see `.env.example`): IGDB_CLIENT_ID, IGDB_ACCESS_TOKEN,
+ * Required env (see `.env.example`): IGDB_CLIENT_ID, IGDB_CLIENT_SECRET,
  * SEED_USER_EMAIL always; CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_D1_DATABASE_ID,
  * CLOUDFLARE_API_TOKEN only for the remote target.
  */
@@ -101,7 +101,7 @@ async function main(): Promise<void> {
 
 	const igdb = createIgdbProvider({
 		clientId: requireEnv('IGDB_CLIENT_ID'),
-		accessToken: requireEnv('IGDB_ACCESS_TOKEN'),
+		clientSecret: requireEnv('IGDB_CLIENT_SECRET'),
 	});
 	const { db, dispose } = local
 		? await createLocalDb()
