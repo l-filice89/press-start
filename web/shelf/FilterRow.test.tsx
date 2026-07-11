@@ -194,6 +194,43 @@ describe('FilterRow', () => {
 		});
 	});
 
+	it('PS+ pill: hidden without badge games, shown when showPsPlus, and kept visible while active', () => {
+		mockGenres([]);
+		const client = () =>
+			new QueryClient({ defaultOptions: { queries: { retry: false } } });
+		const row = (props: { showPsPlus?: boolean; filter?: ShelfFilter }) => (
+			<QueryClientProvider client={client()}>
+				<FilterRow
+					filter={props.filter ?? EMPTY_FILTER}
+					onChange={() => {}}
+					visibleCount={5}
+					showPsPlus={props.showPsPlus}
+				/>
+			</QueryClientProvider>
+		);
+
+		// No badge games → no pill.
+		const { rerender } = render(row({ showPsPlus: false }));
+		expect(screen.queryByTestId('filter-flag-psPlusExtra')).toBeNull();
+
+		// Library has an unowned in-catalog game → pill appears.
+		rerender(row({ showPsPlus: true }));
+		expect(screen.getByRole('button', { name: 'PS+' })).toBeInTheDocument();
+
+		// Stranding guard: the last badge game leaves (showPsPlus false) but the
+		// filter is active — the pill must remain so it can be toggled off.
+		rerender(
+			row({
+				showPsPlus: false,
+				filter: { ...EMPTY_FILTER, flags: ['psPlusExtra'] },
+			}),
+		);
+		expect(screen.getByRole('button', { name: 'PS+' })).toHaveAttribute(
+			'aria-pressed',
+			'true',
+		);
+	});
+
 	it('toggling a reveal pill reports it into the filter (FR-21)', async () => {
 		const user = userEvent.setup();
 		mockGenres([]);

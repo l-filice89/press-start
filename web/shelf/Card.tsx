@@ -180,7 +180,7 @@ export function Card({
 				<div className="card__flags">
 					{game.psPlusExtra && !game.owned && (
 						<span className="card__flag card__flag--ps-extra">
-							<span aria-hidden="true">◈</span>
+							<span aria-hidden="true">PS+</span>
 							<span className="sr-only">
 								In the PlayStation Plus Extra catalog
 							</span>

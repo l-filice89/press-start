@@ -141,6 +141,8 @@
 
 .card__flag--ps-extra {
 	color: var(--color-accent-glow);
+	font-weight: 600;
+	letter-spacing: 0.04em;
 }
 
 .card__flag--release {

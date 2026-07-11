@@ -35,6 +35,11 @@ export const FLAGS = [
 	{ key: 'wishlisted', label: 'Wishlisted' },
 	{ key: 'released', label: 'Released' },
 	{ key: 'playableNow', label: 'Playable now' },
+	// "Play these before they're gone" — the PS+ Extra badge set exactly:
+	// in the catalog and NOT owned (an owned game hides the badge). Its
+	// visibility as a pill is gated on the library actually having such a game
+	// (see FilterRow) — a natural proxy for "has a PS+ subscription".
+	{ key: 'psPlusExtra', label: 'PS+' },
 ] as const;
 
 export type FlagKey = (typeof FLAGS)[number]['key'];
@@ -86,7 +91,11 @@ export function applyShelfFilter(
 			allowedStates.includes(game.effectiveState) &&
 			(filter.genres.length === 0 ||
 				game.genres.some((genre) => filter.genres.includes(genre))) &&
-			filter.flags.every((flag) => game[flag]),
+			// PS+ pill matches the card badge: in-catalog AND not owned. Every
+			// other flag reads its game field directly.
+			filter.flags.every((flag) =>
+				flag === 'psPlusExtra' ? game.psPlusExtra && !game.owned : game[flag],
+			),
 	);
 }
 

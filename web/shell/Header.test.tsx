@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
+import { formatDisplayDate } from '../date';
 import { Header } from './Header';
 
 /**
@@ -17,8 +18,12 @@ describe('Header PS+ readout', () => {
 			<Header email="a@b.co" onSignOut={noop} psPlusRefreshedAt="2026-07-11" />,
 		);
 		const readout = screen.getByTestId('readout');
-		expect(readout).toHaveTextContent('PS+ CATALOG AS OF 2026-07-11');
-		expect(readout).toHaveTextContent('PS+ 2026-07-11');
+		// Rendered in the viewer's locale, not the raw ISO (so 2026-07-11 can't
+		// read as 7 Nov). Assert against the same formatter, locale-independent.
+		const shown = formatDisplayDate('2026-07-11');
+		expect(shown).not.toBe('2026-07-11'); // guard: formatting actually happened
+		expect(readout).toHaveTextContent(`PS+ CATALOG AS OF ${shown}`);
+		expect(readout).toHaveTextContent(`PS+ ${shown}`);
 	});
 
 	it('falls back to an em-dash in both spans when never refreshed', () => {

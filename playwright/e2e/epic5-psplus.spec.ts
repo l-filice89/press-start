@@ -107,10 +107,70 @@ test('the header shows "PS+ CATALOG AS OF {date}" after a refresh (5.3)', async 
 		// Story 5.3 stamps this on a successful check; seed it to drive the readout.
 		await seedSetting('psplus_refreshed_at', '2026-07-11');
 		await page.goto('/');
-		await expect(page.getByTestId('readout')).toContainText(
-			'PS+ CATALOG AS OF 2026-07-11',
-		);
+		const readout = page.getByTestId('readout');
+		await expect(readout).toContainText('PS+ CATALOG AS OF');
+		// Rendered in the viewer's locale (2026-07-11 fix), so assert the date
+		// parts, not the raw ISO — the exact format is locale-dependent and
+		// pinned at the jsdom tier (Header.test.tsx).
+		await expect(readout).toContainText('2026');
+		await expect(readout).toContainText('11');
+		await expect(readout).not.toContainText('2026-07-11');
 	} finally {
 		await deleteSetting('psplus_refreshed_at');
+	}
+});
+
+test('the PS+ filter pill shows for a subscriber and narrows the shelf to unowned in-catalog games', async ({
+	page,
+}) => {
+	const run = randomUUID().slice(0, 8);
+	// Badge set: in the catalog, not owned, released → the pill should match it.
+	const playViaSub = createWishlistedGame({
+		title: `Sub Playable ${run}`,
+		psPlusExtra: true,
+		releaseDate: '2020-01-01',
+		tracking: { playStatus: 'Not started' },
+	});
+	// Owned in-catalog → badge hidden, so the pill must exclude it.
+	const ownedInCatalog = createGame({
+		title: `Sub Owned ${run}`,
+		psPlusExtra: true,
+		releaseDate: '2020-01-01',
+		tracking: { owned: true, playStatus: 'Playing' },
+	});
+	// Not in the catalog → never in the PS+ pill's set.
+	const notInCatalog = createWishlistedGame({
+		title: `Not Sub ${run}`,
+		psPlusExtra: false,
+		tracking: { playStatus: 'Not started' },
+	});
+
+	try {
+		await seedGames([playViaSub, ownedInCatalog, notInCatalog]);
+		await page.goto('/');
+		await loadAllPages(page);
+
+		// The pill renders because the library holds an unowned in-catalog game
+		// (the "has PS+" proxy); it also carries the "PS+" visible label.
+		const pill = page.getByTestId('filter-flag-psPlusExtra');
+		await expect(pill).toBeVisible();
+		await expect(pill).toHaveText('PS+');
+
+		await pill.click();
+		await loadAllPages(page);
+
+		// Only the unowned in-catalog game survives — owned-in-catalog and
+		// not-in-catalog both drop.
+		await expect(
+			page.getByTestId('shelf-card').filter({ hasText: playViaSub.title }),
+		).toBeVisible();
+		await expect(
+			page.getByTestId('shelf-card').filter({ hasText: ownedInCatalog.title }),
+		).toHaveCount(0);
+		await expect(
+			page.getByTestId('shelf-card').filter({ hasText: notInCatalog.title }),
+		).toHaveCount(0);
+	} finally {
+		await deleteGames([playViaSub.id, ownedInCatalog.id, notInCatalog.id]);
 	}
 });

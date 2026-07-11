@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { formatDisplayDate } from '../date';
 import { Wordmark } from './Wordmark';
 import './header.css';
 
@@ -32,7 +33,10 @@ export function Header({
 	psPlusRefreshedAt?: string | null;
 }) {
 	// `||` (not `??`) so an empty/blank stored value also falls back to the dash.
-	const refreshedAt = psPlusRefreshedAt || '—';
+	// Localize the ISO date so it can't be misread month-first (Story 5.3 fix).
+	const refreshedAt = psPlusRefreshedAt
+		? formatDisplayDate(psPlusRefreshedAt)
+		: '—';
 	return (
 		<header className="app-header">
 			<div className="app-header__brand">

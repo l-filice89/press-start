@@ -6,6 +6,7 @@ import { fetchGenreVocabulary } from './api';
 import {
 	EMPTY_FILTER,
 	FLAGS,
+	type FlagKey,
 	LIVE_STATUSES,
 	REVEAL_STATES,
 	type ShelfFilter,
@@ -34,11 +35,24 @@ export function FilterRow({
 	filter,
 	onChange,
 	visibleCount,
+	showPsPlus = false,
 }: {
 	filter: ShelfFilter;
 	onChange: (next: ShelfFilter) => void;
 	visibleCount: number;
+	/** Show the "PS+" pill — true when the library holds an in-catalog,
+	 *  unowned game (proxy for "has PS+"). Always shown while it's the active
+	 *  filter, so a filter can't strand un-removable if the last such game leaves. */
+	showPsPlus?: boolean;
 }) {
+	// Hide the PS+ pill for non-subscribers (no badge games), but never hide it
+	// while it's the active filter — mirrors the genre "uncheckable-off" guard.
+	const flags = FLAGS.filter(
+		(f) =>
+			f.key !== 'psPlusExtra' ||
+			showPsPlus ||
+			filter.flags.includes('psPlusExtra'),
+	);
 	const {
 		data: genres = [],
 		isError,
@@ -93,6 +107,7 @@ export function FilterRow({
 				<FilterSheet
 					filter={filter}
 					onChange={onChange}
+					flags={flags}
 					genreOptions={genreOptions}
 					genreEmptyText={
 						isError
@@ -143,7 +158,7 @@ export function FilterRow({
 						})
 					}
 				/>
-				{FLAGS.map(({ key, label }) => (
+				{flags.map(({ key, label }) => (
 					<button
 						key={key}
 						type="button"
@@ -224,6 +239,7 @@ function FilterSummary({ filter }: { filter: ShelfFilter }) {
 function FilterSheet({
 	filter,
 	onChange,
+	flags,
 	genreOptions,
 	genreEmptyText,
 	visibleCount,
@@ -231,6 +247,7 @@ function FilterSheet({
 }: {
 	filter: ShelfFilter;
 	onChange: (next: ShelfFilter) => void;
+	flags: readonly { key: FlagKey; label: string }[];
 	genreOptions: string[];
 	genreEmptyText: string;
 	visibleCount: number;
@@ -337,7 +354,7 @@ function FilterSheet({
 				</div>
 				<div className="filter-sheet__group">
 					<p className="filter-sheet__group-label">Flags — all of (and)</p>
-					{FLAGS.map(({ key, label }) =>
+					{flags.map(({ key, label }) =>
 						toggleRow(label, filter.flags.includes(key), () =>
 							onChange({
 								...filter,

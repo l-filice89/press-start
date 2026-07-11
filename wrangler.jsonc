@@ -20,14 +20,19 @@
 		"enabled": true
 	},
 	/**
-	 * Monthly PS+ Extra catalog refresh (Story 5.2, FR-39). 12:00 UTC on the
-	 * 22nd — past the latest possible 3rd Tuesday (the 21st), when Sony rotates
-	 * the catalog. Cloudflare cron has no nth-weekday operator, so a fixed
-	 * day-of-month after the rotation is the reliable alignment; the check is
-	 * idempotent. Not mirrored into env.e2e — local dev never fires it.
+	 * Monthly PS+ Extra catalog refresh (Story 5.2, FR-39). Sony rotates the
+	 * Extra/Premium Game Catalog on the 3rd Tuesday of the month (always day
+	 * 15–21). Cloudflare cron has no nth-weekday operator and DOM+DOW is OR'd,
+	 * so we can't express "3rd Tuesday" directly. Instead fire 21:00 UTC every
+	 * day in the 15–21 window: the drop-day run lands hours after the rotation
+	 * (within-24h freshness), and the surrounding days are harmless idempotent
+	 * re-affirms (the check is idempotent and guards against empty-catalog
+	 * wipes). ~7 cheap runs/month, well inside the free-tier subrequest budget.
+	 * ponytail: window-scan, not a 3rd-Tuesday guard — trades 6 redundant
+	 * idempotent runs for zero date-gate code. Not mirrored into env.e2e.
 	 */
 	"triggers": {
-		"crons": ["0 12 22 * *"]
+		"crons": ["0 21 15-21 * *"]
 	},
 	"upload_source_maps": true,
 	"compatibility_flags": ["nodejs_compat"],
