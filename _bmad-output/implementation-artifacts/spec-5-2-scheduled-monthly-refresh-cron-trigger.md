@@ -4,7 +4,7 @@ type: 'feature'
 created: '2026-07-11'
 status: 'done'
 baseline_revision: '6db38204967ed39521fdaeed933f020e2d4708de'
-final_revision: 'PENDING_COMMIT'
+final_revision: '5f438b8f98ae008e8df963de188f15ebc328194a'
 review_loop_iteration: 0
 followup_review_recommended: false
 context:
