@@ -53,6 +53,9 @@ export interface ShelfGame {
 	boughtOn: string | null;
 	wishlistedOn: string | null;
 	ownershipType: 'physical' | 'digital' | null;
+	/** How ownership was acquired (FR-9 amended): `membership` = PS+ claim —
+	 * the card badges it; null = legacy rows or un-owned. */
+	ownedVia: 'purchase' | 'membership' | null;
 	releaseDate: string | null;
 	genres: string[];
 }
@@ -90,6 +93,7 @@ function bakeCard(row: LibraryRow, genres: string[]): ShelfGame {
 		boughtOn: row.boughtOn,
 		wishlistedOn: row.wishlistedOn,
 		ownershipType: row.ownershipType,
+		ownedVia: row.ownedVia,
 		releaseDate: row.releaseDate,
 		genres,
 	};

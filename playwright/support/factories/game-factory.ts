@@ -15,6 +15,8 @@ export interface SeedGame {
 	psPlusExtra: boolean;
 	tracking: {
 		owned: boolean;
+		/** FR-9 amended: `membership` = PS+ claim (card shows the PS+ tag). */
+		ownedVia: 'purchase' | 'membership' | null;
 		playStatus:
 			| 'Not started'
 			| 'Up next'
@@ -44,6 +46,7 @@ export function createGame(
 		...overrides,
 		tracking: {
 			owned: true,
+			ownedVia: null,
 			playStatus: null,
 			completedOn: null,
 			platinumOn: null,

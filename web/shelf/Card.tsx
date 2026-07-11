@@ -227,6 +227,17 @@ export function Card({
 					    the row height and drops the chip from the a11y tree. */}
 					<span className="card__owned" data-owned={game.owned || undefined}>
 						OWNED
+						{/* FR-9 amended: a PS+ claim is owned but subscription-bound —
+						    worth knowing at a glance (it vanishes if PS+ lapses). */}
+						{game.ownedVia === 'membership' && (
+							<span
+								className="card__owned-via"
+								data-testid="card-owned-via-membership"
+							>
+								<span aria-hidden="true"> · PS+</span>
+								<span className="sr-only"> via PS Plus claim</span>
+							</span>
+						)}
 					</span>
 				</p>
 			</div>

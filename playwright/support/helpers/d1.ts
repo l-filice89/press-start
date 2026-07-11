@@ -129,8 +129,8 @@ const seedSql = (game: SeedGame): string[] => {
 	return [
 		`INSERT INTO game (id, title, title_normalized, release_date, cover_url, store_url, ps_plus_extra, unenriched)
 		 VALUES (${sq(game.id)}, ${sq(game.title)}, ${sq(game.title.toLowerCase())}, ${sq(game.releaseDate)}, ${sq(game.coverUrl)}, ${sq(game.storeUrl)}, ${game.psPlusExtra ? 1 : 0}, 0);`,
-		`INSERT INTO game_tracking (user_id, game_id, owned, play_status, completed_on, platinum_on, wishlisted_on)
-		 SELECT id, ${sq(game.id)}, ${t.owned ? 1 : 0}, ${sq(t.playStatus)}, ${sq(t.completedOn)}, ${sq(t.platinumOn)}, ${sq(t.wishlistedOn)} FROM user LIMIT 1;`,
+		`INSERT INTO game_tracking (user_id, game_id, owned, owned_via, play_status, completed_on, platinum_on, wishlisted_on)
+		 SELECT id, ${sq(game.id)}, ${t.owned ? 1 : 0}, ${sq(t.ownedVia)}, ${sq(t.playStatus)}, ${sq(t.completedOn)}, ${sq(t.platinumOn)}, ${sq(t.wishlistedOn)} FROM user LIMIT 1;`,
 	];
 };
 

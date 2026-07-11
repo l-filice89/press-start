@@ -147,6 +147,7 @@ export type LibraryRow = {
 	wishlistedOn: string | null;
 	owned: boolean;
 	ownershipType: (typeof gameTracking.$inferSelect)['ownershipType'];
+	ownedVia: (typeof gameTracking.$inferSelect)['ownedVia'];
 };
 
 /**
@@ -177,6 +178,7 @@ export async function listLibraryForUser(
 			wishlistedOn: gameTracking.wishlistedOn,
 			owned: gameTracking.owned,
 			ownershipType: gameTracking.ownershipType,
+			ownedVia: gameTracking.ownedVia,
 		})
 		.from(gameTracking)
 		.innerJoin(game, eq(gameTracking.gameId, game.id))

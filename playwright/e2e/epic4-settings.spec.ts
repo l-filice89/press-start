@@ -1,4 +1,10 @@
-import { deleteSetting, seedSetting } from '../support/helpers/d1';
+import { createGame } from '../support/factories/game-factory';
+import {
+	deleteGames,
+	deleteSetting,
+	seedGames,
+	seedSetting,
+} from '../support/helpers/d1';
 import { expect, test } from '../support/merged-fixtures';
 
 /**
@@ -147,4 +153,38 @@ test('persisted sync needs-attention feeds the amber banner; Review reopens the 
 	// the items, so the banner is still there on a fresh load.
 	await page.reload();
 	await expect(page.getByTestId('attention-banner-stragglers')).toBeVisible();
+});
+
+test('a game owned via PS+ claim carries the PS+ tag on its card (FR-9 amended)', async ({
+	page,
+}) => {
+	const claimed = createGame({
+		tracking: { owned: true, ownedVia: 'membership', playStatus: 'Playing' },
+	});
+	const bought = createGame({
+		tracking: { owned: true, ownedVia: 'purchase', playStatus: 'Playing' },
+	});
+	try {
+		await seedGames([claimed, bought]);
+		await page.goto('/');
+
+		const claimedCard = page
+			.getByTestId('shelf-card')
+			.filter({ hasText: claimed.title });
+		await expect(claimedCard).toBeVisible();
+		await expect(
+			claimedCard.getByTestId('card-owned-via-membership'),
+		).toHaveText(/PS\+/);
+
+		// A purchase shows the plain OWNED chip — no subscription tag.
+		const boughtCard = page
+			.getByTestId('shelf-card')
+			.filter({ hasText: bought.title });
+		await expect(boughtCard).toBeVisible();
+		await expect(
+			boughtCard.getByTestId('card-owned-via-membership'),
+		).toHaveCount(0);
+	} finally {
+		await deleteGames([claimed.id, bought.id]);
+	}
 });

@@ -30,6 +30,7 @@ function game(overrides: Partial<ShelfGame> & { id: string }): ShelfGame {
 		boughtOn: null,
 		wishlistedOn: null,
 		ownershipType: null,
+		ownedVia: null,
 		releaseDate: null,
 		genres: [],
 		...overrides,
