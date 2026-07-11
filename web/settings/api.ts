@@ -23,6 +23,9 @@ export const settingsSchema = z.object({
 	// Defaulted: a deploy-skewed/cached response without the field must not
 	// reject the whole settings payload (timezone + PSN banner ride on it).
 	syncAttention: z.array(syncAttentionItemSchema).default([]),
+	// Story 5.2: the last monthly PS+ Extra cron refresh failed. Defaulted for
+	// the same deploy-skew reason as syncAttention.
+	psPlusRefreshFailed: z.boolean().default(false),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;

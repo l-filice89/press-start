@@ -19,6 +19,16 @@
 	"observability": {
 		"enabled": true
 	},
+	/**
+	 * Monthly PS+ Extra catalog refresh (Story 5.2, FR-39). 12:00 UTC on the
+	 * 22nd — past the latest possible 3rd Tuesday (the 21st), when Sony rotates
+	 * the catalog. Cloudflare cron has no nth-weekday operator, so a fixed
+	 * day-of-month after the rotation is the reliable alignment; the check is
+	 * idempotent. Not mirrored into env.e2e — local dev never fires it.
+	 */
+	"triggers": {
+		"crons": ["0 12 22 * *"]
+	},
 	"upload_source_maps": true,
 	"compatibility_flags": ["nodejs_compat"],
 	/**

@@ -7,6 +7,7 @@ import {
 	clearPsnAuthExpired,
 	getPsnCookie,
 	isPsnAuthExpired,
+	isPsPlusRefreshFailed,
 	PSN_COOKIE_SETTING_KEY,
 	readSyncAttention,
 	TIMEZONE_SETTING_KEY,
@@ -56,19 +57,26 @@ settingsRoute.get('/settings', requireAuth, async (c) => {
 	// Presence reflects the EFFECTIVE cookie (saved setting or the Wrangler
 	// secret seed) — a deployment running on the seed must not claim "no
 	// cookie" while sync works.
-	const [timezone, psnCookie, psnAuthExpired, syncAttention] =
-		await Promise.all([
-			getSetting(db, userId, TIMEZONE_SETTING_KEY),
-			getPsnCookie(db, userId, c.env),
-			isPsnAuthExpired(db, userId),
-			readSyncAttention(db, userId),
-		]);
+	const [
+		timezone,
+		psnCookie,
+		psnAuthExpired,
+		syncAttention,
+		psPlusRefreshFailed,
+	] = await Promise.all([
+		getSetting(db, userId, TIMEZONE_SETTING_KEY),
+		getPsnCookie(db, userId, c.env),
+		isPsnAuthExpired(db, userId),
+		readSyncAttention(db, userId),
+		isPsPlusRefreshFailed(db, userId),
+	]);
 	return c.json(
 		{
 			timezone: timezone ?? null,
 			psnCookieSet: Boolean(psnCookie),
 			psnAuthExpired,
 			syncAttention,
+			psPlusRefreshFailed,
 		},
 		200,
 	);

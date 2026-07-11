@@ -94,6 +94,12 @@ export function AppShell({
 						}}
 					/>
 				)}
+				{settings?.psPlusRefreshFailed && (
+					<AttentionBanner
+						variant="failed-refresh"
+						message="The monthly PS+ Extra catalog refresh didn't complete — it'll retry next month, or run Check PS+ Extra from the menu to try now."
+					/>
+				)}
 				<main className="app-shell__main" id="shelf">
 					<Shelf />
 				</main>

@@ -95,6 +95,7 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 			psnCookieSet: false,
 			psnAuthExpired: false,
 			syncAttention: [],
+			psPlusRefreshFailed: false,
 		});
 	});
 
@@ -219,6 +220,22 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 		expect(
 			await getSetting(db(), userId, SYNC_ATTENTION_SETTING_KEY),
 		).toBeUndefined();
+	});
+
+	it('PS+ refresh failure (5.2): GET exposes psPlusRefreshFailed, cleared on resolve', async () => {
+		const { markPsPlusRefreshFailed, clearPsPlusRefreshFailed } = await import(
+			'../../src/services/settings'
+		);
+
+		await markPsPlusRefreshFailed(db(), userId);
+		expect(
+			await (await appFetch('/api/settings', { headers: { cookie } })).json(),
+		).toMatchObject({ psPlusRefreshFailed: true });
+
+		await clearPsPlusRefreshFailed(db(), userId);
+		expect(
+			await (await appFetch('/api/settings', { headers: { cookie } })).json(),
+		).toMatchObject({ psPlusRefreshFailed: false });
 	});
 
 	it('stamps started_on as today IN THE USER ZONE, not the UTC day (hazard)', async () => {

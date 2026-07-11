@@ -11,9 +11,18 @@
 
 import { normalizeTitle } from '../core';
 import { createPsnProvider } from '../providers';
-import { listLibraryForUser, setPsPlusExtraFlags } from '../repositories';
+import {
+	findUserByEmail,
+	listLibraryForUser,
+	setPsPlusExtraFlags,
+} from '../repositories';
 import type { Db } from '../repositories/db';
-import { getPsnCookie, getPsnRegion } from './settings';
+import {
+	clearPsPlusRefreshFailed,
+	getPsnCookie,
+	getPsnRegion,
+	markPsPlusRefreshFailed,
+} from './settings';
 
 export interface PsPlusCheckResult {
 	/** Titles newly flagged as in the catalog this run. */
@@ -88,6 +97,10 @@ export async function runPsPlusCheck(
 		false,
 	);
 
+	// A successful refresh — by ANY trigger — resolves a prior failed-cron
+	// notice (Story 5.2, AR-14): the button is thus also a resolution path.
+	await clearPsPlusRefreshFailed(db, userId);
+
 	return {
 		ok: true,
 		result: {
@@ -97,4 +110,38 @@ export async function runPsPlusCheck(
 			region,
 		},
 	};
+}
+
+/**
+ * The monthly Cron Trigger entry (Story 5.2, FR-39/40): runs the SAME
+ * `runPsPlusCheck` for the single account user statelessly. A failed run (or a
+ * throw) persists the `psplus_refresh_failed` flag that lights the attention
+ * banner; success clears it inside `runPsPlusCheck`. No user row yet → no-op.
+ */
+export async function runScheduledPsPlusCheck(
+	db: Db,
+	env: {
+		AUTH_ALLOWED_EMAIL: string;
+		PSN_REGION?: string;
+		PSN_SESSION_COOKIE?: string;
+	},
+): Promise<void> {
+	// ponytail: single-tenant — resolve THE user by the allowlist email. Loop
+	// over users here if AUTH_ALLOWED_EMAIL ever becomes multi-value.
+	const user = await findUserByEmail(db, env.AUTH_ALLOWED_EMAIL);
+	if (!user) return;
+
+	try {
+		const outcome = await runPsPlusCheck(db, user.id, env);
+		// Only a genuine provider failure (a retry may fix) lights the banner.
+		// `no-region` is a deploy/config gap, not a transient refresh failure:
+		// the banner tells the user to run the button, but the button hits the
+		// same no-region wall — lighting it would be a permanent dead-end.
+		if (!outcome.ok && outcome.reason === 'provider') {
+			await markPsPlusRefreshFailed(db, user.id);
+		}
+	} catch (error) {
+		console.error('ps+ scheduled refresh threw', error);
+		await markPsPlusRefreshFailed(db, user.id);
+	}
 }

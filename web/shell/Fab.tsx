@@ -72,6 +72,9 @@ export function Fab({
 			// Flags feed playableNow — the shelf must re-derive.
 			queryClient.invalidateQueries({ queryKey: ['shelf'] });
 			queryClient.invalidateQueries({ queryKey: ['shelf-search'] });
+			// A successful check clears any failed-cron flag (5.2) — refetch
+			// settings so the failed-refresh banner disappears without a reload.
+			queryClient.invalidateQueries({ queryKey: ['settings'] });
 		},
 		onError: () => {
 			toast({ message: 'PS+ check failed — try again later.' });

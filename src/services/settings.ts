@@ -58,6 +58,39 @@ export async function getPsnRegion(
 	return seed;
 }
 
+/**
+ * Scheduled PS+ Extra refresh failure (Story 5.2, FR-40/AR-14). `'failed'`
+ * while the last MONTHLY cron run could not refresh the catalog; absent
+ * otherwise. Only the stateless cron sets it (a button failure is a toast,
+ * 5.1); any successful `runPsPlusCheck` — cron or button — clears it, so the
+ * banner self-resolves the moment the catalog is refreshed by any path.
+ */
+export const PSPLUS_REFRESH_FAILED_SETTING_KEY = 'psplus_refresh_failed';
+const PSPLUS_REFRESH_FAILED = 'failed';
+
+export async function markPsPlusRefreshFailed(db: Db, userId: string) {
+	await setSetting(
+		db,
+		userId,
+		PSPLUS_REFRESH_FAILED_SETTING_KEY,
+		PSPLUS_REFRESH_FAILED,
+	);
+}
+
+export async function clearPsPlusRefreshFailed(db: Db, userId: string) {
+	await deleteSetting(db, userId, PSPLUS_REFRESH_FAILED_SETTING_KEY);
+}
+
+export async function isPsPlusRefreshFailed(
+	db: Db,
+	userId: string,
+): Promise<boolean> {
+	return (
+		(await getSetting(db, userId, PSPLUS_REFRESH_FAILED_SETTING_KEY)) ===
+		PSPLUS_REFRESH_FAILED
+	);
+}
+
 /** Persist the PSN-rejected state so the banner survives reloads (NFR-4). */
 export async function markPsnAuthExpired(db: Db, userId: string) {
 	await setSetting(db, userId, PSN_AUTH_SETTING_KEY, PSN_AUTH_EXPIRED);

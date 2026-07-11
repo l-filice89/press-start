@@ -3,7 +3,12 @@ import {
 	createGame,
 	createWishlistedGame,
 } from '../support/factories/game-factory';
-import { deleteGames, seedGames } from '../support/helpers/d1';
+import {
+	deleteGames,
+	deleteSetting,
+	seedGames,
+	seedSetting,
+} from '../support/helpers/d1';
 import { loadAllPages } from '../support/helpers/shelf';
 import { expect, test } from '../support/merged-fixtures';
 
@@ -73,5 +78,24 @@ test('a flagged non-owned released game is Playable now; owned games hide the fl
 		).toHaveCount(0);
 	} finally {
 		await deleteGames([inCatalog.id, ownedFlagged.id, unreleased.id]);
+	}
+});
+
+test('a failed monthly refresh surfaces the failed-refresh attention banner (5.2c)', async ({
+	page,
+}) => {
+	try {
+		// The cron persists this flag on a failed scheduled refresh (Story 5.2).
+		await seedSetting('psplus_refresh_failed', 'failed');
+		await page.goto('/');
+		await expect(
+			page.getByTestId('attention-banner-failed-refresh'),
+		).toBeVisible();
+		await expect(
+			page.getByTestId('attention-banner-failed-refresh'),
+		).toContainText('PS+ Extra');
+	} finally {
+		// Restore the deterministic baseline (auth-journey asserts it exact).
+		await deleteSetting('psplus_refresh_failed');
 	}
 });
