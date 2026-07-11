@@ -207,6 +207,30 @@ describe('createPsnProvider', () => {
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
 
+	it('throws PsnAuthError on the REAL expired-cookie response: HTTP 200 + Access-denied GraphQL error (hazard: PSN never answers 401)', async () => {
+		// Captured live 2026-07-11 with a bogus pdccws_p — verbatim fixture.
+		const fetchMock = vi.fn().mockResolvedValue(
+			jsonResponse({
+				data: { purchasedTitlesRetrieve: null },
+				errors: [
+					{
+						message:
+							'Access denied! You need to be authorized to perform this action!',
+						path: ['purchasedTitlesRetrieve'],
+						extensions: { service: 'arkham-gql' },
+					},
+				],
+			}),
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(
+			provider(['expired']).provider.fetchPurchasedGames(),
+		).rejects.toBeInstanceOf(PsnAuthError);
+		// One attempt, no retry — same contract as the HTTP 401/403 path.
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
 	it('surfaces GraphQL-level errors', async () => {
 		vi.stubGlobal(
 			'fetch',

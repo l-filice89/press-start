@@ -204,3 +204,6 @@ status: open
 - source_spec: `_bmad-output/implementation-artifacts/spec-psn-claims-count-as-owned.md`
   summary: Subscription-cancel flow — un-own exactly the `owned_via = 'membership'` tracking rows (claims) when the PS+ subscription lapses, leaving purchases untouched; no trigger/surface exists yet.
   evidence: FR-9 amendment (2026-07-11) counts claims as owned specifically because the `owned_via` flag makes a clean cancel-time rollback possible; the flag is written by seed and sync but nothing reads it yet. Natural home: a Settings action ("I cancelled PS+") or an Epic 5 region/subscription surface.
+- source_spec: `_bmad-output/implementation-artifacts/epic-4-retro-2026-07-11.md`
+  summary: web/shell/Fab.tsx re-hand-rolls the `['shelf']` + `['shelf-search']` invalidation pair that `invalidateShelfQueries` already encapsulates — if a third shelf query key is added, one site is likely missed and drifts.
+  evidence: Epic 4 retro independent review (finding #3). The existing `invalidateShelfQueries` is a per-game `useCallback` bound inside `web/shelf/useTrackingMutations.ts:127` (not exported); Fab additionally invalidates `['settings']`. YAGNI extraction until a third invalidation site appears (same reasoning as the trap-dedup deferral) — extract a shared exported helper then. No user-visible bug today.

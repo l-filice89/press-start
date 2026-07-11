@@ -23,11 +23,13 @@ const MAX_PAGES = 40;
  * the caller surfaces the refresh instructions, never retries (NFR-4, AD-14).
  */
 export class PsnAuthError extends Error {
-	constructor(reason: 'missing-cookie' | 401 | 403) {
+	constructor(reason: 'missing-cookie' | 'denied' | 401 | 403) {
 		super(
 			reason === 'missing-cookie'
 				? 'No PlayStation session cookie is configured.'
-				: `PlayStation rejected the request (HTTP ${reason}) — the session cookie has most likely expired.`,
+				: reason === 'denied'
+					? 'PlayStation denied access — the session cookie has most likely expired.'
+					: `PlayStation rejected the request (HTTP ${reason}) — the session cookie has most likely expired.`,
 		);
 		this.name = 'PsnAuthError';
 	}
@@ -165,7 +167,20 @@ export function createPsnProvider({
 			);
 		}
 		if (payload.errors) {
-			throw new Error(`PSN GraphQL error: ${JSON.stringify(payload.errors)}`);
+			// Real PSN answers an expired/invalid cookie with HTTP 200 + an
+			// "Access denied! You need to be authorized…" GraphQL error — never
+			// 401/403 (probed live 2026-07-11). Map it to the auth path so the
+			// refresh banner lights instead of a generic 502.
+			// ponytail: matches the observed message text — if PSN localizes or
+			// rewords it, this misses and falls to the generic 502 (banner stays
+			// dark). Upgrade path if that bites: key off a GraphQL error
+			// extensions `code`, or treat errors+`purchasedTitlesRetrieve===null`
+			// as auth (accepting it also swallows a rotted-query-hash error).
+			const errorText = JSON.stringify(payload.errors);
+			if (/access denied|authoriz/i.test(errorText)) {
+				throw new PsnAuthError('denied');
+			}
+			throw new Error(`PSN GraphQL error: ${errorText}`);
 		}
 		const page = payload.data?.purchasedTitlesRetrieve;
 		if (!page || !Array.isArray(page.games) || !page.pageInfo) {

@@ -146,6 +146,10 @@ export async function runSync(
 	// reads). Every op is additive and the whole plan is idempotent, so a
 	// mid-plan failure is recoverable by re-running — report it as
 	// needs-attention instead of aborting the games already synced.
+	// ponytail: per-game sequential round-trips — fine at hobby scale, but a
+	// first sync of a large library can exceed the Workers subrequest budget
+	// (AD-15) partway; per-item catch reports the overflow and a re-run heals
+	// it. Upgrade path if it bites: batch the plan through db.batch().
 	for (const create of plan.creates) {
 		try {
 			const created = await insertGame(db, {
