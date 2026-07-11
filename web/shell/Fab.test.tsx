@@ -45,14 +45,18 @@ function renderFab() {
 	});
 	const invalidate = vi.spyOn(client, 'invalidateQueries');
 	const onSyncComplete = vi.fn();
+	const onPsPlusCheckComplete = vi.fn();
 	render(
 		<QueryClientProvider client={client}>
 			<ToastHost>
-				<Fab onSyncComplete={onSyncComplete} />
+				<Fab
+					onSyncComplete={onSyncComplete}
+					onPsPlusCheckComplete={onPsPlusCheckComplete}
+				/>
 			</ToastHost>
 		</QueryClientProvider>,
 	);
-	return { invalidate, onSyncComplete };
+	return { invalidate, onSyncComplete, onPsPlusCheckComplete };
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -102,6 +106,68 @@ describe('Fab', () => {
 		expect(invalidate).toHaveBeenCalledWith({ queryKey: ['settings'] });
 		// Drawer closed after settling.
 		expect(screen.queryByTestId('fab-drawer')).not.toBeInTheDocument();
+	});
+
+	it('runs the PS+ Extra check with a spinner, hands the result over, and repaints the shelf', async () => {
+		const { release } = deferredFetch(() =>
+			Promise.resolve(
+				new Response(
+					JSON.stringify({
+						flagged: ['Hades'],
+						cleared: ['Bloodborne'],
+						checked: 12,
+						region: 'it-it',
+					}),
+					{ status: 200, headers: { 'content-type': 'application/json' } },
+				),
+			),
+		);
+		const { invalidate, onPsPlusCheckComplete } = renderFab();
+
+		await userEvent.click(screen.getByRole('button', { name: 'Chores' }));
+		await userEvent.click(
+			screen.getByRole('button', { name: 'Check PS+ Extra' }),
+		);
+
+		expect(await screen.findByTestId('fab-psplus-spinner')).toBeInTheDocument();
+		expect(
+			screen.getByRole('button', { name: 'Check PS+ Extra' }),
+		).toBeDisabled();
+
+		release();
+		await waitFor(() =>
+			expect(onPsPlusCheckComplete).toHaveBeenCalledWith({
+				flagged: ['Hades'],
+				cleared: ['Bloodborne'],
+				checked: 12,
+				region: 'it-it',
+			}),
+		);
+		// Flags feed playableNow — the shelf must re-derive.
+		expect(invalidate).toHaveBeenCalledWith({ queryKey: ['shelf'] });
+		expect(invalidate).toHaveBeenCalledWith({ queryKey: ['shelf-search'] });
+		expect(screen.queryByTestId('fab-drawer')).not.toBeInTheDocument();
+	});
+
+	it('a failed PS+ check toasts', async () => {
+		const { release } = deferredFetch(() =>
+			Promise.resolve(
+				new Response(JSON.stringify({ error: 'nope' }), { status: 502 }),
+			),
+		);
+		renderFab();
+
+		await userEvent.click(screen.getByRole('button', { name: 'Chores' }));
+		await userEvent.click(
+			screen.getByRole('button', { name: 'Check PS+ Extra' }),
+		);
+		release();
+
+		await waitFor(() =>
+			expect(screen.getByTestId('toast')).toHaveTextContent(
+				/PS\+ check failed/,
+			),
+		);
 	});
 
 	it('a failed sync toasts and refetches settings so the banner can light', async () => {

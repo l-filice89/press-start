@@ -19,6 +19,16 @@
 	"observability": {
 		"enabled": true
 	},
+	/**
+	 * Monthly PS+ Extra catalog refresh (Story 5.2, FR-39). 12:00 UTC on the
+	 * 22nd — past the latest possible 3rd Tuesday (the 21st), when Sony rotates
+	 * the catalog. Cloudflare cron has no nth-weekday operator, so a fixed
+	 * day-of-month after the rotation is the reliable alignment; the check is
+	 * idempotent. Not mirrored into env.e2e — local dev never fires it.
+	 */
+	"triggers": {
+		"crons": ["0 12 22 * *"]
+	},
 	"upload_source_maps": true,
 	"compatibility_flags": ["nodejs_compat"],
 	/**
@@ -39,7 +49,10 @@
 	 */
 	"vars": {
 		"AUTH_ALLOWED_EMAIL": "l.filice.89@gmail.com",
-		"AUTH_EMAIL_FROM": "PRESS START <onboarding@resend.dev>"
+		"AUTH_EMAIL_FROM": "PRESS START <onboarding@resend.dev>",
+		// PS+ Extra catalog locale (Story 5.1, AR-23). Seeds the `psn_region`
+		// SETTING row on first check; the stored setting wins afterwards.
+		"PSN_REGION": "it-it"
 	},
 	/**
 	 * Playwright e2e environment (Epic 2.5 TR-1), selected via CLOUDFLARE_ENV=e2e.
@@ -68,6 +81,7 @@
 			"vars": {
 				"AUTH_ALLOWED_EMAIL": "e2e@press-start.local",
 				"AUTH_EMAIL_FROM": "",
+				"PSN_REGION": "it-it",
 				// Enables POST /api/e2e/sql (test seeding through the Worker, avoiding
 				// cross-process SQLite locks). e2e env only — never deployed.
 				"E2E_TEST_HOOKS": "1"

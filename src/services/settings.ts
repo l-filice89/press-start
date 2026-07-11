@@ -37,6 +37,86 @@ export async function getPsnCookie(
 	return stored || env.PSN_SESSION_COOKIE?.trim() || undefined;
 }
 
+/**
+ * PSN store region (Story 5.1, AR-18/23): the locale the PS+ Extra catalog is
+ * checked against. `SETTING` wins; the `PSN_REGION` Wrangler var only seeds —
+ * and the seed is PERSISTED on first read so the button and the cron (5.2)
+ * can never diverge on a config change between runs.
+ */
+export const PSN_REGION_SETTING_KEY = 'psn_region';
+
+export async function getPsnRegion(
+	db: Db,
+	userId: string,
+	env: { PSN_REGION?: string },
+): Promise<string | undefined> {
+	const stored = await getSetting(db, userId, PSN_REGION_SETTING_KEY);
+	if (stored) return stored;
+	const seed = env.PSN_REGION?.trim();
+	if (!seed) return undefined;
+	await setSetting(db, userId, PSN_REGION_SETTING_KEY, seed);
+	return seed;
+}
+
+/**
+ * Scheduled PS+ Extra refresh failure (Story 5.2, FR-40/AR-14). `'failed'`
+ * while the last MONTHLY cron run could not refresh the catalog; absent
+ * otherwise. Only the stateless cron sets it (a button failure is a toast,
+ * 5.1); any successful `runPsPlusCheck` — cron or button — clears it, so the
+ * banner self-resolves the moment the catalog is refreshed by any path.
+ */
+export const PSPLUS_REFRESH_FAILED_SETTING_KEY = 'psplus_refresh_failed';
+const PSPLUS_REFRESH_FAILED = 'failed';
+
+export async function markPsPlusRefreshFailed(db: Db, userId: string) {
+	await setSetting(
+		db,
+		userId,
+		PSPLUS_REFRESH_FAILED_SETTING_KEY,
+		PSPLUS_REFRESH_FAILED,
+	);
+}
+
+export async function clearPsPlusRefreshFailed(db: Db, userId: string) {
+	await deleteSetting(db, userId, PSPLUS_REFRESH_FAILED_SETTING_KEY);
+}
+
+export async function isPsPlusRefreshFailed(
+	db: Db,
+	userId: string,
+): Promise<boolean> {
+	return (
+		(await getSetting(db, userId, PSPLUS_REFRESH_FAILED_SETTING_KEY)) ===
+		PSPLUS_REFRESH_FAILED
+	);
+}
+
+/**
+ * Last successful PS+ Extra refresh date (Story 5.3, FR-40/AR-18). Written on
+ * every successful `runPsPlusCheck` (button or cron) as `todayForUser` — the
+ * same user-zone date source as every tracking stamp — and read by the header
+ * "PS+ CATALOG AS OF {date}" readout. A failed run leaves the prior value.
+ */
+export const PSPLUS_REFRESHED_AT_SETTING_KEY = 'psplus_refreshed_at';
+
+export async function stampPsPlusRefreshedAt(db: Db, userId: string) {
+	await setSetting(
+		db,
+		userId,
+		PSPLUS_REFRESHED_AT_SETTING_KEY,
+		await todayForUser(db, userId),
+	);
+}
+
+export async function getPsPlusRefreshedAt(
+	db: Db,
+	userId: string,
+): Promise<string | null> {
+	return (
+		(await getSetting(db, userId, PSPLUS_REFRESHED_AT_SETTING_KEY)) ?? null
+	);
+}
+
 /** Persist the PSN-rejected state so the banner survives reloads (NFR-4). */
 export async function markPsnAuthExpired(db: Db, userId: string) {
 	await setSetting(db, userId, PSN_AUTH_SETTING_KEY, PSN_AUTH_EXPIRED);

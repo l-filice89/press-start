@@ -94,10 +94,10 @@ development_status:
   epic-4-retrospective: done # 2026-07-11
 
   # Epic 5: Know What's Playable — PS+ Extra Awareness
-  epic-5: backlog
-  5-1-region-setting-ps-extra-check-button: backlog
-  5-2-scheduled-monthly-refresh-cron-trigger: backlog
-  5-3-ps-catalog-as-of-date-timestamp: backlog
+  epic-5: done # 2026-07-11 — 3/3 stories
+  5-1-region-setting-ps-extra-check-button: done
+  5-2-scheduled-monthly-refresh-cron-trigger: done
+  5-3-ps-catalog-as-of-date-timestamp: done
   epic-5-retrospective: optional
 
   # Epic 6: Add at the Moment of Discovery + Chores

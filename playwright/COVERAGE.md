@@ -115,3 +115,19 @@ Epic 1's deferred 1.5h (prefers-reduced-motion) is closed by
 | 4.3b needs-action items seed the persistent attention banner, surviving the modal and reloads | `epic4-settings.spec.ts` › persisted sync needs-attention feeds the amber banner… (fresh-load banner + reload persistence; the sync-run→persist write and self-resolution in `sync.test.ts` integration hazards) |
 | 4.3c summary offers a button jumping to the problem | `epic4-settings.spec.ts` › persisted sync needs-attention… ("Find in library" → search seeded + focused); seed mechanics also jsdom-pinned in `SearchBox.test.tsx` and `SyncSummaryModal.test.tsx` |
 | ad-hoc FR-9 amendment: claimed games show a PS+ tag on the OWNED chip | `epic4-settings.spec.ts` › a game owned via PS+ claim carries the PS+ tag on its card (purchase negative asserted; chip content also jsdom-pinned in `Card.test.tsx`; the detail panel's acquisition-source line — claim/purchase/silent-NULL — jsdom-pinned in `DetailPanel.test.tsx`, same DTO field the e2e already drives) |
+
+## Epic 5
+
+| AC | Coverage |
+|----|----------|
+| 5.1a region persisted in `SETTING` (config-seeded) and read by the check | skipped e2e — no UI flow (config seed + server read); pinned in `psplus.test.ts` integration › seeds the region setting from config on first run |
+| 5.1b FAB "Check PS+ Extra" runs the check with a spinner | drawer item + spinner + result handoff pinned in jsdom `Fab.test.tsx` (a live check needs a store-catalog response the e2e Worker cannot stub — same constraint as 4.2b) |
+| 5.1c flags set/cleared on tracked non-owned games only, both directions; never auto-added | skipped e2e — same stubbed-PSN constraint; hazards pinned in `psplus.test.ts` integration (set, clear, owned untouched, no auto-add, normalization match, failed fetch writes nothing) |
+| 5.1d owned games ignore/hide the PS+ flag | `epic5-psplus.spec.ts` › a flagged non-owned released game is Playable now; owned games hide the flag… |
+| 5.1e stored membership lights Playable now (card flag + filter pill) for released games | `epic5-psplus.spec.ts` › … (released in-catalog visible under the pill, unreleased excluded) |
+| 5.1f summary modal reports the flag changes | modal content pinned in jsdom `PsPlusCheckModal.test.tsx`; run→modal handoff in `Fab.test.tsx` (live-run constraint as 5.1b) |
+| 5.2a monthly Cron Trigger fires the same region-scoped check statelessly | skipped e2e — a Cron Trigger cannot be fired from a Playwright run; pinned in `psplus-cron.test.ts` integration › runs the check via worker.scheduled (real workerd scheduled handler + local D1, catalog stubbed) |
+| 5.2b cron and button read the same stored region (no divergence) | skipped e2e — same unstubbable-cron constraint; pinned in `psplus-cron.test.ts` › sends the stored region as the store locale (button parity in `psplus.test.ts`) |
+| 5.2c a failed scheduled refresh surfaces a notice in the attention banner | `epic5-psplus.spec.ts` › a failed monthly refresh surfaces the failed-refresh attention banner (seeded `psplus_refresh_failed` flag → steel banner); flag mechanics (set on failure, clear on any success) in `psplus-cron.test.ts` + `settings.test.ts` |
+| 5.3a successful refresh persists a timestamp shown as "PS+ CATALOG AS OF {date}" | `epic5-psplus.spec.ts` › the header shows "PS+ CATALOG AS OF {date}" after a refresh (seeded `psplus_refreshed_at` → readout); stamp-on-success + GET exposure in `psplus.test.ts` + `settings.test.ts`; readout render in jsdom `Header.test.tsx` |
+| 5.3b readout is full on desktop, compact on mobile | CSS-only `@media (max-width:600px)` swap of `.app-header__readout-full`/`-compact` (no JS branch — the viewport visibility toggle itself is not asserted); both spans are populated with the date, asserted in `Header.test.tsx`, and the full-form text is present in the `epic5-psplus.spec.ts` readout test |

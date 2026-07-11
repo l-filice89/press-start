@@ -4,6 +4,7 @@ import { AttentionBanner } from '../components/AttentionBanner';
 import { ToastHost } from '../components/Toast';
 import {
 	fetchSettings,
+	type PsPlusCheckResult,
 	type SyncAttentionItem,
 	type SyncResult,
 } from '../settings/api';
@@ -13,6 +14,7 @@ import { Shelf } from '../shelf/Shelf';
 import { Background } from './Background';
 import { Fab } from './Fab';
 import { Header } from './Header';
+import { PsPlusCheckModal } from './PsPlusCheckModal';
 import { SyncSummaryModal } from './SyncSummaryModal';
 import './app-shell.css';
 
@@ -48,6 +50,10 @@ export function AppShell({
 		result: SyncResult | null;
 		attention: SyncAttentionItem[];
 	} | null>(null);
+	// The PS+ check readout (5.1) — snapshot semantics match `summary`.
+	const [psPlusResult, setPsPlusResult] = useState<PsPlusCheckResult | null>(
+		null,
+	);
 	const { data: settings } = useQuery({
 		queryKey: ['settings'],
 		queryFn: ({ signal }) => fetchSettings(signal),
@@ -66,6 +72,7 @@ export function AppShell({
 					onOpenSettings={() => setSettingsOpen(true)}
 					signOutFailed={signOutFailed}
 					search={<SearchBox />}
+					psPlusRefreshedAt={settings?.psPlusRefreshedAt ?? null}
 				/>
 				{settings?.psnAuthExpired && (
 					<AttentionBanner
@@ -88,6 +95,12 @@ export function AppShell({
 						}}
 					/>
 				)}
+				{settings?.psPlusRefreshFailed && (
+					<AttentionBanner
+						variant="failed-refresh"
+						message="The monthly PS+ Extra catalog refresh didn't complete — it'll retry next month, or run Check PS+ Extra from the menu to try now."
+					/>
+				)}
 				<main className="app-shell__main" id="shelf">
 					<Shelf />
 				</main>
@@ -96,8 +109,15 @@ export function AppShell({
 				onSyncComplete={(result) =>
 					setSummary({ result, attention: result.needsAttention })
 				}
+				onPsPlusCheckComplete={setPsPlusResult}
 			/>
 			{settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
+			{psPlusResult && (
+				<PsPlusCheckModal
+					result={psPlusResult}
+					onClose={() => setPsPlusResult(null)}
+				/>
+			)}
 			{summary && (
 				<SyncSummaryModal
 					result={summary.result}
