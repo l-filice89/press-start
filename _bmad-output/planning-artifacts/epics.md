@@ -295,6 +295,10 @@ A button and a monthly Cron Trigger flag which non-owned games are in the user's
 Luca types a name and adds a game from the games DB — or a name-only fallback — in the seconds the discovery moment lasts; resolves import stragglers by search; exports the full library to CSV; and manages settings. The wishlist moment never depends on a third party being up.
 **FRs covered:** FR-24 (add), FR-28 (resolve), FR-29, FR-41, FR-42, FR-43, FR-49 · NFR-4
 
+### Epic 7: Browse the PS+ Catalog & Add — _Post-v1.0.0_
+The full per-region PS+ Extra catalog becomes a browsable, genre-filterable, searchable destination — not just a flag on games already tracked — so Luca can discover what the subscription covers before it rotates out. Adding a game promotes it into the library (Epic 6's add preview + IGDB enrichment), and a "Claim now" deep-link jumps to the PS Store to add it to the account. Built tier-aware so PS+ Premium can layer on later. **Not in the v1 milestone** — a post-release enhancement.
+**FRs covered:** FR-50, FR-51, FR-52 (PRD §6, post-v1) · reuses AR-5 (provider seam), FR-38/39 (catalog fetch), FR-41/42 (add preview)
+
 ---
 
 ## Epic 1: Foundation & the Seeded Shelf
@@ -1180,3 +1184,137 @@ So that my data has a second copy and the app fits my hand.
 **Then** I can sign out and view About/Help (FR-47 session)
 
 > **Delivered ahead of Epic 6:** the centralized 401 re-auth redirect (DW-3) and the shelf-grid ARIA row regrouping (DW-4) shipped as deferred-work bundles and were removed from this story's ACs. Story 6.3 is scoped to CSV export and settings.
+
+### Story 6.4: Ownership source — purchased vs claimed, and un-claim on cancel
+
+As Luca,
+I want the app to know whether I *bought* a game or only *claimed* it with PS+, and to drop my claimed games if I ever cancel,
+So that "owned" always tells the truth and a lapsed subscription doesn't leave me thinking I still own games I don't.
+
+**Context:** Epic 4's FR-9 amendment counts a PS+ claim as owned (`owned_via = 'membership'`), set automatically by sync. But a *manual* owned-toggle has no way to record "I claimed this" — it defaults to `purchase` — and the detail panel doesn't teach the difference. And the escape hatch the `owned_via` flag was designed for (drop claims when the sub ends) was never surfaced. This story closes both. Distinct from PS+ **Extra catalog** availability (Story 5.1): a catalog game you never claimed stays un-owned — this story is only about games you deliberately mark owned.
+
+**Acceptance Criteria:**
+
+**Given** an un-owned game that carries the PS+ Extra pill
+**When** I mark it owned in the card or detail panel
+**Then** a confirm asks *"Did you buy this, or claim it with PS+?"* with **[Purchased]** / **[Claimed]**, writing `owned_via = 'purchase'` or `'membership'` per my choice [FR-9 amended; DW `spec-psn-claims-count-as-owned`]
+
+**Given** an un-owned game that is NOT in the PS+ catalog
+**When** I mark it owned
+**Then** no prompt — it defaults silently to `owned_via = 'purchase'` (only a PS+ game is ambiguous) [FR-9 amended]
+
+**Given** an owned game in the detail panel
+**When** it opens
+**Then** the acquisition source is stated plainly — "Owned · via PS+" for a claim, "Owned · purchased" otherwise — so a subscription-bound game is never mistaken for a permanent one [FR-9 amended]
+
+**Given** the settings surface (Story 6.3) and at least one `owned_via = 'membership'` row
+**When** I tap "I cancelled PS+"
+**Then** every claimed row is un-owned (reverted to not-owned, purchases untouched), a confirm names the count first, and any of those games still in the Extra catalog re-shows its PS+ pill (availability without ownership) [FR-9 amended; DW `spec-psn-claims-count-as-owned` (un-own flow)]
+
+> Resolves the Epic 4 retro item #5 (subscription-cancel scope) and the `owned_via` manual-set gap surfaced 2026-07-11. The un-own is a reversal of ownership only; it never deletes tracking, milestones, or dates.
+
+## Epic 7: Browse the PS+ Catalog & Add
+
+**Status: Post-v1.0.0** — not required for the first release. The MVP (Epics 1–6) is the personal shelf + tracking + PS+ *awareness*; browsing the full catalog is a discovery enhancement that earns its way in after v1 ships. Scheduled, not scoped into the v1 milestone.
+
+Epic 5 flags which games *you already track* are in the PS+ Extra catalog. This epic surfaces the **whole** catalog (~473 games/region) as a browsable destination so Luca can discover — and add — what the subscription covers before a title rotates out. The catalog stops being a name-only diff and becomes a stored, first-class dataset.
+
+> **Scope:** PS+ **Extra** only, but the data model and ingest are **tier-aware** (a `tier` column defaulting to `'extra'`) so a later epic can add PS+ Premium's Classics catalog + a tier filter without a migration rewrite. Covers/genres come from the PS-store payload already fetched; IGDB enrichment happens only on add.
+>
+> **Dependency:** lands **after Epic 6** — Story 7.3 reuses Epic 6's add-by-name preview and `IgdbProvider`. Independent of Epics 1–5 otherwise.
+>
+> **Invariant preserved:** catalog games are **not** `game`/`game_tracking` rows. They live in their own `ps_plus_catalog` table and only become tracked games when explicitly added (7.3) — the "availability is not ownership" rule from Epic 5 holds.
+
+### Story 7.0: Foundation — architecture & UX design gate
+
+As the team,
+I want the `ps_plus_catalog` data model and the catalog-destination UX designed and signed off before any 7.1–7.3 code,
+So that a stored dataset, a new navigation destination, and a paged/searchable grid aren't improvised mid-build.
+
+**Acceptance Criteria:**
+
+**Given** Epic 7 is ready to start
+**When** design begins
+**Then** the architecture spine gains the `ps_plus_catalog` table (fields, region + `tier` scoping, upsert/prune ingest, its relationship to `game`/`game_tracking`, and whether the Story 5.1 flag check reads from it) — a `bmad-architecture` update, reviewed [AR-5]
+
+**Given** the browse destination is new IA (a second place besides the shelf)
+**When** UX is designed
+**Then** a `bmad-ux` spec covers the catalog destination's navigation entry, the paged/virtualized grid, the genre filter + name search, card states (in-library marker, Add, Claim now), and the empty/needs-refresh state — desktop + phone [UX-DR reuse]
+
+**Given** both artifacts exist
+**When** 7.1 is picked up
+**Then** they gate it: no catalog code merges before the data model and UX are signed off (foundation-first, the Epic 4/5 pattern)
+
+> A design/architecture gate, not runtime code — its "done" is signed-off artifacts. Prevents the improvisation risk called out when this epic was scoped (new table + new destination + paged/searchable grid are not shelf-reuse).
+
+### Story 7.1: Persist the PS+ catalog as browsable data
+
+As Luca,
+I want the monthly refresh to store the full catalog, not just match it against my library,
+So that the whole subscription catalog is queryable without a live fetch.
+
+**Acceptance Criteria:**
+
+**Given** the PS+ check (button or cron, Story 5.1/5.2)
+**When** it fetches the region's catalog
+**Then** each product's browsable fields (product id, title, `title_normalized`, cover URL, PS-store genres, release date, `tier='extra'`) are upserted into a new region-scoped `ps_plus_catalog` table [AR-5; new]
+
+**Given** a catalog that changed since the last run (games left)
+**When** the refresh completes
+**Then** rows for products no longer in the region's catalog are pruned, so the table is a faithful current snapshot (same both-directions discipline as the flag check) [new]
+
+**Given** the stored catalog now exists
+**When** the Story 5.1 flag check runs
+**Then** it MAY read tracked-game matches from the stored table instead of a second fetch (consolidation opportunity — not required if it complicates the ingest) [AR-10]
+
+> The fetch is extended from `string[]` (names) to full product records; the empty-catalog wipe guard (Story 5.1) still applies before any prune.
+
+### Story 7.2: Browse the catalog (a genre-filterable destination)
+
+As Luca,
+I want a shelf-style view of the whole PS+ catalog I can filter by genre,
+So that I can explore what's playable through the subscription.
+
+**Acceptance Criteria:**
+
+**Given** a stored catalog for my region (Story 7.1)
+**When** I open the Catalog destination
+**Then** its games render in a shelf-style grid (cover, title), paged/virtualized for the full ~473-item set, reusing the shelf card chrome where practical [new; UX-DR reuse]
+
+**Given** the catalog grid
+**When** I filter by genre
+**Then** only catalog games in the selected genre(s) show (genre-only filter, PS-store taxonomy) — no state/ownership filters, since these aren't tracked games [new]
+
+**Given** the catalog grid
+**When** I type in the catalog search bar
+**Then** the grid narrows to titles matching the query (case-insensitive substring; live with a small debounce) — scoped to the catalog dataset, separate from the shelf/library search [new]
+
+**Given** a catalog game I already track
+**When** it renders in the grid
+**Then** it is marked as already in my library (so I don't re-add it) [FR-42 dedup parity]
+
+**Given** the catalog is empty or its region unset
+**When** I open the destination
+**Then** an empty/how-to-refresh state shows (mirrors the needs-attention posture), never a blank grid [NFR-4]
+
+### Story 7.3: Add — or claim — a game from the catalog
+
+As Luca,
+I want to add a catalog game to my library, or jump to claim it on PlayStation,
+So that discovery in the catalog turns into a tracked game (or a claimed one) in one step.
+
+**Acceptance Criteria:**
+
+**Given** a catalog game not yet in my library
+**When** I add it
+**Then** Epic 6's add preview opens pre-filled (IGDB enrichment on demand), saving as wishlisted; catalog membership immediately lights its PS+ flag → it shows Playable-now on the shelf [FR-41, FR-42, FR-43; AR-5]
+
+**Given** a catalog game
+**When** I tap "Claim now"
+**Then** the PS Store product page for my region opens in a new tab (`store.playstation.com/{region}/product/{productId}`) where I add it to my PlayStation library myself [new]
+
+**Given** the add completes
+**When** the shelf refetches
+**Then** the game appears tracked and the catalog grid marks it as in-library [FR-42]
+
+> **Investigated & declined — direct in-app claim:** firing PlayStation's authenticated add-to-library mutation from press-start (using the stored `pdccws_p` cookie) is an undocumented write against the user's real PSN account — high breakage risk and a real irreversible side effect on a mistaken tap. The "Claim now" deep-link delivers the value with the user performing the account-side action themselves. Revisit only if PlayStation ships a supported API.

@@ -174,9 +174,17 @@ Three doors into the library. All of them record lifecycle dates silently (§4.5
 - "Leaving PS+ Extra soon" warnings for backlog games.
 - Google sign-in.
 
+### Post-v1.0.0 — Browse the PS+ catalog & add (Epic 7)
+
+Not in the v1 milestone. Epic 5 flags catalog membership on games *already tracked*; this turns the **whole** per-region catalog into a browsable destination. Depends on the §4.4 add-by-name path (Epic 6). Does **not** violate the auto-add non-goal below — adds are user-initiated.
+
+- **FR-50** — The full per-region PS+ catalog is stored as a **first-class dataset** in its own table (not `game`/`game_tracking` rows — the no-auto-add non-goal holds), populated and pruned to a faithful snapshot by the §4.3 monthly refresh. **Tier-aware** (`Extra` now; `Premium` layers on via the subscription-settings item below) with no migration rewrite.
+- **FR-51** — A **catalog destination** renders the stored catalog in a shelf-style, paged grid with a **genre filter and name search**, marking games already in the library (FR-42 dedup parity). Covers/genres come from the PS-store payload (NFR-3: stored, not fetched on render).
+- **FR-52** — Adding a catalog game promotes it into the library via the §4.4 add preview (IGDB enrichment on demand, saves as wishlisted — FR-41/43); catalog membership immediately lights its PS+ flag. A **"Claim now"** deep-link opens the PS Store product page for the region so the user adds it to their PlayStation account themselves — **no direct in-app claim** (an undocumented authenticated write against the user's real account; out of scope).
+
 ### Future — earns its way in later
 
-- **PS+ subscription settings:** the user declares whether they have PS+ and the tier — *Essential* (no catalog: invite to sync / highlight when the three monthly games change), *Extra* (the default behavior v1 implements), *Premium* (Extra plus the premium-bracket catalog).
+- **PS+ subscription settings:** the user declares whether they have PS+ and the tier — *Essential* (no catalog: invite to sync / highlight when the three monthly games change), *Extra* (the default behavior v1 implements), *Premium* (Extra plus the premium-bracket catalog). Feeds the tier-aware catalog (FR-50).
 - Tunable play-next suggestions ("same genre" / "vary genre").
 - Stats and dashboards over the lifecycle-date history.
 - Sale detection + notifications for wishlisted games (mechanism sketch in the addendum).
