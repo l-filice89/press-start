@@ -123,11 +123,14 @@ export async function changeOwnership(
 	gameId: string,
 	next: { owned?: boolean; ownershipType?: OwnershipType },
 	today: string,
+	// `membership` = a PS+ claim (sync only): owned, but no bought_on stamp
+	// and flagged for a future subscription-cancel un-own (FR-9 amended).
+	via: 'purchase' | 'membership' = 'purchase',
 ): Promise<EffectiveState | 'invalid' | null> {
 	const current = await getTracking(db, userId, gameId);
 	if (!current) return null;
 
-	const patch = applyOwnershipChange({ next, current, today });
+	const patch = applyOwnershipChange({ next, current, today, via });
 	if (patch === 'invalid') return 'invalid';
 
 	// Write-once `bought_on` (COALESCE) and owned-only type switches (guard)

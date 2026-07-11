@@ -34,6 +34,8 @@ const shelfGameSchema = z.object({
 	boughtOn: z.string().nullable(),
 	wishlistedOn: z.string().nullable(),
 	ownershipType: z.enum(OWNERSHIP_TYPES).nullable(),
+	// `membership` = PS+ claim (FR-9 amended) — the card tags it.
+	ownedVia: z.enum(['purchase', 'membership']).nullable(),
 	releaseDate: z.string().nullable(),
 	genres: z.array(z.string()),
 });

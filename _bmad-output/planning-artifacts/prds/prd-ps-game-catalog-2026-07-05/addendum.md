@@ -28,3 +28,12 @@ Completion milestones as immutable dates (not statuses) make replays safe by con
 ## Ownership-type inference rationale
 
 Sync-sourced = digital, manual = physical (default, editable). Chosen over a mandatory toggle to keep the add flow zero-friction; over pure inference to survive edge cases (gifted discs later bought digitally, delisted digital titles). Ownership-type breakdown is also a known differentiator for future stats dashboards (see landscape scan: Backloggd's digital/physical breakdowns are praised).
+
+### AMENDED 2026-07-11 — claims count as Owned, flagged by source
+
+Product decision (Luca, 2026-07-11), reversing the 2026-07-05 call above: **claimed games ARE ready to play** (for as long as the subscription lasts), so membership-sourced entries count as `Owned` in both seed and sync — the seed had already shipped this way (story 1.6). The original concern (ownership purity, cancel-subscription drift) is answered structurally instead of by exclusion:
+
+- `game_tracking.owned_via` (`purchase` | `membership`) records how ownership was acquired. Claims never stamp `bought_on`; buying a previously claimed game upgrades the source and stamps it (write-once).
+- If the subscription is ever cancelled, a future flow un-owns exactly the `owned_via = 'membership'` rows — purchases untouched.
+- FR-9/FR-26/FR-33/FR-37 read accordingly: sync creates/flips claims like purchases (flagged), summaries report claims with a PS+ tag instead of a skip count; only WEBMAF web-app entitlements are excluded.
+- Accepted consequence: the library reflects everything claimed (~123 of 175 real export entries) — the curation concern above is superseded by "playable is what matters".

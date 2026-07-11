@@ -177,6 +177,14 @@ export async function runSeedImport({
 			startedOn: candidate.startedOn,
 			owned: candidate.owned,
 			ownershipType: candidate.ownershipType,
+			// FR-9 amended (2026-07-11): claims are owned but flagged by source
+			// so a future subscription-cancel flow un-owns claims, never
+			// purchases. `candidate.psPlusExtra` is the seed's claim marker.
+			ownedVia: candidate.owned
+				? candidate.psPlusExtra
+					? 'membership'
+					: 'purchase'
+				: undefined,
 		});
 		summary.tracked++;
 	}

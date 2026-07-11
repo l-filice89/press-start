@@ -77,7 +77,7 @@ development_status:
   epic-2-5-retrospective: done
 
   # Epic 3: Filter & Focus the Backlog
-  epic-3: done # 2026-07-10: reopened for 3.5/3.6 post-retro, both shipped same day; merge to main still open below
+  epic-3: done # 2026-07-10: reopened for 3.5/3.6 post-retro, both shipped same day; merged to main (PR #7, deca64d)
   3-1-filter-the-shelf-by-state-and-genre: done
   3-2-flag-pills-and-state-reveal-pills: done
   3-3-live-filter-summary-empty-state-responsive-filters: done
@@ -87,11 +87,11 @@ development_status:
   epic-3-retrospective: done
 
   # Epic 4: Fill the Library from PlayStation (Sync)
-  epic-4: backlog
-  4-1-psn-provider-session-cookie-settings: backlog
-  4-2-sync-the-playstation-library-append-only: backlog
-  4-3-sync-summary-needs-attention: backlog
-  epic-4-retrospective: optional
+  epic-4: done # 2026-07-11 — 3/3 stories
+  4-1-psn-provider-session-cookie-settings: done # 2026-07-11
+  4-2-sync-the-playstation-library-append-only: done # 2026-07-11
+  4-3-sync-summary-needs-attention: done # 2026-07-11
+  epic-4-retrospective: done # 2026-07-11
 
   # Epic 5: Know What's Playable — PS+ Extra Awareness
   epic-5: backlog
@@ -191,4 +191,24 @@ action_items:
   - epic: 3
     action: "Merge feat/epic-3/filter-focus-backlog to main through the CI OK gate"
     owner: "Luca"
+    status: done # 2026-07-10: PR #7 merged (deca64d), CI+CD green on main, branch deleted
+  - epic: 4
+    action: "Commit the PSN 200-denial fix + ceiling comments; merge feat/epic-4/fill-library-psn-sync to main through the CI OK gate"
+    owner: "Luca"
+    status: open
+  - epic: 4
+    action: "Standing rule 'probe before you map': external-provider error handling starts with a live probe of real failure modes; hazard fixtures use captured payloads. Wire into bmad-dev-auto.toml"
+    owner: "Murat + Winston"
+    status: open
+  - epic: 4
+    action: "Re-home the follow-up-review contract into bmad-dev-auto.toml: a story with followup_review_recommended true gets an independent review pass (or recorded decline) before the epic merge gate (bmad-loop policy.toml rule died with the tool)"
+    owner: "Amelia"
+    status: open
+  - epic: 4
+    action: "Epic 5 prep: probe the PS+ Extra catalog PSN endpoint (persisted query, response shape, region behavior, failure modes) before 5.1 is specced"
+    owner: "Luca + Amelia"
+    status: open
+  - epic: 4
+    action: "Decide whether the subscription-cancel un-own flow (owned_via) joins Epic 5 scope or stays deferred"
+    owner: "Luca + John"
     status: open

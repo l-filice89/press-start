@@ -4,7 +4,7 @@
  * title return an array (non-unique candidate key) while lookups by external
  * link return a single game.
  */
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import {
 	type EXTERNAL_LINK_SOURCES,
 	externalLink,
@@ -85,6 +85,49 @@ export async function listExternalLinks(db: Db, gameId: string) {
 }
 
 /**
+ * Every game with its PSN external ids — the sync planner's matching index
+ * (Story 4.2). One bulk read instead of a per-entry lookup fan-out; `game` is
+ * shared catalog data (AD-19), so this is not user-scoped.
+ */
+export async function listGamesWithPsnLinks(db: Db) {
+	const games = await db
+		.select({
+			id: game.id,
+			titleNormalized: game.titleNormalized,
+			coverUrl: game.coverUrl,
+			storeUrl: game.storeUrl,
+		})
+		.from(game);
+	const links = await db
+		.select({
+			gameId: externalLink.gameId,
+			externalId: externalLink.externalId,
+		})
+		.from(externalLink)
+		.where(eq(externalLink.source, 'PSN'));
+	return { games, links };
+}
+
+/**
+ * NULL-only backfill of PSN-captured facts (FR-33/35): fills a missing
+ * cover/store URL, never overwrites one that stands (COALESCE keeps the
+ * stored value; user- or seed-set facts survive every sync).
+ */
+export async function backfillGameFacts(
+	db: Db,
+	gameId: string,
+	facts: { coverUrl: string | null; storeUrl: string | null },
+) {
+	await db
+		.update(game)
+		.set({
+			coverUrl: sql`COALESCE(${game.coverUrl}, ${facts.coverUrl})`,
+			storeUrl: sql`COALESCE(${game.storeUrl}, ${facts.storeUrl})`,
+		})
+		.where(eq(game.id, gameId));
+}
+
+/**
  * A game joined with one user's tracking row — the row shape the shelf/search
  * services bake into a card DTO.
  */
@@ -104,6 +147,7 @@ export type LibraryRow = {
 	wishlistedOn: string | null;
 	owned: boolean;
 	ownershipType: (typeof gameTracking.$inferSelect)['ownershipType'];
+	ownedVia: (typeof gameTracking.$inferSelect)['ownedVia'];
 };
 
 /**
@@ -134,6 +178,7 @@ export async function listLibraryForUser(
 			wishlistedOn: gameTracking.wishlistedOn,
 			owned: gameTracking.owned,
 			ownershipType: gameTracking.ownershipType,
+			ownedVia: gameTracking.ownedVia,
 		})
 		.from(gameTracking)
 		.innerJoin(game, eq(gameTracking.gameId, game.id))

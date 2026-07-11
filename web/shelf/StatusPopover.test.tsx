@@ -37,6 +37,7 @@ function game(over: Partial<ShelfGame> = {}): ShelfGame {
 		boughtOn: null,
 		wishlistedOn: null,
 		ownershipType: null,
+		ownedVia: null,
 		releaseDate: null,
 		genres: [],
 		...over,

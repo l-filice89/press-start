@@ -61,6 +61,8 @@ export const shelfGameSchema = z.object({
 	boughtOn: z.string().nullable(),
 	wishlistedOn: z.string().nullable(),
 	ownershipType: z.enum(['physical', 'digital']).nullable(),
+	// `membership` = PS+ claim (FR-9 amended) — the card tags it.
+	ownedVia: z.enum(['purchase', 'membership']).nullable(),
 	releaseDate: z.string().nullable(),
 	genres: z.array(z.string()),
 });
@@ -77,7 +79,10 @@ const shelfResponseSchema = z.object({
  * which is what lets the query client skip pointless retries on a 4xx and route
  * a 401 back to sign-in.
  */
-async function callApi(url: string, init?: RequestInit): Promise<unknown> {
+export async function callApi(
+	url: string,
+	init?: RequestInit,
+): Promise<unknown> {
 	const response = await fetch(url, {
 		credentials: 'same-origin',
 		...init,

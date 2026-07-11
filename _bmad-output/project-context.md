@@ -43,6 +43,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - **Game titles are the join key between the two datasets and don't match exactly** — PS names carry trademark glyphs (`HEAVY RAIN™`, `®`) and edition suffixes. Title matching must strip symbols and normalize case/whitespace; expect manual overrides for stragglers.
 - **PS4/PS5 duplicates collapse to one PS5 entry** — preserve the `dedupe_games` rule in the Bun sync function.
 - **Library sync is append-only by game**: syncing from the PS API adds new games, never modifies or deletes existing rows (user-entered status/dates must survive every sync; personal ratings dropped per PRD 2026-07-05 — the Notion `Rating` column is not imported).
+- **PS+ claims COUNT as owned (FR-9 amended 2026-07-11)**: a claimed game is playable, so sync and seed both mark it Owned — but `game_tracking.owned_via` records the source (`purchase` | `membership`). Claims never stamp `bought_on`; buying a claimed game upgrades `owned_via` and stamps it. A future subscription-cancel flow un-owns `membership` rows only — never touch that flag casually. Only WEBMAF web-app entitlements are excluded from sync/seed.
 - "Owned" ≠ "tracked": the PS export has games missing from the Notion data and vice versa (wishlist has `Owned: No`). The UI must handle games present in only one source.
 
 ### PlayStation API Rules

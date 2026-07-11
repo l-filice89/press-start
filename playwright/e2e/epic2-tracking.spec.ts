@@ -206,8 +206,19 @@ test('first move to Playing stamps started_on, visible in the detail panel (2.1b
 		await expect(panel).toBeVisible();
 		const started = panel.getByLabel('Started');
 		// Server stamped TODAY's date (write-once hazard, AR-11; the re-stamp
-		// guard itself is server-side, Vitest-pinned)
-		await expect(started).toHaveValue(new Date().toISOString().slice(0, 10));
+		// guard itself is server-side, Vitest-pinned). "Today" is stamped in the
+		// user's captured IANA zone (Epic 2 timezone policy) — but the capture
+		// itself is a fire-and-forget PUT racing this test's first write, so
+		// between local midnight and UTC midnight the stamp can legitimately be
+		// either calendar day. Accept both; the zone-correctness hazard itself
+		// is pinned deterministically in test/integration/settings.test.ts.
+		const localToday = new Intl.DateTimeFormat('en-CA', {
+			dateStyle: 'short',
+		}).format(new Date());
+		const utcToday = new Date().toISOString().slice(0, 10);
+		await expect(started).toHaveValue(
+			new RegExp(`^(${localToday}|${utcToday})$`),
+		);
 	} finally {
 		await deleteGames([game.id]);
 	}

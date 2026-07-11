@@ -84,6 +84,14 @@ export const gameTracking = sqliteTable(
 		wishlistedOn: text('wishlisted_on'),
 		owned: integer('owned', { mode: 'boolean' }).notNull().default(false),
 		ownershipType: text('ownership_type', { enum: OWNERSHIP_TYPES }),
+		/**
+		 * How ownership was acquired (policy 2026-07-11, FR-9 amended):
+		 * PS+ claims COUNT as owned — playable is what matters — but carry
+		 * `membership` so a future subscription-cancel flow can un-own claims
+		 * without touching purchases. `purchase` = bought (sync purchase rows,
+		 * manual detail-view owns). NULL = legacy rows from before the flag.
+		 */
+		ownedVia: text('owned_via', { enum: ['purchase', 'membership'] }),
 	},
 	(table) => [
 		primaryKey({ columns: [table.userId, table.gameId] }),

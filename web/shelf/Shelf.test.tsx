@@ -32,6 +32,7 @@ function card(
 		boughtOn: null,
 		wishlistedOn: null,
 		ownershipType: null,
+		ownedVia: null,
 		releaseDate: null,
 		genres: [],
 		...over,

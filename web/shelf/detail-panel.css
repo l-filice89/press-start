@@ -335,6 +335,14 @@
 	background: color-mix(in srgb, var(--color-accent-electric) 12%, transparent);
 }
 
+/* Acquisition source (FR-9 amended): claim = electric tint (matches the
+   card's PS+ tag); purchase = quiet secondary text. */
+.detail-panel__owned-via {
+	margin: 0;
+	font-size: 0.8125rem;
+	color: var(--color-text-secondary);
+}
+
 /* A fieldset for group semantics; its native chrome is reset away. */
 .detail-panel__ownership-types {
 	display: flex;

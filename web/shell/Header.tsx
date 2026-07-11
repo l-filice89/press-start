@@ -16,11 +16,13 @@ import './header.css';
 export function Header({
 	email,
 	onSignOut,
+	onOpenSettings,
 	signOutFailed = false,
 	search,
 }: {
 	email: string;
 	onSignOut: () => void;
+	onOpenSettings?: () => void;
 	signOutFailed?: boolean;
 	search?: ReactNode;
 }) {
@@ -53,6 +55,20 @@ export function Header({
 					<span role="alert" className="app-header__error">
 						Sign-out failed — try again.
 					</span>
+				)}
+
+				{/* Settings entry point (Story 4.1) — Epic 6 relocates this into
+				    the FAB drawer's gear; the header button is the interim home. */}
+				{onOpenSettings && (
+					<button
+						type="button"
+						className="app-header__settings tap-target"
+						onClick={onOpenSettings}
+						aria-label="Settings"
+						title="Settings"
+					>
+						⚙
+					</button>
 				)}
 
 				<button

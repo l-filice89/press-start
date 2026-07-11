@@ -22,7 +22,9 @@ export default defineConfig({
 				test: {
 					name: 'unit',
 					environment: 'node',
-					include: ['src/core/**/*.test.ts'],
+					// All pure-Node unit tests under src/ (core, providers, ...);
+					// Worker-runtime integration tests live under test/integration.
+					include: ['src/**/*.test.ts'],
 				},
 			},
 			{

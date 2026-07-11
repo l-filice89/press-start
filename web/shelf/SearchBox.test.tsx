@@ -27,6 +27,7 @@ function card(id: string, title: string): ShelfGame {
 		boughtOn: null,
 		wishlistedOn: null,
 		ownershipType: null,
+		ownedVia: null,
 		releaseDate: null,
 		genres: [],
 	};
@@ -96,5 +97,22 @@ describe('SearchBox', () => {
 		expect(input).not.toHaveFocus();
 		await user.keyboard('/');
 		expect(input).toHaveFocus();
+	});
+
+	it('a seed event fills the field, focuses it, and opens the matches (Story 4.3 jump)', async () => {
+		mockSearch([card('a', 'Doppelganger')]);
+		renderSearch();
+
+		const { seedSearch } = await import('./SearchBox');
+		const { act } = await import('@testing-library/react');
+		act(() => seedSearch('Doppelganger'));
+
+		const input = screen.getByRole('combobox', { name: 'Search your library' });
+		expect(input).toHaveValue('Doppelganger');
+		expect(input).toHaveFocus();
+		// The debounce is skipped: the query fires and the listbox opens.
+		expect(
+			await screen.findByRole('option', { name: 'Doppelganger' }),
+		).toBeInTheDocument();
 	});
 });

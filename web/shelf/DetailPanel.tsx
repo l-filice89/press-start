@@ -374,6 +374,20 @@ export function DetailPanel({
 						>
 							{game.owned ? 'Owned' : 'Not owned'}
 						</button>
+						{/* Acquisition source (FR-9 amended): a claim is owned but
+						    subscription-bound — worth saying where it can be acted on.
+						    Read-only fact from sync/seed; NULL (legacy/manual) shows
+						    nothing rather than guessing. */}
+						{game.owned && game.ownedVia && (
+							<p
+								className="detail-panel__owned-via"
+								data-testid="detail-owned-via"
+							>
+								{game.ownedVia === 'membership'
+									? 'Claimed via PS+ — playable while the subscription lasts'
+									: 'Purchased'}
+							</p>
+						)}
 						{game.owned && (
 							<fieldset
 								aria-label={`Ownership type for ${game.title}`}

@@ -30,6 +30,7 @@ function game(overrides: Partial<ShelfGame> = {}): ShelfGame {
 		boughtOn: null,
 		wishlistedOn: null,
 		ownershipType: null,
+		ownedVia: null,
 		releaseDate: '2015-03-24',
 		genres: ['Action', 'RPG'],
 		...overrides,
@@ -130,6 +131,22 @@ describe('Card', () => {
 		expect(trigger).toHaveAttribute('tabindex', '-1');
 		// The cover art renders inside the trigger — the whole cover is the target.
 		expect(trigger).toContainElement(screen.getByTestId('card-cover'));
+	});
+
+	it('tags the OWNED chip with PS+ for a membership claim — never for a purchase (FR-9 amended)', () => {
+		const { unmount } = renderCard(
+			game({ owned: true, ownedVia: 'membership' }),
+		);
+		const tag = screen.getByTestId('card-owned-via-membership');
+		expect(tag).toHaveTextContent('PS+');
+		// AT hears the source, not just a glyph.
+		expect(tag).toHaveTextContent('via PS Plus claim');
+		unmount();
+
+		renderCard(game({ owned: true, ownedVia: 'purchase' }));
+		expect(
+			screen.queryByTestId('card-owned-via-membership'),
+		).not.toBeInTheDocument();
 	});
 
 	it('shows the PS+ Extra badge only for an unowned in-catalog game', () => {

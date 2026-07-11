@@ -207,6 +207,12 @@
 	padding: 1px var(--space-2);
 }
 
+/* PS+ claim marker inside the OWNED chip (FR-9 amended): electric tint —
+   owned, but subscription-bound. */
+.card__owned-via {
+	color: var(--color-accent-electric);
+}
+
 .card__genres {
 	font-family: var(--font-body);
 	font-size: 11px;

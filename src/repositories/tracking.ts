@@ -65,6 +65,27 @@ export async function upsertTracking(
 }
 
 /**
+ * Insert a tracking row ONLY if none exists (Story 4.2 sync creates).
+ * `onConflictDoNothing` closes the read-decide-write race: a row that
+ * appeared since the caller's read is left byte-identical — sync must never
+ * overwrite user-entered status/dates (FR-33/AD-10). Returns the inserted
+ * row, or undefined when a row already stood.
+ */
+export async function insertTrackingIfAbsent(
+	db: Db,
+	userId: string,
+	gameId: string,
+	values: TrackingPatch,
+) {
+	const [row] = await db
+		.insert(gameTracking)
+		.values({ userId, gameId, ...values })
+		.onConflictDoNothing()
+		.returning();
+	return row;
+}
+
+/**
  * Guarded UPDATE (never inserts) for the tracking write seam. The services'
  * read-decide-write is untransacted on D1, so the write-once and invariant
  * rules `core/` decided from the read are re-enforced HERE, in the SQL itself
@@ -158,6 +179,7 @@ export async function updateTrackingOwnership(
 		owned?: boolean;
 		ownershipType?: OwnershipType | null;
 		boughtOn?: string;
+		ownedVia?: 'purchase' | 'membership' | null;
 	},
 ) {
 	const set: SQLiteUpdateSetSource<typeof gameTracking> = {};
@@ -167,6 +189,7 @@ export async function updateTrackingOwnership(
 	if (patch.boughtOn !== undefined) {
 		set.boughtOn = sql`COALESCE(${gameTracking.boughtOn}, ${patch.boughtOn})`;
 	}
+	if (patch.ownedVia !== undefined) set.ownedVia = patch.ownedVia;
 	const guard =
 		patch.owned === undefined ? eq(gameTracking.owned, true) : undefined;
 	return updateTrackingWhere(db, userId, gameId, set, guard);

@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
+	cleanup,
 	fireEvent,
 	render,
 	screen,
@@ -45,6 +46,7 @@ function game(over: Partial<ShelfGame> = {}): ShelfGame {
 		boughtOn: null,
 		wishlistedOn: null,
 		ownershipType: null,
+		ownedVia: null,
 		releaseDate: null,
 		genres: [],
 		...over,
@@ -543,6 +545,24 @@ describe('DetailPanel', () => {
 	});
 
 	describe('ownership editing (Story 2.4)', () => {
+		it('names the acquisition source: PS+ claim vs purchase; silent when unknown (FR-9 amended)', async () => {
+			await openPanel(game({ owned: true, ownedVia: 'membership' }));
+			expect(screen.getByTestId('detail-owned-via')).toHaveTextContent(
+				/Claimed via PS\+/,
+			);
+			cleanup();
+
+			await openPanel(game({ owned: true, ownedVia: 'purchase' }));
+			expect(screen.getByTestId('detail-owned-via')).toHaveTextContent(
+				'Purchased',
+			);
+			cleanup();
+
+			// Legacy NULL rows say nothing rather than guessing.
+			await openPanel(game({ owned: true, ownedVia: null }));
+			expect(screen.queryByTestId('detail-owned-via')).not.toBeInTheDocument();
+		});
+
 		it('owning from the panel PATCHes the ownership route and toasts plainly', async () => {
 			const user = await openPanel(
 				game({ owned: false, wishlisted: true, ownershipType: null }),

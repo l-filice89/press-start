@@ -28,7 +28,9 @@ export function AttentionBanner({
 			className={`attention-banner attention-banner--${variant}`}
 			role="status"
 			aria-live="polite"
-			data-testid="attention-banner"
+			// Variant-scoped: two banners can coexist (expired cookie + sync
+			// needs-attention) and tests must address one unambiguously.
+			data-testid={`attention-banner-${variant}`}
 		>
 			<span className="attention-banner__message">{message}</span>
 			{action && (
