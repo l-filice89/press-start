@@ -210,7 +210,13 @@ export async function runSync(
 
 			const tracking = trackingByGameId.get(match.gameId);
 			const via = match.viaMembership ? 'membership' : 'purchase';
-			if (!tracking) {
+			if (tracking?.discarded) {
+				// The user discarded this game (soft-delete tombstone). Additive
+				// sync must not resurrect it — leave owned/owned_via untouched so it
+				// stays hidden. Links/facts were already backfilled above (harmless
+				// on a hidden row); only the ownership mutations are gated. Re-adding
+				// the name is the sole revive path (services/games.addGame).
+			} else if (!tracking) {
 				// A shared game this user never tracked: an entry in their
 				// library means they own it. `IfAbsent` closes the read-write
 				// race — a row that appeared since the bulk read stays

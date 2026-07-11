@@ -1,0 +1,1 @@
+ALTER TABLE `game_tracking` ADD `discarded` integer DEFAULT false NOT NULL;

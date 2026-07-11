@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useIsFetching, useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EmptyState } from '../components/EmptyState';
 import { useAnnounce } from '../components/LiveRegion';
@@ -56,6 +56,8 @@ export function Shelf() {
 function FilteredShelf({ games }: { games: ShelfGame[] }) {
 	const [filter, setFilter] = useState<ShelfFilter>(EMPTY_FILTER);
 	const announce = useAnnounce();
+	// Reactive fetch signal for the shelf query (see the stale-id cleanup below).
+	const shelfFetching = useIsFetching({ queryKey: ['shelf'] }) > 0;
 
 	// Search-pick detail view (Story 6.1, FR-42): the combobox lives in the
 	// header, outside the grid — the window event carries the game id here,
@@ -74,11 +76,17 @@ function FilteredShelf({ games }: { games: ShelfGame[] }) {
 	const searchGame = searchGameId
 		? games.find((g) => g.id === searchGameId)
 		: undefined;
-	// Stale-id cleanup (3.4 pattern): an id the payload doesn't hold (yet)
-	// clears instead of resurrecting a dialog later.
+	// Stale-id cleanup (3.4 pattern): an id the payload doesn't hold clears
+	// instead of resurrecting a dialog later — but NOT while the shelf is
+	// refetching. A re-add that REVIVES a discarded game dispatches open-detail
+	// against a payload that doesn't include it yet (the revived card lands one
+	// refetch later, when the parent forwards fresh `games`); nulling mid-fetch
+	// would drop the open. `shelfFetching` is reactive and a dependency, so this
+	// re-runs when the fetch settles: the id opens if the game arrived, or clears
+	// if it was genuinely absent (a failed revive / bogus id) — never stranded.
 	useEffect(() => {
-		if (searchGameId && !searchGame) setSearchGameId(null);
-	}, [searchGameId, searchGame]);
+		if (searchGameId && !searchGame && !shelfFetching) setSearchGameId(null);
+	}, [searchGameId, searchGame, shelfFetching]);
 	const closeSearchDetail = useCallback(() => {
 		setSearchGameId(null);
 		// Focus returns to the search field that opened it (UX-DR19).

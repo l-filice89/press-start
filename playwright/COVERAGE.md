@@ -151,3 +151,17 @@ rows, `games.test.ts` integration).
 | 6.3a Export CSV → full library downloads from D1 | `epic6.spec.ts` › Export CSV: the FAB item downloads … (download event + filename); the CSV content (columns/quoting/ownership/genres) pinned in `export.test.ts` + `csv.test.ts` toCsv round-trip |
 | 6.3b FAB handedness moves the button and persists | `epic6.spec.ts` › Settings: FAB handedness moves the button and persists across a reload (`fab--left` applied + survives reload); persistence pinned server-side in `settings.test.ts` › FAB handedness |
 | 6.3c Settings offers sign out and About/Help | `epic6.spec.ts` › Settings: sign out and About/Help are available (About/Help visible; sign-out returns to the login gate); the sign-out wiring also jsdom-pinned in `SettingsPanel.test.tsx` |
+
+### Discard (soft-delete tombstone, re-add revive)
+
+Follow-up feature `spec-discard-with-readd-revive.md` (supersedes the 2026-07-10
+"no discard" decision). A discarded game leaves every library surface, sync
+can't re-own it, and re-adding the name revives it — no browse-list.
+
+| AC | Coverage |
+|----|----------|
+| Discard from the detail panel closes it, drops the card, UNDO restores | `epic6.spec.ts` › discard: "Remove from library" … (panel hidden, card gone, Undo brings it back); flag write + shelf-hide + undo also pinned in `discard.test.ts` › hides a discarded game … |
+| Re-adding a discarded game's name revives it (no duplicate row) | `epic6.spec.ts` › discard: re-adding a discarded game by name revives it (toast + detail opens + single game row); server revive path pinned in `discard.test.ts` › revives a discarded game when its name is re-added |
+| Discard a name-only mistake from the stragglers dialog (unenriched only) | `epic6.spec.ts` › discard: the stragglers dialog discards … (Discard on the row → tombstone set); list/search drop pinned in `discard.test.ts` › drops a discarded name-only game … |
+| Additive PSN sync never re-owns / un-hides a discarded game | pinned in `discard.test.ts` › does NOT let additive PSN sync re-own a discarded game (owned stays false, discarded stays true after sync) — server-side, no UI flow |
+| Discard on an untracked game 404s (no empty tombstone) | pinned in `discard.test.ts` › 404s a discard on a game the user does not track |

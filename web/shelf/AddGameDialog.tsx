@@ -67,7 +67,16 @@ export function AddGameDialog({
 		mutationFn: addGame,
 		onSuccess: async (result) => {
 			if (result.kind === 'duplicate') {
+				// A duplicate may be a REVIVED discard: re-adding the name clears the
+				// soft-delete tombstone server-side, so the just-revived card isn't in
+				// the shelf cache yet. Kick the refetch FIRST (marks the shelf query
+				// fetching), THEN open detail — the shelf holds a not-yet-present id
+				// while it is refetching and opens the panel once the revived card
+				// lands (Shelf.tsx stale-id guard). Not awaited, so the open is queued
+				// against the in-flight fetch rather than a settled empty payload.
 				toast({ message: 'Already in your library.' });
+				queryClient.invalidateQueries({ queryKey: ['shelf'] });
+				queryClient.invalidateQueries({ queryKey: ['shelf-search'] });
 				onClose();
 				openDetail(result.gameId);
 				return;

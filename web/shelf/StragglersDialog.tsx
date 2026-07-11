@@ -9,6 +9,7 @@ import {
 	resolveStraggler,
 	type Straggler,
 	searchIgdb,
+	setDiscarded,
 } from './api';
 import './stragglers-dialog.css';
 
@@ -34,6 +35,58 @@ export function StragglersDialog({ onClose }: { onClose: () => void }) {
 		queryKey: ['stragglers'],
 		queryFn: ({ signal }) => fetchStragglers(signal),
 	});
+
+	// Refresh every surface a resolve/discard can change: the list, the shelf +
+	// search (a discarded game leaves them), and settings (the amber banner count
+	// keys off the straggler total).
+	const refreshLists = () =>
+		Promise.all([
+			queryClient.invalidateQueries({ queryKey: ['stragglers'] }),
+			queryClient.invalidateQueries({ queryKey: ['shelf'] }),
+			queryClient.invalidateQueries({ queryKey: ['shelf-search'] }),
+			queryClient.invalidateQueries({ queryKey: ['settings'] }),
+		]);
+
+	// Discard a name-only mistake (unenriched kind only — import staging rows are
+	// not games). Reversible: an UNDO toast revives it (soft-delete tombstone),
+	// same shape as the shelf's un-own undo. Re-adding the name also revives.
+	// ponytail: a bare mutation, not the shelf's IN_FLIGHT/WRITE_GEN guards — this
+	// modal has no other write path to the same row and no shared-state race, so
+	// the shelf's cross-surface machinery would be dead weight here.
+	const discardMutation = useMutation({
+		mutationFn: ({ id, discarded }: { id: string; discarded: boolean }) =>
+			setDiscarded(id, discarded),
+	});
+
+	const discardStraggler = (s: Straggler) =>
+		discardMutation.mutate(
+			{ id: s.id, discarded: true },
+			{
+				onSuccess: async () => {
+					await refreshLists();
+					toast({
+						message: `${s.title} — removed`,
+						undo: {
+							onUndo: () =>
+								discardMutation.mutate(
+									{ id: s.id, discarded: false },
+									{
+										onSuccess: refreshLists,
+										// A failed revive must not be silent (it would leave the
+										// game gone with no signal) — same as the forward discard.
+										onError: () =>
+											toast({
+												message: `Couldn’t restore ${s.title}. Try again.`,
+											}),
+									},
+								),
+						},
+					});
+				},
+				onError: () =>
+					toast({ message: `Couldn’t remove ${s.title}. Try again.` }),
+			},
+		);
 
 	return createPortal(
 		// biome-ignore lint/a11y/noStaticElementInteractions: the backdrop is a dismiss surface, not a control — Escape and the Close button are the accessible paths; this only mirrors them for pointer users.
@@ -105,6 +158,19 @@ export function StragglersDialog({ onClose }: { onClose: () => void }) {
 									>
 										Find a match
 									</button>
+									{/* Discard only a name-only add (a real game the user can
+									    have added by mistake). Import staging rows aren't games
+									    — they carry a Notion payload and resolve or stay. */}
+									{s.kind === 'unenriched' && (
+										<button
+											type="button"
+											className="stragglers__discard tap-target"
+											disabled={discardMutation.isPending}
+											onClick={() => discardStraggler(s)}
+										>
+											Discard
+										</button>
+									)}
 								</li>
 							))}
 						</ul>

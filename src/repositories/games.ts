@@ -203,6 +203,10 @@ export type LibraryRow = {
  * `play_status` — shelf ordering derives from the `core/` effective-state
  * function (AD-7), never SQL. The join is via `game_tracking` so a game with no
  * tracking row for this user is absent (the library is what the user tracks).
+ * Discarded rows (soft-delete tombstone) are excluded here — this is the SINGLE
+ * visibility filter, so shelf, search, stragglers, and CSV export all inherit
+ * it. Sync reads `listTrackingForUser` (unfiltered) so it still sees discarded
+ * rows to skip them (services/sync.ts).
  */
 export async function listLibraryForUser(
 	db: Db,
@@ -229,5 +233,7 @@ export async function listLibraryForUser(
 		})
 		.from(gameTracking)
 		.innerJoin(game, eq(gameTracking.gameId, game.id))
-		.where(eq(gameTracking.userId, userId));
+		.where(
+			and(eq(gameTracking.userId, userId), eq(gameTracking.discarded, false)),
+		);
 }

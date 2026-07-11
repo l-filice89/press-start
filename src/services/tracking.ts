@@ -20,6 +20,7 @@ import {
 } from '../core';
 import {
 	getTracking,
+	setDiscarded,
 	updateTrackingDates,
 	updateTrackingMilestone,
 	updateTrackingOwnership,
@@ -182,4 +183,20 @@ export async function editDates(
 		completedOn: updated.completedOn,
 		platinumOn: updated.platinumOn,
 	});
+}
+
+/**
+ * Discard / revive one game (soft-delete tombstone, 2026-07-11). A pure flag
+ * flip — no effective-state or invariant logic — so this is a thin scope +
+ * existence wrapper over the repository. Returns false when the user has no
+ * tracking row for the game (route answers 404); the tombstone is never
+ * inserted, only flipped on a real row.
+ */
+export async function setGameDiscarded(
+	db: Db,
+	userId: string,
+	gameId: string,
+	discarded: boolean,
+): Promise<boolean> {
+	return Boolean(await setDiscarded(db, userId, gameId, discarded));
 }

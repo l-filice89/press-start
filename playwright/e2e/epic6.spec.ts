@@ -1,13 +1,26 @@
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { createGame } from '../support/factories/game-factory';
+import type { Page } from '@playwright/test';
+import { createGame, type SeedGame } from '../support/factories/game-factory';
 import {
 	d1Execute,
 	d1Query,
 	deleteGames,
 	seedGame,
 } from '../support/helpers/d1';
+import { loadAllPages } from '../support/helpers/shelf';
 import { expect, test } from '../support/merged-fixtures';
+
+const cardFor = (page: Page, game: SeedGame) =>
+	page.getByTestId('shelf-card').filter({ hasText: game.title });
+
+/** Open a game's detail via the search combobox (the add/search entry point). */
+async function openDetailBySearch(page: Page, game: SeedGame) {
+	const search = page.getByRole('combobox', { name: 'Search your library' });
+	await search.fill(game.title);
+	await page.getByRole('option', { name: game.title }).first().click();
+	await expect(page.getByTestId('detail-panel')).toBeVisible();
+}
 
 /**
  * Story 6.1 (FR-41/42/43): add a game by name from the persistent search bar.
@@ -137,6 +150,21 @@ test('stragglers: amber banner surfaces both kinds, the dialog lists them, and a
 	await expect(dialog.getByText(importTitle)).toBeVisible();
 	await expect(dialog.getByText(nameOnly.title)).toBeVisible();
 
+	// Discard is offered only on a name-only (unenriched) row — an import staging
+	// row is not a game (no tracking to flag), so its row carries no Discard.
+	const importRow = dialog
+		.locator('.stragglers__row')
+		.filter({ hasText: importTitle });
+	await expect(importRow.getByRole('button', { name: 'Discard' })).toHaveCount(
+		0,
+	);
+	const nameOnlyRow = dialog
+		.locator('.stragglers__row')
+		.filter({ hasText: nameOnly.title });
+	await expect(
+		nameOnlyRow.getByRole('button', { name: 'Discard' }),
+	).toBeVisible();
+
 	// Pick one → the dialog auto-searches the games DB; e2e carries no IGDB
 	// creds, so the search returns nothing and says so (NFR-4). The actual
 	// IGDB pick + resolve is pinned in integration (stragglers.test.ts).
@@ -145,6 +173,130 @@ test('stragglers: amber banner surfaces both kinds, the dialog lists them, and a
 
 	await d1Execute(`DELETE FROM import_straggler WHERE id = '${importId}';`);
 	await deleteGames([nameOnly.id]);
+});
+
+test('discard: "Remove from library" closes the panel, drops the card, and Undo revives it', async ({
+	page,
+}) => {
+	const game = createGame({
+		title: `Discard Detail ${randomUUID().slice(0, 8)}`,
+		tracking: { owned: false, playStatus: 'Not started' },
+	});
+	try {
+		await seedGame(game);
+		await page.goto('/');
+		await openDetailBySearch(page, game);
+
+		await page
+			.getByTestId('detail-panel')
+			.getByRole('button', { name: 'Remove from library' })
+			.click();
+
+		// The panel closes itself (the card is about to unmount) and the card
+		// leaves the shelf on refetch.
+		await expect(page.getByTestId('detail-panel')).toBeHidden();
+		const toast = page
+			.getByTestId('toast')
+			.getByText(`${game.title} — removed from library`);
+		await expect(toast).toBeVisible();
+		await toast.hover(); // pause the 6s undo timer
+		await expect(cardFor(page, game)).toHaveCount(0);
+
+		// Undo revives the tombstone; the card comes back.
+		await page
+			.getByTestId('toast')
+			.getByRole('button', { name: 'Undo', exact: true })
+			.evaluate((el) => (el as HTMLElement).click());
+		await loadAllPages(page);
+		await expect(cardFor(page, game)).toBeVisible();
+	} finally {
+		await deleteGames([game.id]);
+	}
+});
+
+test('discard: re-adding a discarded game by name revives it (no duplicate row)', {
+	// Reviving is driven by the add-by-name duplicate path, which answers 409
+	// by design (FR-42) — an expected response, not a failure. Opt this test
+	// out of the network-error monitor, same as other error-behavior specs.
+	annotation: [{ type: 'skipNetworkMonitoring' }],
+}, async ({ page }) => {
+	const title = `Revive Readd ${randomUUID().slice(0, 8)}`;
+	const game = createGame({
+		title,
+		tracking: { owned: false, playStatus: 'Not started' },
+	});
+	try {
+		await seedGame(game);
+		// Pre-discard it directly (the discard UI is covered above) so this test
+		// isolates the re-add revive path.
+		await d1Execute(
+			`UPDATE game_tracking SET discarded = 1 WHERE game_id = '${game.id}';`,
+		);
+		await page.goto('/');
+		await expect(cardFor(page, game)).toHaveCount(0);
+
+		// It is hidden, so search finds no library match → the ＋ Add row.
+		const search = page.getByRole('combobox', { name: 'Search your library' });
+		await search.fill(title);
+		await page.getByTestId('search-add-option').click();
+		const dialog = page.getByTestId('add-game-dialog');
+		await expect(dialog).toBeVisible();
+		await dialog.getByRole('button', { name: 'Add to wishlist' }).click();
+
+		// Server revives the tombstone and reports a duplicate; the client opens
+		// its detail and the card is back — with no second game row.
+		await expect(
+			page.getByTestId('toast').getByText('Already in your library.'),
+		).toBeVisible();
+		await expect(
+			page.getByTestId('detail-panel').getByRole('heading', { name: title }),
+		).toBeVisible();
+		const rows = await d1Query<{ n: number }>(
+			`SELECT COUNT(*) AS n FROM game WHERE title = '${title}'`,
+		);
+		expect(rows[0].n).toBe(1);
+	} finally {
+		await deleteGames([game.id]);
+	}
+});
+
+test('discard: the stragglers dialog discards a name-only mistake', async ({
+	page,
+}) => {
+	const nameOnly = createGame({
+		title: `Straggler Discard ${randomUUID().slice(0, 8)}`,
+		tracking: { owned: false, playStatus: 'Not started' },
+	});
+	try {
+		await seedGame(nameOnly);
+		await d1Execute(
+			`UPDATE game SET unenriched = 1 WHERE id = '${nameOnly.id}';`,
+		);
+		await page.goto('/');
+
+		await page
+			.getByTestId('attention-banner-enrich')
+			.getByRole('button', { name: 'Resolve' })
+			.click();
+		const dialog = page.getByTestId('stragglers-dialog');
+		const row = dialog
+			.locator('.stragglers__row')
+			.filter({ hasText: nameOnly.title });
+		await expect(row).toBeVisible();
+
+		await row.getByRole('button', { name: 'Discard' }).click();
+		await expect(
+			page.getByTestId('toast').getByText(`${nameOnly.title} — removed`),
+		).toBeVisible();
+
+		// The tombstone is set; the game is gone from the library surfaces.
+		const rows = await d1Query<{ discarded: number }>(
+			`SELECT discarded FROM game_tracking WHERE game_id = '${nameOnly.id}'`,
+		);
+		expect(rows[0].discarded).toBe(1);
+	} finally {
+		await deleteGames([nameOnly.id]);
+	}
 });
 
 test('Export CSV: the FAB item downloads the library as a CSV file (6.3)', async ({

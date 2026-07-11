@@ -13,6 +13,7 @@ import {
 	changePlayStatus,
 	editDates,
 	logMilestone,
+	setGameDiscarded,
 	todayForUser,
 } from '../services';
 import { type AuthVariables, requireAuth } from './auth';
@@ -33,6 +34,10 @@ const playStatusBodySchema = z.object({
 
 const milestoneBodySchema = z.object({
 	milestone: z.enum(MILESTONES),
+});
+
+const discardBodySchema = z.object({
+	discarded: z.boolean(),
 });
 
 const ownershipBodySchema = z
@@ -163,6 +168,32 @@ trackingRoute.patch('/games/:gameId/dates', requireAuth, async (c) => {
 	}
 
 	return c.json(trackingResponseSchema.parse({ effectiveState }), 200);
+});
+
+// Discard / revive one game (soft-delete tombstone, 2026-07-11). A flag flip,
+// not a status change, so it does NOT answer with an effective state; 404 when
+// the user has no tracking row for the game. Revive (discarded:false) is
+// normally driven by re-adding the name, but the same endpoint powers the UNDO
+// toast.
+trackingRoute.patch('/games/:gameId/discard', requireAuth, async (c) => {
+	const body = discardBodySchema.safeParse(
+		await c.req.json().catch(() => null),
+	);
+	if (!body.success) {
+		return c.json({ error: 'invalid discard' }, 400);
+	}
+
+	const found = await setGameDiscarded(
+		createDb(c.env.DB),
+		c.get('userId'),
+		c.req.param('gameId'),
+		body.data.discarded,
+	);
+	if (!found) {
+		return c.json({ error: 'not found' }, 404);
+	}
+
+	return c.json({ discarded: body.data.discarded }, 200);
 });
 
 trackingRoute.post('/games/:gameId/milestones', requireAuth, async (c) => {

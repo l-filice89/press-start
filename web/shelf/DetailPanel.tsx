@@ -101,6 +101,7 @@ export function DetailPanel({
 		setOwnership,
 		saveDates,
 		editGenre,
+		discard,
 		milestoneRows,
 		activateMilestoneRow,
 		confirming,
@@ -422,6 +423,19 @@ export function DetailPanel({
 								View on PS Store
 							</a>
 						)}
+					</section>
+
+					{/* Remove a mistakenly-added game. Reversible (soft-delete tombstone
+					    + UNDO toast, same as un-own), so no confirm gate; discarding
+					    closes the panel via `onHidden` and re-adding the name revives it. */}
+					<section className="detail-panel__section">
+						<button
+							type="button"
+							className="detail-panel__discard tap-target"
+							onClick={discard}
+						>
+							Remove from library
+						</button>
 					</section>
 				</div>
 			</div>

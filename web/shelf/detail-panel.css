@@ -183,6 +183,18 @@
 	cursor: pointer;
 }
 
+/* Remove-from-library: a reversible destructive action (UNDO toast), so a
+   restrained magenta text button rather than a heavy danger block. */
+.detail-panel__discard {
+	border: none;
+	background: none;
+	color: var(--color-heat-magenta-ink);
+	font-family: var(--font-ui);
+	font-size: 13px;
+	text-decoration: underline;
+	cursor: pointer;
+}
+
 .detail-panel__milestone {
 	display: flex;
 	align-items: center;

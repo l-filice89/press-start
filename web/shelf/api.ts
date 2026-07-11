@@ -179,6 +179,23 @@ export async function editDates(
 	return playStatusResponseSchema.parse(body).effectiveState;
 }
 
+/**
+ * Discard (soft-delete) a game or revive it (Story: discard-with-readd-revive).
+ * A discarded game leaves every library surface but keeps its tracking row; the
+ * UNDO toast calls this with `false`. Not a status change — resolves to void; a
+ * 404 (no tracking row) throws via `callApi`.
+ */
+export async function setDiscarded(
+	gameId: string,
+	discarded: boolean,
+): Promise<void> {
+	await callApi(`/api/games/${encodeURIComponent(gameId)}/discard`, {
+		method: 'PATCH',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ discarded }),
+	});
+}
+
 const genresResponseSchema = z.object({ genres: z.array(z.string()) });
 
 /**

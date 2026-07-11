@@ -221,6 +221,22 @@ export async function updateTrackingDates(
 	return updateTrackingWhere(db, userId, gameId, patch, guard);
 }
 
+/**
+ * Discard / revive one game (soft-delete tombstone, 2026-07-11). UPDATE-only —
+ * discard applies only to an already-tracked game, so a missing row updates
+ * nothing (returns undefined) and the route answers 404 rather than minting an
+ * empty tombstone. The revive path (discarded=false) is driven by re-adding the
+ * game's name (services/games.addGame).
+ */
+export async function setDiscarded(
+	db: Db,
+	userId: string,
+	gameId: string,
+	discarded: boolean,
+) {
+	return updateTrackingWhere(db, userId, gameId, { discarded });
+}
+
 /** Every tracking row for a user (AD-13 scope). */
 export async function listTrackingForUser(db: Db, userId: string) {
 	return db.select().from(gameTracking).where(eq(gameTracking.userId, userId));

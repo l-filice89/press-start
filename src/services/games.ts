@@ -19,6 +19,7 @@ import {
 	insertGame,
 	insertTrackingIfAbsent,
 	linkGameGenre,
+	setDiscarded,
 	type TrackingPatch,
 	upsertGenre,
 } from '../repositories';
@@ -59,6 +60,24 @@ export type AddGameOutcome =
 	| { kind: 'created'; gameId: string }
 	| { kind: 'duplicate'; gameId: string }
 	| 'invalid';
+
+/**
+ * Re-add revive (2026-07-11): is this game already tracked by the user, and if
+ * that row is a discarded tombstone, clear it. Returns true when a tracking row
+ * exists (discarded or not) — i.e. this is a duplicate the caller must route to
+ * its detail view rather than create anew. Re-adding a discarded game's name is
+ * the ONLY revive path (no browse-list, by design).
+ */
+async function reviveIfDiscarded(
+	db: Db,
+	userId: string,
+	gameId: string,
+): Promise<boolean> {
+	const tracking = await getTracking(db, userId, gameId);
+	if (!tracking) return false;
+	if (tracking.discarded) await setDiscarded(db, userId, gameId, false);
+	return true;
+}
 
 /** FR-43 defaults: wishlisted (not owned) or owned-as-purchase, Not started. */
 function newTracking(owned: boolean, today: string): TrackingPatch {
@@ -104,15 +123,14 @@ export async function addGame(
 	if (!existing) {
 		const candidates = await findGamesByNormalizedTitle(db, titleNormalized);
 		for (const candidate of candidates) {
-			if (await getTracking(db, userId, candidate.id)) {
-				return { kind: 'duplicate', gameId: candidate.id };
-			}
+			const revived = await reviveIfDiscarded(db, userId, candidate.id);
+			if (revived) return { kind: 'duplicate', gameId: candidate.id };
 		}
 		existing = candidates[0];
 	}
 
 	if (existing) {
-		if (await getTracking(db, userId, existing.id)) {
+		if (await reviveIfDiscarded(db, userId, existing.id)) {
 			return { kind: 'duplicate', gameId: existing.id };
 		}
 		// Shared catalog game this user never tracked: attach tracking only —

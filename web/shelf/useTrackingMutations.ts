@@ -14,6 +14,7 @@ import {
 	type PlayStatus,
 	removeGenre,
 	type ShelfGame,
+	setDiscarded,
 } from './api';
 import { REVEAL_STATES } from './filters';
 
@@ -394,6 +395,50 @@ export function useTrackingMutations(
 		[game.title, guardPending, beginWrite, mutateGenre, toast],
 	);
 
+	// Discard (soft-delete) — a reversible risky action, same feedback shape as
+	// un-owning: UNDO toast that revives the row. Discarding always hides the
+	// card from the default shelf, so `onHidden` fires unconditionally (the
+	// detail panel closes itself rather than vanishing under the user). The UNDO
+	// respects the shared in-flight + stale-intent guards.
+	const discardMutation = useMutation({
+		mutationFn: (discarded: boolean) => setDiscarded(game.id, discarded),
+		onSettled: settleWrite,
+		onSuccess: () => invalidateShelfQueries(),
+		onError: () =>
+			toast({ message: `Couldn’t update ${game.title}. Try again.` }),
+	});
+	const { mutate: mutateDiscard } = discardMutation;
+
+	const discard = useCallback(() => {
+		if (guardPending()) return;
+		beginWrite();
+		const gen = WRITE_GEN.get(game.id) ?? 0;
+		mutateDiscard(true, {
+			onSuccess: () => {
+				toast({
+					message: `${game.title} — removed from library`,
+					undo: {
+						onUndo: () => {
+							if (guardPending() || guardStaleUndo(gen)) return;
+							beginWrite();
+							mutateDiscard(false);
+						},
+					},
+				});
+				onHidden?.();
+			},
+		});
+	}, [
+		game.title,
+		game.id,
+		mutateDiscard,
+		guardPending,
+		guardStaleUndo,
+		beginWrite,
+		toast,
+		onHidden,
+	]);
+
 	const cancelConfirm = useCallback(() => {
 		setConfirming(null);
 		onConfirmClose?.();
@@ -430,6 +475,7 @@ export function useTrackingMutations(
 		setOwnership,
 		saveDates,
 		editGenre,
+		discard,
 		milestoneRows,
 		activateMilestoneRow,
 		confirming,
