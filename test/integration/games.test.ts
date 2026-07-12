@@ -6,7 +6,9 @@ import {
 	addExternalLink,
 	getTracking,
 	insertGame,
+	insertTrackingIfAbsent,
 	listExternalLinks,
+	setDiscarded,
 } from '../../src/repositories';
 import { createDb } from '../../src/repositories/db';
 import { user } from '../../src/schema';
@@ -199,6 +201,47 @@ describe('add a game by name (Story 6.1, through the route)', () => {
 			owned: false,
 			playStatus: 'Not started',
 		});
+	});
+
+	it('DISAMBIGUATION (retro item 3): tracking dominates facts — revive the tombstone, never attach a 2nd tracked row', async () => {
+		// Two rows share a normalized title (AD-18). The UNTRACKED row is inserted
+		// first (lower rowid) AND its facts (title + release date) exactly match the
+		// add input; the user's own row is a discarded tombstone whose facts DON'T
+		// match. An additive score would tie (untracked facts=2 vs tombstone base=2)
+		// and hand the pick to the DB-first untracked row — attaching a 2nd tracked
+		// row and burying the tombstone (FR-42 breach). Tracking must dominate.
+		const norm = normalizeTitle('Twin Titles');
+		const untracked = await insertGame(db(), {
+			title: 'Twin Titles',
+			titleNormalized: norm,
+			releaseDate: '2010-02-23',
+			unenriched: true,
+		});
+		const mine = await insertGame(db(), {
+			title: 'Twin Titles Deluxe',
+			titleNormalized: norm,
+			releaseDate: '2016-03-01',
+			unenriched: true,
+		});
+		await insertTrackingIfAbsent(db(), sessionUser, mine.id, {
+			owned: false,
+			playStatus: 'Not started',
+		});
+		await setDiscarded(db(), sessionUser, mine.id, true);
+
+		// Input facts match the untracked row exactly.
+		const res = await postGame(
+			{ title: 'Twin Titles', releaseDate: '2010-02-23' },
+			sessionCookie,
+		);
+		expect(res.status).toBe(409);
+		expect(await res.json()).toEqual({ error: 'duplicate', gameId: mine.id });
+
+		// Tombstone revived; the facts-matching untracked row was never tracked.
+		expect((await getTracking(db(), sessionUser, mine.id))?.discarded).toBe(
+			false,
+		);
+		expect(await getTracking(db(), sessionUser, untracked.id)).toBeUndefined();
 	});
 
 	it('rejects blank/oversized/malformed bodies with 400, writing nothing', async () => {

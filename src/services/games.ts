@@ -79,6 +79,50 @@ async function reviveIfDiscarded(
 	return true;
 }
 
+/**
+ * Disambiguate same-normalized-title rows (Epic 6 retro action item 3). AD-18
+ * makes `title_normalized` non-unique, so several catalog rows can share a key;
+ * the old code picked DB-order `candidates[0]` for both the anchor and the
+ * revive, so re-adding could un-discard or anchor the wrong physical row. One
+ * shared rule now chooses the row that add + revive + link all act on:
+ *   1. a row the user tracks (a live duplicate, or a discarded tombstone to
+ *      revive) beats an untracked catalog row;
+ *   2. then the row whose facts best match the previewed IGDB candidate
+ *      (release date, exact pre-normalize title);
+ *   3. DB order breaks the final tie (stable).
+ * Returns the chosen row plus its tracking (null = untracked), or null when
+ * there are no candidates. Does not close the renamed-then-discarded revive gap
+ * (title rewritten on enrichment) — that needs alias matching, still deferred.
+ */
+async function pickTitleCandidate(
+	db: Db,
+	userId: string,
+	candidates: Awaited<ReturnType<typeof findGamesByNormalizedTitle>>,
+	input: AddGameInput,
+) {
+	const title = input.title.trim();
+	const scored = await Promise.all(
+		candidates.map(async (row, order) => {
+			const tracking = await getTracking(db, userId, row.id);
+			// Tracking is a STRICTLY DOMINANT tier, not additive points: any row the
+			// user tracks (2 live > 1 tombstone) outranks any untracked one (0),
+			// whatever the facts. Facts only break ties WITHIN a tier — so a
+			// facts-rich untracked row can never win over a facts-poor tombstone
+			// (that tie would attach a second tracked row + bury the tombstone).
+			const trackedRank = tracking ? (tracking.discarded ? 1 : 2) : 0;
+			let facts = 0;
+			if (input.releaseDate && row.releaseDate === input.releaseDate) facts += 1;
+			if (row.title === title) facts += 1; // exact (pre-normalize) title
+			return { row, tracking, trackedRank, facts, order };
+		}),
+	);
+	scored.sort(
+		(a, b) =>
+			b.trackedRank - a.trackedRank || b.facts - a.facts || a.order - b.order,
+	);
+	return scored[0] ?? null;
+}
+
 /** FR-43 defaults: wishlisted (not owned) or owned-as-purchase, Not started. */
 function newTracking(owned: boolean, today: string): TrackingPatch {
 	return owned
@@ -122,11 +166,14 @@ export async function addGame(
 		: undefined;
 	if (!existing) {
 		const candidates = await findGamesByNormalizedTitle(db, titleNormalized);
-		for (const candidate of candidates) {
-			const revived = await reviveIfDiscarded(db, userId, candidate.id);
-			if (revived) return { kind: 'duplicate', gameId: candidate.id };
+		const best = await pickTitleCandidate(db, userId, candidates, input);
+		if (best?.tracking) {
+			// A row this user already tracks: revive a tombstone, else route to it.
+			if (best.tracking.discarded)
+				await setDiscarded(db, userId, best.row.id, false);
+			return { kind: 'duplicate', gameId: best.row.id };
 		}
-		existing = candidates[0];
+		existing = best?.row;
 	}
 
 	if (existing) {
