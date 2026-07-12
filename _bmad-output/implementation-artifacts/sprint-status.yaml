@@ -101,11 +101,12 @@ development_status:
   epic-5-retrospective: done # 2026-07-11
 
   # Epic 6: Add at the Moment of Discovery + Chores
-  epic-6: in-progress # 6.1–6.3 (v1) merged 2026-07-11; 6.4 is post-v1
+  epic-6: in-progress # 6.1–6.3 merged 2026-07-11; 6.4 kept in v1 (epic not split pre/post) — decision 2026-07-12
   6-1-add-a-game-by-name-the-wishlist-moment: done # 2026-07-11
   6-2-name-only-fallback-straggler-resolution: done # 2026-07-11
   6-3-chores-csv-export-settings: done # 2026-07-11
-  6-4-ownership-source-purchased-vs-claimed-un-claim-on-cancel: backlog # added 2026-07-11 (retro item #5 + owned_via manual-set); post-v1
+  6-4-ownership-source-purchased-vs-claimed-un-claim-on-cancel: planned # v1 (2026-07-12): owned_via data layer already exists; UNBUILT = manual Purchased/Claimed setter + un-claim-on-cancel
+  6-5-free-text-shelf-search: planned # v1 (2026-07-12): live substring filter of the visible shelf; SearchBox today is suggestion-combobox only (deferred-work.md)
   epic-6-retrospective: optional
 
   # Epic 7: Browse the PS+ Catalog & Add — POST-v1.0.0 (not in the v1 milestone)
@@ -228,7 +229,7 @@ action_items:
   - epic: 5
     action: "Probe IGDB failure modes (error, empty, rate-limit, missing-title) against captured payloads; verify Epic 6's worktree IGDB integration against them when that branch merges"
     owner: "Luca + Amelia"
-    status: in-progress # 2026-07-11: live probe done → igdb-failure-mode-probe-2026-07-11.md (captured 200/[]/400/401/429 payloads; IGDB uses honest status codes unlike PSN; 429 has no Retry-After). Main-tree provider hardened with the DEGENERATE-RESPONSE array-guard + src/providers/igdb.test.ts (5 hazard rows). REMAINING: port the same guard into the worktree searchGames + verify add-by-name degrades (not 500) at Epic 6 merge — checklist in the probe artifact
+    status: done # 2026-07-11 probe → igdb-failure-mode-probe-2026-07-11.md (captured 200/[]/400/401/429 payloads). 2026-07-12: guard confirmed present in src/providers/igdb.ts across Epic 6 merge (86a15a9); add-by-name degrades on degenerate response. Carry-forward closed.
   - epic: 5
     action: "Triage the two Epic-5 deferrals: modal focus-restore (shared with SyncSummaryModal); global ps_plus_extra column vs per-user ownership"
     owner: "Amelia"
@@ -236,4 +237,4 @@ action_items:
   - epic: 5
     action: "Merge feat/epic-5/know-whats-playable to main through the CI gate; confirm the v1.0.0 merge + release plan (Epic 6 = last v1 epic)"
     owner: "Luca"
-    status: open # critical path
+    status: done # 2026-07-12: merged to main via PR #9 (a157d36); Epic 6 (last v1 epic) landed on top at 86a15a9

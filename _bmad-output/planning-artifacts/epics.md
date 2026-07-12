@@ -1213,6 +1213,28 @@ So that "owned" always tells the truth and a lapsed subscription doesn't leave m
 
 > Resolves the Epic 4 retro item #5 (subscription-cancel scope) and the `owned_via` manual-set gap surfaced 2026-07-11. The un-own is a reversal of ownership only; it never deletes tracking, milestones, or dates.
 
+### Story 6.5: Free-text shelf search
+
+As Luca,
+I want to type in the search bar and filter my shelf to matching games,
+So that I can find a game I already track without scrolling.
+
+**Acceptance Criteria:**
+
+**Given** the persistent search bar and a tracked shelf
+**When** I type free text
+**Then** the visible shelf filters live to games whose title substring-matches the input (normalized, case/diacritic-insensitive) — distinct from Story 6.1's add-a-new-game suggestions
+
+**Given** an active filter that matches no tracked game
+**When** results render
+**Then** the shelf shows an empty state, and Story 6.1's `＋ Add "<name>"` row remains offered so a non-match still routes to adding
+
+**Given** an active filter
+**When** I clear the input
+**Then** the full shelf restores
+
+> Closes the `spec-free-text-shelf-search` deferred-work item. Today `SearchBox.tsx` is a suggestion-combobox only; the visible shelf (`Shelf.tsx`) never sees the input. Pairs with the disambiguation rule (normalized-exact-match) shared across the add/revive paths.
+
 ## Epic 7: Browse the PS+ Catalog & Add
 
 **Status: Post-v1.0.0** — not required for the first release. The MVP (Epics 1–6) is the personal shelf + tracking + PS+ *awareness*; browsing the full catalog is a discovery enhancement that earns its way in after v1 ships. Scheduled, not scoped into the v1 milestone.
