@@ -299,6 +299,10 @@ Luca types a name and adds a game from the games DB — or a name-only fallback 
 The full per-region PS+ Extra catalog becomes a browsable, genre-filterable, searchable destination — not just a flag on games already tracked — so Luca can discover what the subscription covers before it rotates out. Adding a game promotes it into the library (Epic 6's add preview + IGDB enrichment), and a "Claim now" deep-link jumps to the PS Store to add it to the account. Built tier-aware so PS+ Premium can layer on later. **Not in the v1 milestone** — a post-release enhancement.
 **FRs covered:** FR-50, FR-51, FR-52 (PRD §6, post-v1) · reuses AR-5 (provider seam), FR-38/39 (catalog fetch), FR-41/42 (add preview)
 
+### Epic 8: Multi-user Readiness — _Post-v1.0.0, demand-driven_
+Everything that is correct while `AUTH_ALLOWED_EMAIL` is one address but breaks the moment a second user exists: real auth (registration/invite, drop the single-email gate), and turning the global facts (`ps_plus_extra` flag, PSN region, the cron's single-user refresh) into per-user data. The backlog is `publication-blockers.md` (B1–B6) — this epic is its home. **Sequenced after Epic 7 and only when a second user is actually wanted** — no plumbing is front-loaded; nothing here matters under single-user auth.
+**Blockers covered:** B1–B6 (see `publication-blockers.md`) · Epic 6 retro action item 4
+
 ---
 
 ## Epic 1: Foundation & the Seeded Shelf
@@ -1263,6 +1267,10 @@ So that a stored dataset, a new navigation destination, and a paged/searchable g
 **When** UX is designed
 **Then** a `bmad-ux` spec covers the catalog destination's navigation entry, the paged/virtualized grid, the genre filter + name search, card states (in-library marker, Add, Claim now), and the empty/needs-refresh state — desktop + phone [UX-DR reuse]
 
+**Given** the shelf's cross-tree `CustomEvent` bus (`OPEN_DETAIL` / `SEED_SEARCH` / `SHELF_SEARCH`) is the recurring Epic 6 bug source (mount-races, two-live-surfaces-from-one-input) and Epic 7 adds a SECOND destination that would inherit those failure modes
+**When** the architecture is designed
+**Then** it decides the cross-tree communication approach for the new destination — router/shared context vs. more fire-and-forget window events — and records the decision, so 7.1–7.3 don't accrete another `CustomEvent` under load [Epic 6 retro action item 2]
+
 **Given** both artifacts exist
 **When** 7.1 is picked up
 **Then** they gate it: no catalog code merges before the data model and UX are signed off (foundation-first, the Epic 4/5 pattern)
@@ -1340,3 +1348,16 @@ So that discovery in the catalog turns into a tracked game (or a claimed one) in
 **Then** the game appears tracked and the catalog grid marks it as in-library [FR-42]
 
 > **Investigated & declined — direct in-app claim:** firing PlayStation's authenticated add-to-library mutation from press-start (using the stored `pdccws_p` cookie) is an undocumented write against the user's real PSN account — high breakage risk and a real irreversible side effect on a mistaken tap. The "Claim now" deep-link delivers the value with the user performing the account-side action themselves. Revisit only if PlayStation ships a supported API.
+
+## Epic 8: Multi-user Readiness
+
+**Status: Post-v1.0.0, demand-driven** — sequenced after Epic 7 and only picked up when a second user is actually wanted. The app ships single-tenant by design (FR-48 "the app is mine today"); every item here is correct under one `AUTH_ALLOWED_EMAIL` and only wrong once a second user exists. No plumbing is front-loaded.
+
+The backlog is **`publication-blockers.md`** (kept as the live source, cross-referenced from `deferred-work.md`) — this epic is its home rather than a second copy of the table. Each blocker is a story:
+
+- **B1 — Real auth** (registration/invite; drop or list-ify the single-email gate). Gates everything below.
+- **B2 + B3 — Global facts become per-user** (`ps_plus_extra` flag and PSN region — the "global fact that must become per-user" pair; do together).
+- **B4 + B5 — Per-user PS+/sync refresh** (cron loops all users, each with their own region + PSN cookie; mind the free-tier subrequest budget).
+- **B6 — `owned_via = NULL` legacy backfill** (data hygiene, lowest priority).
+
+**Order:** B1 → B2+B3 → B4+B5 → B6, as `publication-blockers.md` states. When this epic is scoped for real, expand each blocker into ACs then (foundation-first: an auth-model + data-scoping design gate like Story 7.0), not now.

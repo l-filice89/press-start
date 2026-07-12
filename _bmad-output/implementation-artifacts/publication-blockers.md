@@ -2,6 +2,8 @@
 
 Things that are correct while `AUTH_ALLOWED_EMAIL` is one address but **break the moment a second user exists**. The app deliberately ships single-tenant (FR-48 "the app is mine today"); this doc is the gate to clear before opening it to other users. Each entry names the code and the fix. Cross-referenced from `deferred-work.md`.
 
+**Owned by Epic 8 (Multi-user Readiness — post-v1.0.0, demand-driven)** in `epics.md`; this table stays the live source, B1–B6 are its stories (Epic 6 retro action item 4).
+
 Status: none resolved — all latent by design.
 
 | # | Blocker | Where | Fix |
