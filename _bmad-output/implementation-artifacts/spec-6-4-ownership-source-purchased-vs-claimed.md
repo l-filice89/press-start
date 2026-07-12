@@ -6,7 +6,7 @@ status: 'done'
 baseline_revision: '1997c89'
 final_revision: '6dbadf9'
 review_loop_iteration: 0
-followup_review_recommended: true
+followup_review_recommended: false # independent follow-up pass ran 2026-07-12; see Follow-up Review
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-6-context.md'
 warnings: ['oversized']
@@ -138,3 +138,13 @@ Status: done
 **Residual risk:** cancel-PS+ re-flag shows a transient stale pill if a claimed game already left the catalog (self-heals next PS+ check — accepted). Multi-user global-flag bleed deferred.
 
 **Follow-up review:** recommended — two medium data-integrity fixes on write/undo paths landed during review; an independent pass before the epic merge gate is prudent (FOLLOW-UP-REVIEW CONTRACT).
+
+## Follow-up Review — 2026-07-12 (independent pass, FOLLOW-UP-REVIEW CONTRACT satisfied)
+
+Two independent Opus reviewers over the combined 6.4+6.5 diff (baseline 1997c89). The primary risk — the claim→purchase "I bought this" upgrade — was verified CORRECT (writes owned_via + bought_on write-once only; status/milestones/dates untouched; gate's `!game.owned` skips the prompt). Earlier patches (discarded-exclusion, UNDO via-restore, flags-first ordering) confirmed sound.
+
+Fixed this pass (commit 1abbaba): upgrade toast says "marked as purchased"; typeless-claim upgrade seeds `ownershipType=digital`; detail always states owned-ness ("Owned" for legacy null-source rows); `OwnershipSourceDialog` restores focus on dismiss (a11y).
+
+Deferred (low/med, logged to deferred-work.md): server doesn't enforce `via=membership` needs a PS+ game (self-scoped integrity); `cancelMembership` writes the shared global `psPlusExtra` (multi-user bleed — pre-existing pattern). Rejected: dialog button hierarchy, per-keystroke fold perf, precomposed-diacritic folding, count TOCTOU, doc drift — all low, single-tenant.
+
+`followup_review_recommended` consumed → set false.

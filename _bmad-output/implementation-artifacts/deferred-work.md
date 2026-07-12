@@ -266,3 +266,7 @@ status: open
 - source_spec: `spec-6-5-free-text-shelf-search.md`
   summary: When a term matches nothing, both the combobox popup's `＋ Add "<term>"` row and the shelf empty-state's `＋ Add "<term>"` action are visible at once, each owning a separate AddGameDialog.
   evidence: SearchBox add row (showPopup && !hasMatches) and Shelf empty-state add (searchActive) both render for the same no-match term. AC2 requires the empty-state Add; 6.1 owns the popup Add. Consider suppressing one while the other is shown. Both open the same 409-safe add flow, so low functional risk.
+
+- source_spec: `spec-6-5-free-text-shelf-search.md`
+  summary: One search input drives two live result surfaces — the 6.1 combobox popup (whole-library server matches) and the 6.5 shelf-grid narrow (visible substring) — showing two different counts/answers at once.
+  evidence: Follow-up review (2026-07-12) flagged Med; the shelf comment concedes the count conflict. Needs a product decision (unify the surfaces, or suppress one contextually), not a quick patch. Both open the same 409-safe add flow.

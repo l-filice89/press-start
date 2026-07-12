@@ -6,7 +6,7 @@ status: 'done'
 baseline_revision: '92a3d9a'
 final_revision: 'f75aff4'
 review_loop_iteration: 0
-followup_review_recommended: true
+followup_review_recommended: false # independent follow-up pass ran 2026-07-12; see Follow-up Review
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-6-context.md'
 warnings: []
@@ -119,3 +119,13 @@ Status: done
 **Residual risk:** the two deferred UX interactions above (both mitigated, low functional risk). No data or security surface — pure client filter.
 
 **Follow-up review:** recommended — three medium a11y/correctness fixes landed across the SearchBox↔Shelf event wiring during review; an independent pass before the epic merge gate is prudent (FOLLOW-UP-REVIEW CONTRACT).
+
+## Follow-up Review — 2026-07-12 (independent pass, FOLLOW-UP-REVIEW CONTRACT satisfied)
+
+Two independent Opus reviewers over the combined 6.4+6.5 diff (baseline 1997c89). The `matchesTitleQuery`/`foldForSearch` predicate and the mount-race seed were confirmed sound.
+
+Fixed this pass (commit 1abbaba): `SearchBox` clears the `lastBroadcastTerm` module mirror on unmount so a next session can't seed a stale filter.
+
+Deferred (logged to deferred-work.md): one input driving two live result surfaces (combobox popup + shelf narrow) with divergent counts — needs a product decision; shelf search can't reach hidden games (offers Add, 409-dedup mitigates). Rejected: precomposed-diacritic folding, per-keystroke fold perf, duplicate Add accessible-name (both open the same 409-safe flow) — low, single-tenant Latin-title library.
+
+`followup_review_recommended` consumed → set false.
