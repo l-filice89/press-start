@@ -101,7 +101,7 @@ development_status:
   epic-5-retrospective: done # 2026-07-11
 
   # Epic 6: Add at the Moment of Discovery + Chores
-  epic-6: in-progress # 6.1–6.3 merged 2026-07-11; 6.4 kept in v1 (epic not split pre/post) — decision 2026-07-12
+  epic-6: done # all stories done; merged to main + v1.0.0 tagged (5ad0ef6) 2026-07-13 — release gate met
   6-1-add-a-game-by-name-the-wishlist-moment: done # 2026-07-11
   6-2-name-only-fallback-straggler-resolution: done # 2026-07-11
   6-3-chores-csv-export-settings: done # 2026-07-11
@@ -257,4 +257,4 @@ action_items:
   - epic: 6
     action: "Critical path — resolve retro follow-ups (the 6.6 decision), then merge feat/epic-6/add-at-discovery to main through the CI gate and tag v1.0.0"
     owner: "Luca"
-    status: open
+    status: done # 2026-07-13: 6.6 shipped as pickTitleCandidate; PR #10 merged (935af38), v1.0.0 tagged (5ad0ef6), prod deployed + seeded
