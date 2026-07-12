@@ -16,6 +16,7 @@ import {
 	TIMEZONE_SETTING_KEY,
 } from '../services/settings';
 import { countStragglers } from '../services/stragglers';
+import { cancelMembership, countMembershipClaims } from '../services/tracking';
 import { type AuthVariables, requireAuth } from './auth';
 
 /**
@@ -70,6 +71,7 @@ settingsRoute.get('/settings', requireAuth, async (c) => {
 		psPlusRefreshedAt,
 		stragglerCount,
 		fabHandedness,
+		psPlusClaimCount,
 	] = await Promise.all([
 		getSetting(db, userId, TIMEZONE_SETTING_KEY),
 		getPsnCookie(db, userId, c.env),
@@ -79,6 +81,7 @@ settingsRoute.get('/settings', requireAuth, async (c) => {
 		getPsPlusRefreshedAt(db, userId),
 		countStragglers(db, userId),
 		readFabHandedness(db, userId),
+		countMembershipClaims(db, userId),
 	]);
 	return c.json(
 		{
@@ -92,9 +95,23 @@ settingsRoute.get('/settings', requireAuth, async (c) => {
 			stragglerCount,
 			// FAB placement (Story 6.3, UX-DR10).
 			fabHandedness,
+			// Owned PS+ claims (Story 6.4): drives + names the cancel-PS+ confirm.
+			psPlusClaimCount,
 		},
 		200,
 	);
+});
+
+// "I cancelled PS+" (Story 6.4 AC4): un-own every `owned_via='membership'` row,
+// purchases untouched, and re-flag those games so their PS+ pill re-shows. A
+// local D1 mutation only — no PSN/IGDB call; the existing PS+ check reconciles
+// catalog truth. Answers with the count actually un-owned.
+settingsRoute.post('/settings/cancel-ps-plus', requireAuth, async (c) => {
+	const { unowned } = await cancelMembership(
+		createDb(c.env.DB),
+		c.get('userId'),
+	);
+	return c.json({ unowned }, 200);
 });
 
 settingsRoute.put('/settings/psn-cookie', requireAuth, async (c) => {

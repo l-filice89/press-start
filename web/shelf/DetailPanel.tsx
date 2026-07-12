@@ -10,6 +10,7 @@ import {
 	PLAY_STATUSES,
 	type ShelfGame,
 } from './api';
+import { OwnershipSourceDialog } from './OwnershipSourceDialog';
 import { MILESTONE_LABELS, useTrackingMutations } from './useTrackingMutations';
 import './detail-panel.css';
 
@@ -99,6 +100,9 @@ export function DetailPanel({
 	const {
 		selectStatus,
 		setOwnership,
+		sourcePrompt,
+		confirmSource,
+		cancelSource,
 		saveDates,
 		editGenre,
 		discard,
@@ -134,7 +138,9 @@ export function DetailPanel({
 	// confirm is stacked on top, Escape belongs to it alone (`enabled` stands
 	// this trap's Escape down).
 	const onKeyDown = useModalTrap(dialogRef, onClose, {
-		enabled: !confirming,
+		// While the milestone confirm OR the buy-vs-claim source prompt is stacked
+		// on top, Escape belongs to it alone (Story 3.5 stacking rule).
+		enabled: !confirming && !sourcePrompt,
 		initialFocusRef: closeRef,
 	});
 
@@ -385,8 +391,8 @@ export function DetailPanel({
 								data-testid="detail-owned-via"
 							>
 								{game.ownedVia === 'membership'
-									? 'Claimed via PS+ — playable while the subscription lasts'
-									: 'Purchased'}
+									? 'Owned · via PS+'
+									: 'Owned · purchased'}
 							</p>
 						)}
 						{game.owned && (
@@ -446,6 +452,15 @@ export function DetailPanel({
 					confirmLabel="Confirm"
 					onConfirm={confirmMilestone}
 					onCancel={cancelConfirm}
+				/>
+			)}
+
+			{sourcePrompt && (
+				<OwnershipSourceDialog
+					title={`Did you buy ${game.title}, or claim it with PS+?`}
+					onPurchased={() => confirmSource('purchase')}
+					onClaimed={() => confirmSource('membership')}
+					onCancel={cancelSource}
 				/>
 			)}
 		</>

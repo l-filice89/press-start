@@ -105,7 +105,7 @@ development_status:
   6-1-add-a-game-by-name-the-wishlist-moment: done # 2026-07-11
   6-2-name-only-fallback-straggler-resolution: done # 2026-07-11
   6-3-chores-csv-export-settings: done # 2026-07-11
-  6-4-ownership-source-purchased-vs-claimed-un-claim-on-cancel: planned # v1 (2026-07-12): owned_via data layer already exists; UNBUILT = manual Purchased/Claimed setter + un-claim-on-cancel
+  6-4-ownership-source-purchased-vs-claimed-un-claim-on-cancel: done # 2026-07-12 (dev-auto): buy-vs-claim prompt + via threading + detail source copy + cancel-PS+ un-own; followup_review_recommended:true (2 medium write-path patches)
   6-5-free-text-shelf-search: planned # v1 (2026-07-12): live substring filter of the visible shelf; SearchBox today is suggestion-combobox only (deferred-work.md)
   epic-6-retrospective: optional
 

@@ -1,5 +1,6 @@
 import { type KeyboardEvent, useRef, useState } from 'react';
 import type { ShelfGame } from './api';
+import { OwnershipSourceDialog } from './OwnershipSourceDialog';
 import { StatusPopover } from './StatusPopover';
 import { useTrackingMutations } from './useTrackingMutations';
 import './card.css';
@@ -80,8 +81,10 @@ export function Card({
 	const coverRef = useRef<HTMLButtonElement>(null);
 
 	// Ownership writes go through the same shared seam as every other tracking
-	// mutation (AR-13) — un-owning toasts with UNDO, owning toasts plainly.
-	const { setOwnership } = useTrackingMutations(game);
+	// mutation (AR-13) — un-owning toasts with UNDO, owning toasts plainly. A
+	// manual own on a PS+-catalog game opens the buy-vs-claim prompt (Story 6.4).
+	const { setOwnership, sourcePrompt, confirmSource, cancelSource } =
+		useTrackingMutations(game);
 
 	const onCoverKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
 		if (e.key === 'Escape') {
@@ -106,141 +109,152 @@ export function Card({
 			: { label: 'TBA', description: 'Release date to be announced' };
 
 	return (
-		// biome-ignore lint/a11y/useSemanticElements: ARIA grid cell (not a table cell) for the roving-focus shelf (UX-DR19)
-		<div
-			ref={cardRef}
-			className={`card${isPlaying ? ' card--playing' : ''}`}
-			role="gridcell"
-			tabIndex={tabIndex}
-			aria-label={`${game.title} — ${game.effectiveState}`}
-			data-testid="shelf-card"
-			data-game-id={game.id}
-			onKeyDown={onKeyDown}
-		>
-			<div className="card__cover">
-				{/* tabIndex={-1} like the pill: the gridcell is the single tab stop;
+		<>
+			{/* biome-ignore lint/a11y/useSemanticElements: ARIA grid cell (not a table cell) for the roving-focus shelf (UX-DR19) */}
+			<div
+				ref={cardRef}
+				className={`card${isPlaying ? ' card--playing' : ''}`}
+				role="gridcell"
+				tabIndex={tabIndex}
+				aria-label={`${game.title} — ${game.effectiveState}`}
+				data-testid="shelf-card"
+				data-game-id={game.id}
+				onKeyDown={onKeyDown}
+			>
+				<div className="card__cover">
+					{/* tabIndex={-1} like the pill: the gridcell is the single tab stop;
 				    widget-mode Tab (Shelf.tsx) and pointer both reach this. Matched on
 				    the class by the grid's Tab-cycle, like the pill. */}
-				<button
-					ref={coverRef}
-					type="button"
-					className="card__cover-button"
-					tabIndex={-1}
-					aria-label={`Open details — ${game.title}`}
-					data-testid="card-cover-button"
-					onClick={() => onOpenDetail?.(game.id)}
-					onKeyDown={onCoverKeyDown}
-				>
-					{showCover ? (
-						<img
-							className="card__cover-img"
-							src={game.coverUrl ?? undefined}
-							alt=""
-							loading="lazy"
-							decoding="async"
-							data-testid="card-cover"
-							onError={() => setCoverFailed(true)}
-						/>
-					) : (
-						<div className="card__cover-fallback" aria-hidden="true">
-							<span className="card__cover-fallback-mark">▹</span>
-						</div>
-					)}
-				</button>
+					<button
+						ref={coverRef}
+						type="button"
+						className="card__cover-button"
+						tabIndex={-1}
+						aria-label={`Open details — ${game.title}`}
+						data-testid="card-cover-button"
+						onClick={() => onOpenDetail?.(game.id)}
+						onKeyDown={onCoverKeyDown}
+					>
+						{showCover ? (
+							<img
+								className="card__cover-img"
+								src={game.coverUrl ?? undefined}
+								alt=""
+								loading="lazy"
+								decoding="async"
+								data-testid="card-cover"
+								onError={() => setCoverFailed(true)}
+							/>
+						) : (
+							<div className="card__cover-fallback" aria-hidden="true">
+								<span className="card__cover-fallback-mark">▹</span>
+							</div>
+						)}
+					</button>
 
-				{/* Top-right owned toggle (Story 2.4): reversible, no confirm. A
+					{/* Top-right owned toggle (Story 2.4): reversible, no confirm. A
 				    sibling of the cover trigger (not nested), so a press can never
 				    activate the open-detail button — stopPropagation is belt and
 				    braces. tabIndex={-1} like the pill/cover: the gridcell is the
 				    single tab stop, and widget-mode Tab (Shelf.tsx) reaches it. */}
-				<button
-					type="button"
-					className="card__owned-toggle tap-expander"
-					tabIndex={-1}
-					aria-pressed={game.owned}
-					aria-label={`Owned — ${game.title}`}
-					data-testid="card-owned-toggle"
-					onClick={(e) => {
-						e.stopPropagation();
-						setOwnership({ owned: !game.owned });
-					}}
-					onKeyDown={(e) => {
-						if (e.key === 'Escape') {
-							// Leave "widget mode": hand focus back to the owning gridcell.
+					<button
+						type="button"
+						className="card__owned-toggle tap-expander"
+						tabIndex={-1}
+						aria-pressed={game.owned}
+						aria-label={`Owned — ${game.title}`}
+						data-testid="card-owned-toggle"
+						onClick={(e) => {
 							e.stopPropagation();
-							e.currentTarget
-								.closest<HTMLElement>('[role="gridcell"]')
-								?.focus();
-						}
-					}}
-				>
-					<span aria-hidden="true">{game.owned ? '◆' : '◇'}</span>
-				</button>
+							setOwnership({ owned: !game.owned });
+						}}
+						onKeyDown={(e) => {
+							if (e.key === 'Escape') {
+								// Leave "widget mode": hand focus back to the owning gridcell.
+								e.stopPropagation();
+								e.currentTarget
+									.closest<HTMLElement>('[role="gridcell"]')
+									?.focus();
+							}
+						}}
+					>
+						<span aria-hidden="true">{game.owned ? '◆' : '◇'}</span>
+					</button>
 
-				<div className="card__flags">
-					{game.psPlusExtra && !game.owned && (
-						<span className="card__flag card__flag--ps-extra">
-							<span aria-hidden="true">PS+</span>
-							<span className="sr-only">
-								In the PlayStation Plus Extra catalog
+					<div className="card__flags">
+						{game.psPlusExtra && !game.owned && (
+							<span className="card__flag card__flag--ps-extra">
+								<span aria-hidden="true">PS+</span>
+								<span className="sr-only">
+									In the PlayStation Plus Extra catalog
+								</span>
 							</span>
-						</span>
-					)}
-					{releaseFlag && (
-						<span className="card__flag card__flag--release">
-							<span aria-hidden="true">{releaseFlag.label}</span>
-							<span className="sr-only">{releaseFlag.description}</span>
-						</span>
-					)}
-					{milestone && (
-						<span
-							className={`card__flag card__flag--milestone${
-								milestone.platinum ? ' card__flag--platinum' : ''
-							}`}
-						>
-							<span aria-hidden="true">{milestone.glyph}</span>
-							<span className="sr-only">{milestone.label}</span>
-						</span>
-					)}
+						)}
+						{releaseFlag && (
+							<span className="card__flag card__flag--release">
+								<span aria-hidden="true">{releaseFlag.label}</span>
+								<span className="sr-only">{releaseFlag.description}</span>
+							</span>
+						)}
+						{milestone && (
+							<span
+								className={`card__flag card__flag--milestone${
+									milestone.platinum ? ' card__flag--platinum' : ''
+								}`}
+							>
+								<span aria-hidden="true">{milestone.glyph}</span>
+								<span className="sr-only">{milestone.label}</span>
+							</span>
+						)}
+					</div>
 				</div>
-			</div>
 
-			{/* Info strip stacks one row per line — title, genres, status, owned —
+				{/* Info strip stacks one row per line — title, genres, status, owned —
 			    and every row is always rendered (hidden/empty rows reserve their
 			    line) so all cards are the same height regardless of content.
 			    (Below 600px the genres row is display:none for every card, so
 			    uniformity holds per breakpoint, not via reservation there.) */}
-			<div className="card__info">
-				<p className="card__title" title={game.title}>
-					{game.title}
-				</p>
-				<p className="card__genres">{game.genres.join(' · ')}</p>
-				<div className="card__meta">
-					<StatusPopover
-						game={game}
-						open={statusMenuOpen}
-						onOpenChange={onStatusMenuOpenChange}
-					/>
-				</div>
-				<p className="card__owned-line">
-					{/* visibility-hidden (CSS, via data-owned) when un-owned — keeps
+				<div className="card__info">
+					<p className="card__title" title={game.title}>
+						{game.title}
+					</p>
+					<p className="card__genres">{game.genres.join(' · ')}</p>
+					<div className="card__meta">
+						<StatusPopover
+							game={game}
+							open={statusMenuOpen}
+							onOpenChange={onStatusMenuOpenChange}
+						/>
+					</div>
+					<p className="card__owned-line">
+						{/* visibility-hidden (CSS, via data-owned) when un-owned — keeps
 					    the row height and drops the chip from the a11y tree. */}
-					<span className="card__owned" data-owned={game.owned || undefined}>
-						OWNED
-						{/* FR-9 amended: a PS+ claim is owned but subscription-bound —
+						<span className="card__owned" data-owned={game.owned || undefined}>
+							OWNED
+							{/* FR-9 amended: a PS+ claim is owned but subscription-bound —
 						    worth knowing at a glance (it vanishes if PS+ lapses). */}
-						{game.ownedVia === 'membership' && (
-							<span
-								className="card__owned-via"
-								data-testid="card-owned-via-membership"
-							>
-								<span aria-hidden="true"> · PS+</span>
-								<span className="sr-only"> via PS Plus claim</span>
-							</span>
-						)}
-					</span>
-				</p>
+							{game.ownedVia === 'membership' && (
+								<span
+									className="card__owned-via"
+									data-testid="card-owned-via-membership"
+								>
+									<span aria-hidden="true"> · PS+</span>
+									<span className="sr-only"> via PS Plus claim</span>
+								</span>
+							)}
+						</span>
+					</p>
+				</div>
 			</div>
-		</div>
+
+			{sourcePrompt && (
+				<OwnershipSourceDialog
+					title={`Did you buy ${game.title}, or claim it with PS+?`}
+					onPurchased={() => confirmSource('purchase')}
+					onClaimed={() => confirmSource('membership')}
+					onCancel={cancelSource}
+				/>
+			)}
+		</>
 	);
 }

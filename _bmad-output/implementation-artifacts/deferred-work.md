@@ -254,3 +254,7 @@ status: open
 - source_spec: `_bmad-output/implementation-artifacts/spec-discard-with-readd-revive.md`
   summary: A discarded game whose title was corrected during straggler resolution cannot be revived by re-typing its original (pre-correction) name — a new duplicate game is created and the tombstone is stranded.
   evidence: services/games.ts revive matches on normalizeTitle(input.title); enrichGame rewrites title/titleNormalized on resolution (e.g. "Caleste"→"Celeste"). If such a game is later discarded and the user re-types "Caleste", no candidate matches → a new unenriched game is created, leaving the discarded row hidden forever. Inherent to normalized-title matching; only bites renamed-then-discarded games (name-only mistakes, the primary case, keep their typed title). Accept, or match revive on external-link/alias as well as title.
+
+- source_spec: `spec-6-4-ownership-source-purchased-vs-claimed.md`
+  summary: cancel-PS+ (per-user Settings action) writes the shared global `game.psPlusExtra` catalog flag via `setPsPlusExtraFlags`, so one user's cancel would mutate catalog pills for all users in a multi-user deployment.
+  evidence: `src/repositories/games.ts` `setPsPlusExtraFlags` updates `game` by id only (no userId — `game` is the shared catalog, AD-19); `runPsPlusCheck` already writes it globally from one user's library, so this is a pre-existing single-tenant assumption, not new to 6.4. Belongs with the existing global-column multi-user publication blocker.

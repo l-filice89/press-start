@@ -235,6 +235,30 @@ describe('Card', () => {
 			});
 		});
 
+		// Story 6.4: the UNDO must restore provenance too — otherwise a re-owned
+		// claim silently revives as a purchase (and would stamp bought_on).
+		it('un-owning a claim then UNDO restores via=membership', async () => {
+			const fetchMock = stubFetch();
+			const user = userEvent.setup();
+			renderCard(game({ owned: true, ownedVia: 'membership' }));
+
+			await user.click(
+				screen.getByRole('button', { name: 'Owned — Bloodborne' }),
+			);
+			await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+			expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+				owned: false,
+			});
+
+			const undo = await screen.findByRole('button', { name: 'Undo' });
+			await user.click(undo);
+			await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+			expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
+				owned: true,
+				via: 'membership',
+			});
+		});
+
 		it('never opens the detail panel', async () => {
 			stubFetch();
 			const user = userEvent.setup();
@@ -244,6 +268,74 @@ describe('Card', () => {
 				screen.getByRole('button', { name: 'Owned — Bloodborne' }),
 			);
 			expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+		});
+
+		// Story 6.4 AC1/AC2: owning a PS+-catalog game is ambiguous — gate on the
+		// buy-vs-claim prompt, no write until the user chooses.
+		it('owning a PS+ game opens the source prompt and writes nothing yet', async () => {
+			const fetchMock = stubFetch();
+			const user = userEvent.setup();
+			renderCard(game({ owned: false, psPlusExtra: true }));
+
+			await user.click(
+				screen.getByRole('button', { name: 'Owned — Bloodborne' }),
+			);
+			expect(
+				screen.getByRole('dialog', {
+					name: 'Did you buy Bloodborne, or claim it with PS+?',
+				}),
+			).toBeInTheDocument();
+			// Gated: no PATCH until the user chooses a source.
+			expect(fetchMock).not.toHaveBeenCalled();
+		});
+
+		it('choosing "Claimed with PS+" writes via=membership', async () => {
+			const fetchMock = stubFetch();
+			const user = userEvent.setup();
+			renderCard(game({ owned: false, psPlusExtra: true }));
+
+			await user.click(
+				screen.getByRole('button', { name: 'Owned — Bloodborne' }),
+			);
+			await user.click(
+				screen.getByRole('button', { name: 'Claimed with PS+' }),
+			);
+			await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+			expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+				owned: true,
+				via: 'membership',
+			});
+		});
+
+		it('choosing "Purchased" writes via=purchase', async () => {
+			const fetchMock = stubFetch();
+			const user = userEvent.setup();
+			renderCard(game({ owned: false, psPlusExtra: true }));
+
+			await user.click(
+				screen.getByRole('button', { name: 'Owned — Bloodborne' }),
+			);
+			await user.click(screen.getByRole('button', { name: 'Purchased' }));
+			await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+			expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+				owned: true,
+				via: 'purchase',
+			});
+		});
+
+		it('cancelling the source prompt writes nothing', async () => {
+			const fetchMock = stubFetch();
+			const user = userEvent.setup();
+			renderCard(game({ owned: false, psPlusExtra: true }));
+
+			await user.click(
+				screen.getByRole('button', { name: 'Owned — Bloodborne' }),
+			);
+			await user.click(screen.getByRole('button', { name: 'Cancel' }));
+			expect(
+				screen.queryByTestId('ownership-source-dialog'),
+			).not.toBeInTheDocument();
+			expect(fetchMock).not.toHaveBeenCalled();
 		});
 	});
 });

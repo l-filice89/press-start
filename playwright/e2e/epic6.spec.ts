@@ -328,6 +328,189 @@ test('Settings: sign out and About/Help are available (6.3)', async ({
 	await expect(panel.getByTestId('settings-sign-out')).toBeVisible();
 });
 
+/**
+ * Story 6.4: ownership source (purchased vs claimed) + un-claim on cancel.
+ * Serial because the "I cancelled PS+" action un-owns EVERY membership row for
+ * the single shared e2e user — running these in parallel would let one test's
+ * cancel nuke another's in-flight claim. Each cleans up its own games.
+ */
+test.describe('Story 6.4 ownership source', () => {
+	test.describe.configure({ mode: 'serial' });
+
+	test('owning a PS+ game prompts buy-vs-claim; "Claimed with PS+" writes owned_via=membership (6.4a)', async ({
+		page,
+	}) => {
+		const game = createGame({
+			title: `PS+ Claim ${randomUUID().slice(0, 8)}`,
+			psPlusExtra: true,
+			tracking: { owned: false, ownedVia: null, playStatus: 'Not started' },
+		});
+		try {
+			await seedGame(game);
+			await page.goto('/');
+			await page.getByRole('button', { name: `Owned — ${game.title}` }).click();
+
+			// The ambiguous own opens the source prompt — nothing written yet.
+			const dialog = page.getByTestId('ownership-source-dialog');
+			await expect(dialog).toBeVisible();
+			await dialog.getByRole('button', { name: 'Claimed with PS+' }).click();
+			await expect(dialog).toBeHidden();
+
+			const rows = await d1Query<{ owned: number; owned_via: string | null }>(
+				`SELECT owned, owned_via FROM game_tracking WHERE game_id = '${game.id}'`,
+			);
+			expect(rows[0].owned).toBe(1);
+			expect(rows[0].owned_via).toBe('membership');
+		} finally {
+			await deleteGames([game.id]);
+		}
+	});
+
+	test('owning a PS+ game via "Purchased" writes owned_via=purchase and stamps bought_on (6.4a)', async ({
+		page,
+	}) => {
+		const game = createGame({
+			title: `PS+ Buy ${randomUUID().slice(0, 8)}`,
+			psPlusExtra: true,
+			tracking: { owned: false, ownedVia: null, playStatus: 'Not started' },
+		});
+		try {
+			await seedGame(game);
+			await page.goto('/');
+			await page.getByRole('button', { name: `Owned — ${game.title}` }).click();
+			await page
+				.getByTestId('ownership-source-dialog')
+				.getByRole('button', { name: 'Purchased' })
+				.click();
+
+			const rows = await d1Query<{
+				owned_via: string | null;
+				bought_on: string | null;
+			}>(
+				`SELECT owned_via, bought_on FROM game_tracking WHERE game_id = '${game.id}'`,
+			);
+			expect(rows[0].owned_via).toBe('purchase');
+			expect(rows[0].bought_on).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+		} finally {
+			await deleteGames([game.id]);
+		}
+	});
+
+	test('owning a non-PS+ game is silent — no prompt, owned_via=purchase (6.4b)', async ({
+		page,
+	}) => {
+		const game = createGame({
+			title: `Plain Own ${randomUUID().slice(0, 8)}`,
+			psPlusExtra: false,
+			tracking: { owned: false, ownedVia: null, playStatus: 'Not started' },
+		});
+		try {
+			await seedGame(game);
+			await page.goto('/');
+			await page.getByRole('button', { name: `Owned — ${game.title}` }).click();
+
+			// No prompt for a non-catalog game — it writes straight through.
+			await expect(page.getByTestId('ownership-source-dialog')).toHaveCount(0);
+			await expect(
+				page.getByTestId('toast').getByText(`${game.title} — owned`),
+			).toBeVisible();
+			const rows = await d1Query<{ owned_via: string | null }>(
+				`SELECT owned_via FROM game_tracking WHERE game_id = '${game.id}'`,
+			);
+			expect(rows[0].owned_via).toBe('purchase');
+		} finally {
+			await deleteGames([game.id]);
+		}
+	});
+
+	test('detail panel states the source: "Owned · via PS+" for a claim, "Owned · purchased" otherwise (6.4c)', async ({
+		page,
+	}) => {
+		const claim = createGame({
+			title: `Src Claim ${randomUUID().slice(0, 8)}`,
+			tracking: {
+				owned: true,
+				ownedVia: 'membership',
+				playStatus: 'Not started',
+			},
+		});
+		const bought = createGame({
+			title: `Src Bought ${randomUUID().slice(0, 8)}`,
+			tracking: {
+				owned: true,
+				ownedVia: 'purchase',
+				playStatus: 'Not started',
+			},
+		});
+		try {
+			await seedGame(claim);
+			await seedGame(bought);
+			await page.goto('/');
+
+			await openDetailBySearch(page, claim);
+			await expect(page.getByTestId('detail-owned-via')).toHaveText(
+				'Owned · via PS+',
+			);
+			await page.getByRole('button', { name: 'Close details' }).click();
+
+			await openDetailBySearch(page, bought);
+			await expect(page.getByTestId('detail-owned-via')).toHaveText(
+				'Owned · purchased',
+			);
+		} finally {
+			await deleteGames([claim.id, bought.id]);
+		}
+	});
+
+	test('Settings "I cancelled PS+" un-owns claimed rows and re-shows their PS+ pill (6.4d)', async ({
+		page,
+	}) => {
+		// A sync-ingested claim: owned from the start, so runPsPlusCheck (which only
+		// flags NON-owned rows) never set its psPlusExtra. Cancel must re-flag it so
+		// the pill returns once it is un-owned.
+		const claim = createGame({
+			title: `Cancel Claim ${randomUUID().slice(0, 8)}`,
+			psPlusExtra: false,
+			tracking: {
+				owned: true,
+				ownedVia: 'membership',
+				playStatus: 'Not started',
+			},
+		});
+		try {
+			await seedGame(claim);
+			await page.goto('/');
+			await page.getByRole('button', { name: 'Settings' }).click();
+
+			// The button names the claim count and confirms before acting.
+			const cancel = page.getByTestId('cancel-ps-plus');
+			await expect(cancel).toBeEnabled();
+			await expect(cancel).toHaveText(/I cancelled PS\+ \(\d+\)/);
+			await cancel.click();
+			await page.getByRole('button', { name: 'Un-own claims' }).click();
+
+			// The claim is un-owned (ownership only) and re-flagged in-catalog so
+			// the pill re-shows.
+			await expect
+				.poll(async () => {
+					const rows = await d1Query<{
+						owned: number;
+						owned_via: string | null;
+						ps_plus_extra: number;
+					}>(
+						`SELECT t.owned, t.owned_via, g.ps_plus_extra
+						 FROM game_tracking t JOIN game g ON g.id = t.game_id
+						 WHERE t.game_id = '${claim.id}'`,
+					);
+					return rows[0];
+				})
+				.toEqual({ owned: 0, owned_via: null, ps_plus_extra: 1 });
+		} finally {
+			await deleteGames([claim.id]);
+		}
+	});
+});
+
 test('Settings: FAB handedness moves the button and persists across a reload (6.3)', async ({
 	page,
 }) => {

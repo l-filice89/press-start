@@ -4,57 +4,45 @@
 
 ## Goal
 
-Let Luca capture a game in the seconds a discovery moment lasts: type a name into the persistent search bar and add it from the games DB (IGDB) — or save a name-only fallback when the games DB is down or lacks the title. Round out the library's data safety and hygiene: resolve import stragglers by manual search, export the full library to CSV as a user-held second copy, and manage app settings. This epic builds the `IgdbProvider` adapter.
+Let Luca capture a game the instant he discovers it — type a name, pick an IGDB result, review pre-filled data, save — in the seconds the discovery moment lasts, with a name-only fallback so the wishlist moment never depends on a third party being reachable. The epic also resolves leftover import stragglers by manual search, exports the full library to CSV as a user-held backup, manages settings, and reconciles ownership provenance (purchased vs PS+-claimed). This is where the `IgdbProvider` adapter is built.
 
 ## Stories
 
 - Story 6.1: Add a game by name (the wishlist moment)
 - Story 6.2: Name-only fallback & straggler resolution
 - Story 6.3: Chores — CSV export & settings
+- Story 6.4: Ownership source — purchased vs claimed, and un-claim on cancel
+- Story 6.5: Free-text shelf search
 
 ## Requirements & Constraints
 
-**Add-by-name (6.1)**
-- Search matches the existing library first: picking an already-tracked game opens its detail view — never create a duplicate. Search covers the whole library, ignoring active filters and hidden states.
-- No library match → top result row is `＋ Add "<name>"`. Tapping opens a preview pre-filled from the games DB (cover, genres, release date); everything is editable; nothing commits until Save.
-- Save CTA names the outcome ("Add to wishlist" / "Add as owned"). Defaults: not owned (= wishlisted, `wishlisted_on` recorded), status Not started.
-- Saving a game with unknown genres auto-creates the genre rows.
-- Successful add: toast confirms; game appears on the shelf.
-
-**Fallback & stragglers (6.2)**
-- The discovery moment never depends on a third party being up: if the games DB is unreachable or lacks the title, save a name-only entry (no cover/genres, release date unknown = not released) flagged `unenriched`; it lands in the stragglers list for later enrichment.
-- Stragglers surface via the attention banner; each is resolvable by manual search from the app — no interactive import session.
-- Resolving an import straggler carries its Notion payload (status, dates, owned flag) onto the matched game.
-- A manual match is permanent: it stores the external-ID/title-alias link so future syncs recognize the game and never re-add it as a duplicate.
-- Failures surface, never silently retry: a failed external lookup lands the game in stragglers.
-
-**Chores (6.3)**
-- CSV export covers the full library — games, statuses, milestones, lifecycle dates, genres, ownership — as a download. Rationale: the DB provider's backups must not be the only copy.
-- Settings: FAB handedness (bottom-right/bottom-left), sign out, About/Help.
-- Auth is better-auth magic link; sign-out is a session concern.
+- Add-by-name searches the games DB, but must first check the existing library: a match opens that game's detail view rather than creating a duplicate. Deduplication rides the shared title-normalizer match key (normalized-exact-match), the same rule used across add/revive paths.
+- Nothing commits until Save. The preview is fully editable. Save defaults to not-owned (= wishlisted, stamps `wishlisted_on`), status `Not started`. New genres on save auto-create their genre rows.
+- Every third-party call routes through a provider adapter; `IgdbProvider` is the seam here. When IGDB is unreachable or lacks the title, the user can still save a name-only entry — a real game row flagged `unenriched`, release date unknown (treated as not released) — which lands in the stragglers list for later enrichment.
+- A straggler is a defined needs-attention record of two kinds: import staging rows carrying a Notion payload, and name-only add entries. Resolving an import straggler by manual search carries its Notion payload (status, dates, owned flag) onto the matched game. A confirmed manual match stores a permanent external-ID/alias link so future syncs recognize the game and never re-add it as a duplicate.
+- Failures must surface, never silently retry. Anything needing action seeds the persistent attention banner; the banner self-clears when the condition resolves.
+- CSV export streams the full library (games, statuses, milestones, lifecycle dates, genres, ownership) from D1 as a download. It is the user-held second copy behind D1 Time Travel.
+- Ownership provenance (Story 6.4): a manual owned-toggle on a game that carries the PS+ Extra pill must ask "Did you buy this, or claim it with PS+?" and write `owned_via = 'purchase'` or `'membership'`. A non-PS+ game defaults silently to `purchase` (only a PS+ game is ambiguous). The detail panel states the source plainly ("Owned · via PS+" vs "Owned · purchased"). A settings action "I cancelled PS+" un-owns every `membership` row (purchases untouched, count named in a confirm first); any of those games still in the Extra catalog re-shows its PS+ pill. Un-own reverses ownership only — never deletes tracking, milestones, or dates. This is distinct from PS+ Extra *catalog availability*: a catalog game never claimed stays un-owned.
+- Free-text shelf search (Story 6.5): typing in the search bar filters the *visible shelf* live by title substring (normalized, case/diacritic-insensitive) — distinct from 6.1's add-a-new-game suggestions. No match shows an empty state that still offers the `＋ Add "<name>"` row; clearing the input restores the full shelf.
 
 ## Technical Decisions
 
-- **Provider port:** every IGDB call goes through an `IgdbProvider` adapter in `providers/` — the sole external-I/O seam. IGDB auth is Twitch OAuth2 client-credentials; creds live in Wrangler secrets.
-- **No external calls on render** (structural rule): IGDB is queried only from explicit user actions (add-by-name search, straggler resolution), never on page load. Stay within the 50-external-subrequests/invocation cap.
-- **Straggler is a defined record with two kinds:** (a) import staging rows unmatched to a `GAME` (carry Notion payload; not yet a `GAME`), and (b) name-only add-by-name entries (real `GAME` rows flagged `unenriched`). The stragglers list is a view over both.
-- **Identity & matching:** `title_normalized` (single shared normalization function) is a non-unique candidate key; external-ID is identity. `EXTERNAL_LINK` allows many rows per (game, source) — sources are `PSN|IGDB`. Resolving a straggler writes a permanent link that survives re-sync.
-- **Layering:** routes → services → core (I/O-free) / repositories (D1) / providers. Duplicate-detection and match logic are pure `core/` functions; persistence only through repositories.
-- **CSV export** streams from D1 in `routes/`; genres use the IGDB vocabulary.
-- **Data shape:** shared `GAME` facts (title, release date, cover, genres, `unenriched` flag) vs per-user `GAME_TRACKING` state (owned, status, `wishlisted_on`, milestones). Tracking rows are user-scoped; user data is append-only through the one write-path guard.
+- Domain `core/` is I/O-free; the title-normalizer is a single shared pure function producing the match key (strips glyphs/edition suffixes, drops leading articles, folds case/whitespace, collapses PS4/PS5). Reuse it for both library-match dedup and straggler resolution.
+- All DB access goes through `repositories/` (Drizzle); no raw D1 in services/routes/core. All third-party access through `providers/` adapters only, and only at ingest/add time — never on a render/read path.
+- Zod validates every SPA↔Worker boundary; Hono typed-RPC client + TanStack Query on the read side.
+- `owned_via` is an existing `game_tracking` column (introduced by Epic 4's FR-9 amendment); 6.4 adds the manual-set prompt and the cancel-PS+ reversal flow around it — no new migration for the flag itself.
 
 ## UX & Interaction Patterns
 
-- **Search bar is the sole Add entry point** — persistent, pill-shaped; bottom-pinned on mobile, header-left on desktop; global focus shortcut. Combobox semantics (`role=combobox`, `aria-activedescendant`); result count and the `＋ Add` row announce via a polite live region. No Add in the FAB drawer.
-- **FAB drawer = chores only:** Sync library · Check PS+ Extra · Export CSV · Settings · About/Help. Icons-only mobile / icons+text desktop; icon-only items carry accessible names. Each item opens a modal; long-running items show a spinner.
-- **Attention banner:** single under-header zone, shown only when action is needed, self-clears when resolved. Stragglers = amber; expired cookie = magenta; failed refresh = steel.
-- Toasts announce via polite live region; success is green.
-- Legal: "PlayStation"/Sony marks never appear in app branding/chrome — descriptive text only (e.g. Settings help copy).
-- Reference mockups: `add-stragglers-flow.html`, `settings-login-mock.html`, `ia-shell-wireframe.html` in the UX design folder.
+- Search bar: persistent, combobox semantics (`role=combobox`, `aria-controls`/`aria-activedescendant`); results dropdown lists library matches plus the `＋ Add "<name>"` row; it is never a dead end.
+- Add preview CTA names the outcome: "Add to wishlist" / "Add as owned".
+- FAB upward drawer holds the chores (Export CSV, Settings, About/Help). Its shell is shared with Epic 4's Sync/PS+ items — whichever epic ships first stands up the shell; the other adds its items, need-scoped. If Epic 6 lands first, Story 6.3 creates the shell. No "Add" lives in the drawer (add is the search bar).
+- Attention banner: full-width under-header, shown only when action is needed, amber for stragglers, persistent until the condition clears.
+- Empty states: no filter/search match → offer the add path; empty library → `INSERT GAMES` with Sync / Add actions.
 
 ## Cross-Story Dependencies
 
-- 6.1 and 6.2 depend only on Epic 1's search bar and shelf (both shipped).
-- 6.3's FAB drawer shell is shared with Epic 4, which already landed — the shell and a settings surface exist; this epic adds the "Export CSV" and "About/Help" drawer items and the handedness/sign-out settings.
-- 6.2 builds on the same normalization/matching and straggler machinery used by seed import and PSN sync (Epics 3–4); resolution links must be honored by future syncs.
-- Already delivered ahead of this epic (removed from 6.3's ACs): centralized 401 re-auth redirect and shelf-grid ARIA row regrouping.
+- 6.1 and 6.2 depend only on Epic 1's search bar and shelf; they are the epic's value core.
+- 6.3's FAB drawer shell is shared with Epic 4 (see above).
+- 6.4's cancel-PS+ control lives on the Story 6.3 settings surface, and its provenance rules build on Epic 4's `owned_via` and Epic 5's PS+ Extra catalog membership. It is explicitly *not* the same as Extra-catalog availability.
+- 6.5 pairs with the normalized-exact-match disambiguation rule shared across the add/revive paths; today the search box is suggestion-only and the visible shelf never sees the input.

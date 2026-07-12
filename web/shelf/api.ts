@@ -149,7 +149,13 @@ export async function logMilestone(
  */
 export async function changeOwnership(
 	gameId: string,
-	change: { owned?: boolean; ownershipType?: OwnershipType },
+	change: {
+		owned?: boolean;
+		ownershipType?: OwnershipType;
+		// Acquisition source (Story 6.4): sent only when the buy-vs-claim prompt
+		// resolves on a PS+-catalog game; omitted otherwise (server defaults purchase).
+		via?: 'purchase' | 'membership';
+	},
 ): Promise<EffectiveState> {
 	const body = await callApi(
 		`/api/games/${encodeURIComponent(gameId)}/ownership`,

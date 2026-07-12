@@ -548,13 +548,13 @@ describe('DetailPanel', () => {
 		it('names the acquisition source: PS+ claim vs purchase; silent when unknown (FR-9 amended)', async () => {
 			await openPanel(game({ owned: true, ownedVia: 'membership' }));
 			expect(screen.getByTestId('detail-owned-via')).toHaveTextContent(
-				/Claimed via PS\+/,
+				'Owned · via PS+',
 			);
 			cleanup();
 
 			await openPanel(game({ owned: true, ownedVia: 'purchase' }));
 			expect(screen.getByTestId('detail-owned-via')).toHaveTextContent(
-				'Purchased',
+				'Owned · purchased',
 			);
 			cleanup();
 

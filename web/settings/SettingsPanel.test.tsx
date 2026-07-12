@@ -107,6 +107,71 @@ describe('SettingsPanel', () => {
 		expect(onSignOut).toHaveBeenCalledTimes(1);
 	});
 
+	it('cancel PS+ is inert with no claims (Story 6.4 AC4)', async () => {
+		mockFetch({ psnCookieSet: false, psnAuthExpired: false });
+		renderPanel();
+		await waitFor(() =>
+			expect(screen.getByTestId('cancel-ps-plus')).toBeDisabled(),
+		);
+		expect(screen.getByTestId('cancel-ps-plus')).toHaveTextContent(
+			'No PS+ claims',
+		);
+	});
+
+	it('cancel PS+ names the count, confirms, and POSTs the un-own (Story 6.4 AC4)', async () => {
+		const fetchMock = vi.fn(
+			async (url: string | URL | Request, _init?: RequestInit) => {
+				const href = String(url);
+				if (href.includes('/api/settings/cancel-ps-plus')) {
+					return { ok: true, status: 200, json: async () => ({ unowned: 3 }) };
+				}
+				return {
+					ok: true,
+					status: 200,
+					json: async () => ({
+						timezone: null,
+						syncAttention: [],
+						psnCookieSet: false,
+						psnAuthExpired: false,
+						psPlusClaimCount: 3,
+					}),
+				};
+			},
+		);
+		vi.stubGlobal('fetch', fetchMock);
+		renderPanel();
+
+		// The button names the claim count.
+		const cancel = await screen.findByTestId('cancel-ps-plus');
+		await waitFor(() =>
+			expect(cancel).toHaveTextContent('I cancelled PS+ (3)'),
+		);
+		await userEvent.click(cancel);
+
+		// The confirm gate names the exact count before acting; nothing POSTed yet.
+		expect(
+			screen.getByRole('dialog', {
+				name: /Un-own 3 games claimed with PS\+\?/,
+			}),
+		).toBeInTheDocument();
+		expect(
+			fetchMock.mock.calls.some(([u]) =>
+				String(u).includes('/api/settings/cancel-ps-plus'),
+			),
+		).toBe(false);
+
+		await userEvent.click(
+			screen.getByRole('button', { name: 'Un-own claims' }),
+		);
+		await waitFor(() =>
+			expect(
+				fetchMock.mock.calls.find(([u]) =>
+					String(u).includes('/api/settings/cancel-ps-plus'),
+				)?.[1],
+			).toMatchObject({ method: 'POST' }),
+		);
+	});
+
 	it('toggles FAB handedness, PUTting the chosen side (Story 6.3, UX-DR10)', async () => {
 		const fetchMock = mockFetch({ psnCookieSet: false, psnAuthExpired: false });
 		renderPanel();

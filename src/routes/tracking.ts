@@ -44,6 +44,10 @@ const ownershipBodySchema = z
 	.object({
 		owned: z.boolean().optional(),
 		ownershipType: z.enum(OWNERSHIP_TYPES).optional(),
+		// Acquisition source (Story 6.4): the manual owned-toggle now threads it
+		// so a PS+ claim can be recorded as `membership`. Omitted = `purchase`
+		// (the service default) — non-PS+ owns never send it.
+		via: z.enum(['purchase', 'membership']).optional(),
 	})
 	.refine(
 		(body) => body.owned !== undefined || body.ownershipType !== undefined,
@@ -131,6 +135,7 @@ trackingRoute.patch('/games/:gameId/ownership', requireAuth, async (c) => {
 		c.req.param('gameId'),
 		body.data,
 		today,
+		body.data.via,
 	);
 	if (effectiveState === 'invalid') {
 		// A type on an un-owned game (the type belongs to an owned game).

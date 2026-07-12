@@ -1,8 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useModalTrap } from '../components/useModalTrap';
-import { fetchSettings, saveFabHandedness, savePsnCookie } from './api';
+import {
+	cancelPsPlus,
+	fetchSettings,
+	saveFabHandedness,
+	savePsnCookie,
+} from './api';
 import './settings-panel.css';
 
 /**
@@ -44,7 +50,24 @@ export function SettingsPanel({
 		onSuccess: () => queryClient.invalidateQueries({ queryKey: ['settings'] }),
 	});
 
+	// "I cancelled PS+" (Story 6.4 AC4): count-confirmed bulk un-own of PS+
+	// claims. The button is inert with no claims; the confirm names the count.
+	const claimCount = settings?.psPlusClaimCount ?? 0;
+	const [confirmingCancel, setConfirmingCancel] = useState(false);
+	const cancelClaims = useMutation({
+		mutationFn: cancelPsPlus,
+		onSuccess: () => {
+			setConfirmingCancel(false);
+			// Un-owning re-flags psPlusExtra and clears owned — refresh both the
+			// settings count and the shelf so the pill re-shows without a reload.
+			queryClient.invalidateQueries({ queryKey: ['settings'] });
+			queryClient.invalidateQueries({ queryKey: ['shelf'] });
+		},
+	});
+
 	const onKeyDown = useModalTrap(dialogRef, onClose, {
+		// The count-confirm stacks on top: hand Escape to it (Story 3.5 rule).
+		enabled: !confirmingCancel,
 		initialFocusRef: inputRef,
 	});
 
@@ -154,6 +177,25 @@ export function SettingsPanel({
 				</section>
 
 				<section className="settings-panel__section">
+					<h3 className="settings-panel__heading">PlayStation Plus</h3>
+					<p className="settings-panel__status">
+						Cancelled your subscription? Un-own every game you claimed with PS+
+						— your purchases stay owned.
+					</p>
+					<button
+						type="button"
+						className="settings-panel__signout tap-target"
+						data-testid="cancel-ps-plus"
+						disabled={claimCount === 0 || cancelClaims.isPending}
+						onClick={() => setConfirmingCancel(true)}
+					>
+						{claimCount === 0
+							? 'No PS+ claims'
+							: `I cancelled PS+ (${claimCount})`}
+					</button>
+				</section>
+
+				<section className="settings-panel__section">
 					<h3 className="settings-panel__heading">About &amp; Help</h3>
 					<p className="settings-panel__status">
 						Press Start is your personal game library — search to add a game,
@@ -189,6 +231,17 @@ export function SettingsPanel({
 					</button>
 				</div>
 			</div>
+
+			{confirmingCancel && (
+				<ConfirmDialog
+					title={`Un-own ${claimCount} game${
+						claimCount === 1 ? '' : 's'
+					} claimed with PS+? Your purchases stay owned.`}
+					confirmLabel="Un-own claims"
+					onConfirm={() => cancelClaims.mutate()}
+					onCancel={() => setConfirmingCancel(false)}
+				/>
+			)}
 		</div>,
 		document.body,
 	);

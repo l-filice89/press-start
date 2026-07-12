@@ -565,6 +565,51 @@ describe('ownership writes (Story 2.4, through the route with a real session)', 
 		expect(row?.boughtOn).toBe(CLOCK_TODAY());
 	});
 
+	// Story 6.4 AC1/AC2: the manual owned-toggle now threads `via`. A claim
+	// records owned_via=membership and NEVER stamps bought_on (a claim is not a
+	// purchase — the date slot must stay free for a real one).
+	it('records owned_via=membership on a claim and never stamps bought_on', async () => {
+		const id = await addGame(sessionUser, 'Claimed via toggle', {
+			playStatus: 'Not started',
+		});
+		const response = await patchOwnership(
+			id,
+			{ owned: true, via: 'membership' },
+			cookie,
+		);
+		expect(response.status).toBe(200);
+		const row = await getTracking(db(), sessionUser, id);
+		expect(row?.owned).toBe(true);
+		expect(row?.ownedVia).toBe('membership');
+		expect(row?.boughtOn).toBeNull();
+	});
+
+	it('records owned_via=purchase and stamps bought_on when the source is purchase', async () => {
+		const id = await addGame(sessionUser, 'Bought via toggle', {
+			playStatus: 'Not started',
+		});
+		const response = await patchOwnership(
+			id,
+			{ owned: true, via: 'purchase' },
+			cookie,
+		);
+		expect(response.status).toBe(200);
+		const row = await getTracking(db(), sessionUser, id);
+		expect(row?.ownedVia).toBe('purchase');
+		expect(row?.boughtOn).toBe(CLOCK_TODAY());
+	});
+
+	it('defaults owned_via=purchase when no source is sent (non-PS+ silent own)', async () => {
+		const id = await addGame(sessionUser, 'Silent own', {
+			playStatus: 'Not started',
+		});
+		const response = await patchOwnership(id, { owned: true }, cookie);
+		expect(response.status).toBe(200);
+		expect((await getTracking(db(), sessionUser, id))?.ownedVia).toBe(
+			'purchase',
+		);
+	});
+
 	it('un-owning clears the type and leaves every date untouched; the UNDO PATCH restores both', async () => {
 		const id = await addGame(sessionUser, 'Un-owned', {
 			playStatus: 'Playing',
