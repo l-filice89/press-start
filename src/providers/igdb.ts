@@ -182,7 +182,12 @@ export function createIgdbProvider(
 			// DLC/event entries, dropping out of a shorter candidate list
 			// entirely and leaving a real, released game unenriched. `id` is
 			// requested for the add-by-name previews (Stories 6.1/6.2).
-			body: `search "${query}"; fields id, name, first_release_date, cover.image_id, genres.name; limit 50;`,
+			//
+			// `where category = (...)` keeps only full games (PV-2): main_game(0),
+			// standalone_expansion(4), remake(8), remaster(9), expanded_game(10),
+			// port(11) — dropping DLC/bundle/season/pack/update/mod/episode noise
+			// that otherwise buries real games in search + candidate lists.
+			body: `search "${query}"; fields id, name, first_release_date, cover.image_id, genres.name; where category = (0,4,8,9,10,11); limit 50;`,
 			signal: AbortSignal.timeout(IGDB_TIMEOUT_MS),
 		});
 	}

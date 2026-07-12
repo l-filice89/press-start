@@ -138,6 +138,16 @@ describe('createIgdbProvider auth (client-credentials, self-healing)', () => {
 	});
 });
 
+describe('createIgdbProvider query (PV-2 category filter)', () => {
+	it('filters the games query to full games only (drops DLC/bundle noise)', async () => {
+		const m = stubFetch({ games: () => jsonResponse([HADES]) });
+		await provider().enrich('Hades');
+		const gamesCall = m.mock.calls.find((c) => !isTokenUrl(c[0]));
+		const body = String((gamesCall?.[1] as RequestInit).body);
+		expect(body).toContain('where category = (0,4,8,9,10,11);');
+	});
+});
+
 describe('createIgdbProvider.searchCandidate', () => {
 	it('prefers the exact-normalized match over the top relevance hit', async () => {
 		stubFetch({
