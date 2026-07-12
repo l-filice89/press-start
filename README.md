@@ -4,9 +4,11 @@ A single-user installable PWA that replaces a Notion game-tracking database: a
 React SPA + a Hono JSON API, both served by **one Cloudflare Worker**, backed
 by **Cloudflare D1** (via Drizzle ORM).
 
-This is the Story 1.1 walking skeleton: the deployable scaffold + CI/CD every
-later story builds on. No shelf, auth, or real schema yet — just a health
-check proving the whole pipeline works end to end.
+**v1.0.0** — the full library tracker: magic-link auth (single allowed user),
+the shelf with covers and status/ownership tracking, milestones, genres,
+lifecycle dates, add-by-name (IGDB), straggler resolution, CSV export,
+free-text search, and monthly PlayStation Plus Extra catalog awareness. Shipped
+across Epics 1–6.
 
 ## Prerequisites
 
@@ -59,9 +61,9 @@ All scripts are run the same way locally, in CI, and by the bmad-loop
 ```text
 src/
   core/          # pure domain logic — no I/O, no drizzle-orm, no fetch (AD-3)
-  services/      # ingest jobs (seed, PS sync, PS+ check, add-by-name) — placeholder
-  repositories/  # D1 access via Drizzle — the only persistence seam (AD-4) — placeholder
-  providers/     # PSN/IGDB adapters — the only external-I/O seam (AD-5) — placeholder
+  services/      # ingest + write jobs (seed, PS sync, PS+ check, add-by-name, stragglers)
+  repositories/  # D1 access via Drizzle — the only persistence seam (AD-4)
+  providers/     # PSN/IGDB adapters — the only external-I/O seam (AD-5)
   routes/        # Hono handlers + Zod schemas, mounted under /api/*
   schema/        # Drizzle schema (shared by app + drizzle-kit)
 web/             # React SPA (Vite)
@@ -75,41 +77,46 @@ wrangler.jsonc   # Worker config: D1 binding, static assets, compatibility flags
 `core/` is enforced I/O-free by a Vitest test (`src/core/purity.test.ts`) plus
 a Biome `noRestrictedImports` rule — see `biome.json`.
 
-## Cloudflare setup (one-time, for a real deploy)
+## Cloudflare setup
 
-This scaffold ships with a **placeholder** D1 `database_id` in
-`wrangler.jsonc` (`00000000-0000-0000-0000-000000000000`) because it was
-built in an environment without Cloudflare credentials. Local dev and local
-D1 migrations work fine with the placeholder. Before the first **remote**
-deploy:
+The live deploy targets a real D1 database (its `database_id` is committed in
+`wrangler.jsonc`). Local dev and local D1 migrations work against a separate
+miniflare copy — no Cloudflare account needed for local work. To stand up a
+fresh remote environment:
 
 1. `wrangler login` (or set `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`).
-2. `npx wrangler d1 create ps-game-catalog` and copy the real `database_id`
-   into `wrangler.jsonc`'s `d1_databases[0].database_id`.
+2. `npx wrangler d1 create ps-game-catalog` and put the `database_id` into
+   `wrangler.jsonc`'s `d1_databases[0].database_id`.
 3. Add these repo secrets under **Settings > Secrets and variables >
-   Actions** so the CD workflow can authenticate:
+   Actions** — the CD workflow authenticates with the first two and syncs the
+   last two into the Worker on every deploy:
    - `CLOUDFLARE_API_TOKEN`
    - `CLOUDFLARE_ACCOUNT_ID`
-4. Optional but recommended: configure the `production` GitHub Environment
-   (Settings > Environments) with required reviewers, so the deploy job in
+   - `BETTER_AUTH_SECRET` (required — every `/api/auth/*` route 500s without it)
+   - `RESEND_API_KEY` (magic-link email; without it the link is logged instead)
+4. Optional: configure the `production` GitHub Environment (Settings >
+   Environments) with required reviewers so the deploy job in
    `.github/workflows/deploy.yml` pauses for approval before a destructive
    migration/deploy runs.
-5. Secrets consumed by the Worker at runtime (IGDB/Twitch credentials, the
-   initial PSN cookie) are set via `wrangler secret put <NAME>` — never
-   hardcoded, never committed. The live PSN session cookie later moves into a
-   D1 `SETTING` row, editable in-app (Epic 4).
+5. Worker runtime secrets **not** synced by CD (`IGDB_CLIENT_ID`,
+   `IGDB_CLIENT_SECRET`, and the initial `PSN_SESSION_COOKIE`) are set with
+   `wrangler secret put <NAME>` — never hardcoded, never committed. The live
+   PSN session cookie later moves into a D1 `SETTING` row, editable in-app
+   (Epic 4).
 
 ## CI/CD
 
 - **CI** (`.github/workflows/ci.yml`) runs on every push and pull request:
-  checkout → `bun install --frozen-lockfile` → lint → typecheck → test →
-  build. All must pass.
-- **CD** (`.github/workflows/deploy.yml`) runs on push to `main`: build →
-  `wrangler d1 migrations apply ps-game-catalog --remote` → `wrangler deploy`,
-  strictly in that order. If the migration step fails, deploy never runs
-  (AD-16 — the Worker never migrates itself at startup). The job targets the
-  `production` GitHub Environment so an optional manual-approval gate can be
-  layered on top.
+  a quality gate (lint → typecheck → test → build) plus Playwright e2e and,
+  on PRs, an e2e burn-in that reruns changed specs 5×. All feed one `ci-ok`
+  merge gate.
+- **CD** (`.github/workflows/deploy.yml`) runs on push to `main`: re-runs the
+  gate → `wrangler d1 migrations apply ps-game-catalog --remote` →
+  `wrangler deploy` → syncs the auth/email secrets → smoke-tests `/api/health`
+  and `/api/auth/get-session`, strictly in that order. If the migration step
+  fails, deploy never runs (AD-16 — the Worker never migrates itself at
+  startup). The job targets the `production` GitHub Environment so an optional
+  manual-approval gate can be layered on top.
 
 ## One-time seed import (Story 1.6)
 
