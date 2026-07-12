@@ -18,3 +18,16 @@ RESEND_API_KEY=""
 # used while no cookie has been saved in Settings; the in-app value always
 # wins. Production equivalent: bunx wrangler secret put PSN_SESSION_COOKIE
 PSN_SESSION_COOKIE=""
+
+# IGDB (Twitch app) credentials for the add-by-name preview + straggler
+# resolution (Stories 6.1/6.2). Same id/secret as the seed script's .env pair.
+# The provider mints and refreshes its own Twitch app access token from the
+# id+secret (Epic 5 stable-auth) — there is NO token to paste. OPTIONAL: when
+# either is absent the games-DB search degrades to name-only adds.
+# NOTE: these live in .dev.vars for the WORKER runtime; a copy in .env only
+# feeds the Python seed scripts / Cloudflare CLI, not the running app.
+# Production equivalents:
+#   bunx wrangler secret put IGDB_CLIENT_ID
+#   bunx wrangler secret put IGDB_CLIENT_SECRET
+IGDB_CLIENT_ID=""
+IGDB_CLIENT_SECRET=""

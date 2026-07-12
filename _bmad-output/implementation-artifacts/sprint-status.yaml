@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-06
-last_updated: 2026-07-11
+last_updated: 2026-07-12
 project: ps-game-catalog
 project_key: NOKEY
 tracking_system: file-system
@@ -101,12 +101,13 @@ development_status:
   epic-5-retrospective: done # 2026-07-11
 
   # Epic 6: Add at the Moment of Discovery + Chores
-  epic-6: backlog
-  6-1-add-a-game-by-name-the-wishlist-moment: backlog
-  6-2-name-only-fallback-straggler-resolution: backlog
-  6-3-chores-csv-export-settings: backlog
-  6-4-ownership-source-purchased-vs-claimed-un-claim-on-cancel: backlog # added 2026-07-11 (retro item #5 + owned_via manual-set)
-  epic-6-retrospective: optional
+  epic-6: in-progress # 6.1–6.3 merged 2026-07-11; 6.4 kept in v1 (epic not split pre/post) — decision 2026-07-12
+  6-1-add-a-game-by-name-the-wishlist-moment: done # 2026-07-11
+  6-2-name-only-fallback-straggler-resolution: done # 2026-07-11
+  6-3-chores-csv-export-settings: done # 2026-07-11
+  6-4-ownership-source-purchased-vs-claimed-un-claim-on-cancel: done # 2026-07-12 (dev-auto): buy-vs-claim prompt + via threading + detail source copy + cancel-PS+ un-own; followup_review_recommended:true (2 medium write-path patches)
+  6-5-free-text-shelf-search: done # 2026-07-12 (dev-auto): SHELF_SEARCH_EVENT + module mirror lifts the term to FilteredShelf; matchesTitleQuery normalized-substring filter; no-match empty state offers ＋ Add; turns epic1 1.7d green; followup_review_recommended:true (3 medium a11y/wiring patches)
+  epic-6-retrospective: done # 2026-07-12 — epic-6-retro-2026-07-12.md; epic marker stays in-progress until the main merge + v1.0.0 tag (Luca's release gate)
 
   # Epic 7: Browse the PS+ Catalog & Add — POST-v1.0.0 (not in the v1 milestone)
   epic-7: backlog # post-v1; scheduled after Epic 6
@@ -228,7 +229,7 @@ action_items:
   - epic: 5
     action: "Probe IGDB failure modes (error, empty, rate-limit, missing-title) against captured payloads; verify Epic 6's worktree IGDB integration against them when that branch merges"
     owner: "Luca + Amelia"
-    status: in-progress # 2026-07-11: live probe done → igdb-failure-mode-probe-2026-07-11.md (captured 200/[]/400/401/429 payloads; IGDB uses honest status codes unlike PSN; 429 has no Retry-After). Main-tree provider hardened with the DEGENERATE-RESPONSE array-guard + src/providers/igdb.test.ts (5 hazard rows). REMAINING: port the same guard into the worktree searchGames + verify add-by-name degrades (not 500) at Epic 6 merge — checklist in the probe artifact
+    status: done # 2026-07-11 probe → igdb-failure-mode-probe-2026-07-11.md (captured 200/[]/400/401/429 payloads). 2026-07-12: guard confirmed present in src/providers/igdb.ts across Epic 6 merge (86a15a9); add-by-name degrades on degenerate response. Carry-forward closed.
   - epic: 5
     action: "Triage the two Epic-5 deferrals: modal focus-restore (shared with SyncSummaryModal); global ps_plus_extra column vs per-user ownership"
     owner: "Amelia"
@@ -236,4 +237,24 @@ action_items:
   - epic: 5
     action: "Merge feat/epic-5/know-whats-playable to main through the CI gate; confirm the v1.0.0 merge + release plan (Epic 6 = last v1 epic)"
     owner: "Luca"
-    status: open # critical path
+    status: done # 2026-07-12: merged to main via PR #9 (a157d36); Epic 6 (last v1 epic) landed on top at 86a15a9
+  - epic: 6
+    action: "Auto-force follow-up review on HIGH inline findings regardless of followup_review_recommended — persistent fact in bmad-dev-auto.toml beside the FOLLOW-UP-REVIEW CONTRACT"
+    owner: "Winston + Murat"
+    status: done # 2026-07-12: "FOLLOW-UP-REVIEW AUTO-FORCE ON HIGH" fact added to bmad-dev-auto.toml
+  - epic: 6
+    action: "Fold the cross-tree signalling decision (router/context vs more window CustomEvents) into Story 7.0's arch/UX design gate before any catalog-browse code"
+    owner: "Winston + Sally"
+    status: done # 2026-07-12: added as a Story 7.0 AC in epics.md
+  - epic: 6
+    action: "Story 6.6 (if worth it) — one shared normalized-title disambiguation rule across addGame/revive (prefer tracked-non-discarded / best-facts-match) closing the candidates[0] cluster; Luca decides whether it gates the v1.0.0 tag"
+    owner: "Amelia + Luca"
+    status: done # 2026-07-12: shipped as a scoped fix (pickTitleCandidate), not a full story; independent follow-up review caught + fixed an FR-42 regression in the first cut (tracking now a strictly-dominant tier); 2 candidates[0] ledger items closed + hazard test
+  - epic: 6
+    action: "Create a post-v1 multi-user readiness epic from publication-blockers.md (global psPlusExtra per-user write, per-user region, per-user data scoping); sequence AFTER Epic 7 (demand-driven)"
+    owner: "John + Luca"
+    status: done # 2026-07-12: Epic 8 (Multi-user Readiness) added to epics.md; B1-B6 in publication-blockers.md are its stories
+  - epic: 6
+    action: "Critical path — resolve retro follow-ups (the 6.6 decision), then merge feat/epic-6/add-at-discovery to main through the CI gate and tag v1.0.0"
+    owner: "Luca"
+    status: open

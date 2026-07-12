@@ -10,6 +10,7 @@ import {
 	PLAY_STATUSES,
 	type ShelfGame,
 } from './api';
+import { OwnershipSourceDialog } from './OwnershipSourceDialog';
 import { MILESTONE_LABELS, useTrackingMutations } from './useTrackingMutations';
 import './detail-panel.css';
 
@@ -99,8 +100,12 @@ export function DetailPanel({
 	const {
 		selectStatus,
 		setOwnership,
+		sourcePrompt,
+		confirmSource,
+		cancelSource,
 		saveDates,
 		editGenre,
+		discard,
 		milestoneRows,
 		activateMilestoneRow,
 		confirming,
@@ -133,7 +138,9 @@ export function DetailPanel({
 	// confirm is stacked on top, Escape belongs to it alone (`enabled` stands
 	// this trap's Escape down).
 	const onKeyDown = useModalTrap(dialogRef, onClose, {
-		enabled: !confirming,
+		// While the milestone confirm OR the buy-vs-claim source prompt is stacked
+		// on top, Escape belongs to it alone (Story 3.5 stacking rule).
+		enabled: !confirming && !sourcePrompt,
 		initialFocusRef: closeRef,
 	});
 
@@ -365,63 +372,108 @@ export function DetailPanel({
 
 					<section className="detail-panel__section">
 						<h3 className="detail-panel__heading">Ownership</h3>
-						{/* Reversible, no confirm: un-owning gets an UNDO toast instead. */}
+						{game.owned ? (
+							<>
+								{/* Acquisition source is the STATE (FR-9 amended): a claim is
+								    owned but subscription-bound. Always states owned-ness;
+								    adds the source qualifier when known (NULL = legacy/manual). */}
+								<p
+									className="detail-panel__owned-via"
+									data-testid="detail-owned-via"
+								>
+									{game.ownedVia === 'membership'
+										? 'Owned · via PS+'
+										: game.ownedVia === 'purchase'
+											? 'Owned · purchased'
+											: 'Owned'}
+								</p>
+								<fieldset
+									aria-label={`Ownership type for ${game.title}`}
+									className="detail-panel__ownership-types"
+								>
+									{OWNERSHIP_TYPES.map((type) => (
+										<button
+											key={type}
+											type="button"
+											aria-pressed={game.ownershipType === type}
+											className="detail-panel__ownership-type tap-target"
+											onClick={() => {
+												if (game.ownershipType !== type) {
+													setOwnership({ ownershipType: type });
+												}
+											}}
+										>
+											{type}
+										</button>
+									))}
+								</fieldset>
+								{/* Claim → purchase upgrade: a game left PS+ (or you just bought
+								    it) is now a permanent purchase. Stamps bought_on write-once
+								    server-side; NOT shown for an already-purchased game. */}
+								{game.ownedVia === 'membership' && (
+									<button
+										type="button"
+										className="detail-panel__own-purchased tap-target"
+										onClick={() =>
+											setOwnership({
+												owned: true,
+												via: 'purchase',
+												// A PS+ claim is digital by nature; only seed the type
+												// when the row carries none, so a manual choice survives.
+												...(game.ownershipType
+													? {}
+													: { ownershipType: 'digital' }),
+											})
+										}
+									>
+										I bought this — mark as purchased
+									</button>
+								)}
+								{/* Un-own is a command, not the status. Reversible: UNDO toast. */}
+								<button
+									type="button"
+									className="detail-panel__unown tap-target"
+									onClick={() => setOwnership({ owned: false })}
+								>
+									Mark as not owned
+								</button>
+							</>
+						) : (
+							<>
+								{/* Own is a clear CTA, separate from the state above (a PS+
+								    game routes through the buy-vs-claim prompt, Story 6.4). */}
+								<button
+									type="button"
+									className="detail-panel__own tap-target"
+									onClick={() => setOwnership({ owned: true })}
+								>
+									Mark as owned
+								</button>
+								{/* Persisted data only (NFR-3): the product URL when known, a
+								    store search by title otherwise — never a third-party call. */}
+								<a
+									className="detail-panel__store-link tap-target"
+									href={storeHref(game)}
+									target="_blank"
+									rel="noopener"
+								>
+									View on PS Store
+								</a>
+							</>
+						)}
+					</section>
+
+					{/* Remove a mistakenly-added game. Reversible (soft-delete tombstone
+					    + UNDO toast, same as un-own), so no confirm gate; discarding
+					    closes the panel via `onHidden` and re-adding the name revives it. */}
+					<section className="detail-panel__section">
 						<button
 							type="button"
-							className="detail-panel__owned-toggle tap-target"
-							aria-pressed={game.owned}
-							onClick={() => setOwnership({ owned: !game.owned })}
+							className="detail-panel__discard tap-target"
+							onClick={discard}
 						>
-							{game.owned ? 'Owned' : 'Not owned'}
+							Remove from library
 						</button>
-						{/* Acquisition source (FR-9 amended): a claim is owned but
-						    subscription-bound — worth saying where it can be acted on.
-						    Read-only fact from sync/seed; NULL (legacy/manual) shows
-						    nothing rather than guessing. */}
-						{game.owned && game.ownedVia && (
-							<p
-								className="detail-panel__owned-via"
-								data-testid="detail-owned-via"
-							>
-								{game.ownedVia === 'membership'
-									? 'Claimed via PS+ — playable while the subscription lasts'
-									: 'Purchased'}
-							</p>
-						)}
-						{game.owned && (
-							<fieldset
-								aria-label={`Ownership type for ${game.title}`}
-								className="detail-panel__ownership-types"
-							>
-								{OWNERSHIP_TYPES.map((type) => (
-									<button
-										key={type}
-										type="button"
-										aria-pressed={game.ownershipType === type}
-										className="detail-panel__ownership-type tap-target"
-										onClick={() => {
-											if (game.ownershipType !== type) {
-												setOwnership({ ownershipType: type });
-											}
-										}}
-									>
-										{type}
-									</button>
-								))}
-							</fieldset>
-						)}
-						{!game.owned && (
-							// Persisted data only (NFR-3): the product URL when known, a
-							// store search by title otherwise — never a third-party call.
-							<a
-								className="detail-panel__store-link tap-target"
-								href={storeHref(game)}
-								target="_blank"
-								rel="noopener"
-							>
-								View on PS Store
-							</a>
-						)}
 					</section>
 				</div>
 			</div>
@@ -432,6 +484,15 @@ export function DetailPanel({
 					confirmLabel="Confirm"
 					onConfirm={confirmMilestone}
 					onCancel={cancelConfirm}
+				/>
+			)}
+
+			{sourcePrompt && (
+				<OwnershipSourceDialog
+					title={`Did you buy ${game.title}, or claim it with PS+?`}
+					onPurchased={() => confirmSource('purchase')}
+					onClaimed={() => confirmSource('membership')}
+					onCancel={cancelSource}
 				/>
 			)}
 		</>

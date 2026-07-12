@@ -99,6 +99,41 @@ export function applyShelfFilter(
 	);
 }
 
+/**
+ * Fold a string for free-text shelf search (Story 6.5): lowercase + strip
+ * diacritics (NFD, drop combining marks U+0300–U+036F) + collapse runs of
+ * whitespace to one space + trim. A web-local fold on PURPOSE — NOT
+ * `core/normalizeTitle`, which strips articles/edition-suffixes/numerals to
+ * build a match KEY (wrong for a substring needle: "the" → "" would drop it
+ * from the haystack). This only case/diacritic/whitespace-normalizes so a
+ * substring `contains` is fair.
+ */
+export function foldForSearch(s: string): string {
+	return (
+		s
+			.normalize('NFD')
+			// Strip the combining-marks block (U+0300-U+036F) NFD just produced. Folds
+			// only COMBINING diacritics - precomposed letters are left as-is, fine for a
+			// Latin-title library.
+			.replace(/[\u0300-\u036f]/g, '')
+			.toLowerCase()
+			.replace(/\s+/g, ' ')
+			.trim()
+	);
+}
+
+/**
+ * Normalized, case/diacritic-insensitive substring match of `query` in `title`
+ * (Story 6.5). An empty (or whitespace-only) folded query matches everything —
+ * clearing the search restores the full shelf. Both sides fold identically, so
+ * "pokemon" matches "Pokémon" and vice versa.
+ */
+export function matchesTitleQuery(title: string, query: string): boolean {
+	const needle = foldForSearch(query);
+	if (needle === '') return true;
+	return foldForSearch(title).includes(needle);
+}
+
 /** One rendered token of the summary sentence (Story 3.3, UX-DR23). */
 export type SummaryPart = {
 	text: string;

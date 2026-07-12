@@ -28,6 +28,19 @@
 	font-family: var(--font-ui);
 }
 
+/* Breathing room + a hairline divider between settings groups. */
+.settings-panel__section {
+	margin-top: var(--space-5);
+	padding-top: var(--space-5);
+	border-top: 1px solid var(--color-border-hairline);
+}
+
+.settings-panel__section:first-of-type {
+	margin-top: 0;
+	padding-top: 0;
+	border-top: none;
+}
+
 .settings-panel__heading {
 	margin: 0 0 var(--space-2);
 	color: var(--color-text-primary);
@@ -98,4 +111,37 @@
 .settings-panel__save:disabled {
 	opacity: 0.5;
 	cursor: default;
+}
+
+/* Story 6.3 — handedness toggle + sign out. */
+.settings-panel__handedness {
+	display: flex;
+	gap: var(--space-2);
+}
+
+.settings-panel__hand-option {
+	padding: var(--space-2) var(--space-3);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-sm);
+	background: none;
+	color: var(--color-text-primary);
+	font-family: var(--font-ui);
+	cursor: pointer;
+}
+
+.settings-panel__hand-option[aria-pressed="true"] {
+	border-color: var(--color-accent-electric);
+	background: color-mix(in srgb, var(--color-accent-electric) 18%, transparent);
+	color: var(--color-accent-electric);
+}
+
+.settings-panel__signout {
+	margin-top: var(--space-2);
+	padding: var(--space-2) var(--space-3);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-sm);
+	background: none;
+	color: var(--color-text-primary);
+	font-family: var(--font-ui);
+	cursor: pointer;
 }

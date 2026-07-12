@@ -174,11 +174,17 @@ test('whole-library search matches games hidden from the shelf, NO MATCH otherwi
 			page.getByTestId('shelf-card').filter({ hasText: quarry.title }),
 		).toHaveCount(0);
 
-		const search = page.getByRole('combobox', { name: 'Search your library' });
+		const search = page.getByRole('searchbox', { name: 'Search your library' });
 		await search.fill(quarry.title);
+		// Redesign (2026-07-12): no dropdown. With no filter active a bare search
+		// reaches the WHOLE library (hidden included) — the completed game surfaces
+		// right in the shelf grid (scope rule), and a caption states the reach.
 		await expect(
-			page.getByRole('option').filter({ hasText: quarry.title }),
+			page.getByTestId('shelf-card').filter({ hasText: quarry.title }),
 		).toBeVisible();
+		await expect(page.getByTestId('search-scope')).toContainText(
+			'whole library',
+		);
 
 		await search.fill('zzz no such game xyzzy');
 		await expect(page.getByText('NO MATCH')).toBeVisible();

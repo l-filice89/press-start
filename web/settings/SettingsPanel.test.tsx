@@ -37,16 +37,16 @@ function mockFetch(settings: {
 	return fetchMock;
 }
 
-function renderPanel(onClose = vi.fn()) {
+function renderPanel(onClose = vi.fn(), onSignOut = vi.fn()) {
 	const client = new QueryClient({
 		defaultOptions: { queries: { retry: false } },
 	});
 	render(
 		<QueryClientProvider client={client}>
-			<SettingsPanel onClose={onClose} />
+			<SettingsPanel onClose={onClose} onSignOut={onSignOut} />
 		</QueryClientProvider>,
 	);
-	return onClose;
+	return { onClose, onSignOut };
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -91,10 +91,106 @@ describe('SettingsPanel', () => {
 
 	it('disables Save while the field is blank and closes via the Close button', async () => {
 		mockFetch({ psnCookieSet: false, psnAuthExpired: false });
-		const onClose = renderPanel();
+		const { onClose } = renderPanel();
 
 		expect(screen.getByRole('button', { name: 'Save cookie' })).toBeDisabled();
 		await userEvent.click(screen.getByRole('button', { name: 'Close' }));
 		expect(onClose).toHaveBeenCalledTimes(1);
+	});
+
+	it('signs out and offers About/Help (Story 6.3, FR-47)', async () => {
+		mockFetch({ psnCookieSet: false, psnAuthExpired: false });
+		const { onSignOut } = renderPanel();
+
+		expect(screen.getByText(/About & Help/)).toBeInTheDocument();
+		await userEvent.click(screen.getByTestId('settings-sign-out'));
+		expect(onSignOut).toHaveBeenCalledTimes(1);
+	});
+
+	it('cancel PS+ is inert with no claims (Story 6.4 AC4)', async () => {
+		mockFetch({ psnCookieSet: false, psnAuthExpired: false });
+		renderPanel();
+		await waitFor(() =>
+			expect(screen.getByTestId('cancel-ps-plus')).toBeDisabled(),
+		);
+		expect(screen.getByTestId('cancel-ps-plus')).toHaveTextContent(
+			'No PS+ claims',
+		);
+	});
+
+	it('cancel PS+ names the count, confirms, and POSTs the un-own (Story 6.4 AC4)', async () => {
+		const fetchMock = vi.fn(
+			async (url: string | URL | Request, _init?: RequestInit) => {
+				const href = String(url);
+				if (href.includes('/api/settings/cancel-ps-plus')) {
+					return { ok: true, status: 200, json: async () => ({ unowned: 3 }) };
+				}
+				return {
+					ok: true,
+					status: 200,
+					json: async () => ({
+						timezone: null,
+						syncAttention: [],
+						psnCookieSet: false,
+						psnAuthExpired: false,
+						psPlusClaimCount: 3,
+					}),
+				};
+			},
+		);
+		vi.stubGlobal('fetch', fetchMock);
+		renderPanel();
+
+		// The claim count is named in the section copy (the button stays a plain
+		// command); the confirm gate re-states it before acting.
+		const cancel = await screen.findByTestId('cancel-ps-plus');
+		await waitFor(() => expect(cancel).toHaveTextContent('I cancelled PS+'));
+		expect(
+			screen.getByText(/You have 3 games claimed with PS\+/),
+		).toBeInTheDocument();
+		await userEvent.click(cancel);
+
+		// The confirm gate names the exact count before acting; nothing POSTed yet.
+		expect(
+			screen.getByRole('dialog', {
+				name: /Un-own 3 games claimed with PS\+\?/,
+			}),
+		).toBeInTheDocument();
+		expect(
+			fetchMock.mock.calls.some(([u]) =>
+				String(u).includes('/api/settings/cancel-ps-plus'),
+			),
+		).toBe(false);
+
+		await userEvent.click(
+			screen.getByRole('button', { name: 'Un-own claims' }),
+		);
+		await waitFor(() =>
+			expect(
+				fetchMock.mock.calls.find(([u]) =>
+					String(u).includes('/api/settings/cancel-ps-plus'),
+				)?.[1],
+			).toMatchObject({ method: 'POST' }),
+		);
+	});
+
+	it('toggles FAB handedness, PUTting the chosen side (Story 6.3, UX-DR10)', async () => {
+		const fetchMock = mockFetch({ psnCookieSet: false, psnAuthExpired: false });
+		renderPanel();
+
+		// Default right is pressed; picking left PUTs left.
+		await waitFor(() =>
+			expect(screen.getByTestId('handedness-right')).toHaveAttribute(
+				'aria-pressed',
+				'true',
+			),
+		);
+		await userEvent.click(screen.getByTestId('handedness-left'));
+		await waitFor(() =>
+			expect(fetchMock).toHaveBeenCalledWith(
+				'/api/settings/fab-handedness',
+				expect.objectContaining({ method: 'PUT' }),
+			),
+		);
 	});
 });

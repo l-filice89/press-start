@@ -29,8 +29,8 @@ function retryUnlessClientError(failureCount: number, error: unknown): boolean {
 
 /**
  * The app's single TanStack Query client (the architecture-pinned data-fetch
- * layer). Reads are cached; the shelf/search queries and the play-status
- * mutation live under it.
+ * layer). Reads are cached; the shelf query and the play-status mutation live
+ * under it.
  *
  * The 401 re-auth is wired once, at the client, and applies to every query *and*
  * mutation. It only *does* anything for errors that carry an HTTP `status` —

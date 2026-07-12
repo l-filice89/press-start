@@ -3,7 +3,9 @@ import type { ShelfGame } from './api';
 import {
 	applyShelfFilter,
 	EMPTY_FILTER,
+	foldForSearch,
 	isFilterActive,
+	matchesTitleQuery,
 	type ShelfFilter,
 	summarizeFilter,
 	toggleSelection,
@@ -299,6 +301,52 @@ describe('summarizeFilter', () => {
 		);
 		const parts = summarizeFilter(f({ flags: ['owned', 'playableNow'] }));
 		expect(parts.filter((p) => p.connector === 'and')).toHaveLength(1);
+	});
+});
+
+// HAZARD (Story 6.5 AC1): the AC names a "normalized, case/diacritic-insensitive
+// substring" match. These assert each named invariant on `matchesTitleQuery`
+// directly — not merely that the predicate returns something.
+describe('matchesTitleQuery', () => {
+	it('is case-insensitive', () => {
+		expect(matchesTitleQuery('Bloodborne', 'BLOOD')).toBe(true);
+		expect(matchesTitleQuery('BLOODBORNE', 'blood')).toBe(true);
+	});
+
+	it('is diacritic-insensitive both directions ("pokemon" ↔ "Pokémon")', () => {
+		// Folded query drops its accents to match a plain title…
+		expect(matchesTitleQuery('Pokemon Scarlet', 'pokémon')).toBe(true);
+		// …and a plain query matches an accented title.
+		expect(matchesTitleQuery('Pokémon Scarlet', 'pokemon')).toBe(true);
+		expect(matchesTitleQuery('Ōkami', 'okami')).toBe(true);
+	});
+
+	it('matches a substring in the middle of the title, not just a prefix', () => {
+		expect(matchesTitleQuery('The Last of Us', 'last')).toBe(true);
+		expect(matchesTitleQuery('God of War', 'of')).toBe(true);
+	});
+
+	it('folds internal whitespace runs before comparing', () => {
+		// A double space in the needle still matches a single-spaced title.
+		expect(matchesTitleQuery('God of War', 'god of  war')).toBe(true);
+		// …and a multi-spaced title is matched by a normal needle.
+		expect(matchesTitleQuery('God   of   War', 'god of war')).toBe(true);
+	});
+
+	it('an empty or whitespace-only query matches every title', () => {
+		expect(matchesTitleQuery('Anything At All', '')).toBe(true);
+		expect(matchesTitleQuery('Anything At All', '   ')).toBe(true);
+	});
+
+	it('returns false when the normalized needle is genuinely absent', () => {
+		expect(matchesTitleQuery('Bloodborne', 'zelda')).toBe(false);
+	});
+});
+
+describe('foldForSearch', () => {
+	it('lowercases, strips diacritics, and collapses/trims whitespace', () => {
+		expect(foldForSearch('  Pokémon   Scarlet ')).toBe('pokemon scarlet');
+		expect(foldForSearch('ÀÉÎÕÜ')).toBe('aeiou');
 	});
 });
 

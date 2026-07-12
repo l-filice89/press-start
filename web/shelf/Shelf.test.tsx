@@ -1,9 +1,10 @@
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ShelfGame } from './api';
+import { SHELF_SEARCH_EVENT } from './SearchBox';
 import { chunkIntoRows, countColumns, Shelf } from './Shelf';
 import { resetInFlightWrites } from './useTrackingMutations';
 
@@ -479,6 +480,53 @@ describe('Shelf', () => {
 		expect(screen.getByRole('dialog', { name: 'Bolt' })).toBeVisible();
 	});
 
+	it('keeps the detail panel open when an ownership write drops the game out of the active filter', async () => {
+		const user = userEvent.setup();
+		const a = card('a', 'Apex', { owned: false, wishlisted: true });
+		const b = card('b', 'Bolt', { owned: false, wishlisted: true });
+		let games = [a, b];
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (url: string, init?: RequestInit) => {
+				if (init?.method === 'PATCH') {
+					// Owning Apex removes it from the Wishlisted filter.
+					games = [{ ...a, owned: true, wishlisted: false }, b];
+					return {
+						ok: true,
+						status: 200,
+						json: async () => ({ effectiveState: 'Not started' }),
+					};
+				}
+				if (url.includes('/genres')) {
+					return { ok: true, status: 200, json: async () => ({ genres: [] }) };
+				}
+				return { ok: true, status: 200, json: async () => ({ games }) };
+			}),
+		);
+		renderShelf();
+		await screen.findAllByTestId('shelf-card');
+
+		await user.click(screen.getByTestId('filter-flag-wishlisted'));
+		expect(screen.getAllByTestId('shelf-card')).toHaveLength(2);
+
+		await user.click(
+			screen.getByRole('button', { name: 'Open details — Apex' }),
+		);
+		const panel = screen.getByRole('dialog', { name: 'Apex' });
+		await user.click(
+			within(panel).getByRole('button', { name: 'Mark as owned' }),
+		);
+
+		// Apex leaves the Wishlisted grid…
+		await waitFor(() =>
+			expect(screen.getAllByTestId('shelf-card')).toHaveLength(1),
+		);
+		expect(screen.getByTestId('shelf-card')).toHaveTextContent('Bolt');
+		// …but its detail panel stays open (regression: it used to close because
+		// the open-game lookup was scoped to the filtered set, not the library).
+		expect(screen.getByRole('dialog', { name: 'Apex' })).toBeVisible();
+	});
+
 	// HAZARD (Story 3.6, AC3): menu open-state lives in ShelfGrid — a refetch
 	// that reorders/re-chunks the rows (remounting every Card in jsdom's
 	// one-column layout) must not kill an open status menu. The refetch is
@@ -571,6 +619,95 @@ describe('Shelf', () => {
 			expect(screen.getAllByTestId('shelf-card')).toHaveLength(2),
 		);
 		expect(screen.queryByTestId('status-menu')).not.toBeInTheDocument();
+	});
+
+	// Story 6.5: the SearchBox re-broadcasts its debounced term on a window event
+	// (SHELF_SEARCH_EVENT); the shelf narrows its VISIBLE cards by title substring.
+	// Dispatch the event directly here — SearchBox isn't in this tree.
+	const search = (term: string) =>
+		act(() => {
+			window.dispatchEvent(
+				new CustomEvent(SHELF_SEARCH_EVENT, { detail: term }),
+			);
+		});
+
+	it('narrows the visible shelf live to the search term, then restores on clear', async () => {
+		mockFetch([card('a', 'Apex'), card('b', 'Bloodborne'), card('c', 'Cyan')]);
+		renderShelf();
+		expect(await screen.findAllByTestId('shelf-card')).toHaveLength(3);
+
+		// A substring term (normalized) narrows to the one matching card.
+		search('blood');
+		await waitFor(() => {
+			const cards = screen.getAllByTestId('shelf-card');
+			expect(cards).toHaveLength(1);
+			expect(cards[0]).toHaveTextContent('Bloodborne');
+		});
+
+		// Clearing the term restores the full visible set.
+		search('');
+		await waitFor(() =>
+			expect(screen.getAllByTestId('shelf-card')).toHaveLength(3),
+		);
+	});
+
+	it('a search matching nothing shows NO MATCH; the Add path is NOT duplicated in the empty state', async () => {
+		mockFetch([card('a', 'Apex'), card('b', 'Bloodborne')]);
+		renderShelf();
+		await screen.findAllByTestId('shelf-card');
+
+		search('zzz nothing here');
+		const empty = await screen.findByTestId('empty-state');
+		expect(within(empty).getByText('NO MATCH')).toBeInTheDocument();
+		// The `＋ Add` action moved to the pinned bar under the search field
+		// (SearchBox, not in this tree) — so with no chip filter active the empty
+		// state carries NO action buttons (redesign 2026-07-12).
+		expect(within(empty).queryByRole('button')).not.toBeInTheDocument();
+	});
+
+	// HAZARD (scope rule, redesign 2026-07-12): a bare search reaches the WHOLE
+	// library — a hidden completed/dropped game surfaces by name; once a filter
+	// is active the search is scoped WITHIN it, so the hidden game is suppressed.
+	it('scope rule: no filter reveals a hidden game by name; an active filter suppresses it', async () => {
+		const user = userEvent.setup();
+		mockFetch([
+			card('a', 'Apex', { effectiveState: 'Playing', playStatus: 'Playing' }),
+			card('done', 'Donezo', {
+				playStatus: null,
+				effectiveState: 'Story completed',
+			}),
+		]);
+		renderShelf();
+		// Default set hides the completed game — only Apex shows.
+		await waitFor(() =>
+			expect(screen.getAllByTestId('shelf-card')).toHaveLength(1),
+		);
+
+		// (a) No filter → whole-library search surfaces the hidden completed game.
+		search('donezo');
+		await waitFor(() => {
+			const cards = screen.getAllByTestId('shelf-card');
+			expect(cards).toHaveLength(1);
+			expect(cards[0]).toHaveTextContent('Donezo');
+		});
+		expect(screen.getByTestId('search-scope')).toHaveTextContent(
+			'searching your whole library',
+		);
+
+		// (b) With a State filter active, the same term is scoped within it — the
+		// hidden game stays suppressed → NO MATCH.
+		search('');
+		await waitFor(() =>
+			expect(screen.getAllByTestId('shelf-card')).toHaveLength(1),
+		);
+		await user.click(screen.getByRole('button', { name: 'State' }));
+		await user.click(screen.getByRole('menuitemcheckbox', { name: 'Playing' }));
+		await user.keyboard('{Escape}');
+		search('donezo');
+		await screen.findByText('NO MATCH');
+		expect(screen.getByTestId('search-scope')).toHaveTextContent(
+			'searching within your filters',
+		);
 	});
 
 	it('shows an alert if the shelf fails to load', async () => {

@@ -92,6 +92,18 @@ export const gameTracking = sqliteTable(
 		 * manual detail-view owns). NULL = legacy rows from before the flag.
 		 */
 		ownedVia: text('owned_via', { enum: ['purchase', 'membership'] }),
+		/**
+		 * Soft-delete tombstone (discard, 2026-07-11): the user removed this game
+		 * from their library as a mistake-fix. Kept as a flagged row, never
+		 * deleted — the tombstone is what blocks a re-add from duplicating and
+		 * stops additive sync (FR-33) from re-owning it. Hidden from every library
+		 * surface via `listLibraryForUser`; cleared (revived) by re-adding the name
+		 * (services/games.addGame). Supersedes the 2026-07-10 "no discard" decision
+		 * — this is the tracking-level archive path it left open.
+		 */
+		discarded: integer('discarded', { mode: 'boolean' })
+			.notNull()
+			.default(false),
 	},
 	(table) => [
 		primaryKey({ columns: [table.userId, table.gameId] }),

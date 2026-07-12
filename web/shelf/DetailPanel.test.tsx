@@ -523,10 +523,10 @@ describe('DetailPanel', () => {
 		expect(
 			screen.queryByRole('link', { name: 'View on PS Store' }),
 		).not.toBeInTheDocument();
-		expect(screen.getByRole('button', { name: 'Owned' })).toHaveAttribute(
-			'aria-pressed',
-			'true',
-		);
+		// Owned state offers the un-own command, not a status pill.
+		expect(
+			screen.getByRole('button', { name: 'Mark as not owned' }),
+		).toBeInTheDocument();
 	});
 
 	it('uses the flip entry by default and the cross-fade under reduced motion', async () => {
@@ -548,19 +548,20 @@ describe('DetailPanel', () => {
 		it('names the acquisition source: PS+ claim vs purchase; silent when unknown (FR-9 amended)', async () => {
 			await openPanel(game({ owned: true, ownedVia: 'membership' }));
 			expect(screen.getByTestId('detail-owned-via')).toHaveTextContent(
-				/Claimed via PS\+/,
+				'Owned · via PS+',
 			);
 			cleanup();
 
 			await openPanel(game({ owned: true, ownedVia: 'purchase' }));
 			expect(screen.getByTestId('detail-owned-via')).toHaveTextContent(
-				'Purchased',
+				'Owned · purchased',
 			);
 			cleanup();
 
-			// Legacy NULL rows say nothing rather than guessing.
+			// Legacy NULL rows still state owned-ness, just without a source.
 			await openPanel(game({ owned: true, ownedVia: null }));
-			expect(screen.queryByTestId('detail-owned-via')).not.toBeInTheDocument();
+			expect(screen.getByTestId('detail-owned-via')).toHaveTextContent('Owned');
+			expect(screen.getByTestId('detail-owned-via')).not.toHaveTextContent('·');
 		});
 
 		it('owning from the panel PATCHes the ownership route and toasts plainly', async () => {
@@ -568,9 +569,7 @@ describe('DetailPanel', () => {
 				game({ owned: false, wishlisted: true, ownershipType: null }),
 			);
 
-			const toggle = screen.getByRole('button', { name: 'Not owned' });
-			expect(toggle).toHaveAttribute('aria-pressed', 'false');
-			await user.click(toggle);
+			await user.click(screen.getByRole('button', { name: 'Mark as owned' }));
 
 			await waitFor(() => expect(writes()).toHaveLength(1));
 			const [url, init] = writes()[0];
@@ -589,7 +588,9 @@ describe('DetailPanel', () => {
 			const user = await openPanel(
 				game({ owned: true, ownershipType: 'physical' }),
 			);
-			await user.click(screen.getByRole('button', { name: 'Owned' }));
+			await user.click(
+				screen.getByRole('button', { name: 'Mark as not owned' }),
+			);
 
 			await waitFor(() => expect(writes()).toHaveLength(1));
 			expect(JSON.parse(writes()[0][1].body)).toEqual({
@@ -603,6 +604,54 @@ describe('DetailPanel', () => {
 				owned: true,
 				ownershipType: 'physical',
 			});
+		});
+
+		it('a PS+ claim offers "I bought this", upgrading owned_via to purchase (digital)', async () => {
+			const user = await openPanel(
+				game({ owned: true, ownedVia: 'membership', ownershipType: null }),
+			);
+			await user.click(
+				screen.getByRole('button', {
+					name: 'I bought this — mark as purchased',
+				}),
+			);
+			await waitFor(() => expect(writes()).toHaveLength(1));
+			// A typeless claim is digital by nature — seed it on the upgrade.
+			expect(JSON.parse(writes()[0][1].body)).toEqual({
+				owned: true,
+				via: 'purchase',
+				ownershipType: 'digital',
+			});
+			expect(await screen.findByTestId('toast')).toHaveTextContent(
+				'marked as purchased',
+			);
+		});
+
+		it('keeps an existing type when upgrading a claim to purchase', async () => {
+			const user = await openPanel(
+				game({
+					owned: true,
+					ownedVia: 'membership',
+					ownershipType: 'physical',
+				}),
+			);
+			await user.click(
+				screen.getByRole('button', {
+					name: 'I bought this — mark as purchased',
+				}),
+			);
+			await waitFor(() => expect(writes()).toHaveLength(1));
+			expect(JSON.parse(writes()[0][1].body)).toEqual({
+				owned: true,
+				via: 'purchase',
+			});
+		});
+
+		it('a purchased game offers no "I bought this" upgrade', async () => {
+			await openPanel(game({ owned: true, ownedVia: 'purchase' }));
+			expect(
+				screen.queryByRole('button', { name: /I bought this/ }),
+			).not.toBeInTheDocument();
 		});
 
 		it('switches the ownership type through the segmented pair', async () => {

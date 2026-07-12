@@ -145,6 +145,36 @@ export async function setPsPlusExtraFlags(
 }
 
 /**
+ * Enrich a name-only (`unenriched`) game once a manual IGDB match is confirmed
+ * (Story 6.2, FR-28): fill the facts the add-by-name save lacked and clear the
+ * flag. Straight `set` (not COALESCE) — resolution is the user deliberately
+ * choosing this match, so it overwrites the empty name-only placeholders.
+ */
+export async function enrichGame(
+	db: Db,
+	gameId: string,
+	facts: {
+		coverUrl: string | null;
+		releaseDate: string | null;
+		/** Correct the name-only title to the chosen IGDB match, when given. */
+		title?: string;
+		titleNormalized?: string;
+	},
+) {
+	await db
+		.update(game)
+		.set({
+			coverUrl: facts.coverUrl,
+			releaseDate: facts.releaseDate,
+			unenriched: false,
+			...(facts.title
+				? { title: facts.title, titleNormalized: facts.titleNormalized }
+				: {}),
+		})
+		.where(eq(game.id, gameId));
+}
+
+/**
  * A game joined with one user's tracking row — the row shape the shelf/search
  * services bake into a card DTO.
  */
@@ -173,6 +203,10 @@ export type LibraryRow = {
  * `play_status` — shelf ordering derives from the `core/` effective-state
  * function (AD-7), never SQL. The join is via `game_tracking` so a game with no
  * tracking row for this user is absent (the library is what the user tracks).
+ * Discarded rows (soft-delete tombstone) are excluded here — this is the SINGLE
+ * visibility filter, so shelf, search, stragglers, and CSV export all inherit
+ * it. Sync reads `listTrackingForUser` (unfiltered) so it still sees discarded
+ * rows to skip them (services/sync.ts).
  */
 export async function listLibraryForUser(
 	db: Db,
@@ -199,5 +233,7 @@ export async function listLibraryForUser(
 		})
 		.from(gameTracking)
 		.innerJoin(game, eq(gameTracking.gameId, game.id))
-		.where(eq(gameTracking.userId, userId));
+		.where(
+			and(eq(gameTracking.userId, userId), eq(gameTracking.discarded, false)),
+		);
 }

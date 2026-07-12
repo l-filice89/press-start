@@ -12,6 +12,13 @@
 	gap: var(--space-2);
 }
 
+/* Left-handed placement (Story 6.3, UX-DR10). */
+.fab--left {
+	right: auto;
+	left: var(--space-4);
+	align-items: flex-start;
+}
+
 .fab__toggle {
 	width: 56px;
 	height: 56px;

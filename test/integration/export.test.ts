@@ -1,0 +1,110 @@
+import { applyD1Migrations, env } from 'cloudflare:test';
+import { eq } from 'drizzle-orm';
+import { beforeAll, describe, expect, inject, it } from 'vitest';
+import { normalizeTitle, parseCsv } from '../../src/core';
+import {
+	insertGame,
+	insertTrackingIfAbsent,
+	linkGameGenre,
+	upsertGenre,
+} from '../../src/repositories';
+import { createDb } from '../../src/repositories/db';
+import { user } from '../../src/schema';
+import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
+
+/**
+ * Story 6.3 CSV export: the whole library downloads as a user-held second copy.
+ * Asserts the attachment headers and that every tracked game (with genres +
+ * ownership) lands as a CSV row — parsed back with the app's own parseCsv.
+ */
+
+const db = () => createDb(env.DB);
+
+let cookie: string;
+let userId: string;
+
+describe('CSV export (Story 6.3, through the route)', () => {
+	beforeAll(async () => {
+		await applyD1Migrations(env.DB, inject('migrations'));
+		cookie = await establishSession();
+		const [row] = await db()
+			.select({ id: user.id })
+			.from(user)
+			.where(eq(user.email, ALLOWED_EMAIL))
+			.limit(1);
+		userId = row.id;
+	});
+
+	it('requires auth', async () => {
+		expect((await appFetch('/api/export.csv')).status).toBe(401);
+	});
+
+	it('downloads the full library as a text/csv attachment with genres + ownership', async () => {
+		const g = await insertGame(db(), {
+			title: 'Warhammer 40,000: Boltgun',
+			titleNormalized: normalizeTitle('Warhammer 40,000: Boltgun'),
+			releaseDate: '2023-05-23',
+		});
+		await insertTrackingIfAbsent(db(), userId, g.id, {
+			owned: true,
+			ownershipType: 'digital',
+			ownedVia: 'purchase',
+			playStatus: 'Playing',
+		});
+		const genre = await upsertGenre(db(), 'Shooter');
+		await linkGameGenre(db(), g.id, genre.id);
+
+		const res = await appFetch('/api/export.csv', { headers: { cookie } });
+		expect(res.status).toBe(200);
+		expect(res.headers.get('content-type')).toContain('text/csv');
+		expect(res.headers.get('content-disposition')).toContain('attachment');
+
+		const rows = parseCsv(await res.text());
+		const row = rows.find((r) => r.Title === 'Warhammer 40,000: Boltgun');
+		expect(row).toBeDefined();
+		// Comma-bearing title survived RFC-4180 quoting; ownership + genres present.
+		expect(row?.Owned).toBe('yes');
+		expect(row?.['Acquired Via']).toBe('purchase');
+		expect(row?.Genres).toBe('Shooter');
+		expect(row?.['Release Date']).toBe('2023-05-23');
+	});
+
+	it('carries only the signed-in user’s games (AD-13)', async () => {
+		const now = new Date();
+		const [other] = await db()
+			.insert(user)
+			.values({
+				id: crypto.randomUUID(),
+				name: 'Someone Else',
+				email: 'someone.else@example.com',
+				createdAt: now,
+				updatedAt: now,
+			})
+			.returning({ id: user.id });
+		const g = await insertGame(db(), {
+			title: 'Other User Only Game',
+			titleNormalized: normalizeTitle('Other User Only Game'),
+		});
+		await insertTrackingIfAbsent(db(), other.id, g.id, { owned: true });
+
+		const res = await appFetch('/api/export.csv', { headers: { cookie } });
+		const rows = parseCsv(await res.text());
+		expect(
+			rows.find((r) => r.Title === 'Other User Only Game'),
+		).toBeUndefined();
+	});
+
+	it('neutralizes formula-leading cells so the backup is safe in Excel/Sheets', async () => {
+		const g = await insertGame(db(), {
+			title: '=cmd|/c calc!A0',
+			titleNormalized: normalizeTitle('=cmd|/c calc!A0'),
+		});
+		await insertTrackingIfAbsent(db(), userId, g.id, { owned: true });
+
+		const res = await appFetch('/api/export.csv', { headers: { cookie } });
+		const rows = parseCsv(await res.text());
+		// The leading '=' is apostrophe-prefixed — spreadsheets read it as text.
+		expect(rows.find((r) => r.Title === "'=cmd|/c calc!A0")).toBeDefined();
+		expect(rows.find((r) => r.Title === '=cmd|/c calc!A0')).toBeUndefined();
+	});
+});

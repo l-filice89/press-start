@@ -1,0 +1,117 @@
+/* Add-by-name preview dialog (Story 6.1, UX-DR16): centered over a dimmed
+   backdrop, success-green accent on the CTA — an add is a positive action. */
+
+.add-game__backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: var(--z-overlay);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: color-mix(in srgb, black 62%, transparent);
+}
+
+.add-game {
+	width: min(26rem, calc(100vw - 2 * var(--space-4)));
+	max-height: calc(100dvh - 2 * var(--space-4));
+	overflow-y: auto;
+	margin: var(--space-4);
+	padding: var(--space-4);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface-raised);
+}
+
+.add-game__heading {
+	margin: 0 0 var(--space-3);
+	color: var(--color-text-primary);
+	font-family: var(--font-ui);
+	font-size: 1.1rem;
+}
+
+.add-game__notice {
+	margin: 0 0 var(--space-3);
+	color: var(--color-text-secondary);
+	font-family: var(--font-ui);
+	font-size: 0.9rem;
+}
+
+.add-game__body {
+	display: flex;
+	gap: var(--space-3);
+}
+
+.add-game__cover {
+	width: 5.5rem;
+	height: auto;
+	align-self: flex-start;
+	border-radius: var(--radius-sm);
+}
+
+.add-game__fields {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: var(--space-2);
+}
+
+.add-game__field {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	color: var(--color-text-secondary);
+	font-family: var(--font-ui);
+	font-size: 0.85rem;
+}
+
+.add-game__field input {
+	padding: var(--space-1) var(--space-2);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-sm);
+	background: var(--color-surface);
+	color: var(--color-text-primary);
+	font: inherit;
+}
+
+.add-game__owned {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	margin-top: var(--space-1);
+	color: var(--color-text-primary);
+	font-family: var(--font-ui);
+	font-size: 0.9rem;
+}
+
+.add-game__actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: var(--space-2);
+	margin-top: var(--space-4);
+}
+
+.add-game__cancel,
+.add-game__save {
+	padding: var(--space-2) var(--space-3);
+	border-radius: var(--radius-sm);
+	font: inherit;
+	font-family: var(--font-ui);
+	cursor: pointer;
+}
+
+.add-game__cancel {
+	border: 1px solid var(--color-border-hairline);
+	background: none;
+	color: var(--color-text-primary);
+}
+
+.add-game__save {
+	border: 1px solid var(--color-success-green);
+	background: color-mix(in srgb, var(--color-success-green) 18%, transparent);
+	color: var(--color-success-green);
+}
+
+.add-game__save:disabled {
+	opacity: 0.5;
+	cursor: default;
+}

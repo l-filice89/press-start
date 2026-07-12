@@ -33,12 +33,14 @@
 	cursor: pointer;
 }
 
-/* Amber — stragglers / general attention. */
-.attention-banner--stragglers {
+/* Amber — stragglers / general attention (+ enrich: games needing a match). */
+.attention-banner--stragglers,
+.attention-banner--enrich {
 	background: rgba(255, 178, 84, 0.14);
 	border-bottom-color: rgba(255, 178, 84, 0.4);
 }
-.attention-banner--stragglers .attention-banner__action {
+.attention-banner--stragglers .attention-banner__action,
+.attention-banner--enrich .attention-banner__action {
 	color: var(--color-warn-amber);
 }
 

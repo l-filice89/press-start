@@ -1,7 +1,8 @@
 /**
- * The whole-library search combobox. The input mirrors the header's original
- * placeholder styling; the listbox floats over the shell on a raised surface
- * with the cyan glow-ring (elevation via glow, not drop-shadow). Tokens-only.
+ * The persistent shelf search (redesign 2026-07-12). A plain search input that
+ * live-filters the shelf grid, with a pinned `＋ Add` bar attached under it —
+ * the sole Add entry point (reachable for any term, matches or not). No listbox:
+ * the shelf grid is the one result surface. Tokens-only.
  */
 
 .search-box {
@@ -25,45 +26,35 @@
 	color: var(--color-text-muted);
 }
 
-.search-box__listbox {
+/* The native search clear "X" is a shadow pseudo-element — give it a pointer. */
+.search-box__input::-webkit-search-cancel-button {
+	cursor: pointer;
+}
+
+/**
+ * The pinned `＋ Add "<name>"` bar (Story 6.1 + redesign): a full-width action
+ * attached under the field, floated over the shell so it never shifts the
+ * header layout. Success-green accent carried over from the old add row.
+ */
+.search-box__add {
 	position: absolute;
 	z-index: var(--z-overlay);
 	top: calc(100% + var(--space-1));
 	left: 0;
 	right: 0;
-	margin: 0;
-	padding: var(--space-1);
-	list-style: none;
-	max-height: 60vh;
-	overflow-y: auto;
+	width: 100%;
+	padding: var(--space-2) var(--space-3);
+	text-align: left;
 	background: var(--color-surface-raised);
 	border: 1px solid var(--color-border-hairline);
 	border-radius: var(--radius-md);
 	box-shadow: var(--glow-ring);
-}
-
-.search-box__option {
-	padding: var(--space-2) var(--space-3);
-	border-radius: var(--radius-sm);
+	color: var(--color-success-green);
 	font-family: var(--font-body);
 	font-size: 13px;
-	color: var(--color-text-primary);
-	cursor: default;
+	font-weight: 600;
+	cursor: pointer;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
-}
-
-.search-box__option--active {
-	background: rgba(18, 179, 255, 0.16);
-}
-
-.search-box__empty {
-	padding: var(--space-3);
-	text-align: center;
-	font-family: var(--font-display);
-	font-weight: 600;
-	font-size: 11px;
-	letter-spacing: 0.06em;
-	color: var(--color-text-muted);
 }

@@ -20,6 +20,9 @@ import {
 } from '../core';
 import {
 	getTracking,
+	listTrackingForUser,
+	setDiscarded,
+	setPsPlusExtraFlags,
 	updateTrackingDates,
 	updateTrackingMilestone,
 	updateTrackingOwnership,
@@ -150,6 +153,64 @@ export async function changeOwnership(
 }
 
 /**
+ * Owned PS+ claims (`owned_via='membership'`) this user still holds — the count
+ * the cancel-PS+ confirm names before acting (Story 6.4 AC4). Derives from the
+ * one unfiltered tracking read, same filter `cancelMembership` un-owns by.
+ */
+export async function countMembershipClaims(
+	db: Db,
+	userId: string,
+): Promise<number> {
+	const rows = await listTrackingForUser(db, userId);
+	return rows.filter(
+		(r) => r.owned && r.ownedVia === 'membership' && !r.discarded,
+	).length;
+}
+
+/**
+ * Un-own every PS+ claim on subscription cancel (Story 6.4 AC4, FR-9 amended).
+ * Reverses ownership ONLY — `owned=false, ownershipType=null, ownedVia=null` —
+ * on each live (`!discarded`) `owned_via='membership'` row; purchases
+ * (`owned_via='purchase'`) are never in the filter, and playStatus/milestones/
+ * dates/discarded are never written. Discarded claims are excluded so the count
+ * the confirm named matches the visible shelf.
+ *
+ * A membership claim reaches the shelf two ways: sync ingests it already owned
+ * (so `runPsPlusCheck` — which only flags NON-owned rows — never set its
+ * `psPlusExtra`), or the user claimed a pilled catalog game (flag already set).
+ * Re-flagging `psPlusExtra=true` covers the first case and is a no-op for the
+ * second, so the PS+ pill (shown when `psPlusExtra && !owned`) re-appears either
+ * way. Flags are set BEFORE the un-own loop: if a per-row write throws mid-way
+ * (D1 has no app-side multi-row txn), the not-yet-un-owned rows stay owned — the
+ * pill stays hidden by `!owned` — and a retry finishes the un-own, so no row is
+ * ever stranded un-owned-without-pill.
+ */
+export async function cancelMembership(
+	db: Db,
+	userId: string,
+): Promise<{ unowned: number }> {
+	const rows = await listTrackingForUser(db, userId);
+	const claims = rows.filter(
+		(r) => r.owned && r.ownedVia === 'membership' && !r.discarded,
+	);
+	// ponytail: re-flag from last-known catalog membership; next runPsPlusCheck
+	// clears any that have since left the catalog. Set first — see docblock.
+	await setPsPlusExtraFlags(
+		db,
+		claims.map((r) => r.gameId),
+		true,
+	);
+	for (const r of claims) {
+		await updateTrackingOwnership(db, userId, r.gameId, {
+			owned: false,
+			ownershipType: null,
+			ownedVia: null,
+		});
+	}
+	return { unowned: claims.length };
+}
+
+/**
  * Manually correct lifecycle dates on this user's tracking row (Story 2.4,
  * FR-45 — a deliberate override that never touches `play_status`). `core/`
  * validates and enforces the completion invariant on the merged result:
@@ -182,4 +243,20 @@ export async function editDates(
 		completedOn: updated.completedOn,
 		platinumOn: updated.platinumOn,
 	});
+}
+
+/**
+ * Discard / revive one game (soft-delete tombstone, 2026-07-11). A pure flag
+ * flip — no effective-state or invariant logic — so this is a thin scope +
+ * existence wrapper over the repository. Returns false when the user has no
+ * tracking row for the game (route answers 404); the tombstone is never
+ * inserted, only flipped on a real row.
+ */
+export async function setGameDiscarded(
+	db: Db,
+	userId: string,
+	gameId: string,
+	discarded: boolean,
+): Promise<boolean> {
+	return Boolean(await setDiscarded(db, userId, gameId, discarded));
 }

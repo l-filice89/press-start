@@ -224,8 +224,10 @@ test('ownership: un-own offers UNDO and restores; type switches physical/digital
 				.getByRole('button', { name: 'digital' }),
 		).toHaveAttribute('aria-pressed', 'true');
 
-		// Un-own → UNDO toast (2.4a)
-		await panel.getByRole('button', { name: 'Owned', exact: true }).click();
+		// Un-own → UNDO toast (2.4a). Story 6.4 redesigned the panel ownership
+		// control: the un-own command is now "Mark as not owned" (the old single
+		// "Owned" toggle is gone — owned-ness is the "Owned · …" status text).
+		await panel.getByRole('button', { name: 'Mark as not owned' }).click();
 		const toast = page
 			.getByTestId('toast')
 			.getByText(`${game.title} — no longer owned`);
@@ -242,10 +244,11 @@ test('ownership: un-own offers UNDO and restores; type switches physical/digital
 			.evaluate((el) => (el as HTMLElement).click());
 
 		// Direct asserts (Story 3.4): the still-open panel shows the restored
-		// flag AND the previous type surviving the round trip.
+		// ownership (the un-own command returns only while owned) AND the
+		// previous type surviving the round trip.
 		await expect(
-			panel.getByRole('button', { name: 'Owned', exact: true }),
-		).toHaveAttribute('aria-pressed', 'true');
+			panel.getByRole('button', { name: 'Mark as not owned' }),
+		).toBeVisible();
 		await expect(
 			panel
 				.getByRole('group', { name: `Ownership type for ${game.title}` })

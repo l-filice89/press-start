@@ -14,6 +14,7 @@ import {
 	type PlayStatus,
 	removeGenre,
 	type ShelfGame,
+	setDiscarded,
 } from './api';
 import { REVEAL_STATES } from './filters';
 
@@ -88,6 +89,9 @@ export function useTrackingMutations(
 ) {
 	// Which milestone the confirm dialog is gating; null = no dialog.
 	const [confirming, setConfirming] = useState<Milestone | null>(null);
+	// True while the buy-vs-claim source prompt is open (Story 6.4): a manual
+	// own on a PS+-catalog game gates here — no write until the user chooses.
+	const [sourcePrompt, setSourcePrompt] = useState(false);
 
 	const queryClient = useQueryClient();
 	const { toast } = useToast();
@@ -120,13 +124,11 @@ export function useTrackingMutations(
 		},
 		[toast, game.id, game.title],
 	);
-	// One invalidation seam for every write path (Story 3.6, AC1): the search
-	// listbox renders from ['shelf-search', term] — a write that refreshes the
-	// shelf but not the search leaves an open listbox stale (prefix match
-	// covers every term). 409 paths refresh through here too.
+	// One invalidation seam for every write path: the shelf query is the single
+	// source the grid (and its client-side search/filter) renders from. 409 paths
+	// refresh through here too.
 	const invalidateShelfQueries = useCallback(() => {
 		queryClient.invalidateQueries({ queryKey: ['shelf'] });
-		queryClient.invalidateQueries({ queryKey: ['shelf-search'] });
 	}, [queryClient]);
 
 	// `onHidden` fires only on a visible→hidden TRANSITION (Story 3.2, FR-4/17):
@@ -268,8 +270,11 @@ export function useTrackingMutations(
 	// section share this one path. Ownership never changes effective state, so
 	// no `onHidden` — invalidation alone keeps the shelf honest.
 	const ownershipMutation = useMutation({
-		mutationFn: (change: { owned?: boolean; ownershipType?: OwnershipType }) =>
-			changeOwnership(game.id, change),
+		mutationFn: (change: {
+			owned?: boolean;
+			ownershipType?: OwnershipType;
+			via?: 'purchase' | 'membership';
+		}) => changeOwnership(game.id, change),
 		onSettled: settleWrite,
 		onSuccess: () => invalidateShelfQueries(),
 		onError: () =>
@@ -278,19 +283,36 @@ export function useTrackingMutations(
 	const { mutate: mutateOwnership } = ownershipMutation;
 
 	const setOwnership = useCallback(
-		(change: { owned?: boolean; ownershipType?: OwnershipType }) => {
+		(change: {
+			owned?: boolean;
+			ownershipType?: OwnershipType;
+			via?: 'purchase' | 'membership';
+		}) => {
 			// Same shared race guard as `selectStatus` (Story 3.4, AC5).
 			if (guardPending()) return;
+			// A manual own on a not-yet-owned PS+-catalog game is ambiguous — buy or
+			// claim? Gate on the source prompt (Story 6.4 AC1), mirroring the
+			// milestone `confirming` pattern; the write happens in `confirmSource`.
+			// Every other game (and every un-own / type switch, and a redundant
+			// re-own) writes straight through.
+			if (change.owned === true && !game.owned && game.psPlusExtra) {
+				setSourcePrompt(true);
+				return;
+			}
 			const previousType = game.ownershipType;
+			const previousVia = game.ownedVia;
 			beginWrite();
 			// Same stale-intent token as the status undo (Story 3.6, AC2).
 			const gen = WRITE_GEN.get(game.id) ?? 0;
 			mutateOwnership(change, {
 				onSuccess: () => {
 					if (change.owned === false) {
-						// Un-owning is a reversible risky action: UNDO restores the flag
-						// AND the previous type. `bought_on` needs no restore — un-owning
-						// never touched it (write-once server-side).
+						// Un-owning is a reversible risky action: UNDO restores the flag,
+						// the previous type AND the provenance (`via`) — otherwise a
+						// re-owned claim would silently revive as a purchase (Story 6.4).
+						// `bought_on` needs no restore — un-owning never touched it
+						// (write-once server-side), and a membership revive re-sends its
+						// `via` so no `bought_on` is stamped either.
 						toast({
 							message: `${game.title} — no longer owned`,
 							undo: {
@@ -300,6 +322,7 @@ export function useTrackingMutations(
 									mutateOwnership({
 										owned: true,
 										...(previousType ? { ownershipType: previousType } : {}),
+										...(previousVia ? { via: previousVia } : {}),
 									});
 								},
 							},
@@ -309,7 +332,11 @@ export function useTrackingMutations(
 					toast({
 						message:
 							change.owned === true
-								? `${game.title} — owned`
+								? // A via change on an already-owned game is the claim→purchase
+									// upgrade (Story 6.4), not a fresh own — say so.
+									game.owned && change.via === 'purchase'
+									? `${game.title} — marked as purchased`
+									: `${game.title} — owned`
 								: `${game.title} — ${change.ownershipType}`,
 					});
 				},
@@ -318,7 +345,10 @@ export function useTrackingMutations(
 		[
 			game.title,
 			game.ownershipType,
+			game.ownedVia,
+			game.owned,
 			game.id,
+			game.psPlusExtra,
 			mutateOwnership,
 			guardPending,
 			guardStaleUndo,
@@ -326,6 +356,24 @@ export function useTrackingMutations(
 			toast,
 		],
 	);
+
+	// The buy-vs-claim choice resolves the source prompt into the owning write
+	// (Story 6.4 AC1/AC2) — a plain owned toast, no UNDO (owning isn't risky).
+	const confirmSource = useCallback(
+		(via: 'purchase' | 'membership') => {
+			// Guard BEFORE dismissing: a write in flight keeps the prompt open so the
+			// choice survives a retry rather than being silently discarded.
+			if (guardPending()) return;
+			setSourcePrompt(false);
+			beginWrite();
+			mutateOwnership(
+				{ owned: true, via },
+				{ onSuccess: () => toast({ message: `${game.title} — owned` }) },
+			);
+		},
+		[game.title, guardPending, beginWrite, mutateOwnership, toast],
+	);
+	const cancelSource = useCallback(() => setSourcePrompt(false), []);
 
 	// Lifecycle-date corrections (Story 2.4, FR-45): deliberate overrides. A 409
 	// is the completion-invariant refusal, same as clearing a status — explain
@@ -394,6 +442,50 @@ export function useTrackingMutations(
 		[game.title, guardPending, beginWrite, mutateGenre, toast],
 	);
 
+	// Discard (soft-delete) — a reversible risky action, same feedback shape as
+	// un-owning: UNDO toast that revives the row. Discarding always hides the
+	// card from the default shelf, so `onHidden` fires unconditionally (the
+	// detail panel closes itself rather than vanishing under the user). The UNDO
+	// respects the shared in-flight + stale-intent guards.
+	const discardMutation = useMutation({
+		mutationFn: (discarded: boolean) => setDiscarded(game.id, discarded),
+		onSettled: settleWrite,
+		onSuccess: () => invalidateShelfQueries(),
+		onError: () =>
+			toast({ message: `Couldn’t update ${game.title}. Try again.` }),
+	});
+	const { mutate: mutateDiscard } = discardMutation;
+
+	const discard = useCallback(() => {
+		if (guardPending()) return;
+		beginWrite();
+		const gen = WRITE_GEN.get(game.id) ?? 0;
+		mutateDiscard(true, {
+			onSuccess: () => {
+				toast({
+					message: `${game.title} — removed from library`,
+					undo: {
+						onUndo: () => {
+							if (guardPending() || guardStaleUndo(gen)) return;
+							beginWrite();
+							mutateDiscard(false);
+						},
+					},
+				});
+				onHidden?.();
+			},
+		});
+	}, [
+		game.title,
+		game.id,
+		mutateDiscard,
+		guardPending,
+		guardStaleUndo,
+		beginWrite,
+		toast,
+		onHidden,
+	]);
+
 	const cancelConfirm = useCallback(() => {
 		setConfirming(null);
 		onConfirmClose?.();
@@ -428,8 +520,12 @@ export function useTrackingMutations(
 	return {
 		selectStatus,
 		setOwnership,
+		sourcePrompt,
+		confirmSource,
+		cancelSource,
 		saveDates,
 		editGenre,
+		discard,
 		milestoneRows,
 		activateMilestoneRow,
 		confirming,

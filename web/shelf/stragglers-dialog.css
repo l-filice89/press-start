@@ -1,0 +1,157 @@
+/* Stragglers list + resolution dialog (Story 6.2): a list of games needing a
+   games-DB match, then a manual IGDB pick — centered over a dimmed backdrop. */
+
+.stragglers__backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: var(--z-overlay);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: color-mix(in srgb, black 62%, transparent);
+}
+
+.stragglers {
+	width: min(30rem, calc(100vw - 2 * var(--space-4)));
+	max-height: calc(100dvh - 2 * var(--space-4));
+	overflow-y: auto;
+	margin: var(--space-4);
+	padding: var(--space-4);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface-raised);
+}
+
+.stragglers__heading {
+	margin: 0 0 var(--space-3);
+	color: var(--color-text-primary);
+	font-family: var(--font-ui);
+	font-size: 1.1rem;
+}
+
+.stragglers__notice {
+	margin: 0 0 var(--space-3);
+	color: var(--color-text-secondary);
+	font-family: var(--font-ui);
+	font-size: 0.9rem;
+}
+
+.stragglers__list,
+.stragglers__candidates {
+	margin: 0 0 var(--space-3);
+	padding: 0;
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+}
+
+.stragglers__row,
+.stragglers__candidate {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	padding: var(--space-2);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-sm);
+}
+
+.stragglers__title,
+.stragglers__candidate-name {
+	flex: 1;
+	color: var(--color-text-primary);
+	font-family: var(--font-ui);
+	font-size: 0.95rem;
+}
+
+.stragglers__kind {
+	color: var(--color-text-secondary);
+	font-family: var(--font-ui);
+	font-size: 0.75rem;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.stragglers__cover {
+	width: 2.5rem;
+	height: auto;
+	border-radius: var(--radius-sm);
+}
+
+.stragglers__search {
+	display: flex;
+	align-items: flex-end;
+	gap: var(--space-2);
+	margin-bottom: var(--space-3);
+}
+
+.stragglers__field {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: var(--space-1);
+	color: var(--color-text-secondary);
+	font-family: var(--font-ui);
+	font-size: 0.85rem;
+}
+
+.stragglers__field input {
+	padding: var(--space-2);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-sm);
+	background: var(--color-surface-sunken);
+	color: var(--color-text-primary);
+	font-size: 0.95rem;
+}
+
+.stragglers__actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: var(--space-2);
+}
+
+.stragglers__resolve,
+.stragglers__use,
+.stragglers__search-btn {
+	padding: var(--space-2) var(--space-3);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--color-success-green);
+	font-family: var(--font-ui);
+	font-weight: 600;
+	cursor: pointer;
+}
+
+/* Discard a name-only mistake — reversible (UNDO toast), so a restrained
+   magenta secondary next to the green "Find a match". */
+.stragglers__discard {
+	padding: var(--space-2) var(--space-3);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--color-heat-magenta-ink);
+	font-family: var(--font-ui);
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.stragglers__discard:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.stragglers__close {
+	padding: var(--space-2) var(--space-3);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--color-text-secondary);
+	font-family: var(--font-ui);
+	cursor: pointer;
+}
+
+.stragglers__use:disabled {
+	opacity: 0.5;
+	cursor: default;
+}

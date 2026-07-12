@@ -202,12 +202,16 @@ test('a filtered view keeps state → owned → alpha ordering (FR-18 amendment)
 	}
 });
 
-test('whole-library search ignores active shelf filters (search isolation)', async ({
+// Scope rule (redesign 2026-07-12, supersedes the old "search ignores filters"
+// isolation invariant): a bare search reaches the WHOLE library, but once a
+// filter is active the search narrows WITHIN it — asserted in BOTH directions,
+// the e2e half of the named scope-rule hazard (jsdom-pinned in `Shelf.test.tsx`).
+test('search scope rule: a bare search reaches the whole library; an active filter narrows within it', async ({
 	page,
 }) => {
 	const run = randomUUID().slice(0, 8);
 	const paused = createGame({
-		title: `Search Isolation ${run}`,
+		title: `Search Scope ${run}`,
 		tracking: { playStatus: 'Paused' },
 	});
 	try {
@@ -215,20 +219,29 @@ test('whole-library search ignores active shelf filters (search isolation)', asy
 		await page.goto('/');
 		await expect(cardFor(page, paused)).toBeVisible();
 
-		// Filter the shelf down to Playing — the Paused game leaves the shelf…
+		const search = page.getByRole('searchbox', { name: 'Search your library' });
+
+		// No filter → whole-library search surfaces it in the grid; the caption
+		// states the reach.
+		await search.fill(paused.title);
+		await expect(cardFor(page, paused)).toBeVisible();
+		await expect(page.getByTestId('search-scope')).toContainText(
+			'whole library',
+		);
+
+		// Clear the term, then filter down to Playing — the Paused game leaves.
+		await search.fill('');
 		await page.getByTestId('filter-state').click();
 		await page.getByRole('menuitemcheckbox', { name: 'Playing' }).click();
 		await page.keyboard.press('Escape');
-		await loadAllPages(page);
 		await expect(cardFor(page, paused)).toHaveCount(0);
 
-		// …but the whole-library search still finds it (filters never leak in).
-		await page
-			.getByRole('combobox', { name: 'Search your library' })
-			.fill(paused.title);
-		await expect(
-			page.getByRole('option', { name: new RegExp(paused.title) }),
-		).toBeVisible();
+		// Now search WITHIN the Playing filter — the Paused game stays suppressed.
+		await search.fill(paused.title);
+		await expect(page.getByText('NO MATCH')).toBeVisible();
+		await expect(page.getByTestId('search-scope')).toContainText(
+			'within your filters',
+		);
 	} finally {
 		await deleteGames([paused.id]);
 	}

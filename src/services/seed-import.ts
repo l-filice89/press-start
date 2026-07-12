@@ -11,6 +11,7 @@
 
 import { parseCsv } from '../core/csv';
 import { buildSeedPlan } from '../core/seed-reconcile';
+import { isRecordableStragglerTitle } from '../core/straggler-title';
 import type { IgdbProvider } from '../providers/igdb';
 import {
 	addExternalLink,
@@ -86,6 +87,10 @@ export async function runSeedImport({
 		sourceTitle: string,
 		notionPayload: string | null,
 	): Promise<void> {
+		// HAZARD (garbage-title filter): a blank/whitespace or URL source title
+		// can't be resolved to a game — drop it so it never becomes a permanent
+		// straggler. Not counted (it was never recorded).
+		if (!isRecordableStragglerTitle(sourceTitle)) return;
 		if (knownStragglers.has(sourceTitle)) return;
 		await insertStraggler(db, { sourceTitle, notionPayload });
 		knownStragglers.add(sourceTitle);

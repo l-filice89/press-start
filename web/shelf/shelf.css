@@ -40,3 +40,12 @@
 	padding: var(--space-5) 0;
 	text-align: center;
 }
+
+/* Search scope caption (redesign 2026-07-12): states the search reach —
+   whole-library vs within-filter — in the UI, mirroring the filter summary. */
+.shelf__search-scope {
+	margin: var(--space-2) 0 0;
+	color: var(--color-text-secondary);
+	font-family: var(--font-ui);
+	font-size: 0.9rem;
+}
