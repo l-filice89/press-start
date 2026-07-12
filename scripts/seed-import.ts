@@ -72,14 +72,22 @@ function createHttpDb(accountId: string, databaseId: string, apiToken: string) {
 				body: JSON.stringify({ sql, params }),
 			});
 			if (!response.ok) {
-				throw new Error(`D1 HTTP query failed: ${response.status} ${await response.text()}`);
+				// Drizzle re-wraps a thrown error as a generic "Failed query", losing
+				// this detail — log it directly so a bad token / wrong account id is
+				// visible (a 403 here means the API token lacks D1 edit permission).
+				const body = await response.text();
+				console.error(`\nD1 HTTP ${response.status} ${response.statusText}: ${body}`);
+				throw new Error(`D1 HTTP query failed: ${response.status}`);
 			}
 			const data = (await response.json()) as {
 				success: boolean;
 				errors: unknown[];
 				result: { results: Record<string, unknown>[] }[];
 			};
-			if (!data.success) throw new Error(`D1 error: ${JSON.stringify(data.errors)}`);
+			if (!data.success) {
+				console.error(`\nD1 error: ${JSON.stringify(data.errors)}`);
+				throw new Error(`D1 error: ${JSON.stringify(data.errors)}`);
+			}
 			const rows = (data.result[0]?.results ?? []).map((r) => Object.values(r));
 			// `.get()` expects a single positional row, `.all()`/`.values()` an array of them.
 			return { rows: method === 'get' ? (rows[0] ?? []) : rows };
