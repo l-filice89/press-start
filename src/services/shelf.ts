@@ -1,5 +1,5 @@
 /**
- * Shelf + search orchestration (AD-6). The only place that reads the library
+ * Shelf orchestration (AD-6). The only place that reads the library
  * through `repositories/` (AD-4) and derives state through `core/` (AD-7/AD-8)
  * to bake the fully-resolved card DTO the SPA renders. No third-party fetch is
  * possible here — covers/store links come only from persisted `game` rows
@@ -140,27 +140,4 @@ export async function getShelf(
 			? library
 			: library.filter((g) => isDefaultShelfVisible(g.effectiveState)),
 	);
-}
-
-/**
- * The dedicated whole-library search (FR-19) — a separate path from `getShelf`,
- * NOT a filter over the shelf result. Matches every game by case-insensitive
- * substring on the display title, ignoring active filters and hidden states.
- * Plain alphabetical on purpose — the shelf's state/ownership tiers (FR-18)
- * do NOT apply here. Blank query → no results (the SPA falls back to the
- * shelf).
- */
-export async function searchLibrary(
-	db: Db,
-	userId: string,
-	query: string,
-): Promise<ShelfGame[]> {
-	const needle = query.trim().toLowerCase();
-	if (needle === '') return [];
-	const library = await loadLibrary(db, userId);
-	return library
-		.filter((g) => g.title.toLowerCase().includes(needle))
-		.sort((a, b) =>
-			a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }),
-		);
 }

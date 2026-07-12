@@ -124,13 +124,11 @@ export function useTrackingMutations(
 		},
 		[toast, game.id, game.title],
 	);
-	// One invalidation seam for every write path (Story 3.6, AC1): the search
-	// listbox renders from ['shelf-search', term] — a write that refreshes the
-	// shelf but not the search leaves an open listbox stale (prefix match
-	// covers every term). 409 paths refresh through here too.
+	// One invalidation seam for every write path: the shelf query is the single
+	// source the grid (and its client-side search/filter) renders from. 409 paths
+	// refresh through here too.
 	const invalidateShelfQueries = useCallback(() => {
 		queryClient.invalidateQueries({ queryKey: ['shelf'] });
-		queryClient.invalidateQueries({ queryKey: ['shelf-search'] });
 	}, [queryClient]);
 
 	// `onHidden` fires only on a visible→hidden TRANSITION (Story 3.2, FR-4/17):

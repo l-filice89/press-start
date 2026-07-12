@@ -42,14 +42,13 @@ export function StragglersDialog({ onClose }: { onClose: () => void }) {
 		queryFn: ({ signal }) => fetchStragglers(signal),
 	});
 
-	// Refresh every surface a resolve/discard can change: the list, the shelf +
-	// search (a discarded game leaves them), and settings (the amber banner count
-	// keys off the straggler total).
+	// Refresh every surface a resolve/discard can change: the list, the shelf (a
+	// discarded game leaves it), and settings (the amber banner count keys off the
+	// straggler total).
 	const refreshLists = () =>
 		Promise.all([
 			queryClient.invalidateQueries({ queryKey: ['stragglers'] }),
 			queryClient.invalidateQueries({ queryKey: ['shelf'] }),
-			queryClient.invalidateQueries({ queryKey: ['shelf-search'] }),
 			queryClient.invalidateQueries({ queryKey: ['settings'] }),
 		]);
 
@@ -148,7 +147,6 @@ export function StragglersDialog({ onClose }: { onClose: () => void }) {
 							await Promise.all([
 								queryClient.invalidateQueries({ queryKey: ['stragglers'] }),
 								queryClient.invalidateQueries({ queryKey: ['shelf'] }),
-								queryClient.invalidateQueries({ queryKey: ['shelf-search'] }),
 								queryClient.invalidateQueries({ queryKey: ['settings'] }),
 								queryClient.invalidateQueries({ queryKey: ['genres'] }),
 							]);

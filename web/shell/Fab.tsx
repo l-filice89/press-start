@@ -46,7 +46,6 @@ export function Fab({
 			announce('Sync complete.');
 			onSyncComplete(result);
 			queryClient.invalidateQueries({ queryKey: ['shelf'] });
-			queryClient.invalidateQueries({ queryKey: ['shelf-search'] });
 			// needs-attention items were persisted server-side; refetch so the
 			// banner state matches this run.
 			queryClient.invalidateQueries({ queryKey: ['settings'] });
@@ -74,7 +73,6 @@ export function Fab({
 			onPsPlusCheckComplete(result);
 			// Flags feed playableNow — the shelf must re-derive.
 			queryClient.invalidateQueries({ queryKey: ['shelf'] });
-			queryClient.invalidateQueries({ queryKey: ['shelf-search'] });
 			// A successful check clears any failed-cron flag (5.2) — refetch
 			// settings so the failed-refresh banner disappears without a reload.
 			queryClient.invalidateQueries({ queryKey: ['settings'] });

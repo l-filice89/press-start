@@ -103,7 +103,6 @@ describe('Fab', () => {
 		);
 		expect(screen.queryByTestId('toast')).not.toBeInTheDocument();
 		expect(invalidate).toHaveBeenCalledWith({ queryKey: ['shelf'] });
-		expect(invalidate).toHaveBeenCalledWith({ queryKey: ['shelf-search'] });
 		expect(invalidate).toHaveBeenCalledWith({ queryKey: ['settings'] });
 		// Drawer closed after settling.
 		expect(screen.queryByTestId('fab-drawer')).not.toBeInTheDocument();
@@ -146,7 +145,6 @@ describe('Fab', () => {
 		);
 		// Flags feed playableNow — the shelf must re-derive.
 		expect(invalidate).toHaveBeenCalledWith({ queryKey: ['shelf'] });
-		expect(invalidate).toHaveBeenCalledWith({ queryKey: ['shelf-search'] });
 		expect(screen.queryByTestId('fab-drawer')).not.toBeInTheDocument();
 	});
 

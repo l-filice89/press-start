@@ -76,7 +76,6 @@ export function AddGameDialog({
 				// against the in-flight fetch rather than a settled empty payload.
 				toast({ message: 'Already in your library.' });
 				queryClient.invalidateQueries({ queryKey: ['shelf'] });
-				queryClient.invalidateQueries({ queryKey: ['shelf-search'] });
 				onClose();
 				openDetail(result.gameId);
 				return;
@@ -87,7 +86,6 @@ export function AddGameDialog({
 			// Refetch before closing so the game is on the shelf when focus lands.
 			await Promise.all([
 				queryClient.invalidateQueries({ queryKey: ['shelf'] }),
-				queryClient.invalidateQueries({ queryKey: ['shelf-search'] }),
 				queryClient.invalidateQueries({ queryKey: ['genres'] }),
 			]);
 			onClose();

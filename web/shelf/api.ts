@@ -253,14 +253,6 @@ export function fetchShelf(signal?: AbortSignal): Promise<ShelfGame[]> {
 	return fetchGames('/api/shelf?include=hidden', signal);
 }
 
-/** The dedicated whole-library search (matches every game, ignores filters). */
-export function searchShelf(
-	query: string,
-	signal?: AbortSignal,
-): Promise<ShelfGame[]> {
-	return fetchGames(`/api/shelf/search?q=${encodeURIComponent(query)}`, signal);
-}
-
 /* ---- Add a game by name (Story 6.1) ---- */
 
 const addPreviewSchema = z.object({

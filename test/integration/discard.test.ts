@@ -114,15 +114,11 @@ describe('discard (soft-delete tombstone, through the route)', () => {
 		expect(await shelfTitles(cookie)).toContain('Discard Me');
 	});
 
-	it('drops a discarded name-only game from the search and the stragglers list', async () => {
+	it('drops a discarded name-only game from the shelf and the stragglers list', async () => {
 		const g = await trackedGame('Zzz Only Search', true);
 		await discard(g.id, true, cookie);
 
-		const search = await appFetch('/api/shelf/search?q=Zzz%20Only%20Search', {
-			headers: { cookie },
-		});
-		const { games } = (await search.json()) as { games: { id: string }[] };
-		expect(games.map((x) => x.id)).not.toContain(g.id);
+		expect(await shelfTitles(cookie)).not.toContain('Zzz Only Search');
 
 		const strag = await appFetch('/api/stragglers', { headers: { cookie } });
 		const { stragglers } = (await strag.json()) as {

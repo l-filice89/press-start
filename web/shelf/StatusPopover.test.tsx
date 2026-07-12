@@ -288,25 +288,6 @@ describe('StatusPopover', () => {
 		expect(fetchMock).toHaveBeenCalledTimes(2);
 	});
 
-	// HAZARD (Story 3.6, AC1): every write refreshes the search query too — an
-	// open search listbox must never keep rendering pre-write data.
-	it('a status write invalidates the shelf-search query alongside the shelf', async () => {
-		const user = userEvent.setup();
-		const { client } = renderPopover();
-		client.setQueryData(['shelf-search', 'blood'], { games: [] });
-		client.setQueryData(['shelf'], { games: [] });
-
-		await user.click(pill());
-		await user.click(screen.getByRole('menuitemradio', { name: 'Playing' }));
-
-		await waitFor(() => {
-			expect(
-				client.getQueryState(['shelf-search', 'blood'])?.isInvalidated,
-			).toBe(true);
-			expect(client.getQueryState(['shelf'])?.isInvalidated).toBe(true);
-		});
-	});
-
 	it('surfaces a failed status change instead of silently doing nothing', async () => {
 		const user = userEvent.setup();
 		fetchMock.mockResolvedValue({

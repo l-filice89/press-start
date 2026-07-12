@@ -3,13 +3,13 @@ import { z } from 'zod';
 import { EFFECTIVE_STATES, PLAY_STATUSES } from '../core';
 import { createDb } from '../repositories/db';
 import { OWNERSHIP_TYPES } from '../schema/catalog';
-import { getShelf, searchLibrary } from '../services';
+import { getShelf } from '../services';
 import { type AuthVariables, requireAuth } from './auth';
 
 /**
- * The read-only shelf boundary (Story 1.7). Two user-scoped GET routes behind
- * `requireAuth` (AD-13): the default backlog shelf and a dedicated whole-library
- * search. Both return the baked `ShelfGame` card DTO, Zod-validated on the way
+ * The read-only shelf boundary (Story 1.7). One user-scoped GET route behind
+ * `requireAuth` (AD-13): the whole ordered library (the SPA filters/searches it
+ * client-side). Returns the baked `ShelfGame` card DTO, Zod-validated on the way
  * out (AR-26). No third-party fetch happens here — the service reads only
  * persisted rows (NFR-3).
  */
@@ -57,12 +57,5 @@ shelfRoute.get('/shelf', requireAuth, async (c) => {
 	// reveal pills can OR hidden states into the visible set. Default unchanged.
 	const includeHidden = c.req.query('include') === 'hidden';
 	const games = await getShelf(db, c.get('userId'), includeHidden);
-	return c.json(shelfResponseSchema.parse({ games }), 200);
-});
-
-shelfRoute.get('/shelf/search', requireAuth, async (c) => {
-	const db = createDb(c.env.DB);
-	const query = c.req.query('q') ?? '';
-	const games = await searchLibrary(db, c.get('userId'), query);
 	return c.json(shelfResponseSchema.parse({ games }), 200);
 });

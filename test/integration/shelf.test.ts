@@ -13,11 +13,11 @@ import {
 } from '../../src/repositories';
 import { createDb } from '../../src/repositories/db';
 import { user } from '../../src/schema';
-import { getShelf, searchLibrary } from '../../src/services';
+import { getShelf } from '../../src/services';
 import worker from '../../worker/index';
 
 /**
- * Story 1.7 integration tests: the read-only shelf/search read path against
+ * Story 1.7 integration tests: the read-only shelf read path against
  * real workerd + local D1. The substantive ordering/visibility/scoping logic is
  * exercised through the `services/` functions (the route wrapper is a thin
  * `requireAuth` + Zod layer, proven separately by the 401 case below and the
@@ -63,7 +63,7 @@ async function addGame(
 let userA: string;
 let userB: string;
 
-describe('read-only shelf + search (integration, real workerd + local D1)', () => {
+describe('read-only shelf (integration, real workerd + local D1)', () => {
 	beforeAll(async () => {
 		await applyD1Migrations(env.DB, inject('migrations'));
 		userA = await seedUser('shelf-a@example.com');
@@ -177,22 +177,7 @@ describe('read-only shelf + search (integration, real workerd + local D1)', () =
 		expect(shelf.find((g) => g.title === 'Bolt')?.genres).toEqual([]);
 	});
 
-	it('search matches the whole library incl. hidden states, ignoring the shelf filter', async () => {
-		const results = await searchLibrary(db(), userA, 'game');
-		const titles = results.map((g) => g.title);
-		// Both hidden games match a whole-library search.
-		expect(titles).toContain('Done Game');
-		expect(titles).toContain('Dropped Game');
-	});
-
-	it('search is case-insensitive substring; blank query returns nothing', async () => {
-		expect(
-			(await searchLibrary(db(), userA, 'APEX')).map((g) => g.title),
-		).toEqual(['Apex']);
-		expect(await searchLibrary(db(), userA, '   ')).toEqual([]);
-	});
-
-	it('scopes shelf + search to the signed-in user', async () => {
+	it('scopes the shelf to the signed-in user', async () => {
 		const shelfB = await getShelf(db(), userB);
 		expect(shelfB.map((g) => g.title)).toEqual(['Apex']);
 		// User B's Apex is Paused, not User A's Playing — no cross-user bleed.
