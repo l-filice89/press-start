@@ -29,7 +29,7 @@ it, or `skipped` with the reason. Epic 2 rows land with story 2.5.3.
 | 1.7a card content (cover/title/pill/owned/flags; genres desktop-only) | `epic1-shelf.spec.ts` › shelf renders card content (title/state/OWNED/cover-fallback/PS+ flag; release + milestone flags jsdom-pinned in `Card.test.tsx`); genres delta in `epic1-responsive.spec.ts` |
 | 1.7b default visible set + ordering (state → owned → alpha) | `epic1-shelf.spec.ts` › default shelf hides finished states and orders by state → owned → alpha |
 | 1.7c progressive render / infinite scroll | `epic1-shelf.spec.ts` › infinite scroll reveals the next page (first fold = PAGE_SIZE + one growth event; full-set exhaustion exercised by loadAllPages in the ordering test) |
-| 1.7d whole-library search ignoring filters/hidden states | `epic1-shelf.spec.ts` › whole-library search matches games hidden from the shelf (match visibility); selecting a result now opens detail — shipped by Story 6.1, pinned in `epic6.spec.ts` › picking an existing library match opens its detail view |
+| 1.7d whole-library search ignoring filters/hidden states | `epic1-shelf.spec.ts` › whole-library search matches games hidden from the shelf, NO MATCH otherwise — REDESIGNED 2026-07-12: with no filter a bare search reaches the whole library (hidden included) and surfaces the game IN THE GRID (scope rule) with a `search-scope` caption stating the reach; gibberish → NO MATCH. Opening a searched game is now a card click (`epic6.spec.ts` › searching an existing game … the card opens detail) |
 | 1.7e skeleton first load + INSERT GAMES empty state | `epic1-shelf.spec.ts` › first load shows skeletons; › empty library shows INSERT GAMES |
 | 1.7f covers from persisted data, no third-party fetch on render | skipped — architecture NFR, unverified in e2e (no fixture seeds a cover_url; networkErrorMonitor only catches 4xx/5xx, not successful third-party fetches) |
 | 1.7g focusable grid with arrow traversal in reading order | `epic1-shelf.spec.ts` › shelf grid supports arrow traversal in reading order |
@@ -72,7 +72,7 @@ Epic 1's deferred 1.5h (prefers-reduced-motion) is closed by
 | 3.1c nothing selected → default set; any selection → exactly those states | `epic3-filter.spec.ts` › state filter shows exactly the selected states, highlights, and restores the default set |
 | 3.1d active filter entry visually highlighted | `epic3-filter.spec.ts` › state filter… (data-active trigger + aria-checked row asserted) |
 | 3.1 FR-18 ordering holds in filtered views | `epic3-filter.spec.ts` › a filtered view keeps state → owned → alpha ordering |
-| 3.1 search isolation (filters never leak into whole-library search) | `epic3-filter.spec.ts` › whole-library search ignores active shelf filters |
+| 3.1 search scope rule (SUPERSEDES the old "search ignores filters" isolation, redesign 2026-07-12) | `epic3-filter.spec.ts` › search scope rule: a bare search reaches the whole library; an active filter narrows within it (both directions; jsdom-pinned in `Shelf.test.tsx` › scope rule: no filter reveals a hidden game by name; an active filter suppresses it) |
 | 3.2a Flag pills Owned/Wishlisted/Released/Playable now, each its own AND group | `epic3-reveal.spec.ts` › flag pills are their own AND groups (Wishlisted + State AND asserted; all four pills' pressed state pinned in jsdom `FilterRow.test.tsx`) |
 | 3.2b reveal pill shows its hidden state (semantics amended by 3.5 — exclusive view) | superseded by 3.5a — `epic3-reveal.spec.ts` › a reveal pill is an exclusive view (all three pills pinned in jsdom + `filters.test.ts`) |
 | 3.2c solid pills narrow, dashed pills reveal | `epic3-reveal.spec.ts` › a reveal pill… / › flag pills… (modifier classes asserted; the dashed border itself is static CSS) |
@@ -137,9 +137,16 @@ The e2e env carries no IGDB creds (`.dev.vars.e2e`), so Playwright drives the
 name-only path; the IGDB-prefill half is pinned in Vitest (`igdb.test.ts` wire
 rows, `games.test.ts` integration).
 
+Search redesign (2026-07-12): the suggestion dropdown is gone. The search input
+(`role=searchbox`) live-filters the shelf grid — the ONE result surface — and a
+pinned `＋ Add "<term>"` bar under it (`search-add-option`) is the sole Add entry
+point, present for ANY non-empty term (the "FF fix": Add stays reachable even
+when library games match). A `search-scope` caption states the reach: whole
+library (no filter) vs within your filters (filter active) — the scope rule.
+
 | AC | Coverage |
 |----|----------|
-| 6.1a library match → detail view, no duplicate created | `epic6.spec.ts` › picking an existing library match opens its detail view — no duplicate |
+| 6.1a library match → detail view, no duplicate created; + FF fix (Add present despite matches) | `epic6.spec.ts` › searching an existing game narrows the shelf, still offers ＋ Add (FF fix), and the card opens detail — no duplicate (asserts the pinned Add bar is visible WHILE a library game matches, then the card click opens detail and the DB still holds one row) |
 | 6.1b no match → `＋ Add` row → preview prefilled, all editable, nothing persisted before Save | `epic6.spec.ts` › add-by-name … (Add row, editable title, name-only notice, pre-Save DB count = 0); IGDB prefill pinned in `games.test.ts` › preview/enriched-add integration (no external calls in e2e) |
 | 6.1c save owned off/on → CTA "Add to wishlist"/"Add as owned" + matching defaults | `epic6.spec.ts` › add-by-name … (CTA follows the owned toggle; wishlist defaults asserted in D1); owned-as-purchase defaults pinned in `games.test.ts` › add-as-owned |
 | 6.1d unknown IGDB genres auto-created + linked on save | pinned in `games.test.ts` › genre auto-create (e2e runs the name-only path with no IGDB genres — unreachable there) |
@@ -156,9 +163,11 @@ rows, `games.test.ts` integration).
 | 6.4c detail source reads "Owned · via PS+" (claim) / "Owned · purchased" (else) | `epic6.spec.ts` › detail panel states the source…; provenance copy also jsdom-pinned in `DetailPanel.test.tsx` |
 | 6.4c detail "I bought this" upgrades a PS+ claim to purchase (bought_on stamped); own/un-own are separate labelled commands | `epic6.spec.ts` › detail "I bought this" upgrades a PS+ claim to a purchase…; upgrade CTA + "Mark as owned"/"Mark as not owned" commands jsdom-pinned in `DetailPanel.test.tsx` |
 | 6.4d cancel PS+ un-owns claims only (purchases/milestones/dates/status intact), pill re-shows, count named | `epic6.spec.ts` › Settings "I cancelled PS+" un-owns claimed rows and re-shows their PS+ pill; the named-invariant hazard (purchases + milestones/dates/status untouched, count named first, psPlusExtra re-set true, 0-claim no-op) pinned in `settings.test.ts` › cancel PS+ un-owns claims only… + › cancel PS+ with no claims is an inert no-op; the confirm-count flow also jsdom-pinned in `SettingsPanel.test.tsx` |
-| 6.5a free-text search narrows the visible shelf by normalized (case/diacritic-insensitive) title substring, distinct from the 6.1 suggestions | `epic6.spec.ts` › shelf search narrows the visible grid by normalized title substring (accented title + plain-ASCII needle proves the fold; baseline card drops); the `matchesTitleQuery` named invariant (case/diacritic/whitespace/empty) pinned in `filters.test.ts`, live-narrowing in jsdom `Shelf.test.tsx` |
-| 6.5b no shelf match → NO MATCH empty state still offering `＋ Add "<term>"` (routes to the 6.1 add flow) | `epic6.spec.ts` › a shelf search matching nothing shows NO MATCH and still offers ＋ Add (empty-state Add row opens the preview dialog); jsdom `Shelf.test.tsx` › a search matching nothing shows NO MATCH with an ＋ Add row that opens the add dialog |
+| 6.5a free-text search narrows the visible shelf by normalized (case/diacritic-insensitive) title substring; the grid is the sole result surface | `epic6.spec.ts` › shelf search narrows the visible grid by normalized title substring (accented title + plain-ASCII needle proves the fold; baseline card drops); the `matchesTitleQuery` named invariant (case/diacritic/whitespace/empty) pinned in `filters.test.ts`, live-narrowing in jsdom `Shelf.test.tsx` |
+| 6.5b no shelf match → NO MATCH empty state; `＋ Add "<term>"` reachable via the pinned bar (NOT duplicated in the empty state) | `epic6.spec.ts` › a shelf search matching nothing shows NO MATCH and still offers ＋ Add (empty state carries no buttons; the pinned `search-add-option` bar opens the preview dialog); jsdom `Shelf.test.tsx` › a search matching nothing shows NO MATCH; the Add path is NOT duplicated in the empty state |
 | 6.5c clearing the input restores the full visible shelf | `epic6.spec.ts` › clearing the shelf search restores the full visible shelf (baseline card returns); jsdom `Shelf.test.tsx` › narrows the visible shelf live… then restores on clear |
+| Search redesign — scope rule (whole-library incl hidden with no filter; respects the filter otherwise), stated in a `search-scope` caption | `epic3-filter.spec.ts` › search scope rule … (both directions) + `epic1-shelf.spec.ts` › whole-library search … (hidden game surfaces in the grid); jsdom hazard `Shelf.test.tsx` › scope rule: no filter reveals a hidden game by name; an active filter suppresses it |
+| Search redesign — Add always reachable (FF fix), single result surface (no dropdown) | `epic6.spec.ts` › searching an existing game … still offers ＋ Add (FF fix) …; jsdom `SearchBox.test.tsx` › pins an ＋ Add bar for ANY non-empty term …, › is a plain searchbox — no combobox/listbox surface |
 
 ### Discard (soft-delete tombstone, re-add revive)
 

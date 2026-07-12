@@ -3,44 +3,20 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ShelfGame } from './api';
-import { currentShelfSearchTerm, SearchBox } from './SearchBox';
+import {
+	currentShelfSearchTerm,
+	SEED_SEARCH_EVENT,
+	SearchBox,
+	SHELF_SEARCH_EVENT,
+} from './SearchBox';
 
-function card(id: string, title: string): ShelfGame {
-	return {
-		id,
-		title,
-		coverUrl: null,
-		storeUrl: null,
-		playStatus: 'Not started',
-		effectiveState: 'Not started',
-		owned: true,
-		released: true,
-		wishlisted: false,
-		playableNow: true,
-		psPlusExtra: false,
-		hasCompleted: false,
-		hasPlatinum: false,
-		completedOn: null,
-		platinumOn: null,
-		startedOn: null,
-		boughtOn: null,
-		wishlistedOn: null,
-		ownershipType: null,
-		ownedVia: null,
-		releaseDate: null,
-		genres: [],
-	};
-}
-
-/** Capture the queried URLs so we can assert the dedicated search endpoint. */
-function mockSearch(games: ShelfGame[]) {
-	const calls: string[] = [];
+// SearchBox itself makes NO fetch now (the suggestion dropdown is gone — the
+// shelf grid is the one result surface). The only network call is the add
+// dialog's IGDB preview, which degrades to the name-only path here.
+function mockPreview() {
 	vi.stubGlobal(
 		'fetch',
 		vi.fn(async (url: string) => {
-			calls.push(url);
-			// The add dialog's preview call (Story 6.1) rides the same stub.
 			if (url.startsWith('/api/games/preview')) {
 				return {
 					ok: true,
@@ -48,10 +24,9 @@ function mockSearch(games: ShelfGame[]) {
 					json: async () => ({ available: false, candidate: null }),
 				};
 			}
-			return { ok: true, status: 200, json: async () => ({ games }) };
+			return { ok: true, status: 200, json: async () => ({}) };
 		}),
 	);
-	return calls;
 }
 
 function renderSearch() {
@@ -70,138 +45,118 @@ afterEach(() => {
 });
 
 describe('SearchBox', () => {
-	it('is a combobox that lists whole-library matches on type', async () => {
-		const user = userEvent.setup();
-		const calls = mockSearch([card('a', 'Apex Legends')]);
+	it('is a plain searchbox — no combobox/listbox surface', async () => {
+		mockPreview();
 		renderSearch();
-
-		const input = screen.getByRole('combobox', { name: 'Search your library' });
-		await user.type(input, 'apex');
-
-		expect(await screen.findByRole('option')).toHaveTextContent('Apex Legends');
-		// It hit the dedicated search endpoint, not the shelf endpoint.
-		expect(calls.some((u) => u.startsWith('/api/shelf/search?q='))).toBe(true);
-		expect(input).toHaveAttribute('aria-expanded', 'true');
+		expect(
+			screen.getByRole('searchbox', { name: 'Search your library' }),
+		).toBeInTheDocument();
+		// The old suggestion dropdown is gone entirely.
+		expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+		expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
 	});
 
 	// Story 6.5 mount-race guard: the shelf may mount AFTER a term was typed, so
-	// the last broadcast term is mirrored in module scope for a fresh shelf to
-	// seed from — not only pushed through the fire-and-forget window event.
-	it('mirrors the settled term in currentShelfSearchTerm for a late-mounting shelf', async () => {
+	// the last broadcast term is mirrored in module scope (and re-broadcast on
+	// the window event) for a fresh shelf to seed from.
+	it('broadcasts the settled term and mirrors it in currentShelfSearchTerm', async () => {
 		const user = userEvent.setup();
-		mockSearch([card('a', 'Apex Legends')]);
+		mockPreview();
 		renderSearch();
-
-		const input = screen.getByRole('combobox', { name: 'Search your library' });
-		await user.type(input, 'apex');
-		// The option appearing proves the debounce settled and the term broadcast.
-		await screen.findByRole('option');
-		expect(currentShelfSearchTerm()).toBe('apex');
-
-		await user.clear(input);
-		await vi.waitFor(() => expect(currentShelfSearchTerm()).toBe(''));
-	});
-
-	it('offers ＋ Add when the whole-library query returns nothing (Story 6.1)', async () => {
-		const user = userEvent.setup();
-		mockSearch([]);
-		renderSearch();
+		const broadcast: string[] = [];
+		const onSearch = (e: Event) =>
+			broadcast.push((e as CustomEvent<string>).detail);
+		window.addEventListener(SHELF_SEARCH_EVENT, onSearch);
 
 		await user.type(
-			screen.getByRole('combobox', { name: 'Search your library' }),
-			'zzz',
+			screen.getByRole('searchbox', { name: 'Search your library' }),
+			'apex',
 		);
-		expect(await screen.findByTestId('search-add-option')).toHaveTextContent(
-			'Add “zzz”',
+		// The debounce settles → the term broadcasts and the mirror updates.
+		await vi.waitFor(() => expect(currentShelfSearchTerm()).toBe('apex'));
+		expect(broadcast).toContain('apex');
+
+		await user.clear(
+			screen.getByRole('searchbox', { name: 'Search your library' }),
 		);
+		await vi.waitFor(() => expect(currentShelfSearchTerm()).toBe(''));
+		window.removeEventListener(SHELF_SEARCH_EVENT, onSearch);
+	});
+
+	it('pins an ＋ Add bar for ANY non-empty term and opens the preview dialog (FR-41, FF fix)', async () => {
+		const user = userEvent.setup();
+		mockPreview();
+		renderSearch();
+
+		const input = screen.getByRole('searchbox', {
+			name: 'Search your library',
+		});
+		// The Add bar appears whether or not a library game matches — SearchBox
+		// no longer knows about matches, so it is always reachable (the FF fix).
+		await user.type(input, 'Final Fantasy');
+		const addBar = await screen.findByTestId('search-add-option');
+		expect(addBar).toHaveTextContent('Add “Final Fantasy”');
+
+		await user.click(addBar);
+		const dialog = await screen.findByTestId('add-game-dialog');
+		expect(dialog).toBeInTheDocument();
+		// Seeded with the typed name; nothing committed until Save.
+		expect(screen.getByLabelText('Title')).toHaveValue('Final Fantasy');
+	});
+
+	it('shows no Add bar for an empty (or whitespace-only) term', async () => {
+		const user = userEvent.setup();
+		mockPreview();
+		renderSearch();
+		expect(screen.queryByTestId('search-add-option')).not.toBeInTheDocument();
+
+		// A whitespace-only term trims away → still no Add bar.
+		await user.type(
+			screen.getByRole('searchbox', { name: 'Search your library' }),
+			'   ',
+		);
+		await new Promise((r) => setTimeout(r, 250));
+		expect(screen.queryByTestId('search-add-option')).not.toBeInTheDocument();
 	});
 
 	it('focuses the field on the global "/" shortcut', async () => {
 		const user = userEvent.setup();
-		mockSearch([]);
+		mockPreview();
 		renderSearch();
 
-		const input = screen.getByRole('combobox', { name: 'Search your library' });
+		const input = screen.getByRole('searchbox', {
+			name: 'Search your library',
+		});
 		expect(input).not.toHaveFocus();
 		await user.keyboard('/');
 		expect(input).toHaveFocus();
 	});
 
-	it('picking a match dispatches the open-detail event — never a create (Story 6.1, FR-42)', async () => {
-		const user = userEvent.setup();
-		mockSearch([card('g-42', 'Apex Legends')]);
+	it('a seed event fills the field, focuses it, and broadcasts the term (Story 4.3 jump)', async () => {
+		mockPreview();
 		renderSearch();
-		const opened: string[] = [];
-		const { OPEN_DETAIL_EVENT } = await import('./open-detail');
-		const onOpen = (e: Event) => opened.push((e as CustomEvent<string>).detail);
-		window.addEventListener(OPEN_DETAIL_EVENT, onOpen);
+		const broadcast: string[] = [];
+		const onSearch = (e: Event) =>
+			broadcast.push((e as CustomEvent<string>).detail);
+		window.addEventListener(SHELF_SEARCH_EVENT, onSearch);
 
-		await user.type(
-			screen.getByRole('combobox', { name: 'Search your library' }),
-			'apex',
-		);
-		const option = await screen.findByRole('option', { name: 'Apex Legends' });
-		// mousedown activates (it must beat the input's blur) — pointer covers it.
-		await user.pointer({ keys: '[MouseLeft]', target: option });
-
-		expect(opened).toEqual(['g-42']);
-		// The listbox closed; nothing was POSTed.
-		expect(screen.queryByRole('option')).not.toBeInTheDocument();
-		window.removeEventListener(OPEN_DETAIL_EVENT, onOpen);
-	});
-
-	it('keyboard ArrowDown+Enter selects the active match', async () => {
-		const user = userEvent.setup();
-		mockSearch([card('g-1', 'Hades')]);
-		renderSearch();
-		const opened: string[] = [];
-		const { OPEN_DETAIL_EVENT } = await import('./open-detail');
-		const onOpen = (e: Event) => opened.push((e as CustomEvent<string>).detail);
-		window.addEventListener(OPEN_DETAIL_EVENT, onOpen);
-
-		const input = screen.getByRole('combobox', { name: 'Search your library' });
-		await user.type(input, 'hades');
-		await screen.findByRole('option', { name: 'Hades' });
-		await user.keyboard('{ArrowDown}{Enter}');
-
-		expect(opened).toEqual(['g-1']);
-		window.removeEventListener(OPEN_DETAIL_EVENT, onOpen);
-	});
-
-	it('no library match → the one option is ＋ Add, which opens the preview dialog (FR-41)', async () => {
-		const user = userEvent.setup();
-		mockSearch([]);
-		renderSearch();
-
-		await user.type(
-			screen.getByRole('combobox', { name: 'Search your library' }),
-			'Tunic',
-		);
-		const addRow = await screen.findByTestId('search-add-option');
-		expect(addRow).toHaveAttribute('role', 'option');
-		expect(addRow).toHaveTextContent('Add “Tunic”');
-
-		await user.pointer({ keys: '[MouseLeft]', target: addRow });
-		const dialog = await screen.findByTestId('add-game-dialog');
-		expect(dialog).toBeInTheDocument();
-		// Pre-filled with the typed name; nothing committed until Save.
-		expect(screen.getByLabelText('Title')).toHaveValue('Tunic');
-	});
-
-	it('a seed event fills the field, focuses it, and opens the matches (Story 4.3 jump)', async () => {
-		mockSearch([card('a', 'Doppelganger')]);
-		renderSearch();
-
-		const { seedSearch } = await import('./SearchBox');
 		const { act } = await import('@testing-library/react');
-		act(() => seedSearch('Doppelganger'));
+		act(() =>
+			window.dispatchEvent(
+				new CustomEvent(SEED_SEARCH_EVENT, { detail: 'Doppelganger' }),
+			),
+		);
 
-		const input = screen.getByRole('combobox', { name: 'Search your library' });
+		const input = screen.getByRole('searchbox', {
+			name: 'Search your library',
+		});
 		expect(input).toHaveValue('Doppelganger');
 		expect(input).toHaveFocus();
-		// The debounce is skipped: the query fires and the listbox opens.
-		expect(
-			await screen.findByRole('option', { name: 'Doppelganger' }),
-		).toBeInTheDocument();
+		// The debounce is skipped: the term broadcasts to the shelf immediately.
+		await vi.waitFor(() =>
+			expect(currentShelfSearchTerm()).toBe('Doppelganger'),
+		);
+		expect(broadcast).toContain('Doppelganger');
+		window.removeEventListener(SHELF_SEARCH_EVENT, onSearch);
 	});
 });

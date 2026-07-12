@@ -651,21 +651,63 @@ describe('Shelf', () => {
 		);
 	});
 
-	it('a search matching nothing shows NO MATCH with an ＋ Add row that opens the add dialog', async () => {
-		const user = userEvent.setup();
+	it('a search matching nothing shows NO MATCH; the Add path is NOT duplicated in the empty state', async () => {
 		mockFetch([card('a', 'Apex'), card('b', 'Bloodborne')]);
 		renderShelf();
 		await screen.findAllByTestId('shelf-card');
 
 		search('zzz nothing here');
-		await screen.findByText('NO MATCH');
-		// The 6.1 add path is still offered — labelled with the typed term.
-		const addButton = await screen.findByRole('button', {
-			name: '＋ Add “zzz nothing here”',
-		});
+		const empty = await screen.findByTestId('empty-state');
+		expect(within(empty).getByText('NO MATCH')).toBeInTheDocument();
+		// The `＋ Add` action moved to the pinned bar under the search field
+		// (SearchBox, not in this tree) — so with no chip filter active the empty
+		// state carries NO action buttons (redesign 2026-07-12).
+		expect(within(empty).queryByRole('button')).not.toBeInTheDocument();
+	});
 
-		await user.click(addButton);
-		expect(await screen.findByTestId('add-game-dialog')).toBeInTheDocument();
+	// HAZARD (scope rule, redesign 2026-07-12): a bare search reaches the WHOLE
+	// library — a hidden completed/dropped game surfaces by name; once a filter
+	// is active the search is scoped WITHIN it, so the hidden game is suppressed.
+	it('scope rule: no filter reveals a hidden game by name; an active filter suppresses it', async () => {
+		const user = userEvent.setup();
+		mockFetch([
+			card('a', 'Apex', { effectiveState: 'Playing', playStatus: 'Playing' }),
+			card('done', 'Donezo', {
+				playStatus: null,
+				effectiveState: 'Story completed',
+			}),
+		]);
+		renderShelf();
+		// Default set hides the completed game — only Apex shows.
+		await waitFor(() =>
+			expect(screen.getAllByTestId('shelf-card')).toHaveLength(1),
+		);
+
+		// (a) No filter → whole-library search surfaces the hidden completed game.
+		search('donezo');
+		await waitFor(() => {
+			const cards = screen.getAllByTestId('shelf-card');
+			expect(cards).toHaveLength(1);
+			expect(cards[0]).toHaveTextContent('Donezo');
+		});
+		expect(screen.getByTestId('search-scope')).toHaveTextContent(
+			'searching your whole library',
+		);
+
+		// (b) With a State filter active, the same term is scoped within it — the
+		// hidden game stays suppressed → NO MATCH.
+		search('');
+		await waitFor(() =>
+			expect(screen.getAllByTestId('shelf-card')).toHaveLength(1),
+		);
+		await user.click(screen.getByRole('button', { name: 'State' }));
+		await user.click(screen.getByRole('menuitemcheckbox', { name: 'Playing' }));
+		await user.keyboard('{Escape}');
+		search('donezo');
+		await screen.findByText('NO MATCH');
+		expect(screen.getByTestId('search-scope')).toHaveTextContent(
+			'searching within your filters',
+		);
 	});
 
 	it('shows an alert if the shelf fails to load', async () => {

@@ -14,11 +14,18 @@ import { expect, test } from '../support/merged-fixtures';
 const cardFor = (page: Page, game: SeedGame) =>
 	page.getByTestId('shelf-card').filter({ hasText: game.title });
 
-/** Open a game's detail via the search combobox (the add/search entry point). */
+/**
+ * Open a game's detail by searching for it. The redesign (2026-07-12) dropped
+ * the suggestion dropdown — search now filters the shelf grid, so open the card
+ * directly. A bare search reaches the whole library (hidden included), so this
+ * works for completed/dropped games too (scope rule).
+ */
 async function openDetailBySearch(page: Page, game: SeedGame) {
-	const search = page.getByRole('combobox', { name: 'Search your library' });
+	const search = page.getByRole('searchbox', { name: 'Search your library' });
 	await search.fill(game.title);
-	await page.getByRole('option', { name: game.title }).first().click();
+	await page
+		.getByRole('button', { name: `Open details — ${game.title}` })
+		.click();
 	await expect(page.getByTestId('detail-panel')).toBeVisible();
 }
 
@@ -30,18 +37,25 @@ async function openDetailBySearch(page: Page, game: SeedGame) {
  * See playwright/COVERAGE.md → Epic 6.
  */
 
-test('picking an existing library match opens its detail view — no duplicate (6.1a)', async ({
+test('searching an existing game narrows the shelf, still offers ＋ Add (FF fix), and the card opens detail — no duplicate (6.1a)', async ({
 	page,
 }) => {
 	await page.goto('/');
-	const search = page.getByRole('combobox', { name: 'Search your library' });
+	const search = page.getByRole('searchbox', { name: 'Search your library' });
 	await search.fill('Baseline Alpha');
 
-	const option = page.getByRole('option', { name: 'Baseline Alpha' });
-	await expect(option).toBeVisible();
-	await option.click();
+	// The card is filtered into view…
+	const cardAlpha = cardFor(page, { title: 'Baseline Alpha' } as SeedGame);
+	await expect(cardAlpha).toBeVisible();
+	// …AND the pinned ＋ Add bar is STILL present even though a game matches —
+	// the redesign's fix (the old zero-matches-only Add row couldn't reach a
+	// name that other titles matched, e.g. "Final Fantasy").
+	await expect(page.getByTestId('search-add-option')).toBeVisible();
 
-	// The detail dialog opens for that game; nothing was created.
+	// Opening the card (not a dropdown option) shows its detail; nothing created.
+	await page
+		.getByRole('button', { name: 'Open details — Baseline Alpha' })
+		.click();
 	const panel = page.getByTestId('detail-panel');
 	await expect(panel).toBeVisible();
 	await expect(
@@ -58,10 +72,10 @@ test('add-by-name: ＋ Add row → editable preview → Save → toast → on th
 }) => {
 	const title = `Added By Name ${randomUUID().slice(0, 8)}`;
 	await page.goto('/');
-	const search = page.getByRole('combobox', { name: 'Search your library' });
+	const search = page.getByRole('searchbox', { name: 'Search your library' });
 	await search.fill(title);
 
-	// No library match → the one option is the Add row.
+	// The pinned Add bar under the field routes to the add-by-name preview.
 	const addRow = page.getByTestId('search-add-option');
 	await expect(addRow).toBeVisible();
 	await expect(addRow).toHaveText(`＋ Add “${title}”`);
@@ -121,9 +135,10 @@ test('add-by-name: ＋ Add row → editable preview → Save → toast → on th
 });
 
 /**
- * Story 6.5: free-text shelf search. Typing narrows the VISIBLE shelf grid by
- * normalized title substring (case/diacritic-insensitive) — distinct from the
- * 6.1 combobox suggestions (server search) that share the same input.
+ * Story 6.5 (+ 2026-07-12 redesign): free-text shelf search. Typing narrows the
+ * VISIBLE shelf grid by normalized title substring (case/diacritic-insensitive).
+ * There is no suggestion dropdown — the grid is the one result surface; a pinned
+ * ＋ Add bar under the field is the sole Add entry point.
  */
 test('shelf search narrows the visible grid by normalized title substring (6.5a)', async ({
 	page,
@@ -143,7 +158,7 @@ test('shelf search narrows the visible grid by normalized title substring (6.5a)
 			.filter({ hasText: 'Baseline Alpha' });
 		await expect(baseline).toBeVisible();
 
-		const search = page.getByRole('combobox', { name: 'Search your library' });
+		const search = page.getByRole('searchbox', { name: 'Search your library' });
 		await search.fill('pokemon zephyr');
 
 		// The visible grid narrows to the accented match; the baseline card drops.
@@ -161,16 +176,17 @@ test('a shelf search matching nothing shows NO MATCH and still offers ＋ Add (6
 	await page.goto('/');
 	await expect(page.getByTestId('shelf-card').first()).toBeVisible();
 
-	const search = page.getByRole('combobox', { name: 'Search your library' });
+	const search = page.getByRole('searchbox', { name: 'Search your library' });
 	await search.fill(term);
 
-	// The visible shelf empties to the NO MATCH state, which still routes to the
-	// 6.1 add flow via its own ＋ Add row (scoped to the empty state, not the
-	// combobox popup that carries the same label).
+	// The visible shelf empties to the NO MATCH state. The ＋ Add path is no
+	// longer duplicated inside the empty state (redesign 2026-07-12) — it lives
+	// in the single pinned bar under the search field, present for any term.
 	const emptyState = page.getByTestId('empty-state');
 	await expect(emptyState.getByText('NO MATCH')).toBeVisible();
-	const addRow = emptyState.getByRole('button', { name: `＋ Add “${term}”` });
-	await expect(addRow).toBeVisible();
+	await expect(emptyState.getByRole('button')).toHaveCount(0);
+	const addRow = page.getByTestId('search-add-option');
+	await expect(addRow).toHaveText(`＋ Add “${term}”`);
 
 	await addRow.click();
 	await expect(page.getByTestId('add-game-dialog')).toBeVisible();
@@ -193,7 +209,7 @@ test('clearing the shelf search restores the full visible shelf (6.5c)', async (
 			.filter({ hasText: 'Baseline Alpha' });
 		await expect(baseline).toBeVisible();
 
-		const search = page.getByRole('combobox', { name: 'Search your library' });
+		const search = page.getByRole('searchbox', { name: 'Search your library' });
 		await search.fill('restorable search');
 		await expect(cardFor(page, game)).toBeVisible();
 		await expect(baseline).toHaveCount(0);
@@ -322,8 +338,9 @@ test('discard: re-adding a discarded game by name revives it (no duplicate row)'
 		await page.goto('/');
 		await expect(cardFor(page, game)).toHaveCount(0);
 
-		// It is hidden, so search finds no library match → the ＋ Add row.
-		const search = page.getByRole('combobox', { name: 'Search your library' });
+		// The pinned ＋ Add bar is present for any typed term; re-adding the name
+		// revives the tombstone server-side (409 → opens the existing game).
+		const search = page.getByRole('searchbox', { name: 'Search your library' });
 		await search.fill(title);
 		await page.getByTestId('search-add-option').click();
 		const dialog = page.getByTestId('add-game-dialog');

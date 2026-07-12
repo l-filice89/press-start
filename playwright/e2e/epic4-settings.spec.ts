@@ -145,7 +145,7 @@ test('persisted sync needs-attention feeds the amber banner; Review reopens the 
 	// Jump-to-problem: the whole-library search is seeded and focused.
 	await summary.getByRole('button', { name: 'Find in library' }).click();
 	await expect(summary).toBeHidden();
-	const search = page.getByRole('combobox', { name: 'Search your library' });
+	const search = page.getByRole('searchbox', { name: 'Search your library' });
 	await expect(search).toHaveValue('Doppelganger');
 	await expect(search).toBeFocused();
 

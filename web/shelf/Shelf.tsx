@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EmptyState } from '../components/EmptyState';
 import { useAnnounce } from '../components/LiveRegion';
 import { SkeletonGrid } from '../components/Skeleton';
-import { AddGameDialog } from './AddGameDialog';
 import { fetchShelf, type ShelfGame } from './api';
 import { Card } from './Card';
 import { DetailPanel } from './DetailPanel';
@@ -31,8 +30,9 @@ import './shelf.css';
  * never re-derives state — it renders what `/api/shelf` returns, in order.
  * Story 3.1 layers State/Genre filtering on top as a pure, order-preserving
  * subset of that payload (`applyShelfFilter`), so FR-18 ordering holds in
- * every filtered view. The whole-library search is a separate query path and
- * never sees this filter.
+ * every filtered view. Free-text search (Story 6.5) filters the SAME payload:
+ * with no filter it reaches the whole library (hidden included), with a filter
+ * it narrows within (the scope rule in FilteredShelf).
  */
 export function Shelf() {
 	const { data, isPending, isError } = useQuery({
@@ -63,11 +63,11 @@ function FilteredShelf({ games }: { games: ShelfGame[] }) {
 	// Reactive fetch signal for the shelf query (see the stale-id cleanup below).
 	const shelfFetching = useIsFetching({ queryKey: ['shelf'] }) > 0;
 
-	// Search-pick detail view (Story 6.1, FR-42): the combobox lives in the
-	// header, outside the grid — the window event carries the game id here,
-	// where the WHOLE library payload (hidden states included) is in hand, so
-	// a completed/dropped game found by search still opens. Rendered as its
-	// own panel: ShelfGrid's panel only knows the filtered visible set.
+	// Open-detail-by-id (Story 6.1, FR-42): the add-by-name dedup/revive path
+	// (AddGameDialog answers a 409 by dispatching OPEN_DETAIL_EVENT) carries a
+	// game id here, where the WHOLE library payload (hidden states included) is
+	// in hand — so a completed/dropped or just-revived game still opens. Rendered
+	// as its own panel: ShelfGrid's panel only knows the filtered visible set.
 	const [searchGameId, setSearchGameId] = useState<string | null>(null);
 	useEffect(() => {
 		function onOpen(e: Event) {
@@ -96,10 +96,11 @@ function FilteredShelf({ games }: { games: ShelfGame[] }) {
 		// Focus returns to the search field that opened it (UX-DR19).
 		document.querySelector<HTMLElement>('.search-box__input')?.focus();
 	}, []);
-	// Free-text shelf search (Story 6.5): the header's SearchBox re-broadcasts its
-	// debounced/trimmed term on every change; the visible grid narrows by title
-	// substring on TOP of the filter. Kept out of `ShelfFilter` on purpose —
-	// search and the filter chips are independent AND-ed axes, so `isFilterActive`
+	// Free-text shelf search (Story 6.5 + 2026-07-12 redesign): the header's
+	// SearchBox re-broadcasts its debounced/trimmed term; the shelf is the ONE
+	// result surface (the suggestion dropdown is gone). With no filter it whole-
+	// library searches (hidden included), with a filter it narrows within — see
+	// the scope rule below. Kept out of `ShelfFilter` on purpose so `isFilterActive`
 	// / Clear filters semantics stay untouched.
 	// Seed from the last broadcast term (not just ''): if the user typed while the
 	// shelf was still loading — or this remounted after a refetch — the event
@@ -113,21 +114,23 @@ function FilteredShelf({ games }: { games: ShelfGame[] }) {
 		window.addEventListener(SHELF_SEARCH_EVENT, onSearch);
 		return () => window.removeEventListener(SHELF_SEARCH_EVENT, onSearch);
 	}, []);
-	// The no-match empty state offers Story 6.1's add path; opening it reuses the
-	// self-contained AddGameDialog seeded with the typed term.
-	const [addingTitle, setAddingTitle] = useState<string | null>(null);
-	// A non-empty folded term is what makes an empty shelf a "search miss" (offer
-	// Add) rather than a filter/empty-backlog outcome — a whitespace-only term
-	// folds away and matches all, so it never reaches here.
+	// A non-empty folded term is what makes an empty shelf a "search miss"
+	// rather than a filter/empty-backlog outcome — a whitespace-only term folds
+	// away and matches all, so it never reaches here.
 	const searchActive = foldForSearch(searchTerm) !== '';
 
-	const visible = useMemo(
-		() =>
-			applyShelfFilter(games, filter).filter((g) =>
-				matchesTitleQuery(g.title, searchTerm),
-			),
-		[games, filter, searchTerm],
-	);
+	// Scope rule (redesign 2026-07-12): a bare search (no filter) searches the
+	// WHOLE library — the `['shelf']` payload already includes hidden states
+	// (`?include=hidden`), so a completed/dropped game is findable by name. Once
+	// a filter is active, search narrows WITHIN it (the filter is respected). No
+	// term at all → the plain filtered set, unchanged.
+	const visible = useMemo(() => {
+		if (!searchActive) return applyShelfFilter(games, filter);
+		const base = isFilterActive(filter)
+			? applyShelfFilter(games, filter)
+			: games;
+		return base.filter((g) => matchesTitleQuery(g.title, searchTerm));
+	}, [games, filter, searchTerm, searchActive]);
 	// The payload is the whole library (hidden states included) — user-facing
 	// counts and the "is the backlog empty" judgment use the default set.
 	const defaultCount = useMemo(
@@ -183,10 +186,24 @@ function FilteredShelf({ games }: { games: ShelfGame[] }) {
 		);
 	}, [filter, visible.length, defaultCount, games.length, announce]);
 
-	// No shelf-side search announce: the focused SearchBox combobox already speaks
-	// its own result count while typing, and a second polite-region message here
-	// (a different count — visible cards vs whole-library server matches) would
-	// double up and conflict. The shelf narrowing is visually self-evident.
+	// Announce the search result count (redesign 2026-07-12): the old combobox
+	// spoke its own listbox count and is gone, so the shelf — the sole result
+	// surface now — restores the polite-region announce. Guarded on the TERM
+	// (mirrors the filter-announce ref above): a background refetch that changes
+	// the count without a new term stays silent; leaving search resets the ref so
+	// re-entering the same term re-announces.
+	const lastSearchAnnounced = useRef<string | null>(null);
+	useEffect(() => {
+		if (!searchActive) {
+			lastSearchAnnounced.current = null;
+			return;
+		}
+		if (lastSearchAnnounced.current === searchTerm) return;
+		lastSearchAnnounced.current = searchTerm;
+		announce(
+			`${visible.length} result${visible.length === 1 ? '' : 's'} for “${searchTerm}”.`,
+		);
+	}, [searchActive, searchTerm, visible.length, announce]);
 
 	return (
 		<>
@@ -196,6 +213,18 @@ function FilteredShelf({ games }: { games: ShelfGame[] }) {
 				visibleCount={visible.length}
 				showPsPlus={games.some((g) => g.psPlusExtra && !g.owned)}
 			/>
+			{/* Scope caption (redesign 2026-07-12): the search reach is stated in the
+			    UI, not just felt — whole-library vs within-filter — so a completed
+			    game surfacing (or being suppressed) reads as intentional. */}
+			{searchActive && (
+				<p className="shelf__search-scope" data-testid="search-scope">
+					{visible.length} result{visible.length === 1 ? '' : 's'} for “
+					{searchTerm}” ·{' '}
+					{isFilterActive(filter)
+						? 'searching within your filters'
+						: 'searching your whole library'}
+				</p>
+			)}
 			{/* display:contents wrapper: arms the handoff flag while focus lives
 			    anywhere in the grid OR the empty state (Clear filters included, so
 			    the reverse handoff works). Unmounts fire no blur — that's the
@@ -212,29 +241,25 @@ function FilteredShelf({ games }: { games: ShelfGame[] }) {
 				}}
 			>
 				{visible.length === 0 ? (
-					// A search miss (Story 6.5) is "NO MATCH" that still offers the 6.1
-					// add path — `＋ Add "<term>"` — plus Clear filters when a chip filter
-					// is also narrowing. Otherwise "NO MATCH" is a filter outcome; a
-					// library whose every game is hidden (all completed/dropped) with no
-					// filter/search active is an empty backlog, not a failed filter, and
-					// the filter outcome offers the way back out (UX-DR18).
+					// A search miss is "NO MATCH". The Add path now lives in the pinned
+					// bar under the search field (SearchBox), reachable for ANY term — so
+					// the empty state no longer duplicates it; it only offers Clear filters
+					// when a chip filter is also narrowing. Otherwise a library whose every
+					// game is hidden (all completed/dropped) with no filter/search active is
+					// an empty backlog, not a failed filter, and it offers the way back out.
 					searchActive ? (
 						<EmptyState
 							variant="no-match"
-							actions={[
-								{
-									label: `＋ Add “${searchTerm}”`,
-									onClick: () => setAddingTitle(searchTerm),
-								},
-								...(isFilterActive(filter)
+							actions={
+								isFilterActive(filter)
 									? [
 											{
 												label: 'Clear filters',
 												onClick: () => setFilter(EMPTY_FILTER),
 											},
 										]
-									: []),
-							]}
+									: undefined
+							}
 						/>
 					) : isFilterActive(filter) ? (
 						<EmptyState
@@ -255,18 +280,6 @@ function FilteredShelf({ games }: { games: ShelfGame[] }) {
 			</div>
 			{searchGame && (
 				<DetailPanel game={searchGame} onClose={closeSearchDetail} />
-			)}
-			{addingTitle !== null && (
-				<AddGameDialog
-					title={addingTitle}
-					onClose={() => {
-						setAddingTitle(null);
-						// Return focus to the search field that spawned the Add (UX-DR19)
-						// — AddGameDialog doesn't auto-restore, and the empty-state button
-						// it opened from may unmount when the shelf repopulates.
-						document.querySelector<HTMLElement>('.search-box__input')?.focus();
-					}}
-				/>
 			)}
 		</>
 	);
