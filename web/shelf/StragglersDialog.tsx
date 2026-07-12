@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useToast } from '../components/Toast';
 import { useModalTrap } from '../components/useModalTrap';
 import {
 	fetchStragglers,
 	type IgdbCandidate,
+	ignoreStraggler,
 	resolveStraggler,
 	type Straggler,
 	searchIgdb,
@@ -30,6 +32,10 @@ export function StragglersDialog({ onClose }: { onClose: () => void }) {
 	const onKeyDown = useModalTrap(dialogRef, onClose);
 
 	const [selected, setSelected] = useState<Straggler | null>(null);
+	// The import row awaiting the ignore confirm gate (null = no gate open).
+	const [confirmingIgnore, setConfirmingIgnore] = useState<Straggler | null>(
+		null,
+	);
 
 	const { data: stragglers = [], isPending } = useQuery({
 		queryKey: ['stragglers'],
@@ -88,6 +94,25 @@ export function StragglersDialog({ onClose }: { onClose: () => void }) {
 			},
 		);
 
+	// Ignore an import staging row (import kind only). Unlike the unenriched
+	// discard this is a HARD delete of the Notion data — no undo — so it's gated
+	// behind ConfirmDialog. A plain toast confirms; onError surfaces a failure.
+	const ignoreMutation = useMutation({
+		mutationFn: (s: Straggler) => ignoreStraggler(s.id),
+	});
+
+	const ignoreImport = (s: Straggler) => {
+		setConfirmingIgnore(null);
+		ignoreMutation.mutate(s, {
+			onSuccess: async () => {
+				await refreshLists();
+				toast({ message: `${s.title} — ignored` });
+			},
+			onError: () =>
+				toast({ message: `Couldn’t ignore ${s.title}. Try again.` }),
+		});
+	};
+
 	return createPortal(
 		// biome-ignore lint/a11y/noStaticElementInteractions: the backdrop is a dismiss surface, not a control — Escape and the Close button are the accessible paths; this only mirrors them for pointer users.
 		<div
@@ -139,6 +164,12 @@ export function StragglersDialog({ onClose }: { onClose: () => void }) {
 				) : (
 					<>
 						{isPending && <p className="stragglers__notice">Loading…</p>}
+						{/* The two kinds confuse users — name the difference and what
+							    each row's actions mean before they act. */}
+						<p className="stragglers__notice">
+							Import rows come from your Notion library — match one to keep its
+							history, or ignore it. Name-only rows are games you added by name.
+						</p>
 						{!isPending && stragglers.length === 0 && (
 							<p className="stragglers__notice" role="status">
 								Nothing to resolve — every game has a match.
@@ -158,6 +189,18 @@ export function StragglersDialog({ onClose }: { onClose: () => void }) {
 									>
 										Find a match
 									</button>
+									{/* Ignore an import staging row — hard-deletes its Notion
+									    data, so it's confirm-gated (no undo). */}
+									{s.kind === 'import' && (
+										<button
+											type="button"
+											className="stragglers__discard tap-target"
+											disabled={ignoreMutation.isPending}
+											onClick={() => setConfirmingIgnore(s)}
+										>
+											Ignore
+										</button>
+									)}
 									{/* Discard only a name-only add (a real game the user can
 									    have added by mistake). Import staging rows aren't games
 									    — they carry a Notion payload and resolve or stay. */}
@@ -186,6 +229,14 @@ export function StragglersDialog({ onClose }: { onClose: () => void }) {
 					</>
 				)}
 			</div>
+			{confirmingIgnore && (
+				<ConfirmDialog
+					title={`Ignore “${confirmingIgnore.title}”? Its imported status and dates will be discarded.`}
+					confirmLabel="Ignore"
+					onConfirm={() => ignoreImport(confirmingIgnore)}
+					onCancel={() => setConfirmingIgnore(null)}
+				/>
+			)}
 		</div>,
 		document.body,
 	);

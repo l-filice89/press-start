@@ -399,3 +399,16 @@ export async function resolveStraggler(
 	});
 	return z.object({ gameId: z.string() }).parse(body);
 }
+
+/**
+ * Ignore (dismiss) an import straggler — hard-deletes its Notion staging row
+ * server-side (no undo, so the caller confirm-gates it). A 404 (already gone)
+ * throws via `callApi`; the resolve-view onError toast pattern covers it.
+ */
+export async function ignoreStraggler(id: string): Promise<void> {
+	await callApi('/api/stragglers/ignore', {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ id }),
+	});
+}

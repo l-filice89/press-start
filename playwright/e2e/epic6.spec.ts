@@ -403,6 +403,55 @@ test('discard: the stragglers dialog discards a name-only mistake', async ({
 	}
 });
 
+test('stragglers: Ignore an import row is confirm-gated and hard-deletes the staging row', async ({
+	page,
+}) => {
+	const importId = randomUUID();
+	const importTitle = `E2E Ignore ${importId.slice(0, 8)}`;
+	await d1Execute(
+		`INSERT INTO import_straggler (id, source_title, notion_payload) VALUES ('${importId}', '${importTitle}', '{}');`,
+	);
+	try {
+		await page.goto('/');
+		await page
+			.getByTestId('attention-banner-enrich')
+			.getByRole('button', { name: 'Resolve' })
+			.click();
+		const dialog = page.getByTestId('stragglers-dialog');
+		const row = dialog
+			.locator('.stragglers__row')
+			.filter({ hasText: importTitle });
+		await expect(row).toBeVisible();
+
+		// Ignore is confirm-gated (hard delete, no undo). Cancel writes nothing.
+		await row.getByRole('button', { name: 'Ignore' }).click();
+		await page.getByRole('button', { name: 'Cancel' }).click();
+		await expect(row).toBeVisible();
+		let rows = await d1Query<{ n: number }>(
+			`SELECT COUNT(*) AS n FROM import_straggler WHERE id = '${importId}'`,
+		);
+		expect(rows[0].n).toBe(1);
+
+		// Confirm → the row drops and the staging row is gone from D1. Scope the
+		// confirm button to the gate (the row's Ignore shares the label).
+		await row.getByRole('button', { name: 'Ignore' }).click();
+		await page
+			.getByTestId('confirm-backdrop')
+			.getByRole('button', { name: 'Ignore' })
+			.click();
+		await expect(
+			page.getByTestId('toast').getByText(`${importTitle} — ignored`),
+		).toBeVisible();
+		await expect(row).toHaveCount(0);
+		rows = await d1Query<{ n: number }>(
+			`SELECT COUNT(*) AS n FROM import_straggler WHERE id = '${importId}'`,
+		);
+		expect(rows[0].n).toBe(0);
+	} finally {
+		await d1Execute(`DELETE FROM import_straggler WHERE id = '${importId}';`);
+	}
+});
+
 test('Export CSV: the FAB item downloads the library as a CSV file (6.3)', async ({
 	page,
 }) => {

@@ -286,6 +286,35 @@ describe('straggler resolution (Story 6.2, through the route)', () => {
 		expect(anonList.status).toBe(401);
 	});
 
+	it('ignores an import straggler: hard-deletes the staging row (200), 404 on a stale id', async () => {
+		const straggler = await insertStraggler(db(), {
+			sourceTitle: 'Ignore Me',
+			notionPayload: JSON.stringify({ Title: 'Ignore Me', Status: 'Playing' }),
+		});
+
+		const res = await post(
+			'/api/stragglers/ignore',
+			{ id: straggler.id },
+			sessionCookie,
+		);
+		expect(res.status).toBe(200);
+		expect(await res.json()).toEqual({ ok: true });
+		// The Notion staging row is gone (hard delete, no game created).
+		expect(await getStragglerById(db(), straggler.id)).toBeUndefined();
+
+		// A second ignore of the same (now-stale) id answers 404.
+		const stale = await post(
+			'/api/stragglers/ignore',
+			{ id: straggler.id },
+			sessionCookie,
+		);
+		expect(stale.status).toBe(404);
+
+		// Unauthenticated ignore is refused.
+		const anon = await post('/api/stragglers/ignore', { id: 'x' });
+		expect(anon.status).toBe(401);
+	});
+
 	it('search endpoint degrades to an empty list without IGDB creds (200, not 5xx)', async () => {
 		const res = await appFetch('/api/games/search?title=Celeste', {
 			headers: { cookie: sessionCookie },

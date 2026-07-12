@@ -63,6 +63,22 @@ export async function listStragglerView(
 	];
 }
 
+/**
+ * Ignore (dismiss) an import straggler — a HARD delete of the Notion staging
+ * row (not a game, so nothing to soft-delete). The user is discarding the
+ * imported status/dates that came with it; the confirm gate in the UI owns the
+ * "no undo" warning. A missing row answers 'not-found' so the client drops a
+ * stale entry. Only import rows reach this — unenriched games use discard.
+ */
+export async function ignoreImportStraggler(
+	db: Db,
+	id: string,
+): Promise<'ignored' | 'not-found'> {
+	if (!(await getStragglerById(db, id))) return 'not-found';
+	await deleteStraggler(db, id);
+	return 'ignored';
+}
+
 /** How many stragglers need attention — feeds the amber banner (AR-22). */
 export async function countStragglers(db: Db, userId: string): Promise<number> {
 	return (await listStragglerView(db, userId)).length;

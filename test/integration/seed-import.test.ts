@@ -326,6 +326,42 @@ describe('runSeedImport (integration, real workerd + local D1)', () => {
 		).toHaveLength(0);
 	});
 
+	it('never records a straggler for a garbage source title (blank or bare URL)', async () => {
+		// A blank Title and an IGN URL masquerading as a title are both
+		// unresolvable — the garbage-title filter must skip them (no straggler,
+		// no count), so they never reach the resolve dialog. Both carry an unknown
+		// status so they'd otherwise be recorded as stragglers.
+		const notion = csv(NOTION_HEADER, [
+			{
+				Title: '',
+				'Date finished': '',
+				'Date started': '',
+				Owned: 'No',
+				Status: 'Backlogged',
+			},
+			{
+				Title: 'https://www.ign.com/games/some-game',
+				'Date finished': '',
+				'Date started': '',
+				Owned: 'No',
+				Status: 'Backlogged',
+			},
+		]);
+		const summary = await runSeedImport({
+			db: db(),
+			igdb: fakeIgdb(),
+			psCsv: csv(PS_HEADER, []),
+			notionCsv: notion,
+			userEmail: USER_EMAIL,
+		});
+		expect(summary.stragglers).toBe(0);
+		expect(
+			(await listStragglers(db())).some(
+				(s) => s.sourceTitle.trim() === '' || s.sourceTitle.startsWith('http'),
+			),
+		).toBe(false);
+	});
+
 	it('is idempotent on re-run — no duplicate games, links, or genres', async () => {
 		const ps = csv(PS_HEADER, [
 			{

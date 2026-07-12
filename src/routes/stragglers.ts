@@ -1,7 +1,11 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { createDb } from '../repositories/db';
-import { listStragglerView, resolveStraggler } from '../services';
+import {
+	ignoreImportStraggler,
+	listStragglerView,
+	resolveStraggler,
+} from '../services';
 import { type AuthVariables, requireAuth } from './auth';
 
 /**
@@ -43,6 +47,8 @@ const resolveBodySchema = z.object({
 	genres: z.array(z.string().max(64)).max(20).optional(),
 });
 
+const ignoreBodySchema = z.object({ id: z.string().min(1) });
+
 type StragglersEnv = { Bindings: Env; Variables: AuthVariables };
 
 export const stragglersRoute = new Hono<StragglersEnv>();
@@ -74,4 +80,20 @@ stragglersRoute.post('/stragglers/resolve', requireAuth, async (c) => {
 		return c.json({ error: 'straggler not found' }, 404);
 	}
 	return c.json({ gameId: outcome.gameId }, 200);
+});
+
+// Ignore (dismiss) an import straggler: hard-delete its Notion staging row.
+// The client confirm-gates this (no undo, unlike the unenriched discard).
+stragglersRoute.post('/stragglers/ignore', requireAuth, async (c) => {
+	const body = ignoreBodySchema.safeParse(await c.req.json().catch(() => null));
+	if (!body.success) {
+		return c.json({ error: 'invalid request' }, 400);
+	}
+
+	const db = createDb(c.env.DB);
+	const outcome = await ignoreImportStraggler(db, body.data.id);
+	if (outcome === 'not-found') {
+		return c.json({ error: 'straggler not found' }, 404);
+	}
+	return c.json({ ok: true }, 200);
 });
