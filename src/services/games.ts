@@ -111,7 +111,8 @@ async function pickTitleCandidate(
 			// (that tie would attach a second tracked row + bury the tombstone).
 			const trackedRank = tracking ? (tracking.discarded ? 1 : 2) : 0;
 			let facts = 0;
-			if (input.releaseDate && row.releaseDate === input.releaseDate) facts += 1;
+			if (input.releaseDate && row.releaseDate === input.releaseDate)
+				facts += 1;
 			if (row.title === title) facts += 1; // exact (pre-normalize) title
 			return { row, tracking, trackedRank, facts, order };
 		}),

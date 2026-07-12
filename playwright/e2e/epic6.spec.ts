@@ -531,10 +531,16 @@ test.describe('Story 6.4 ownership source', () => {
 			await seedGame(game);
 			await page.goto('/');
 			await page.getByRole('button', { name: `Owned — ${game.title}` }).click();
-			await page
-				.getByTestId('ownership-source-dialog')
-				.getByRole('button', { name: 'Purchased' })
-				.click();
+
+			const dialog = page.getByTestId('ownership-source-dialog');
+			await expect(dialog).toBeVisible();
+			await dialog.getByRole('button', { name: 'Purchased' }).click();
+			await expect(dialog).toBeHidden();
+			// The owned toast fires in the mutation's onSuccess — wait for it so the
+			// D1 read below can't race the write's fetch (flaky under CI load).
+			await expect(
+				page.getByTestId('toast').getByText(`${game.title} — owned`),
+			).toBeVisible();
 
 			const rows = await d1Query<{
 				owned_via: string | null;
