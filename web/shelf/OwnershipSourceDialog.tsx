@@ -25,8 +25,11 @@ export function OwnershipSourceDialog({
 	const cancelRef = useRef<HTMLButtonElement>(null);
 	const titleId = useId();
 
+	// Opened from a card/detail owned-toggle that owns no focus-restore of its
+	// own — restore focus to it on dismiss so a keyboard user isn't stranded.
 	const onKeyDown = useModalTrap(dialogRef, onCancel, {
 		initialFocusRef: cancelRef,
+		restoreFocus: true,
 	});
 
 	return createPortal(

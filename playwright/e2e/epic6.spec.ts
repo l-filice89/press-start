@@ -615,7 +615,9 @@ test.describe('Story 6.4 ownership source', () => {
 			const cancel = page.getByTestId('cancel-ps-plus');
 			await expect(cancel).toBeEnabled();
 			await expect(cancel).toHaveText('I cancelled PS+');
-			await expect(page.getByText(/\d+ games? claimed with PS\+/)).toBeVisible();
+			await expect(
+				page.getByText(/\d+ games? claimed with PS\+/),
+			).toBeVisible();
 			await cancel.click();
 			await page.getByRole('button', { name: 'Un-own claims' }).click();
 

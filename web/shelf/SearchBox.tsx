@@ -80,6 +80,14 @@ export function SearchBox() {
 		);
 	}, [debounced]);
 
+	// Clear the module mirror when the box unmounts (logout/teardown) so a next
+	// session's shelf can't seed a stale term before this remounts and re-emits.
+	useEffect(() => {
+		return () => {
+			lastBroadcastTerm = '';
+		};
+	}, []);
+
 	// Jump-to-problem seed (Story 4.3): fill, skip the debounce, focus, open.
 	useEffect(() => {
 		function onSeed(e: Event) {

@@ -334,7 +334,11 @@ export function useTrackingMutations(
 					toast({
 						message:
 							change.owned === true
-								? `${game.title} — owned`
+								? // A via change on an already-owned game is the claim→purchase
+									// upgrade (Story 6.4), not a fresh own — say so.
+									game.owned && change.via === 'purchase'
+									? `${game.title} — marked as purchased`
+									: `${game.title} — owned`
 								: `${game.title} — ${change.ownershipType}`,
 					});
 				},

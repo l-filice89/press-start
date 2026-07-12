@@ -558,9 +558,10 @@ describe('DetailPanel', () => {
 			);
 			cleanup();
 
-			// Legacy NULL rows say nothing rather than guessing.
+			// Legacy NULL rows still state owned-ness, just without a source.
 			await openPanel(game({ owned: true, ownedVia: null }));
-			expect(screen.queryByTestId('detail-owned-via')).not.toBeInTheDocument();
+			expect(screen.getByTestId('detail-owned-via')).toHaveTextContent('Owned');
+			expect(screen.getByTestId('detail-owned-via')).not.toHaveTextContent('·');
 		});
 
 		it('owning from the panel PATCHes the ownership route and toasts plainly', async () => {
@@ -605,9 +606,34 @@ describe('DetailPanel', () => {
 			});
 		});
 
-		it('a PS+ claim offers "I bought this", upgrading owned_via to purchase', async () => {
+		it('a PS+ claim offers "I bought this", upgrading owned_via to purchase (digital)', async () => {
 			const user = await openPanel(
-				game({ owned: true, ownedVia: 'membership' }),
+				game({ owned: true, ownedVia: 'membership', ownershipType: null }),
+			);
+			await user.click(
+				screen.getByRole('button', {
+					name: 'I bought this — mark as purchased',
+				}),
+			);
+			await waitFor(() => expect(writes()).toHaveLength(1));
+			// A typeless claim is digital by nature — seed it on the upgrade.
+			expect(JSON.parse(writes()[0][1].body)).toEqual({
+				owned: true,
+				via: 'purchase',
+				ownershipType: 'digital',
+			});
+			expect(await screen.findByTestId('toast')).toHaveTextContent(
+				'marked as purchased',
+			);
+		});
+
+		it('keeps an existing type when upgrading a claim to purchase', async () => {
+			const user = await openPanel(
+				game({
+					owned: true,
+					ownedVia: 'membership',
+					ownershipType: 'physical',
+				}),
 			);
 			await user.click(
 				screen.getByRole('button', {

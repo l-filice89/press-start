@@ -375,18 +375,18 @@ export function DetailPanel({
 						{game.owned ? (
 							<>
 								{/* Acquisition source is the STATE (FR-9 amended): a claim is
-								    owned but subscription-bound. Read-only fact; NULL
-								    (legacy/manual) shows nothing rather than guessing. */}
-								{game.ownedVia && (
-									<p
-										className="detail-panel__owned-via"
-										data-testid="detail-owned-via"
-									>
-										{game.ownedVia === 'membership'
-											? 'Owned · via PS+'
-											: 'Owned · purchased'}
-									</p>
-								)}
+								    owned but subscription-bound. Always states owned-ness;
+								    adds the source qualifier when known (NULL = legacy/manual). */}
+								<p
+									className="detail-panel__owned-via"
+									data-testid="detail-owned-via"
+								>
+									{game.ownedVia === 'membership'
+										? 'Owned · via PS+'
+										: game.ownedVia === 'purchase'
+											? 'Owned · purchased'
+											: 'Owned'}
+								</p>
 								<fieldset
 									aria-label={`Ownership type for ${game.title}`}
 									className="detail-panel__ownership-types"
@@ -415,7 +415,15 @@ export function DetailPanel({
 										type="button"
 										className="detail-panel__own-purchased tap-target"
 										onClick={() =>
-											setOwnership({ owned: true, via: 'purchase' })
+											setOwnership({
+												owned: true,
+												via: 'purchase',
+												// A PS+ claim is digital by nature; only seed the type
+												// when the row carries none, so a manual choice survives.
+												...(game.ownershipType
+													? {}
+													: { ownershipType: 'digital' }),
+											})
 										}
 									>
 										I bought this — mark as purchased
