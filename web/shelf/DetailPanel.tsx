@@ -372,62 +372,86 @@ export function DetailPanel({
 
 					<section className="detail-panel__section">
 						<h3 className="detail-panel__heading">Ownership</h3>
-						{/* Reversible, no confirm: un-owning gets an UNDO toast instead. */}
-						<button
-							type="button"
-							className="detail-panel__owned-toggle tap-target"
-							aria-pressed={game.owned}
-							onClick={() => setOwnership({ owned: !game.owned })}
-						>
-							{game.owned ? 'Owned' : 'Not owned'}
-						</button>
-						{/* Acquisition source (FR-9 amended): a claim is owned but
-						    subscription-bound — worth saying where it can be acted on.
-						    Read-only fact from sync/seed; NULL (legacy/manual) shows
-						    nothing rather than guessing. */}
-						{game.owned && game.ownedVia && (
-							<p
-								className="detail-panel__owned-via"
-								data-testid="detail-owned-via"
-							>
-								{game.ownedVia === 'membership'
-									? 'Owned · via PS+'
-									: 'Owned · purchased'}
-							</p>
-						)}
-						{game.owned && (
-							<fieldset
-								aria-label={`Ownership type for ${game.title}`}
-								className="detail-panel__ownership-types"
-							>
-								{OWNERSHIP_TYPES.map((type) => (
-									<button
-										key={type}
-										type="button"
-										aria-pressed={game.ownershipType === type}
-										className="detail-panel__ownership-type tap-target"
-										onClick={() => {
-											if (game.ownershipType !== type) {
-												setOwnership({ ownershipType: type });
-											}
-										}}
+						{game.owned ? (
+							<>
+								{/* Acquisition source is the STATE (FR-9 amended): a claim is
+								    owned but subscription-bound. Read-only fact; NULL
+								    (legacy/manual) shows nothing rather than guessing. */}
+								{game.ownedVia && (
+									<p
+										className="detail-panel__owned-via"
+										data-testid="detail-owned-via"
 									>
-										{type}
+										{game.ownedVia === 'membership'
+											? 'Owned · via PS+'
+											: 'Owned · purchased'}
+									</p>
+								)}
+								<fieldset
+									aria-label={`Ownership type for ${game.title}`}
+									className="detail-panel__ownership-types"
+								>
+									{OWNERSHIP_TYPES.map((type) => (
+										<button
+											key={type}
+											type="button"
+											aria-pressed={game.ownershipType === type}
+											className="detail-panel__ownership-type tap-target"
+											onClick={() => {
+												if (game.ownershipType !== type) {
+													setOwnership({ ownershipType: type });
+												}
+											}}
+										>
+											{type}
+										</button>
+									))}
+								</fieldset>
+								{/* Claim → purchase upgrade: a game left PS+ (or you just bought
+								    it) is now a permanent purchase. Stamps bought_on write-once
+								    server-side; NOT shown for an already-purchased game. */}
+								{game.ownedVia === 'membership' && (
+									<button
+										type="button"
+										className="detail-panel__own-purchased tap-target"
+										onClick={() =>
+											setOwnership({ owned: true, via: 'purchase' })
+										}
+									>
+										I bought this — mark as purchased
 									</button>
-								))}
-							</fieldset>
-						)}
-						{!game.owned && (
-							// Persisted data only (NFR-3): the product URL when known, a
-							// store search by title otherwise — never a third-party call.
-							<a
-								className="detail-panel__store-link tap-target"
-								href={storeHref(game)}
-								target="_blank"
-								rel="noopener"
-							>
-								View on PS Store
-							</a>
+								)}
+								{/* Un-own is a command, not the status. Reversible: UNDO toast. */}
+								<button
+									type="button"
+									className="detail-panel__unown tap-target"
+									onClick={() => setOwnership({ owned: false })}
+								>
+									Mark as not owned
+								</button>
+							</>
+						) : (
+							<>
+								{/* Own is a clear CTA, separate from the state above (a PS+
+								    game routes through the buy-vs-claim prompt, Story 6.4). */}
+								<button
+									type="button"
+									className="detail-panel__own tap-target"
+									onClick={() => setOwnership({ owned: true })}
+								>
+									Mark as owned
+								</button>
+								{/* Persisted data only (NFR-3): the product URL when known, a
+								    store search by title otherwise — never a third-party call. */}
+								<a
+									className="detail-panel__store-link tap-target"
+									href={storeHref(game)}
+									target="_blank"
+									rel="noopener"
+								>
+									View on PS Store
+								</a>
+							</>
 						)}
 					</section>
 

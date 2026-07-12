@@ -523,10 +523,10 @@ describe('DetailPanel', () => {
 		expect(
 			screen.queryByRole('link', { name: 'View on PS Store' }),
 		).not.toBeInTheDocument();
-		expect(screen.getByRole('button', { name: 'Owned' })).toHaveAttribute(
-			'aria-pressed',
-			'true',
-		);
+		// Owned state offers the un-own command, not a status pill.
+		expect(
+			screen.getByRole('button', { name: 'Mark as not owned' }),
+		).toBeInTheDocument();
 	});
 
 	it('uses the flip entry by default and the cross-fade under reduced motion', async () => {
@@ -568,9 +568,7 @@ describe('DetailPanel', () => {
 				game({ owned: false, wishlisted: true, ownershipType: null }),
 			);
 
-			const toggle = screen.getByRole('button', { name: 'Not owned' });
-			expect(toggle).toHaveAttribute('aria-pressed', 'false');
-			await user.click(toggle);
+			await user.click(screen.getByRole('button', { name: 'Mark as owned' }));
 
 			await waitFor(() => expect(writes()).toHaveLength(1));
 			const [url, init] = writes()[0];
@@ -589,7 +587,9 @@ describe('DetailPanel', () => {
 			const user = await openPanel(
 				game({ owned: true, ownershipType: 'physical' }),
 			);
-			await user.click(screen.getByRole('button', { name: 'Owned' }));
+			await user.click(
+				screen.getByRole('button', { name: 'Mark as not owned' }),
+			);
 
 			await waitFor(() => expect(writes()).toHaveLength(1));
 			expect(JSON.parse(writes()[0][1].body)).toEqual({
@@ -603,6 +603,29 @@ describe('DetailPanel', () => {
 				owned: true,
 				ownershipType: 'physical',
 			});
+		});
+
+		it('a PS+ claim offers "I bought this", upgrading owned_via to purchase', async () => {
+			const user = await openPanel(
+				game({ owned: true, ownedVia: 'membership' }),
+			);
+			await user.click(
+				screen.getByRole('button', {
+					name: 'I bought this — mark as purchased',
+				}),
+			);
+			await waitFor(() => expect(writes()).toHaveLength(1));
+			expect(JSON.parse(writes()[0][1].body)).toEqual({
+				owned: true,
+				via: 'purchase',
+			});
+		});
+
+		it('a purchased game offers no "I bought this" upgrade', async () => {
+			await openPanel(game({ owned: true, ownedVia: 'purchase' }));
+			expect(
+				screen.queryByRole('button', { name: /I bought this/ }),
+			).not.toBeInTheDocument();
 		});
 
 		it('switches the ownership type through the segmented pair', async () => {

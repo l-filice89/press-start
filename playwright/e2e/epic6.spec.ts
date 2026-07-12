@@ -549,6 +549,47 @@ test.describe('Story 6.4 ownership source', () => {
 		}
 	});
 
+	test('detail "I bought this" upgrades a PS+ claim to a purchase, stamping bought_on (6.4c)', async ({
+		page,
+	}) => {
+		const claim = createGame({
+			title: `Upgrade Claim ${randomUUID().slice(0, 8)}`,
+			tracking: {
+				owned: true,
+				ownedVia: 'membership',
+				playStatus: 'Not started',
+			},
+		});
+		try {
+			await seedGame(claim);
+			await page.goto('/');
+			await openDetailBySearch(page, claim);
+			await expect(page.getByTestId('detail-owned-via')).toHaveText(
+				'Owned · via PS+',
+			);
+
+			await page
+				.getByRole('button', { name: 'I bought this — mark as purchased' })
+				.click();
+
+			// The source line flips to purchased without a reload…
+			await expect(page.getByTestId('detail-owned-via')).toHaveText(
+				'Owned · purchased',
+			);
+			// …and the row is now a purchase with a stamped bought_on.
+			const rows = await d1Query<{
+				owned_via: string | null;
+				bought_on: string | null;
+			}>(
+				`SELECT owned_via, bought_on FROM game_tracking WHERE game_id = '${claim.id}'`,
+			);
+			expect(rows[0].owned_via).toBe('purchase');
+			expect(rows[0].bought_on).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+		} finally {
+			await deleteGames([claim.id]);
+		}
+	});
+
 	test('Settings "I cancelled PS+" un-owns claimed rows and re-shows their PS+ pill (6.4d)', async ({
 		page,
 	}) => {
@@ -569,10 +610,12 @@ test.describe('Story 6.4 ownership source', () => {
 			await page.goto('/');
 			await page.getByRole('button', { name: 'Settings' }).click();
 
-			// The button names the claim count and confirms before acting.
+			// The section copy names the claim count; the button is a plain command
+			// and the confirm re-states the count before acting.
 			const cancel = page.getByTestId('cancel-ps-plus');
 			await expect(cancel).toBeEnabled();
-			await expect(cancel).toHaveText(/I cancelled PS\+ \(\d+\)/);
+			await expect(cancel).toHaveText('I cancelled PS+');
+			await expect(page.getByText(/\d+ games? claimed with PS\+/)).toBeVisible();
 			await cancel.click();
 			await page.getByRole('button', { name: 'Un-own claims' }).click();
 

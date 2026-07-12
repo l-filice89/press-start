@@ -25,6 +25,11 @@
 	color: var(--color-text-muted);
 }
 
+/* The native search clear "X" is a shadow pseudo-element — give it a pointer. */
+.search-box__input::-webkit-search-cancel-button {
+	cursor: pointer;
+}
+
 .search-box__listbox {
 	position: absolute;
 	z-index: var(--z-overlay);

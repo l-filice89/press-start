@@ -179,8 +179,9 @@ export function SettingsPanel({
 				<section className="settings-panel__section">
 					<h3 className="settings-panel__heading">PlayStation Plus</h3>
 					<p className="settings-panel__status">
-						Cancelled your subscription? Un-own every game you claimed with PS+
-						— your purchases stay owned.
+						{claimCount === 0
+							? 'You have no games claimed with PS+.'
+							: `You have ${claimCount} game${claimCount === 1 ? '' : 's'} claimed with PS+. Cancelled your subscription? Un-own them — your purchases stay owned.`}
 					</p>
 					<button
 						type="button"
@@ -189,9 +190,7 @@ export function SettingsPanel({
 						disabled={claimCount === 0 || cancelClaims.isPending}
 						onClick={() => setConfirmingCancel(true)}
 					>
-						{claimCount === 0
-							? 'No PS+ claims'
-							: `I cancelled PS+ (${claimCount})`}
+						{claimCount === 0 ? 'No PS+ claims' : 'I cancelled PS+'}
 					</button>
 				</section>
 

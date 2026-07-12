@@ -285,7 +285,11 @@ export function useTrackingMutations(
 	const { mutate: mutateOwnership } = ownershipMutation;
 
 	const setOwnership = useCallback(
-		(change: { owned?: boolean; ownershipType?: OwnershipType }) => {
+		(change: {
+			owned?: boolean;
+			ownershipType?: OwnershipType;
+			via?: 'purchase' | 'membership';
+		}) => {
 			// Same shared race guard as `selectStatus` (Story 3.4, AC5).
 			if (guardPending()) return;
 			// A manual own on a not-yet-owned PS+-catalog game is ambiguous — buy or

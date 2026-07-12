@@ -15,6 +15,19 @@
 	min-height: var(--hit-target);
 }
 
+/* Every interactive control carries the hit-area class, so pointer-cursor lives
+   here once instead of per-component (a native <button> defaults to `default`).
+   Disabled controls revert. */
+.tap-target,
+.tap-expander {
+	cursor: pointer;
+}
+
+.tap-target:disabled,
+.tap-expander:disabled {
+	cursor: default;
+}
+
 .tap-expander {
 	position: relative;
 	display: inline-flex;

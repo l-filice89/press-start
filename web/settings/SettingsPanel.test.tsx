@@ -141,11 +141,13 @@ describe('SettingsPanel', () => {
 		vi.stubGlobal('fetch', fetchMock);
 		renderPanel();
 
-		// The button names the claim count.
+		// The claim count is named in the section copy (the button stays a plain
+		// command); the confirm gate re-states it before acting.
 		const cancel = await screen.findByTestId('cancel-ps-plus');
-		await waitFor(() =>
-			expect(cancel).toHaveTextContent('I cancelled PS+ (3)'),
-		);
+		await waitFor(() => expect(cancel).toHaveTextContent('I cancelled PS+'));
+		expect(
+			screen.getByText(/You have 3 games claimed with PS\+/),
+		).toBeInTheDocument();
 		await userEvent.click(cancel);
 
 		// The confirm gate names the exact count before acting; nothing POSTed yet.
