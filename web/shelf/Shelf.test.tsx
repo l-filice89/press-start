@@ -480,6 +480,53 @@ describe('Shelf', () => {
 		expect(screen.getByRole('dialog', { name: 'Bolt' })).toBeVisible();
 	});
 
+	it('keeps the detail panel open when an ownership write drops the game out of the active filter', async () => {
+		const user = userEvent.setup();
+		const a = card('a', 'Apex', { owned: false, wishlisted: true });
+		const b = card('b', 'Bolt', { owned: false, wishlisted: true });
+		let games = [a, b];
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (url: string, init?: RequestInit) => {
+				if (init?.method === 'PATCH') {
+					// Owning Apex removes it from the Wishlisted filter.
+					games = [{ ...a, owned: true, wishlisted: false }, b];
+					return {
+						ok: true,
+						status: 200,
+						json: async () => ({ effectiveState: 'Not started' }),
+					};
+				}
+				if (url.includes('/genres')) {
+					return { ok: true, status: 200, json: async () => ({ genres: [] }) };
+				}
+				return { ok: true, status: 200, json: async () => ({ games }) };
+			}),
+		);
+		renderShelf();
+		await screen.findAllByTestId('shelf-card');
+
+		await user.click(screen.getByTestId('filter-flag-wishlisted'));
+		expect(screen.getAllByTestId('shelf-card')).toHaveLength(2);
+
+		await user.click(
+			screen.getByRole('button', { name: 'Open details — Apex' }),
+		);
+		const panel = screen.getByRole('dialog', { name: 'Apex' });
+		await user.click(
+			within(panel).getByRole('button', { name: 'Mark as owned' }),
+		);
+
+		// Apex leaves the Wishlisted grid…
+		await waitFor(() =>
+			expect(screen.getAllByTestId('shelf-card')).toHaveLength(1),
+		);
+		expect(screen.getByTestId('shelf-card')).toHaveTextContent('Bolt');
+		// …but its detail panel stays open (regression: it used to close because
+		// the open-game lookup was scoped to the filtered set, not the library).
+		expect(screen.getByRole('dialog', { name: 'Apex' })).toBeVisible();
+	});
+
 	// HAZARD (Story 3.6, AC3): menu open-state lives in ShelfGrid — a refetch
 	// that reorders/re-chunks the rows (remounting every Card in jsdom's
 	// one-column layout) must not kill an open status menu. The refetch is

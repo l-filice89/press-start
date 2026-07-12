@@ -250,7 +250,7 @@ function FilteredShelf({ games }: { games: ShelfGame[] }) {
 						<EmptyState variant="insert-games" />
 					)
 				) : (
-					<ShelfGrid games={visible} />
+					<ShelfGrid games={visible} library={games} />
 				)}
 			</div>
 			{searchGame && (
@@ -299,7 +299,13 @@ export function chunkIntoRows<T>(items: T[], columnCount: number): T[][] {
 }
 
 /** The card grid with roving-tabindex keyboard nav + progressive rendering. */
-function ShelfGrid({ games }: { games: ShelfGame[] }) {
+function ShelfGrid({
+	games,
+	library,
+}: {
+	games: ShelfGame[];
+	library: ShelfGame[];
+}) {
 	// jsdom (tests) has no IntersectionObserver — render everything there so the
 	// full set is assertable; real browsers page it in on scroll.
 	const supportsObserver = typeof IntersectionObserver !== 'undefined';
@@ -331,10 +337,15 @@ function ShelfGrid({ games }: { games: ShelfGame[] }) {
 			setOpenStatusGameId(null);
 		}
 	}, [visible, openStatusGameId]);
-	// Look up in the FULL list, not the progressive window: a write that
-	// reorders the open game past the rendered page must not kill its panel.
+	// Look up in the whole LIBRARY, not the filtered/paged grid: a write that
+	// drops the open game out of the active filter (e.g. owning a wishlisted
+	// game, changing its status under a state filter) — or pages it past the
+	// rendered window — must keep the panel open so the user can keep editing.
+	// The deliberate close on a status→hidden write still fires via `onHidden`;
+	// the stale-id cleanup below now only triggers on true library removal
+	// (a discard), where closing IS right.
 	const openGame = openGameId
-		? games.find((g) => g.id === openGameId)
+		? library.find((g) => g.id === openGameId)
 		: undefined;
 	const closeDetail = useCallback(() => {
 		// Return focus to the owning gridcell (UX-DR19) — by game id, not a
