@@ -4,7 +4,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ShelfGame } from './api';
-import { SearchBox } from './SearchBox';
+import { currentShelfSearchTerm, SearchBox } from './SearchBox';
 
 function card(id: string, title: string): ShelfGame {
 	return {
@@ -82,6 +82,24 @@ describe('SearchBox', () => {
 		// It hit the dedicated search endpoint, not the shelf endpoint.
 		expect(calls.some((u) => u.startsWith('/api/shelf/search?q='))).toBe(true);
 		expect(input).toHaveAttribute('aria-expanded', 'true');
+	});
+
+	// Story 6.5 mount-race guard: the shelf may mount AFTER a term was typed, so
+	// the last broadcast term is mirrored in module scope for a fresh shelf to
+	// seed from — not only pushed through the fire-and-forget window event.
+	it('mirrors the settled term in currentShelfSearchTerm for a late-mounting shelf', async () => {
+		const user = userEvent.setup();
+		mockSearch([card('a', 'Apex Legends')]);
+		renderSearch();
+
+		const input = screen.getByRole('combobox', { name: 'Search your library' });
+		await user.type(input, 'apex');
+		// The option appearing proves the debounce settled and the term broadcast.
+		await screen.findByRole('option');
+		expect(currentShelfSearchTerm()).toBe('apex');
+
+		await user.clear(input);
+		await vi.waitFor(() => expect(currentShelfSearchTerm()).toBe(''));
 	});
 
 	it('offers ＋ Add when the whole-library query returns nothing (Story 6.1)', async () => {

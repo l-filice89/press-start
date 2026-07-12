@@ -1,9 +1,10 @@
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ShelfGame } from './api';
+import { SHELF_SEARCH_EVENT } from './SearchBox';
 import { chunkIntoRows, countColumns, Shelf } from './Shelf';
 import { resetInFlightWrites } from './useTrackingMutations';
 
@@ -571,6 +572,53 @@ describe('Shelf', () => {
 			expect(screen.getAllByTestId('shelf-card')).toHaveLength(2),
 		);
 		expect(screen.queryByTestId('status-menu')).not.toBeInTheDocument();
+	});
+
+	// Story 6.5: the SearchBox re-broadcasts its debounced term on a window event
+	// (SHELF_SEARCH_EVENT); the shelf narrows its VISIBLE cards by title substring.
+	// Dispatch the event directly here — SearchBox isn't in this tree.
+	const search = (term: string) =>
+		act(() => {
+			window.dispatchEvent(
+				new CustomEvent(SHELF_SEARCH_EVENT, { detail: term }),
+			);
+		});
+
+	it('narrows the visible shelf live to the search term, then restores on clear', async () => {
+		mockFetch([card('a', 'Apex'), card('b', 'Bloodborne'), card('c', 'Cyan')]);
+		renderShelf();
+		expect(await screen.findAllByTestId('shelf-card')).toHaveLength(3);
+
+		// A substring term (normalized) narrows to the one matching card.
+		search('blood');
+		await waitFor(() => {
+			const cards = screen.getAllByTestId('shelf-card');
+			expect(cards).toHaveLength(1);
+			expect(cards[0]).toHaveTextContent('Bloodborne');
+		});
+
+		// Clearing the term restores the full visible set.
+		search('');
+		await waitFor(() =>
+			expect(screen.getAllByTestId('shelf-card')).toHaveLength(3),
+		);
+	});
+
+	it('a search matching nothing shows NO MATCH with an ＋ Add row that opens the add dialog', async () => {
+		const user = userEvent.setup();
+		mockFetch([card('a', 'Apex'), card('b', 'Bloodborne')]);
+		renderShelf();
+		await screen.findAllByTestId('shelf-card');
+
+		search('zzz nothing here');
+		await screen.findByText('NO MATCH');
+		// The 6.1 add path is still offered — labelled with the typed term.
+		const addButton = await screen.findByRole('button', {
+			name: '＋ Add “zzz nothing here”',
+		});
+
+		await user.click(addButton);
+		expect(await screen.findByTestId('add-game-dialog')).toBeInTheDocument();
 	});
 
 	it('shows an alert if the shelf fails to load', async () => {

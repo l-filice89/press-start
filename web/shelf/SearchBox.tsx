@@ -18,6 +18,25 @@ export function seedSearch(query: string): void {
 }
 
 /**
+ * Lift the live search term to the visible shelf (Story 6.5). The shelf grid is
+ * a sibling under AppShell, so — like SEED/OPEN_DETAIL — the term travels by a
+ * window event, not a threaded prop. Payload is the already-debounced/trimmed
+ * value; the shelf narrows its cards by title substring, distinct from the
+ * combobox suggestions this box drives against the server.
+ */
+export const SHELF_SEARCH_EVENT = 'shelf:search-term';
+
+// A window CustomEvent has no retained last value, so a shelf that mounts (or
+// remounts after a refetch drops it to the skeleton) AFTER the last dispatch
+// would start unfiltered while the input still shows a term. Mirror the last
+// broadcast term in module scope — the same one-truth-across-instances pattern
+// as useTrackingMutations' IN_FLIGHT — so a fresh FilteredShelf seeds from it.
+let lastBroadcastTerm = '';
+export function currentShelfSearchTerm(): string {
+	return lastBroadcastTerm;
+}
+
+/**
  * The persistent whole-library search (FR-19, UX-DR16) — and the sole Add
  * entry point (Story 6.1, FR-41/42). A combobox querying the dedicated
  * `/api/shelf/search` endpoint (matches every game, ignoring active filters
@@ -50,6 +69,16 @@ export function SearchBox() {
 		queryFn: ({ signal }) => searchShelf(debounced, signal),
 		enabled: debounced !== '',
 	});
+
+	// Re-broadcast every settled term to the shelf grid (Story 6.5), and mirror it
+	// in module scope so a shelf that mounts between dispatches still picks it up
+	// (a live listener can't be relied on across the shelf's skeleton→grid gap).
+	useEffect(() => {
+		lastBroadcastTerm = debounced;
+		window.dispatchEvent(
+			new CustomEvent(SHELF_SEARCH_EVENT, { detail: debounced }),
+		);
+	}, [debounced]);
 
 	// Jump-to-problem seed (Story 4.3): fill, skip the debounce, focus, open.
 	useEffect(() => {

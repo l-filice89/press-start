@@ -258,3 +258,11 @@ status: open
 - source_spec: `spec-6-4-ownership-source-purchased-vs-claimed.md`
   summary: cancel-PS+ (per-user Settings action) writes the shared global `game.psPlusExtra` catalog flag via `setPsPlusExtraFlags`, so one user's cancel would mutate catalog pills for all users in a multi-user deployment.
   evidence: `src/repositories/games.ts` `setPsPlusExtraFlags` updates `game` by id only (no userId — `game` is the shared catalog, AD-19); `runPsPlusCheck` already writes it globally from one user's library, so this is a pre-existing single-tenant assumption, not new to 6.4. Belongs with the existing global-column multi-user publication blocker.
+
+- source_spec: `spec-6-5-free-text-shelf-search.md`
+  summary: Story 4.3 seed-search (jump-to-problem) now also narrows the visible shelf via SHELF_SEARCH_EVENT; if the seeded game is hidden/filtered the grid shows a false "NO MATCH" + "＋ Add <title>" for a game that already exists.
+  evidence: The 6.5 broadcast effect keys on `debounced`, which `onSeed` sets directly (web/shelf/SearchBox.tsx). Mitigated in practice (stragglers/problems are typically visible, not completed/dropped) and by the 409→open-existing-detail path in AddGameDialog. Fix needs a source flag distinguishing typed vs seeded, or scoping the broadcast to user input.
+
+- source_spec: `spec-6-5-free-text-shelf-search.md`
+  summary: When a term matches nothing, both the combobox popup's `＋ Add "<term>"` row and the shelf empty-state's `＋ Add "<term>"` action are visible at once, each owning a separate AddGameDialog.
+  evidence: SearchBox add row (showPopup && !hasMatches) and Shelf empty-state add (searchActive) both render for the same no-match term. AC2 requires the empty-state Add; 6.1 owns the popup Add. Consider suppressing one while the other is shown. Both open the same 409-safe add flow, so low functional risk.

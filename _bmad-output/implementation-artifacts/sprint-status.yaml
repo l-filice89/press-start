@@ -106,7 +106,7 @@ development_status:
   6-2-name-only-fallback-straggler-resolution: done # 2026-07-11
   6-3-chores-csv-export-settings: done # 2026-07-11
   6-4-ownership-source-purchased-vs-claimed-un-claim-on-cancel: done # 2026-07-12 (dev-auto): buy-vs-claim prompt + via threading + detail source copy + cancel-PS+ un-own; followup_review_recommended:true (2 medium write-path patches)
-  6-5-free-text-shelf-search: planned # v1 (2026-07-12): live substring filter of the visible shelf; SearchBox today is suggestion-combobox only (deferred-work.md)
+  6-5-free-text-shelf-search: done # 2026-07-12 (dev-auto): SHELF_SEARCH_EVENT + module mirror lifts the term to FilteredShelf; matchesTitleQuery normalized-substring filter; no-match empty state offers ＋ Add; turns epic1 1.7d green; followup_review_recommended:true (3 medium a11y/wiring patches)
   epic-6-retrospective: optional
 
   # Epic 7: Browse the PS+ Catalog & Add — POST-v1.0.0 (not in the v1 milestone)

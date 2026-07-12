@@ -120,6 +120,93 @@ test('add-by-name: ＋ Add row → editable preview → Save → toast → on th
 	await deleteGames([saved[0].id]);
 });
 
+/**
+ * Story 6.5: free-text shelf search. Typing narrows the VISIBLE shelf grid by
+ * normalized title substring (case/diacritic-insensitive) — distinct from the
+ * 6.1 combobox suggestions (server search) that share the same input.
+ */
+test('shelf search narrows the visible grid by normalized title substring (6.5a)', async ({
+	page,
+}) => {
+	// An accent in the title + a plain-ASCII needle proves the case/diacritic fold.
+	const game = createGame({
+		title: `Pokémon Zephyr ${randomUUID().slice(0, 8)}`,
+		tracking: { owned: true, playStatus: 'Playing' },
+	});
+	try {
+		await seedGame(game);
+		await page.goto('/');
+		await expect(cardFor(page, game)).toBeVisible();
+		// A baseline game is in the default visible set to start with.
+		const baseline = page
+			.getByTestId('shelf-card')
+			.filter({ hasText: 'Baseline Alpha' });
+		await expect(baseline).toBeVisible();
+
+		const search = page.getByRole('combobox', { name: 'Search your library' });
+		await search.fill('pokemon zephyr');
+
+		// The visible grid narrows to the accented match; the baseline card drops.
+		await expect(cardFor(page, game)).toBeVisible();
+		await expect(baseline).toHaveCount(0);
+	} finally {
+		await deleteGames([game.id]);
+	}
+});
+
+test('a shelf search matching nothing shows NO MATCH and still offers ＋ Add (6.5b)', async ({
+	page,
+}) => {
+	const term = `zzz no shelf match ${randomUUID().slice(0, 8)}`;
+	await page.goto('/');
+	await expect(page.getByTestId('shelf-card').first()).toBeVisible();
+
+	const search = page.getByRole('combobox', { name: 'Search your library' });
+	await search.fill(term);
+
+	// The visible shelf empties to the NO MATCH state, which still routes to the
+	// 6.1 add flow via its own ＋ Add row (scoped to the empty state, not the
+	// combobox popup that carries the same label).
+	const emptyState = page.getByTestId('empty-state');
+	await expect(emptyState.getByText('NO MATCH')).toBeVisible();
+	const addRow = emptyState.getByRole('button', { name: `＋ Add “${term}”` });
+	await expect(addRow).toBeVisible();
+
+	await addRow.click();
+	await expect(page.getByTestId('add-game-dialog')).toBeVisible();
+	// Nothing is saved — close the preview without committing.
+	await page.getByRole('button', { name: 'Cancel' }).click();
+});
+
+test('clearing the shelf search restores the full visible shelf (6.5c)', async ({
+	page,
+}) => {
+	const game = createGame({
+		title: `Restorable Search ${randomUUID().slice(0, 8)}`,
+		tracking: { owned: true, playStatus: 'Playing' },
+	});
+	try {
+		await seedGame(game);
+		await page.goto('/');
+		const baseline = page
+			.getByTestId('shelf-card')
+			.filter({ hasText: 'Baseline Alpha' });
+		await expect(baseline).toBeVisible();
+
+		const search = page.getByRole('combobox', { name: 'Search your library' });
+		await search.fill('restorable search');
+		await expect(cardFor(page, game)).toBeVisible();
+		await expect(baseline).toHaveCount(0);
+
+		// Clearing the input restores every default-visible card.
+		await search.fill('');
+		await expect(baseline).toBeVisible();
+		await expect(cardFor(page, game)).toBeVisible();
+	} finally {
+		await deleteGames([game.id]);
+	}
+});
+
 test('stragglers: amber banner surfaces both kinds, the dialog lists them, and a resolve attempt degrades without IGDB creds (6.2)', async ({
 	page,
 }) => {
