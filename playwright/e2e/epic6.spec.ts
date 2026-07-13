@@ -278,6 +278,41 @@ test('stragglers: amber banner surfaces both kinds, the dialog lists them, and a
 	await deleteGames([nameOnly.id]);
 });
 
+test('rematch (PV-4): the detail panel offers "Wrong match?" → opens the games-DB picker seeded with the title, degrading without IGDB creds', async ({
+	page,
+}) => {
+	const game = createGame({
+		title: `Rematch Target ${randomUUID().slice(0, 8)}`,
+		tracking: { owned: true, playStatus: 'Playing' },
+	});
+	try {
+		await seedGame(game);
+		await page.goto('/');
+		await openDetailBySearch(page, game);
+
+		// The correction entry point lives in the detail header.
+		await page
+			.getByTestId('detail-panel')
+			.getByRole('button', { name: 'Wrong match?' })
+			.click();
+
+		// The picker opens seeded with the current title and auto-searches; e2e
+		// carries no IGDB creds, so it degrades to the no-match notice (NFR-4).
+		// The actual rematch write is pinned in integration (games.test.ts).
+		const dialog = page.getByTestId('rematch-dialog');
+		await expect(dialog).toBeVisible();
+		await expect(dialog.getByRole('textbox')).toHaveValue(game.title);
+		await expect(dialog.getByText(/No games-DB match found/)).toBeVisible();
+
+		// Back returns to the still-open detail panel (no write).
+		await dialog.getByRole('button', { name: 'Back' }).click();
+		await expect(dialog).toBeHidden();
+		await expect(page.getByTestId('detail-panel')).toBeVisible();
+	} finally {
+		await deleteGames([game.id]);
+	}
+});
+
 test('discard: "Remove from library" closes the panel, drops the card, and Undo revives it', async ({
 	page,
 }) => {

@@ -130,6 +130,20 @@
 	color: var(--color-text-primary);
 	font: inherit;
 	cursor: pointer;
+	/* DOM-first (focus-trap anchor) but rendered last (top-right ✕ convention). */
+	order: 2;
+}
+
+/* PV-4 rematch entry point — a quiet text button, not a primary CTA. */
+.detail-panel__rematch {
+	order: 1;
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-sm);
+	background: none;
+	color: var(--color-text-secondary);
+	font: inherit;
+	font-size: 13px;
+	cursor: pointer;
 }
 
 .detail-panel__section {
