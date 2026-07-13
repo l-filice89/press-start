@@ -289,3 +289,15 @@ status: open
 - source_spec: `_bmad-output/implementation-artifacts/spec-6-6-one-picker-for-every-igdb-match-pv-6.md`
   summary: Stacked modals leave the dialog underneath live to assistive tech — the covered dialog keeps `role="dialog" aria-modal="true"` and is neither `inert` nor `aria-hidden`, so a screen-reader user can still reach its fields and buttons.
   evidence: Project-wide pattern, not introduced by 6.6 — `SettingsPanel` + `ConfirmDialog` (cancel-PS+), `StragglersDialog` + `ConfirmDialog` (ignore), and `DetailPanel` + `RematchDialog` all stack this way; `useModalTrap`'s `enabled` flag hands over Escape but nothing hides the layer below. One shared fix belongs in `useModalTrap` (mark the container `inert` while disabled), not in any single dialog.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-8-1-sign-in-with-google-b1a.md`
+  summary: A de-allowlisted session still passes `/api/auth/get-session`, so the SPA renders the authenticated shell while every data route 401s — and its `session` rows are never revoked.
+  evidence: `requireAuth` re-checks the allowlist (Story 8.1) but `authRoute` hands `/auth/*` straight to better-auth, and the SPA gates on `authClient.useSession()`. Changing AUTH_ALLOWED_EMAIL therefore yields a broken shell rather than the login screen, and the stale cookie stays valid for any future route that forgets `requireAuth`. Fix: gate get-session, or revoke a user's sessions when the allowlist stops admitting them. Only reachable by the operator changing his own allowlist today; it becomes real with Story 8.2.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-8-1-sign-in-with-google-b1a.md`
+  summary: Starting a Google sign-in writes an OAuth state row to `verification` before any allowlist check can run, so a stranger can grow that table by repeatedly starting (never finishing) sign-ins.
+  evidence: The magic-link path has a route-level pre-gate precisely to prevent this residue (`routes/auth.ts`), but the OAuth path cannot — the email is only known after the code exchange, which is why the gate lives in the create hook. The rows are short-lived and carry no user data. The fix belongs with whatever rate-limits the auth endpoints.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-8-1-sign-in-with-google-b1a.md`
+  summary: The OAuth allowlist gate covers user CREATION only — linking a Google account into an EXISTING user row never runs it.
+  evidence: `account.accountLinking` is at better-auth defaults (enabled, google trusted), so `handleOAuthUserInfo` links by matching email without calling `user.create.before`. Safe today by construction (the allowlist is one exact email, so a non-allowlisted address has no row to link into) and noted in the code, but Story 8.2 — which widens the allowlist into real registration — must gate the link path too.

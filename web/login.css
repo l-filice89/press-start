@@ -84,3 +84,36 @@
 	font-size: 13px;
 	color: var(--color-heat-magenta-ink);
 }
+
+/* Story 8.1 (B1a) — Google sits alongside the magic link, styled as the
+   secondary path: same shape as the submit CTA, hairline instead of fill. */
+.login__divider {
+	margin: var(--space-3) 0;
+	font-family: var(--font-ui);
+	font-size: 13px;
+	color: var(--text-dim);
+	text-align: center;
+}
+
+.login__google {
+	width: 100%;
+	padding: var(--space-3) var(--space-4);
+	font-family: var(--font-ui);
+	font-weight: 700;
+	font-size: 15px;
+	color: var(--color-text-primary);
+	background: none;
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-sm);
+	cursor: pointer;
+}
+
+.login__google:hover:not(:disabled) {
+	border-color: var(--color-accent-electric);
+	color: var(--color-accent-electric);
+}
+
+.login__google:disabled {
+	opacity: 0.6;
+	cursor: default;
+}

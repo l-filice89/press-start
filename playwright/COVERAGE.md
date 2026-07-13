@@ -187,3 +187,18 @@ can't re-own it, and re-adding the name revives it — no browse-list.
 | Ignore an import straggler from the dialog (confirm-gated hard delete of the Notion staging row; import rows only) | `epic6.spec.ts` › stragglers: Ignore an import row is confirm-gated and hard-deletes the staging row (Cancel writes nothing, Confirm drops the row + deletes the D1 row); the endpoint/hard-delete + 404-on-stale pinned in `stragglers.test.ts` › ignores an import straggler; the Ignore-vs-Discard split + confirm gate jsdom-pinned in `StragglersDialog.test.tsx` |
 | Additive PSN sync never re-owns / un-hides a discarded game | pinned in `discard.test.ts` › does NOT let additive PSN sync re-own a discarded game (owned stays false, discarded stays true after sync) — server-side, no UI flow |
 | Discard on an untracked game 404s (no empty tombstone) | pinned in `discard.test.ts` › 404s a discard on a game the user does not track |
+
+## Epic 8
+
+Only Story 8.1 (B1a, Google sign-in) is implemented — it sits outside the rest of
+the epic's ordering and is single-tenant-safe. The OAuth round-trip itself is
+not browser-drivable here (no credentials, no consent screen); the gate is
+pinned in `test/integration/auth.test.ts` against real workerd + D1.
+
+| AC | Coverage |
+|----|----------|
+| 8.1a Google is added ALONGSIDE magic link — both paths work, neither replaces the other | `auth-journey.spec.ts` › the login gate offers Google alongside the magic link (both CTAs on the same gate) + › signs in via the console-captured magic link (the magic-link journey still green end to end); the provider is only registered when both Google creds are set, pinned by `auth.test.ts` (the e2e/dev envs have none and magic link keeps working) |
+| 8.1b a non-allowlisted OAuth callback is still rejected by `isAllowedEmail` — no user/account row | `auth.test.ts` › Google OAuth allowlist gate › rejects a non-allowlisted Google account — no user row, no account row + › admits the allowlisted Google account + › fails closed when the allowlist is unset + › strands a session whose user is no longer allowlisted. NOT e2e: driving it needs Google's consent screen and live credentials, which the e2e env has by design neither of; the tests hit `internalAdapter.createOAuthUser`, the exact seam better-auth's callback runs the gate through |
+| 8.1c a rejected OAuth sign-in is stated plainly, not swallowed into a blank screen | jsdom `Login.test.tsx` › states the allowlist rejection rather than bouncing silently (`/?error=ACCESS_DENIED` → alert, param consumed) + › surfaces a failed OAuth start instead of a dead button — the redirect that produces the param is the server-side branch pinned in 8.1b; no e2e can produce it without Google |
+| 8.1d the Google button and the magic-link form both render, on the existing token system | `auth-journey.spec.ts` › the login gate offers Google alongside the magic link; jsdom `Login.test.tsx` › offers both sign-in paths, and the Google button starts the OAuth flow (asserts `signIn.social` is called with the google provider) |
+| 8.1e the Google client secret lives in a Worker secret, never in the repo | no runtime flow — enforced by config: the pair lives in `.dev.vars` / `wrangler secret put` (documented in `.dev.vars.example`), and `wrangler.jsonc` carries only a comment naming them. `grep -rn "GOOGLE_CLIENT" wrangler.jsonc` returns comments only |

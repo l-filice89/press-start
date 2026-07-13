@@ -55,7 +55,11 @@ authRoute.on(['GET', 'POST'], '/auth/*', (c) => {
 export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
 	const auth = createAuth(c.env, { baseURL: new URL(c.req.url).origin });
 	const session = await auth.api.getSession({ headers: c.req.raw.headers });
-	if (!session) {
+	// The allowlist is re-checked on every protected request, not just at
+	// sign-in: a `user` row outlives the allowlist that admitted it, so a
+	// changed (or emptied) AUTH_ALLOWED_EMAIL must strand the old session
+	// rather than leave a stale account with a live key to the library.
+	if (!session || !isAllowedEmail(session.user.email, c.env)) {
 		return c.json({ error: 'unauthorized' }, 401);
 	}
 	c.set('userId', session.user.id);

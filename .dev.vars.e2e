@@ -6,3 +6,6 @@ BETTER_AUTH_SECRET=e2e-local-only-secret-never-used-in-production
 
 # Absent on purpose: the e2e sync test relies on NO cookie being configured.
 PSN_SESSION_COOKIE=""
+
+GOOGLE_CLIENT_ID=""
+GOOGLE_CLIENT_SECRET=""

@@ -121,7 +121,7 @@ development_status:
   # Epic 8: Multi-user Readiness — POST-v1.0.0, demand-driven (after Epic 7)
   epic-8: backlog
   8-0-foundation-auth-model-data-scoping-design-gate: backlog # gate: signed-off auth model + scoping before any 8.x code
-  8-1-sign-in-with-google-b1a: backlog
+  8-1-sign-in-with-google-b1a: done # 2026-07-13 (dev-auto): Google alongside magic link; allowlist enforced on the OAuth path via a databaseHooks create gate (+ requireAuth re-check); 6 review patches incl. 1 HIGH (the rejection code never reached the browser); followup_review_recommended:true (forced by the HIGH)
   8-2-real-users-can-register-b1b: backlog
   8-3-per-user-ps-facts-region-and-catalog-flag-b2-b3: backlog
   8-4-the-scheduled-refresh-serves-every-user-b4-b5: backlog
