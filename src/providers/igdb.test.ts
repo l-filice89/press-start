@@ -44,7 +44,9 @@ function stubFetch(opts: { token?: () => Response; games: () => Response }) {
 	const token =
 		opts.token ??
 		(() => jsonResponse({ access_token: 'app-tok', expires_in: 5_000_000 }));
-	const fetchMock = vi.fn(async (url: unknown) =>
+	// Second param typed so `calls[i][1]` (the request init) is reachable — the
+	// PV-2 query-body assertion inspects it.
+	const fetchMock = vi.fn(async (url: unknown, _init?: unknown) =>
 		isTokenUrl(url) ? token() : opts.games(),
 	);
 	vi.stubGlobal('fetch', fetchMock);
@@ -138,13 +140,16 @@ describe('createIgdbProvider auth (client-credentials, self-healing)', () => {
 	});
 });
 
-describe('createIgdbProvider query (PV-2 category filter)', () => {
+describe('createIgdbProvider query (PV-2 game_type filter)', () => {
 	it('filters the games query to full games only (drops DLC/bundle noise)', async () => {
 		const m = stubFetch({ games: () => jsonResponse([HADES]) });
 		await provider().enrich('Hades');
 		const gamesCall = m.mock.calls.find((c) => !isTokenUrl(c[0]));
 		const body = String((gamesCall?.[1] as RequestInit).body);
-		expect(body).toContain('where category = (0,4,8,9,10,11);');
+		// `game_type`, NOT the retired `category` field — the latter matches zero
+		// rows live and empties every search (fixed 2026-07-13).
+		expect(body).toContain('where game_type = (0,4,8,9,10,11);');
+		expect(body).not.toContain('category');
 	});
 });
 
