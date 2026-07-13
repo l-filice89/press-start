@@ -139,6 +139,14 @@ export function SettingsPanel({
 							save.reset();
 						}}
 					/>
+					<button
+						type="button"
+						className="settings-panel__save tap-target"
+						disabled={!trimmed || save.isPending}
+						onClick={() => save.mutate(trimmed)}
+					>
+						{save.isPending ? 'Saving…' : 'Save cookie'}
+					</button>
 					<div
 						className="settings-panel__feedback"
 						role="status"
@@ -219,14 +227,6 @@ export function SettingsPanel({
 						onClick={onClose}
 					>
 						Close
-					</button>
-					<button
-						type="button"
-						className="settings-panel__save tap-target"
-						disabled={!trimmed || save.isPending}
-						onClick={() => save.mutate(trimmed)}
-					>
-						{save.isPending ? 'Saving…' : 'Save cookie'}
 					</button>
 				</div>
 			</div>
