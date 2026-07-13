@@ -79,6 +79,11 @@ stragglersRoute.post('/stragglers/resolve', requireAuth, async (c) => {
 	if (outcome === 'not-found') {
 		return c.json({ error: 'straggler not found' }, 404);
 	}
+	// That IGDB game is already in the catalog under another row (FR-29): the
+	// add-by-name 409 convention — the existing id, so the UI can point at it.
+	if (outcome.kind === 'conflict') {
+		return c.json({ error: 'already linked', gameId: outcome.gameId }, 409);
+	}
 	return c.json({ gameId: outcome.gameId }, 200);
 });
 

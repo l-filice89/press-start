@@ -37,16 +37,16 @@ function mockFetch(settings: {
 	return fetchMock;
 }
 
-function renderPanel(onClose = vi.fn(), onSignOut = vi.fn()) {
+function renderPanel(onClose = vi.fn()) {
 	const client = new QueryClient({
 		defaultOptions: { queries: { retry: false } },
 	});
 	render(
 		<QueryClientProvider client={client}>
-			<SettingsPanel onClose={onClose} onSignOut={onSignOut} />
+			<SettingsPanel onClose={onClose} />
 		</QueryClientProvider>,
 	);
-	return { onClose, onSignOut };
+	return { onClose };
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -98,13 +98,14 @@ describe('SettingsPanel', () => {
 		expect(onClose).toHaveBeenCalledTimes(1);
 	});
 
-	it('signs out and offers About/Help (Story 6.3, FR-47)', async () => {
+	// Sign-out lives in the header alone (deferred-work triage 2026-07-13): the
+	// panel offers About/Help and no second sign-out entry point.
+	it('offers About/Help and no sign-out of its own (Story 6.3, FR-47)', async () => {
 		mockFetch({ psnCookieSet: false, psnAuthExpired: false });
-		const { onSignOut } = renderPanel();
+		renderPanel();
 
 		expect(screen.getByText(/About & Help/)).toBeInTheDocument();
-		await userEvent.click(screen.getByTestId('settings-sign-out'));
-		expect(onSignOut).toHaveBeenCalledTimes(1);
+		expect(screen.queryByTestId('settings-sign-out')).not.toBeInTheDocument();
 	});
 
 	it('cancel PS+ is inert with no claims (Story 6.4 AC4)', async () => {

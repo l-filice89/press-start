@@ -125,12 +125,7 @@ export function AppShell({
 				}
 				onPsPlusCheckComplete={setPsPlusResult}
 			/>
-			{settingsOpen && (
-				<SettingsPanel
-					onClose={() => setSettingsOpen(false)}
-					onSignOut={onSignOut}
-				/>
-			)}
+			{settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
 			{psPlusResult && (
 				<PsPlusCheckModal
 					result={psPlusResult}

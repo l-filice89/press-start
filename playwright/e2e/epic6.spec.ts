@@ -503,17 +503,18 @@ test('Export CSV: the FAB item downloads the library as a CSV file (6.3)', async
 	expect(content.startsWith('Title,State,')).toBe(true);
 });
 
-test('Settings: sign out and About/Help are available (6.3)', async ({
+test('Settings: About/Help is available; sign-out lives in the header (6.3)', async ({
 	page,
 }) => {
 	await page.goto('/');
 	await page.getByRole('button', { name: 'Settings' }).click();
 	const panel = page.getByTestId('settings-panel');
 	await expect(panel.getByText(/About & Help/)).toBeVisible();
-	// The affordance only — CLICKING sign-out revokes the one shared
-	// storage-state session and every parallel test 401s off the shelf.
-	// The click → onSignOut wiring is pinned in SettingsPanel.test.tsx.
-	await expect(panel.getByTestId('settings-sign-out')).toBeVisible();
+	// One sign-out entry point, the header's (deferred-work triage 2026-07-13).
+	// The affordance only — CLICKING it revokes the one shared storage-state
+	// session and every parallel test 401s off the shelf.
+	await expect(panel.getByTestId('settings-sign-out')).toHaveCount(0);
+	await expect(page.getByRole('button', { name: /sign out/i })).toBeVisible();
 });
 
 /**
@@ -796,8 +797,7 @@ test('add: "Not the right game?" picks a different match, overwrites the draft, 
 
 	await page.route(
 		(url) => url.pathname === '/api/games/preview',
-		(route) =>
-			route.fulfill({ json: { available: true, candidate: wrong } }),
+		(route) => route.fulfill({ json: { available: true, candidate: wrong } }),
 	);
 	await page.route(
 		(url) => url.pathname === '/api/games/search',

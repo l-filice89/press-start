@@ -1497,6 +1497,18 @@ So that the app is no longer one hard-coded email address.
 **When** it hits any tracking read/write path
 **Then** it is refused — the scoping is enforced server-side, not by the UI hiding things [AR-13]
 
+**Given** a user who is no longer admitted (removed from the allowlist, or de-provisioned under whatever replaces it) but still holds a valid session cookie
+**When** they open the app
+**Then** they land on the login screen, not a shell that renders while every data route 401s — the session check the SPA gates on (`/api/auth/get-session`) applies the same admission rule as `requireAuth`, and their `session` rows are revoked [deferred-work: de-allowlisted session; AR-13, NFR-4]
+
+**Given** OAuth account linking is at better-auth defaults (a Google identity links into an existing user row by matching email, without `user.create.before` running)
+**When** registration opens the door to real addresses
+**Then** the admission rule gates the LINK path too, not just user creation — no one links a Google identity into an account they weren't admitted to [deferred-work: OAuth link gate; B1a, B1b]
+
+**Given** the auth endpoints are reachable by strangers once registration is open (a started-but-never-finished Google sign-in writes an OAuth state row to `verification` before any admission check can run)
+**When** the endpoints are hardened
+**Then** they are rate-limited — the residue of an unfinished sign-in cannot be grown without bound [deferred-work: OAuth verification residue; NFR-1]
+
 > Gates 8.3–8.5. Nothing below matters until a second user exists.
 
 ### Story 8.3: Per-user PS+ facts — region and catalog flag (B2 + B3)
@@ -1522,6 +1534,10 @@ So that another user's catalog check never rewrites what is playable for me.
 **Given** existing single-user data
 **When** the migration runs
 **Then** the current global flag and region are carried onto the existing user, losing nothing [AR-16]
+
+**Given** every writer of the global flag — the PS+ check (`setPsPlusExtraFlags`), the scheduled refresh, and Story 6.4's "I cancelled PS+" un-claim, which re-flags the games it un-owns
+**When** the flag becomes per-user
+**Then** all three write the per-user shape — one user's cancel can no longer repaint another user's catalog pills [deferred-work: cancel-PS+ global write; B2, AD-19]
 
 > B2 and B3 are one story on purpose: both are "a global fact that must become per-user", and a per-user flag is meaningless without a per-user region.
 

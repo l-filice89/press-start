@@ -64,3 +64,12 @@ baseline_commit: '824407a'
 
 - The runnable check: asserts the request body carries the clause.
   [`igdb.test.ts:141`](../../src/providers/igdb.test.ts#L141)
+
+## Amendment 2026-07-13 (post-ship)
+
+Two corrections to the shipped filter, both live-verified:
+
+1. **`category` → `game_type`.** IGDB retired `category`; filtering on it matched zero rows and emptied every search. The clause is `where game_type = (...)` (same enum values).
+2. **Whitelist widened to `(0,2,4,6,8,9,10,11)`** — expansion(2) and episode(6) readmitted alongside main_game(0), standalone_expansion(4), remake(8), remaster(9), expanded_game(10), port(11). The original whitelist dropped titles people genuinely own and track (Witcher 3: Blood and Wine; Life is Strange episodes). Season(7), bundle(3), DLC(1), pack/update/mod stay excluded — that noise is what the filter is for. Closes the deferred-work whitelist watch.
+
+Read every reference to `category = (0,4,8,9,10,11)` above as `game_type = (0,2,4,6,8,9,10,11)`.

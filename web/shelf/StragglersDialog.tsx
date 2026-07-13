@@ -29,13 +29,15 @@ export function StragglersDialog({ onClose }: { onClose: () => void }) {
 	const headingId = useId();
 	const queryClient = useQueryClient();
 	const { toast } = useToast();
-	const onKeyDown = useModalTrap(dialogRef, onClose);
-
 	const [selected, setSelected] = useState<Straggler | null>(null);
 	// The import row awaiting the ignore confirm gate (null = no gate open).
 	const [confirmingIgnore, setConfirmingIgnore] = useState<Straggler | null>(
 		null,
 	);
+	const onKeyDown = useModalTrap(dialogRef, onClose, {
+		// The ignore confirm stacks on top: hand it Escape (Story 3.5 rule).
+		enabled: !confirmingIgnore,
+	});
 
 	const { data: stragglers = [], isPending } = useQuery({
 		queryKey: ['stragglers'],
@@ -151,9 +153,16 @@ export function StragglersDialog({ onClose }: { onClose: () => void }) {
 								queryClient.invalidateQueries({ queryKey: ['genres'] }),
 							]);
 						}}
-						onError={() => {
+						onError={(error) => {
+							// 409: that IGDB game is already in the library under another
+							// row, so retrying the same pick can never work — say what to do
+							// instead (pick a different match, or discard this row).
+							const conflict =
+								(error as { status?: number } | null)?.status === 409;
 							toast({
-								message: `Couldn’t resolve ${selected.title}. Try again.`,
+								message: conflict
+									? `That game is already in your library. Pick a different match, or discard “${selected.title}”.`
+									: `Couldn’t resolve ${selected.title}. Try again.`,
 							});
 							setSelected(null);
 							queryClient.invalidateQueries({ queryKey: ['stragglers'] });
@@ -249,7 +258,7 @@ function ResolveView({
 	straggler: Straggler;
 	onCancel: () => void;
 	onResolved: () => void | Promise<void>;
-	onError: () => void;
+	onError: (error: unknown) => void;
 }) {
 	const mutation = useMutation({
 		mutationFn: (candidate: IgdbCandidate) =>
