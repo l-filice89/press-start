@@ -46,18 +46,25 @@ function renderFab(handedness: 'left' | 'right' = 'right') {
 	const invalidate = vi.spyOn(client, 'invalidateQueries');
 	const onSyncComplete = vi.fn();
 	const onPsPlusCheckComplete = vi.fn();
+	const onTrophySyncComplete = vi.fn();
 	render(
 		<QueryClientProvider client={client}>
 			<ToastHost>
 				<Fab
 					onSyncComplete={onSyncComplete}
 					onPsPlusCheckComplete={onPsPlusCheckComplete}
+					onTrophySyncComplete={onTrophySyncComplete}
 					handedness={handedness}
 				/>
 			</ToastHost>
 		</QueryClientProvider>,
 	);
-	return { invalidate, onSyncComplete, onPsPlusCheckComplete };
+	return {
+		invalidate,
+		onSyncComplete,
+		onPsPlusCheckComplete,
+		onTrophySyncComplete,
+	};
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -146,6 +153,66 @@ describe('Fab', () => {
 		// Flags feed playableNow — the shelf must re-derive.
 		expect(invalidate).toHaveBeenCalledWith({ queryKey: ['shelf'] });
 		expect(screen.queryByTestId('fab-drawer')).not.toBeInTheDocument();
+	});
+
+	it('runs the trophy sync with a spinner, hands the result over, and repaints the shelf (Story 9.2)', async () => {
+		const { release, fetchMock } = deferredFetch(() =>
+			Promise.resolve(
+				new Response(
+					JSON.stringify({
+						updated: ['Ultimate Chicken Horse'],
+						unmatched: ['Some Demo'],
+						needsAttention: [],
+					}),
+					{ status: 200, headers: { 'content-type': 'application/json' } },
+				),
+			),
+		);
+		const { invalidate, onTrophySyncComplete } = renderFab();
+
+		await userEvent.click(screen.getByRole('button', { name: 'Chores' }));
+		await userEvent.click(screen.getByTestId('fab-trophy-sync'));
+
+		expect(await screen.findByTestId('fab-trophy-spinner')).toBeInTheDocument();
+		expect(screen.getByTestId('fab-trophy-sync')).toBeDisabled();
+
+		release();
+		await waitFor(() =>
+			expect(onTrophySyncComplete).toHaveBeenCalledWith({
+				updated: ['Ultimate Chicken Horse'],
+				unmatched: ['Some Demo'],
+				needsAttention: [],
+			}),
+		);
+		expect(fetchMock).toHaveBeenCalledWith(
+			'/api/sync/trophies',
+			expect.objectContaining({ method: 'POST' }),
+		);
+		// The counts feed the card's %/grade — the shelf must re-derive.
+		expect(invalidate).toHaveBeenCalledWith({ queryKey: ['shelf'] });
+		expect(screen.queryByTestId('toast')).not.toBeInTheDocument();
+	});
+
+	it('a trophy sync rejected for an expired token toasts and refetches settings so the banner lights (hazard: no retry)', async () => {
+		const { release, fetchMock } = deferredFetch(() =>
+			Promise.resolve(
+				new Response(JSON.stringify({ error: 'expired' }), { status: 401 }),
+			),
+		);
+		const { invalidate } = renderFab();
+
+		await userEvent.click(screen.getByRole('button', { name: 'Chores' }));
+		await userEvent.click(screen.getByTestId('fab-trophy-sync'));
+		release();
+
+		await waitFor(() =>
+			expect(screen.getByTestId('toast')).toHaveTextContent(
+				/Trophy sync failed/,
+			),
+		);
+		expect(invalidate).toHaveBeenCalledWith({ queryKey: ['settings'] });
+		// One attempt — the client never re-fires a rejected credential.
+		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
 	it('a failed PS+ check toasts', async () => {

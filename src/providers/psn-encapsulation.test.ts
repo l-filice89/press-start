@@ -29,6 +29,14 @@ const PSN_AUTH_PATTERNS: {
 		allowed: [PROVIDER],
 	},
 	{
+		// Story 9.2: the trophy list rides a SECOND PSN host (m.np.playstation.com,
+		// not the GraphQL one) — the seam has to hold there too, or a service could
+		// hand-roll a trophy call with its own bearer.
+		label: 'the PSN trophy API host',
+		pattern: /m\.np\.playstation\.com|trophyTitles/,
+		allowed: [PROVIDER],
+	},
+	{
 		label: 'the persisted getPurchasedGameList query',
 		pattern: /getPurchasedGameList/,
 		allowed: [PROVIDER],

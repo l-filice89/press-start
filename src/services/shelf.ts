@@ -6,12 +6,16 @@
  * (NFR-3). Every read is user-scoped (AD-13).
  */
 import {
+	completionPercent,
 	computeDerivedStates,
 	computeEffectiveState,
 	type EffectiveState,
 	isDefaultShelfVisible,
 	orderShelf,
 	type PlayStatus,
+	type TrophyGrade,
+	totalTrophies,
+	trophyGrade,
 } from '../core';
 import {
 	type LibraryRow,
@@ -58,6 +62,55 @@ export interface ShelfGame {
 	ownedVia: 'purchase' | 'membership' | null;
 	releaseDate: string | null;
 	genres: string[];
+	/**
+	 * Trophy progress (Story 9.2), derived HERE from the counts persisted by the
+	 * trophy sync — nothing is fetched on render (NFR-3), and the % / grade are
+	 * never stored (AD-8). `null` = no trophy data: the card and detail show
+	 * NOTHING for this game, never a fake 0%.
+	 */
+	trophy: {
+		percent: number;
+		grade: TrophyGrade;
+		earned: TrophyTiers;
+		defined: TrophyTiers;
+	} | null;
+}
+
+interface TrophyTiers {
+	bronze: number;
+	silver: number;
+	gold: number;
+	platinum: number;
+}
+
+/**
+ * The stored counts → the card's trophy block, or null. `trophy_synced_at` is
+ * the sentinel — it is THE column that means "the trophy sync wrote this row",
+ * so a never-synced row (and a partially-written one) reads as NO DATA instead
+ * of `?? 0`-filling missing tiers into a wrong percentage. A synced game whose
+ * defined counts sum to zero (PSN lists it with no trophies) is also no data,
+ * and `completionPercent` says so by returning null.
+ */
+function bakeTrophy(row: LibraryRow): ShelfGame['trophy'] {
+	if (row.trophySyncedAt == null) return null;
+	const earned: TrophyTiers = {
+		bronze: row.trophyEarnedBronze ?? 0,
+		silver: row.trophyEarnedSilver ?? 0,
+		gold: row.trophyEarnedGold ?? 0,
+		platinum: row.trophyEarnedPlatinum ?? 0,
+	};
+	const defined: TrophyTiers = {
+		bronze: row.trophyDefinedBronze ?? 0,
+		silver: row.trophyDefinedSilver ?? 0,
+		gold: row.trophyDefinedGold ?? 0,
+		platinum: row.trophyDefinedPlatinum ?? 0,
+	};
+	const percent = completionPercent(
+		totalTrophies(earned),
+		totalTrophies(defined),
+	);
+	if (percent === null) return null;
+	return { percent, grade: trophyGrade(percent), earned, defined };
 }
 
 function bakeCard(row: LibraryRow, genres: string[]): ShelfGame {
@@ -96,6 +149,7 @@ function bakeCard(row: LibraryRow, genres: string[]): ShelfGame {
 		ownedVia: row.ownedVia,
 		releaseDate: row.releaseDate,
 		genres,
+		trophy: bakeTrophy(row),
 	};
 }
 

@@ -356,3 +356,19 @@ resolution: spike complete; the table above IS the deliverable. Firm: NPSSO gate
 - source_spec: `spec-9-1b-swap-psnprovider-cookie-to-npsso-bearer-vr-1.md`
   summary: The npsso charset guard in `src/routes/settings.ts` admits non-Latin1 codepoints, which the outbound Cookie header cannot carry.
   evidence: Such a value saves fine, then fails at `fetch` with a TypeError → a 502 at sync time instead of a 400 at save time. Fails closed (no injection, no bad write), so it is a diagnosability nit, not a security hole.
+
+- source_spec: `spec-9-2-trophy-progress-on-every-game-vr-2.md`
+  summary: Trophy counts are never cleared or aged — a game whose trophy title stops matching PSN keeps its last-synced "62% · B" forever, and the UI never shows how old the numbers are (`trophy_synced_at` is stored but never read).
+  evidence: Nothing writes NULL back to the trophy columns, and no view reads `trophy_synced_at`. Needs a product call (clear on vanish? show "synced 3 months ago"?) rather than a silent default, so it was not invented during the run.
+
+- source_spec: `spec-9-2-trophy-progress-on-every-game-vr-2.md`
+  summary: `Db` now types a `batch` method, but the seed script's sqlite-proxy driver is built without a batch callback — any future repository function that batches and is reused by the seed path fails at RUNTIME, not compile time.
+  evidence: `src/repositories/db.ts` widens the type; `scripts/seed-import.ts` calls `drizzle(callback, { schema })` with no batch callback. Harmless today (the seed path never calls `setTrophyCountsBatch`), a trap tomorrow.
+
+- source_spec: `spec-9-2-trophy-progress-on-every-game-vr-2.md`
+  summary: No e2e test drives the FAB -> trophy sync -> shelf-repaint seam end to end, because PSN cannot be stubbed in the Playwright environment.
+  evidence: `Fab.test.tsx` mocks fetch, `trophies.test.ts` mocks the provider, and the e2e seeds D1 directly — so query invalidation actually repainting a card with fresh counts is asserted nowhere. Same limitation `epic5-psplus.spec.ts` already records.
+
+- source_spec: `spec-9-2-trophy-progress-on-every-game-vr-2.md`
+  summary: A discarded game's trophy title is reported as "no library match" noise on every trophy sync, and two trophy syncs in flight for the same user are not locked (same posture as the library sync).
+  evidence: `listLibraryForUser` excludes discarded rows, so their trophy titles fall into `unmatched`; the FAB disable is per-component only. Both are cosmetic / pre-existing-pattern, not data hazards.

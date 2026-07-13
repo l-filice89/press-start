@@ -6,7 +6,9 @@ import {
 	type PsPlusCheckResult,
 	runPsPlusCheck,
 	runSync,
+	runTrophySync,
 	type SyncResult,
+	type TrophySyncResult,
 } from '../settings/api';
 import './fab.css';
 
@@ -20,12 +22,15 @@ import './fab.css';
 export function Fab({
 	onSyncComplete,
 	onPsPlusCheckComplete,
+	onTrophySyncComplete,
 	handedness = 'right',
 }: {
 	/** Receives every completed run's result — AppShell opens the summary modal (FR-37). */
 	onSyncComplete: (result: SyncResult) => void;
 	/** Receives every completed PS+ check's result — AppShell opens its readout (FR-38). */
 	onPsPlusCheckComplete: (result: PsPlusCheckResult) => void;
+	/** Receives every completed trophy sync's result — AppShell opens its readout (Story 9.2). */
+	onTrophySyncComplete: (result: TrophySyncResult) => void;
 	/** FAB placement (Story 6.3, UX-DR10) — bottom-right (default) or bottom-left. */
 	handedness?: 'left' | 'right';
 }) {
@@ -83,7 +88,34 @@ export function Fab({
 		onSettled: () => setOpen(false),
 	});
 
-	syncPendingRef.current = sync.isPending || check.isPending;
+	// Trophy sync (Story 9.2): same shape as the library sync — a 401 means the
+	// server already persisted the expired flag, so refetching settings lights
+	// the banner; the counts land in a summary readout, never a toast.
+	const trophies = useMutation({
+		mutationFn: runTrophySync,
+		onSuccess: (result: TrophySyncResult) => {
+			announce('Trophy sync complete.');
+			onTrophySyncComplete(result);
+			// The counts feed the card's %/grade — the shelf must re-derive.
+			queryClient.invalidateQueries({ queryKey: ['shelf'] });
+			queryClient.invalidateQueries({ queryKey: ['settings'] });
+		},
+		onError: (error: Error & { status?: number }) => {
+			if (error.status === 401) {
+				toast({
+					message:
+						'Trophy sync failed — the PlayStation token expired. See the banner.',
+				});
+				queryClient.invalidateQueries({ queryKey: ['settings'] });
+			} else {
+				toast({ message: 'Trophy sync failed — try again later.' });
+			}
+		},
+		onSettled: () => setOpen(false),
+	});
+
+	const psnBusy = sync.isPending || check.isPending || trophies.isPending;
+	syncPendingRef.current = psnBusy;
 
 	const exportCsv = useMutation({
 		// A bare <a download> can't see the HTTP status: a lapsed session would
@@ -137,7 +169,7 @@ export function Fab({
 						type="button"
 						className="fab__item tap-target"
 						onClick={() => sync.mutate()}
-						disabled={sync.isPending || check.isPending}
+						disabled={psnBusy}
 						aria-label="Sync library"
 						data-testid="fab-sync"
 					>
@@ -156,7 +188,7 @@ export function Fab({
 						type="button"
 						className="fab__item tap-target"
 						onClick={() => check.mutate()}
-						disabled={sync.isPending || check.isPending}
+						disabled={psnBusy}
 						aria-label="Check PS+ Extra"
 						data-testid="fab-psplus-check"
 					>
@@ -172,6 +204,31 @@ export function Fab({
 						</span>
 						<span className="fab__item-label">
 							{check.isPending ? 'Checking…' : 'Check PS+ Extra'}
+						</span>
+					</button>
+					<button
+						type="button"
+						className="fab__item tap-target"
+						onClick={() => trophies.mutate()}
+						disabled={psnBusy}
+						aria-label="Sync trophies"
+						data-testid="fab-trophy-sync"
+					>
+						<span className="fab__item-icon" aria-hidden="true">
+							{trophies.isPending ? (
+								<span
+									className="fab__spinner"
+									data-testid="fab-trophy-spinner"
+								/>
+							) : (
+								// A monochrome text glyph, like every other item: the trophy
+								// emoji renders full-color gold and reads flat against the
+								// neon-outline language (same reason Card.tsx strokes an SVG).
+								'★'
+							)}
+						</span>
+						<span className="fab__item-label">
+							{trophies.isPending ? 'Syncing trophies…' : 'Sync trophies'}
 						</span>
 					</button>
 					<button

@@ -49,6 +49,19 @@ const CATALOG_PAGE_SIZE = 100;
 // keeps a totalCount regression inside the 50-subrequest budget (AD-15).
 const CATALOG_MAX_PAGES = 30;
 
+// Trophy list (Story 9.2): a DIFFERENT host from the library GraphQL surface,
+// and it behaves differently — a rejected bearer answers a real HTTP 401
+// `{"error":{"message":"Invalid token"}}` here, where GraphQL answers 200 +
+// errors[]. Wire shape captured live 2026-07-13 (`tmp/probe-trophies.ts`),
+// never derived from convention.
+const TROPHY_URL =
+	'https://m.np.playstation.com/api/trophy/v1/users/me/trophyTitles';
+const TROPHY_PAGE_SIZE = 100;
+// One paginated collection for the WHOLE account (137 titles → 2 pages), not a
+// per-game lookup. 20 pages = 2,000 titles; the brake keeps a nextOffset
+// regression inside the 50-subrequest budget (AD-15).
+const TROPHY_MAX_PAGES = 20;
+
 /**
  * NPSSO missing or rejected (a denied exchange, or a 401/403 on the API).
  * Thrown after exactly ONE attempt — the caller surfaces the refresh
@@ -86,9 +99,38 @@ export interface PsnGame {
 	storeUrl: string | null;
 }
 
+/** Earned/defined trophies by tier, exactly as the trophy host sends them. */
+export interface PsnTrophyTierCounts {
+	bronze: number;
+	silver: number;
+	gold: number;
+	platinum: number;
+}
+
+/**
+ * One trophy title (Story 9.2), from the LIVE capture. There is NO `titleId`
+ * or `conceptId` on this payload — `npCommunicationId` is an NPWR id the
+ * library side has never seen — so the only join back to a library game is
+ * `trophyTitleName`. PSN's weighted `progress` is deliberately NOT carried:
+ * the % is derived from the counts in `core/` (AR-3/AR-8).
+ */
+export interface PsnTrophyTitle {
+	npCommunicationId: string;
+	trophyTitleName: string;
+	trophyTitlePlatform: string;
+	definedTrophies: PsnTrophyTierCounts;
+	earnedTrophies: PsnTrophyTierCounts;
+}
+
 export interface PsnProvider {
 	/** The full purchased list, paginated until `pageInfo.isLast`. */
 	fetchPurchasedGames(): Promise<PsnGame[]>;
+	/**
+	 * Every trophy title on the account (Story 9.2), paginated on `nextOffset`.
+	 * Rides the same bearer as the library call, with the same one-attempt
+	 * `PsnAuthError` discipline (NFR-4/AD-14).
+	 */
+	fetchTrophyTitles(): Promise<PsnTrophyTitle[]>;
 	/**
 	 * Product names currently in the region's PS+ Game Catalog (Story 5.1,
 	 * FR-38). Public store-browse endpoint — no credential involved, so
@@ -138,6 +180,39 @@ function toPsnGame(game: RawPsnGame): PsnGame {
 interface CatalogPage {
 	products: { name?: string }[];
 	pageInfo: { totalCount?: number };
+}
+
+interface RawTrophyTitle {
+	npCommunicationId?: string;
+	trophyTitleName?: string;
+	trophyTitlePlatform?: string;
+	definedTrophies?: Partial<PsnTrophyTierCounts>;
+	earnedTrophies?: Partial<PsnTrophyTierCounts>;
+}
+
+interface TrophyPage {
+	trophyTitles: RawTrophyTitle[];
+	nextOffset?: number | null;
+	totalItemCount?: number;
+}
+
+const tierCounts = (
+	raw: Partial<PsnTrophyTierCounts> | undefined,
+): PsnTrophyTierCounts => ({
+	bronze: raw?.bronze ?? 0,
+	silver: raw?.silver ?? 0,
+	gold: raw?.gold ?? 0,
+	platinum: raw?.platinum ?? 0,
+});
+
+function toTrophyTitle(raw: RawTrophyTitle): PsnTrophyTitle {
+	return {
+		npCommunicationId: raw.npCommunicationId ?? '',
+		trophyTitleName: raw.trophyTitleName ?? '',
+		trophyTitlePlatform: raw.trophyTitlePlatform ?? '',
+		definedTrophies: tierCounts(raw.definedTrophies),
+		earnedTrophies: tierCounts(raw.earnedTrophies),
+	};
 }
 
 function catalogPageUrl(offset: number): string {
@@ -401,6 +476,77 @@ export function createPsnProvider({
 		return page;
 	}
 
+	/**
+	 * One trophy page. The DEGENERATE-RESPONSE GUARD lives here: a 200 carrying
+	 * an `error` body, a missing/!array `trophyTitles`, or an EMPTY list while
+	 * `totalItemCount > 0` all throw — the sync writes nothing and the stored
+	 * trophy counts survive. (Captured 401 shape: `{"error":{"message":"Invalid
+	 * token"}}` — a real HTTP 401 on this host, unlike the GraphQL surface.)
+	 */
+	async function fetchTrophyPage(
+		token: string,
+		offset: number,
+		collected: number,
+	): Promise<TrophyPage> {
+		const response = await fetch(
+			`${TROPHY_URL}?limit=${TROPHY_PAGE_SIZE}&offset=${offset}`,
+			{
+				headers: {
+					accept: 'application/json',
+					authorization: `Bearer ${token}`,
+				},
+				signal: AbortSignal.timeout(PSN_TIMEOUT_MS),
+			},
+		);
+
+		if (response.status === 401 || response.status === 403) {
+			// One attempt, then surface — never retry an expired credential.
+			throw new PsnAuthError(response.status);
+		}
+		if (!response.ok) {
+			throw new Error(
+				`PSN trophy request failed: ${response.status} ${(await response.text()).slice(0, 500)}`,
+			);
+		}
+
+		const text = await response.text();
+		let payload: TrophyPage & { error?: { message?: string } };
+		try {
+			payload = JSON.parse(text);
+		} catch {
+			throw new Error(
+				`PSN trophies returned non-JSON (${response.status}): ${text.slice(0, 200)}`,
+			);
+		}
+		if (payload.error) {
+			throw new Error(
+				`PSN trophy error body on HTTP ${response.status}: ${JSON.stringify(payload.error)}`,
+			);
+		}
+		if (!Array.isArray(payload.trophyTitles)) {
+			throw new Error('PSN trophy response missing a trophyTitles array');
+		}
+		if (
+			collected === 0 &&
+			payload.trophyTitles.length === 0 &&
+			(payload.totalItemCount ?? 0) > 0
+		) {
+			// An account with 137 titles answering an EMPTY FIRST page is a broken
+			// response, not an empty account: fail closed rather than let the caller
+			// interpret "no trophies" and act on it.
+			// The guard is deliberately scoped to the first page. A later empty page
+			// is one PSN's own nextOffset told us to fetch — a boundary account (an
+			// exact multiple of the page size) or a title delisted mid-run lands
+			// there legitimately, and throwing would 502 a run whose titles we
+			// already hold. A genuinely truncated run is still caught: the caller
+			// reconciles the collected count against totalItemCount below.
+			throw new Error(
+				`PSN trophies returned an empty list while totalItemCount is ${payload.totalItemCount} — refusing a degenerate response`,
+			);
+		}
+		return payload;
+	}
+
 	return {
 		async fetchPurchasedGames() {
 			// One exchange for the whole (paginated) run — keeps the sync inside
@@ -421,6 +567,46 @@ export function createPsnProvider({
 				start += page.games.length;
 			}
 			return games;
+		},
+
+		async fetchTrophyTitles() {
+			// The SAME bearer as the library call: one exchange for the whole FETCH
+			// (2 exchange legs + 2 trophy pages for a 137-title account) — the D1
+			// writes the sync then issues are batched, and are the other half of the
+			// subrequest budget (AD-15).
+			const token = await getBearer();
+
+			const titles: PsnTrophyTitle[] = [];
+			let offset = 0;
+			let total: number | undefined;
+			for (let pageCount = 0; ; pageCount++) {
+				if (pageCount >= TROPHY_MAX_PAGES) {
+					throw new Error(
+						`PSN trophy pagination exceeded ${TROPHY_MAX_PAGES} pages — aborting instead of looping.`,
+					);
+				}
+				const page = await fetchTrophyPage(token, offset, titles.length);
+				titles.push(...page.trophyTitles.map(toTrophyTitle));
+				if (typeof page.totalItemCount === 'number')
+					total = page.totalItemCount;
+				const next = page.nextOffset;
+				// The last page carries no (or a non-advancing) nextOffset. Requiring
+				// it to MOVE FORWARD is what stops a `nextOffset: 0` regression from
+				// re-fetching page one until the brake trips.
+				if (typeof next !== 'number' || next <= offset) break;
+				if (page.trophyTitles.length === 0) break;
+				offset = next;
+			}
+			// FAIL CLOSED on a short run: a truncated pagination (a dropped
+			// nextOffset, a short middle page) would otherwise be indistinguishable
+			// from "the account has fewer titles" — and those titles would silently
+			// keep their stale counts, unreported.
+			if (typeof total === 'number' && titles.length < total) {
+				throw new Error(
+					`PSN trophies returned ${titles.length} of ${total} titles — refusing a short result`,
+				);
+			}
+			return titles;
 		},
 
 		async fetchPsPlusExtraCatalog(region: string) {

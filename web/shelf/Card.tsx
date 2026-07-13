@@ -225,6 +225,19 @@ export function Card({
 							open={statusMenuOpen}
 							onOpenChange={onStatusMenuOpenChange}
 						/>
+						{/* Story 9.2: trophy progress, from counts persisted at sync time
+						    (nothing is fetched on render). A game with NO trophy data
+						    renders nothing at all here — never a fake 0%. */}
+						{game.trophy && (
+							<span className="card__trophy" data-testid="card-trophy">
+								<span aria-hidden="true">
+									{game.trophy.percent}% · {game.trophy.grade}
+								</span>
+								<span className="sr-only">
+									{`Trophy progress ${game.trophy.percent} percent, grade ${game.trophy.grade}`}
+								</span>
+							</span>
+						)}
 					</div>
 					<p className="card__owned-line">
 						{/* visibility-hidden (CSS, via data-owned) when un-owned — keeps

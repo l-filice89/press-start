@@ -135,6 +135,33 @@ test('Sync from the FAB with no token configured lights the expired-token banner
 	await expect(page.getByTestId('settings-panel')).toBeVisible();
 });
 
+test('Sync trophies from the FAB with no token configured lights the expired-token banner (Story 9.2)', {
+	// The 401 IS the flow under test — opt out of the network-error monitor.
+	annotation: [{ type: 'skipNetworkMonitoring' }],
+}, async ({ page }) => {
+	// Lives HERE, not in epic9-trophies.spec.ts: it mutates the same per-user
+	// PSN setting keys as every test in this serial file, and a parallel
+	// worker's cleanup would wipe the flag mid-assert.
+	await page.goto('/');
+	await expect(page.getByTestId('attention-banner-expired-token')).toHaveCount(
+		0,
+	);
+
+	await page.getByRole('button', { name: 'Chores' }).click();
+	await page.getByTestId('fab-trophy-sync').click();
+
+	// The trophy sync fails as PsnAuthError before any outbound PSN call, the
+	// server persists the flag, and the banner lights — no retry, and no trophy
+	// count anywhere was written.
+	await expect(page.getByTestId('toast')).toHaveText(/Trophy sync failed/);
+	const banner = page.getByTestId('attention-banner-expired-token');
+	await expect(banner).toBeVisible();
+	await expect(banner).toHaveClass(/attention-banner--expired-token/);
+	// Recovery is one tap from the failure.
+	await banner.getByRole('button', { name: 'Update token' }).click();
+	await expect(page.getByTestId('settings-panel')).toBeVisible();
+});
+
 test('persisted sync needs-attention feeds the amber banner; Review reopens the summary and jumps to search (4.3)', async ({
 	page,
 }) => {

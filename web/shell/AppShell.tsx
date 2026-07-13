@@ -7,6 +7,7 @@ import {
 	type PsPlusCheckResult,
 	type SyncAttentionItem,
 	type SyncResult,
+	type TrophySyncResult,
 } from '../settings/api';
 import { SettingsPanel } from '../settings/SettingsPanel';
 import { SearchBox } from '../shelf/SearchBox';
@@ -17,6 +18,7 @@ import { Fab } from './Fab';
 import { Header } from './Header';
 import { PsPlusCheckModal } from './PsPlusCheckModal';
 import { SyncSummaryModal } from './SyncSummaryModal';
+import { TrophySyncModal } from './TrophySyncModal';
 import './app-shell.css';
 
 /**
@@ -54,6 +56,10 @@ export function AppShell({
 	} | null>(null);
 	// The PS+ check readout (5.1) — snapshot semantics match `summary`.
 	const [psPlusResult, setPsPlusResult] = useState<PsPlusCheckResult | null>(
+		null,
+	);
+	// The trophy-sync readout (Story 9.2) — snapshot semantics match `summary`.
+	const [trophyResult, setTrophyResult] = useState<TrophySyncResult | null>(
 		null,
 	);
 	const { data: settings } = useQuery({
@@ -124,12 +130,19 @@ export function AppShell({
 					setSummary({ result, attention: result.needsAttention })
 				}
 				onPsPlusCheckComplete={setPsPlusResult}
+				onTrophySyncComplete={setTrophyResult}
 			/>
 			{settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
 			{psPlusResult && (
 				<PsPlusCheckModal
 					result={psPlusResult}
 					onClose={() => setPsPlusResult(null)}
+				/>
+			)}
+			{trophyResult && (
+				<TrophySyncModal
+					result={trophyResult}
+					onClose={() => setTrophyResult(null)}
 				/>
 			)}
 			{stragglersOpen && (

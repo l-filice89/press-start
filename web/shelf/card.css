@@ -183,9 +183,21 @@
 	text-overflow: ellipsis;
 }
 
-/* Sole child is the status popover; flex keeps it shrink-wrapped on its row. */
+/* Status popover, then the trophy span (Story 9.2) — the trophy's
+   `margin-left: auto` is what pushes it to the far end of this flex row. */
 .card__meta {
 	display: flex;
+	align-items: center;
+}
+
+/* Trophy progress (Story 9.2) sits opposite the status pill; absent entirely
+   for a game with no trophy data, so no space is reserved for it. */
+.card__trophy {
+	margin-left: auto;
+	font-family: var(--font-mono);
+	font-size: 11px;
+	white-space: nowrap;
+	color: var(--state-milestone);
 }
 
 .card__owned-line {

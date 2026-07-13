@@ -7,7 +7,12 @@
  */
 import { and, eq, isNotNull, or, type SQL, sql } from 'drizzle-orm';
 import type { SQLiteUpdateSetSource } from 'drizzle-orm/sqlite-core';
-import type { DateEdits, OwnershipType, PlayStatus } from '../core';
+import type {
+	DateEdits,
+	OwnershipType,
+	PlayStatus,
+	TrophyTierCounts,
+} from '../core';
 import { gameTracking } from '../schema/catalog';
 import type { Db } from './db';
 
@@ -235,6 +240,75 @@ export async function setDiscarded(
 	discarded: boolean,
 ) {
 	return updateTrackingWhere(db, userId, gameId, { discarded });
+}
+
+/** One game's trophy counts, as the sync hands them over (Story 9.2). */
+export type TrophyCountsWrite = {
+	gameId: string;
+	npCommId: string;
+	earned: TrophyTierCounts;
+	defined: TrophyTierCounts;
+	syncedAt: string;
+};
+
+/**
+ * D1 statements per `batch` call. A per-title UPDATE would be one BINDING call
+ * each (~137 on a real account) and binding calls count against the Workers
+ * subrequest limit (50 on the free tier) — batching keeps the whole write at
+ * ceil(n/50) calls.
+ */
+const TROPHY_BATCH_SIZE = 50;
+
+/**
+ * Trophy counts write (Story 9.2), CHUNK-BATCHED. UPDATE-only through the same
+ * conditional write seam as every other tracking mutation: the trophy sync
+ * writes counts onto games the user ALREADY tracks — an untracked match mints
+ * no row. The SET list is trophy columns ONLY: no play status, no milestone, no
+ * lifecycle date can be reached from here (the invariant the integration test
+ * snapshots across a run), and every statement is user-scoped (AD-13).
+ *
+ * Returns the game ids that ACTUALLY persisted — a row deleted underneath us
+ * updates nothing, and the caller must not report it as written.
+ */
+export async function setTrophyCountsBatch(
+	db: Db,
+	userId: string,
+	writes: TrophyCountsWrite[],
+): Promise<Set<string>> {
+	const written = new Set<string>();
+	for (let i = 0; i < writes.length; i += TROPHY_BATCH_SIZE) {
+		const chunk = writes.slice(i, i + TROPHY_BATCH_SIZE);
+		const statements = chunk.map((counts) =>
+			db
+				.update(gameTracking)
+				.set({
+					trophyNpCommId: counts.npCommId,
+					trophyEarnedBronze: counts.earned.bronze,
+					trophyEarnedSilver: counts.earned.silver,
+					trophyEarnedGold: counts.earned.gold,
+					trophyEarnedPlatinum: counts.earned.platinum,
+					trophyDefinedBronze: counts.defined.bronze,
+					trophyDefinedSilver: counts.defined.silver,
+					trophyDefinedGold: counts.defined.gold,
+					trophyDefinedPlatinum: counts.defined.platinum,
+					trophySyncedAt: counts.syncedAt,
+				})
+				.where(
+					and(
+						eq(gameTracking.userId, userId),
+						eq(gameTracking.gameId, counts.gameId),
+					),
+				)
+				.returning({ gameId: gameTracking.gameId }),
+		);
+		const results = await db.batch(
+			statements as [(typeof statements)[number], ...typeof statements],
+		);
+		results.forEach((rows, index) => {
+			if (rows.length > 0) written.add(chunk[index].gameId);
+		});
+	}
+	return written;
 }
 
 /** Every tracking row for a user (AD-13 scope). */

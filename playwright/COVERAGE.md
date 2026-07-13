@@ -189,6 +189,23 @@ can't re-own it, and re-adding the name revives it — no browse-list.
 | Additive PSN sync never re-owns / un-hides a discarded game | pinned in `discard.test.ts` › does NOT let additive PSN sync re-own a discarded game (owned stays false, discarded stays true after sync) — server-side, no UI flow |
 | Discard on an untracked game 404s (no empty tombstone) | pinned in `discard.test.ts` › 404s a discard on a game the user does not track |
 
+## Epic 9
+
+Story 9.2 (trophy progress). The sync RUN needs a PSN trophy response the e2e
+Worker cannot stub (same constraint as 4.2b/5.1b), so the run is pinned at the
+integration tier against real workerd + D1 with the CAPTURED wire shape; e2e
+drives what the persisted counts do to the UI.
+
+| AC | Coverage |
+|----|----------|
+| 9.2a counts fetched through `PsnProvider` and persisted; no PSN call on render | skipped e2e — unstubbable PSN; pinned in `psn.test.ts` › fetchTrophyTitles (captured payload, pagination, bearer reuse) + `trophies.test.ts` integration › persists the counts by NAME…; the adapter seam itself in `psn-encapsulation.test.ts` (the trophy host is allowed only in the provider) |
+| 9.2b % + grade derived in `core/` from the stored counts; no trophy data → NOTHING, never `0%` | `epic9-trophies.spec.ts` › a game with trophy counts shows % · grade on its card; one without shows NOTHING (a real 0-earned game asserted as `0% · D`, distinct from no data); the bands/percent/floor rows in `trophy.test.ts`, the card/detail render in jsdom `Card.test.tsx` + `DetailPanel.test.tsx` |
+| 9.2b (detail) Trophies section with the tier breakdown | `epic9-trophies.spec.ts` › the detail panel carries a Trophies section with the tier breakdown, and omits it without data |
+| 9.2c a trophy sync changes no play status, milestone, or lifecycle date | skipped e2e — same unstubbable-PSN constraint; the hazard is pinned in `trophies.test.ts` › persists the counts by NAME … and touches NOTHING else (every non-trophy column snapshotted across a run) |
+| 9.2d expired NPSSO or a degenerate 200 → stops, writes NOTHING, existing counts survive | `epic4-settings.spec.ts` › Sync trophies from the FAB with no token configured lights the expired-token banner (Story 9.2) — it lives in THAT file, not `epic9-trophies.spec.ts`, because it mutates the same per-user `psn_auth` key as every test there and that file is serial for exactly this reason (a parallel worker's cleanup wipes the flag mid-assert); the fail-closed writes in `trophies.test.ts` › a DEGENERATE 200 (error body) writes NOTHING… + › an empty trophyTitles while totalItemCount > 0 … + › a trophy-host 401 persists psn_auth=expired…; the provider rows in `psn.test.ts` |
+| 9.2e the whole run is a BOUNDED number of subrequests (no per-game fan-out): 4 `fetch` (2 exchange legs + 2 trophy pages) plus ceil(matched/50) batched D1 calls — D1 binding calls count against the Workers limit too, so the writes are chunk-batched, never one UPDATE per title | the fetch half pinned in `psn.test.ts` › paginates on nextOffset and exchanges the NPSSO ONCE; the write half in `trophies.test.ts` (unit) › batches the writes: the D1 call count is bounded, not linear in matched titles; no UI flow |
+| 9.2 FAB trigger + summary readout | jsdom `Fab.test.tsx` › runs the trophy sync with a spinner, hands the result over, and repaints the shelf + › a trophy sync rejected for an expired token toasts…; the readout content in `TrophySyncModal.test.tsx` (unmatched reported, ambiguous named as needs-attention) |
+
 ## Epic 8
 
 Only Story 8.1 (B1a, Google sign-in) is implemented — it sits outside the rest of

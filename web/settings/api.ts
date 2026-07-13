@@ -105,6 +105,26 @@ export async function runSync(): Promise<SyncResult> {
 	return syncResultSchema.parse(await callApi('/api/sync', { method: 'POST' }));
 }
 
+/** Result of a PSN trophy sync (Story 9.2). */
+export const trophySyncResultSchema = z.object({
+	/** Games whose trophy counts this run wrote. */
+	updated: z.array(z.string()),
+	/** Trophy titles with no library game (a demo, an unowned game) — not an error. */
+	unmatched: z.array(z.string()),
+	/** Ambiguous names: nothing was written, and they are named. */
+	needsAttention: z.array(syncAttentionItemSchema),
+});
+
+export type TrophySyncResult = z.infer<typeof trophySyncResultSchema>;
+
+/** Trigger the in-Worker trophy sync. A 401 means the NPSSO expired — the
+ * server already lit the banner flag; never auto-retry (AD-14). */
+export async function runTrophySync(): Promise<TrophySyncResult> {
+	return trophySyncResultSchema.parse(
+		await callApi('/api/sync/trophies', { method: 'POST' }),
+	);
+}
+
 /** Result of a PS+ Extra catalog check (Story 5.1, FR-38). */
 export const psPlusCheckResultSchema = z.object({
 	/** Titles newly flagged as in the catalog this run. */

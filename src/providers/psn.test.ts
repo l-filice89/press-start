@@ -490,6 +490,255 @@ describe('createPsnProvider', () => {
 	});
 });
 
+/**
+ * Trophy list (Story 9.2). Every fixture below is the shape CAPTURED LIVE on
+ * 2026-07-13 by `tmp/probe-trophies.ts` — not a convention-derived guess (one
+ * of those shipped a production bug on this project). The captured facts:
+ * `{trophyTitles[], nextOffset, totalItemCount}`, entries carrying
+ * `npCommunicationId`/`trophyTitleName`/`trophyTitlePlatform`/
+ * `definedTrophies`/`earnedTrophies`/`progress` and NO titleId, and a bogus
+ * bearer answering a REAL HTTP 401 `{"error":{"message":"Invalid token"}}`.
+ */
+const TROPHY_HOST =
+	'https://m.np.playstation.com/api/trophy/v1/users/me/trophyTitles';
+
+const trophyEntry = (over: Record<string, unknown> = {}) => ({
+	npCommunicationId: 'NPWR22372_00',
+	trophyTitleName: 'Ultimate Chicken Horse Trophies',
+	trophyTitlePlatform: 'PS4',
+	hasTrophyGroups: false,
+	definedTrophies: { bronze: 40, silver: 12, gold: 6, platinum: 1 },
+	earnedTrophies: { bronze: 3, silver: 0, gold: 0, platinum: 0 },
+	progress: 4,
+	lastUpdatedDateTime: '2026-05-02T19:22:11Z',
+	...over,
+});
+
+const trophyPage = (
+	titles: unknown[],
+	extra: Record<string, unknown> = {},
+): Response =>
+	jsonResponse({
+		trophyTitles: titles,
+		totalItemCount: titles.length,
+		...extra,
+	});
+
+/** The trophy calls only — the two exchange legs filtered out. */
+const trophyCalls = (fetchMock: ReturnType<typeof vi.fn>) =>
+	fetchMock.mock.calls.filter(([url]) => String(url).startsWith(TROPHY_HOST));
+
+describe('fetchTrophyTitles', () => {
+	it('maps the CAPTURED entry shape and rides the same bearer (no cookie)', async () => {
+		const fetchMock = mockPsn(() => trophyPage([trophyEntry()]));
+		vi.stubGlobal('fetch', fetchMock);
+
+		const titles = await provider(['npsso']).provider.fetchTrophyTitles();
+
+		expect(titles).toEqual([
+			{
+				npCommunicationId: 'NPWR22372_00',
+				trophyTitleName: 'Ultimate Chicken Horse Trophies',
+				trophyTitlePlatform: 'PS4',
+				definedTrophies: { bronze: 40, silver: 12, gold: 6, platinum: 1 },
+				earnedTrophies: { bronze: 3, silver: 0, gold: 0, platinum: 0 },
+			},
+		]);
+		// PSN's weighted `progress` is deliberately NOT carried — the % is derived
+		// from the counts in core/ (a persisted derived value = a second truth).
+		expect(titles[0]).not.toHaveProperty('progress');
+
+		const [url, init] = trophyCalls(fetchMock)[0];
+		expect(String(url)).toContain('limit=100');
+		expect(String(url)).toContain('offset=0');
+		expect(init.headers.authorization).toBe('Bearer jwt-bearer');
+		expect(init.headers.cookie).toBeUndefined();
+		expect(init.method ?? 'GET').toBe('GET');
+	});
+
+	it('accepts an EMPTY page past the end (hazard: a boundary account would 502 forever)', async () => {
+		// PSN hands back a nextOffset on the boundary page of an account whose
+		// title count is an exact multiple of the page size — the page it tells us
+		// to fetch is empty, and every title is already in hand. Failing there
+		// would be an outage-as-denial: the run holds the whole account.
+		const pages = [
+			trophyPage([trophyEntry({ trophyTitleName: 'Tales of Arise' })], {
+				nextOffset: 100,
+				totalItemCount: 1,
+			}),
+			trophyPage([], { totalItemCount: 1 }),
+		];
+		const fetchMock = mockPsn(() => pages.shift() as Response);
+		vi.stubGlobal('fetch', fetchMock);
+
+		const titles = await provider(['npsso']).provider.fetchTrophyTitles();
+
+		expect(titles.map((t) => t.trophyTitleName)).toEqual(['Tales of Arise']);
+		expect(trophyCalls(fetchMock)).toHaveLength(2);
+	});
+
+	it('paginates on nextOffset and exchanges the NPSSO ONCE (hazard: the fetch budget is 4 subrequests)', async () => {
+		const pages = [
+			trophyPage([trophyEntry({ trophyTitleName: 'Tales of Arise' })], {
+				nextOffset: 100,
+				totalItemCount: 2,
+			}),
+			trophyPage([trophyEntry({ trophyTitleName: 'Astro Bot' })], {
+				totalItemCount: 2,
+			}),
+		];
+		const fetchMock = mockPsn(() => pages.shift() as Response);
+		vi.stubGlobal('fetch', fetchMock);
+
+		const { provider: psn, getNpsso } = provider(['npsso']);
+		const titles = await psn.fetchTrophyTitles();
+
+		expect(titles.map((t) => t.trophyTitleName)).toEqual([
+			'Tales of Arise',
+			'Astro Bot',
+		]);
+		const calls = trophyCalls(fetchMock);
+		expect(calls).toHaveLength(2);
+		expect(String(calls[1][0])).toContain('offset=100');
+		// One exchange for the whole run: 2 exchange legs + 2 trophy pages = 4.
+		expect(getNpsso).toHaveBeenCalledTimes(1);
+		expect(fetchMock).toHaveBeenCalledTimes(4);
+	});
+
+	it('throws PsnAuthError on the CAPTURED 401 body, after exactly one attempt (hazard: no retry)', async () => {
+		// Verbatim from the probe's bogus-bearer run.
+		const fetchMock = mockPsn(() =>
+			jsonResponse({ error: { message: 'Invalid token' } }, 401),
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(
+			provider(['expired']).provider.fetchTrophyTitles(),
+		).rejects.toBeInstanceOf(PsnAuthError);
+		expect(trophyCalls(fetchMock)).toHaveLength(1);
+	});
+
+	it('fails closed on a DEGENERATE 200 carrying an error body (hazard: 200 + error must not read as zero trophies)', async () => {
+		const fetchMock = mockPsn(() =>
+			jsonResponse({ error: { message: 'Invalid token' }, trophyTitles: [] }),
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(
+			provider(['npsso']).provider.fetchTrophyTitles(),
+		).rejects.toThrow(/error body/);
+	});
+
+	it('fails closed on an empty list while totalItemCount > 0 (hazard: an empty page would wipe nothing but report "no trophies")', async () => {
+		const fetchMock = mockPsn(() =>
+			jsonResponse({ trophyTitles: [], totalItemCount: 137 }),
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(
+			provider(['npsso']).provider.fetchTrophyTitles(),
+		).rejects.toThrow(/degenerate/i);
+	});
+
+	it('a genuinely empty account (totalItemCount 0) is not degenerate', async () => {
+		vi.stubGlobal(
+			'fetch',
+			mockPsn(() => jsonResponse({ trophyTitles: [], totalItemCount: 0 })),
+		);
+		expect(await provider(['npsso']).provider.fetchTrophyTitles()).toEqual([]);
+	});
+
+	it('rejects a 200 with no trophyTitles array, and a non-JSON 200', async () => {
+		vi.stubGlobal(
+			'fetch',
+			mockPsn(() => jsonResponse({ totalItemCount: 3 })),
+		);
+		await expect(
+			provider(['npsso']).provider.fetchTrophyTitles(),
+		).rejects.toThrow(/trophyTitles array/);
+
+		vi.stubGlobal(
+			'fetch',
+			mockPsn(() => new Response('<html>sign in</html>', { status: 200 })),
+		);
+		await expect(
+			provider(['npsso']).provider.fetchTrophyTitles(),
+		).rejects.toThrow(/non-JSON/);
+	});
+
+	it('aborts a runaway pagination instead of looping forever (hazard: nextOffset never settles)', async () => {
+		// An always-advancing nextOffset: the brake is the only thing that stops it.
+		let offset = 0;
+		const fetchMock = mockPsn(() => {
+			offset += 100;
+			return trophyPage([trophyEntry()], {
+				nextOffset: offset,
+				totalItemCount: 1e6,
+			});
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(
+			provider(['npsso']).provider.fetchTrophyTitles(),
+		).rejects.toThrow(/exceeded 20 pages/);
+		expect(trophyCalls(fetchMock)).toHaveLength(20);
+	});
+
+	it('stops on a non-advancing nextOffset, and the short result FAILS CLOSED (hazard: nextOffset: 0 would re-fetch page one forever; truncating silently would strand 136 titles)', async () => {
+		const fetchMock = mockPsn(() =>
+			trophyPage([trophyEntry()], { nextOffset: 0, totalItemCount: 137 }),
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(
+			provider(['npsso']).provider.fetchTrophyTitles(),
+		).rejects.toThrow(/1 of 137 titles/);
+		expect(trophyCalls(fetchMock)).toHaveLength(1);
+	});
+
+	it('fails closed when a MIDDLE page comes back short (hazard: the collected count must reconcile against totalItemCount, not just page one)', async () => {
+		// Page 1 is full and promises 137 titles; page 2 is the last page and
+		// carries only one — 101 collected of 137, a truncated run.
+		const pages = [
+			trophyPage(
+				Array.from({ length: 100 }, (_, i) =>
+					trophyEntry({ trophyTitleName: `Game ${i}` }),
+				),
+				{ nextOffset: 100, totalItemCount: 137 },
+			),
+			trophyPage([trophyEntry({ trophyTitleName: 'Astro Bot' })], {
+				totalItemCount: 137,
+			}),
+		];
+		const fetchMock = mockPsn(() => pages.shift() as Response);
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(
+			provider(['npsso']).provider.fetchTrophyTitles(),
+		).rejects.toThrow(/101 of 137 titles/);
+	});
+
+	it('surfaces a non-auth HTTP failure with its status', async () => {
+		vi.stubGlobal(
+			'fetch',
+			mockPsn(() => new Response('boom', { status: 500 })),
+		);
+		await expect(
+			provider(['npsso']).provider.fetchTrophyTitles(),
+		).rejects.toThrow(/500/);
+	});
+
+	it('throws PsnAuthError without touching PSN when no NPSSO is configured', async () => {
+		const fetchMock = vi.fn();
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(
+			provider([undefined]).provider.fetchTrophyTitles(),
+		).rejects.toBeInstanceOf(PsnAuthError);
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+});
+
 /** Catalog page response (Story 5.1). */
 function catalogPage(names: string[], totalCount: number) {
 	return jsonResponse({

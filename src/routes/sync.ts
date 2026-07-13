@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { createDb } from '../repositories/db';
 import { runSync } from '../services/sync';
+import { runTrophySync } from '../services/trophies';
 import { type AuthVariables, requireAuth } from './auth';
 
 /**
@@ -34,6 +35,36 @@ syncRoute.post('/sync', requireAuth, async (c) => {
 					{
 						error:
 							'Sync failed — PlayStation did not answer as expected. Try again later.',
+					},
+					502,
+				);
+	}
+	return c.json(outcome.result, 200);
+});
+
+/**
+ * The trophy sync trigger (Story 9.2). Same contract as the library sync: 401
+ * = the NPSSO was rejected/missing (the expired flag is already persisted, the
+ * client must not retry); any other failure — including a DEGENERATE trophy
+ * response, which the provider throws on — is a 502, and nothing was written.
+ */
+syncRoute.post('/sync/trophies', requireAuth, async (c) => {
+	const outcome = await runTrophySync(
+		createDb(c.env.DB),
+		c.get('userId'),
+		c.env,
+	).catch((error: unknown) => {
+		console.error('trophy sync failed', error);
+		return { ok: false as const, reason: 'provider' as const };
+	});
+
+	if (!outcome.ok) {
+		return outcome.reason === 'auth'
+			? c.json({ error: outcome.message }, 401)
+			: c.json(
+					{
+						error:
+							'Trophy sync failed — PlayStation did not answer as expected. Try again later.',
 					},
 					502,
 				);

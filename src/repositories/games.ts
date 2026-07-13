@@ -206,6 +206,8 @@ export async function enrichGame(
 export type LibraryRow = {
 	id: string;
 	title: string;
+	/** The stored match key — the ONE key both syncs join a PSN name on. */
+	titleNormalized: string;
 	releaseDate: string | null;
 	coverUrl: string | null;
 	storeUrl: string | null;
@@ -220,6 +222,19 @@ export type LibraryRow = {
 	owned: boolean;
 	ownershipType: (typeof gameTracking.$inferSelect)['ownershipType'];
 	ownedVia: (typeof gameTracking.$inferSelect)['ownedVia'];
+	// Raw trophy counts (Story 9.2). `trophySyncedAt` is the "this row has trophy
+	// data" column — a NULL there means the trophy sync never wrote this game,
+	// which is what makes the card/detail show NOTHING (never a fake 0%). The %
+	// and the grade are derived from the counts in `core/trophy.ts`, never stored.
+	trophySyncedAt: string | null;
+	trophyEarnedBronze: number | null;
+	trophyEarnedSilver: number | null;
+	trophyEarnedGold: number | null;
+	trophyEarnedPlatinum: number | null;
+	trophyDefinedBronze: number | null;
+	trophyDefinedSilver: number | null;
+	trophyDefinedGold: number | null;
+	trophyDefinedPlatinum: number | null;
 };
 
 /**
@@ -241,6 +256,7 @@ export async function listLibraryForUser(
 		.select({
 			id: game.id,
 			title: game.title,
+			titleNormalized: game.titleNormalized,
 			releaseDate: game.releaseDate,
 			coverUrl: game.coverUrl,
 			storeUrl: game.storeUrl,
@@ -255,6 +271,15 @@ export async function listLibraryForUser(
 			owned: gameTracking.owned,
 			ownershipType: gameTracking.ownershipType,
 			ownedVia: gameTracking.ownedVia,
+			trophySyncedAt: gameTracking.trophySyncedAt,
+			trophyEarnedBronze: gameTracking.trophyEarnedBronze,
+			trophyEarnedSilver: gameTracking.trophyEarnedSilver,
+			trophyEarnedGold: gameTracking.trophyEarnedGold,
+			trophyEarnedPlatinum: gameTracking.trophyEarnedPlatinum,
+			trophyDefinedBronze: gameTracking.trophyDefinedBronze,
+			trophyDefinedSilver: gameTracking.trophyDefinedSilver,
+			trophyDefinedGold: gameTracking.trophyDefinedGold,
+			trophyDefinedPlatinum: gameTracking.trophyDefinedPlatinum,
 		})
 		.from(gameTracking)
 		.innerJoin(game, eq(gameTracking.gameId, game.id))
