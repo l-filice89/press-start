@@ -52,11 +52,11 @@ export function Fab({
 		},
 		onError: (error: Error & { status?: number }) => {
 			if (error.status === 401) {
-				// The PSN cookie was rejected: the server persisted the expired
+				// The PSN token was rejected: the server persisted the expired
 				// flag — refetching settings lights the banner without a reload.
 				toast({
 					message:
-						'Sync failed — the PlayStation cookie expired. See the banner.',
+						'Sync failed — the PlayStation token expired. See the banner.',
 				});
 				queryClient.invalidateQueries({ queryKey: ['settings'] });
 			} else {

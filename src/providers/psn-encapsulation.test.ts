@@ -1,11 +1,13 @@
 /**
- * PSN auth-encapsulation guard (Story 4.1, AR-5/AD-5: "the auth mechanism
- * lives entirely inside the adapter"). Scans every non-test source under
- * `src/` and `web/` and asserts the PSN wire mechanics appear ONLY in
- * `src/providers/psn.ts` — so a future NPSSO swap stays a one-file change and
- * no route/service/UI ever hand-rolls a PSN call. The cookie NAME is also
- * allowed in the Settings panel, whose user-facing refresh instructions must
- * tell the user which cookie to copy — copy, not mechanics.
+ * PSN auth-encapsulation guard (Story 4.1, re-pointed at the NPSSO bearer in
+ * 9.1b — AR-5/AD-5: "the auth mechanism lives entirely inside the adapter").
+ * Scans every non-test source under `src/` and `web/` and asserts the PSN wire
+ * mechanics — including the ca.account.sony.com authorize/token exchange —
+ * appear ONLY in `src/providers/psn.ts`, so no route/service/UI ever hand-rolls
+ * a PSN call or a second credential exchange. The token NAME is also allowed in
+ * the Settings panel, whose user-facing instructions must tell the user which
+ * value to copy, and in the settings route, which strips a pasted `npsso=`
+ * prefix — copy and input hygiene, not mechanics.
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
@@ -42,16 +44,35 @@ const PSN_AUTH_PATTERNS: {
 		allowed: [PROVIDER],
 	},
 	{
-		// The NAME may appear where the user is told what to copy (panel
-		// instructions) and where the paste is sanitized (settings route's
-		// leading-`pdccws_p=` strip) — copy and input hygiene, not mechanics.
-		label: 'the pdccws_p session cookie',
+		label: 'the NPSSO authorize/token exchange host',
+		pattern: /ca\.account\.sony\.com\/api\/authz/,
+		allowed: [PROVIDER],
+	},
+	{
+		label: 'the OAuth client credentials of the exchange',
+		pattern: /09515159-7237-4370-9b40-3806e67c0891|com\.scee\.psxandroid/,
+		allowed: [PROVIDER],
+	},
+	{
+		// The wire form is allowed only where the paste is sanitized (the settings
+		// route strips a leading `npsso=`) — input hygiene, not mechanics. The
+		// Settings panel names the token in prose but never spells the pair, and
+		// must not start: if the UI ever hand-rolls the wire form, this bites.
+		//
+		// The pattern is the WIRE form (`npsso=` — the cookie pair the exchange
+		// sends), not the identifier: `getPsnNpsso`/`psn_npsso` are the seam's
+		// public names and are supposed to travel.
+		label: 'the npsso cookie pair',
+		pattern: /npsso=/,
+		allowed: [PROVIDER, 'src/routes/settings.ts'],
+	},
+	{
+		// Gone from every .ts/.tsx source — which is all this scan covers. The
+		// name still legitimately appears in the frozen legacy `export_ps_catalog.py`
+		// and in the README's legacy-scripts line; neither is a live code path.
+		label: 'the deleted pdccws_p session cookie (the cookie path is gone)',
 		pattern: /pdccws_p/,
-		allowed: [
-			PROVIDER,
-			'web/settings/SettingsPanel.tsx',
-			'src/routes/settings.ts',
-		],
+		allowed: [],
 	},
 ];
 

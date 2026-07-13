@@ -21,7 +21,7 @@ import {
 } from '../repositories';
 import type { Db } from '../repositories/db';
 import {
-	getPsnCookie,
+	getPsnNpsso,
 	markPsnAuthExpired,
 	type SyncAttentionItem,
 	todayForUser,
@@ -46,7 +46,7 @@ export interface SyncResult {
 	needsAttention: SyncAttentionItem[];
 }
 
-/** Sync failed before any write: expired/missing cookie (FR-36). */
+/** Sync failed before any write: expired/missing NPSSO token (FR-36). */
 export type SyncOutcome =
 	| { ok: true; result: SyncResult }
 	| { ok: false; reason: 'auth'; message: string };
@@ -94,10 +94,10 @@ async function buildIndex(db: Db): Promise<{
 export async function runSync(
 	db: Db,
 	userId: string,
-	env: { PSN_SESSION_COOKIE?: string },
+	env: { PSN_NPSSO?: string },
 ): Promise<SyncOutcome> {
 	const provider = createPsnProvider({
-		getCookie: () => getPsnCookie(db, userId, env),
+		getNpsso: () => getPsnNpsso(db, userId, env),
 	});
 
 	let entries: SyncEntry[];

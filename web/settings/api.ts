@@ -5,8 +5,8 @@ import { callApi } from '../shelf/api';
  * Client contract for `/api/settings` (Story 4.1). Mirrors the server shape
  * rather than importing across the SPA/Worker program boundary (same policy
  * as `web/shelf/api.ts`, whose `callApi` — status-carrying errors for the
- * query client's 401 routing — is reused here). The PSN cookie itself never
- * appears in this contract — the API reports presence only.
+ * query client's 401 routing — is reused here). The PSN NPSSO token itself
+ * never appears in this contract — the API reports presence only.
  */
 
 export const syncAttentionItemSchema = z.object({
@@ -18,7 +18,7 @@ export type SyncAttentionItem = z.infer<typeof syncAttentionItemSchema>;
 
 export const settingsSchema = z.object({
 	timezone: z.string().nullable(),
-	psnCookieSet: z.boolean(),
+	psnNpssoSet: z.boolean(),
 	psnAuthExpired: z.boolean(),
 	// Defaulted: a deploy-skewed/cached response without the field must not
 	// reject the whole settings payload (timezone + PSN banner ride on it).
@@ -67,12 +67,12 @@ export async function cancelPsPlus(): Promise<{ unowned: number }> {
 	return z.object({ unowned: z.number() }).parse(body);
 }
 
-/** Save a fresh PSN session cookie; the server clears the expired flag. */
-export async function savePsnCookie(cookie: string): Promise<void> {
-	await callApi('/api/settings/psn-cookie', {
+/** Save a fresh PSN NPSSO token; the server clears the expired flag. */
+export async function savePsnNpsso(npsso: string): Promise<void> {
+	await callApi('/api/settings/psn-npsso', {
 		method: 'PUT',
 		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify({ cookie }),
+		body: JSON.stringify({ npsso }),
 	});
 }
 
@@ -99,7 +99,7 @@ export const syncResultSchema = z.object({
 
 export type SyncResult = z.infer<typeof syncResultSchema>;
 
-/** Trigger the in-Worker PSN sync. A 401 means the session cookie expired —
+/** Trigger the in-Worker PSN sync. A 401 means the NPSSO token expired —
  * the server already lit the attention-banner flag; never auto-retry. */
 export async function runSync(): Promise<SyncResult> {
 	return syncResultSchema.parse(await callApi('/api/sync', { method: 'POST' }));

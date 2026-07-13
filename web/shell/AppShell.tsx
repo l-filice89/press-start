@@ -28,7 +28,7 @@ import './app-shell.css';
  *
  * Providers wrap the tree so surfaces can `useToast()` / `useAnnounce()` from
  * anywhere. The attention-banner slot under the header is fed by the settings
- * query: a PSN-rejected cookie surfaces the refresh path (4.1), and persisted
+ * query: a PSN-rejected token surfaces the refresh path (4.1), and persisted
  * sync needs-attention items surface the amber banner (4.3) — both survive
  * reloads until their condition self-resolves (NFR-4 — never one dismissed
  * modal away).
@@ -79,10 +79,10 @@ export function AppShell({
 				/>
 				{settings?.psnAuthExpired && (
 					<AttentionBanner
-						variant="expired-cookie"
-						message="PlayStation rejected the session cookie — sign in at library.playstation.com, copy the fresh cookie from DevTools, and paste it in Settings."
+						variant="expired-token"
+						message="PlayStation rejected the NPSSO token — open Settings, follow the “Get / refresh token” link, and paste the fresh token."
 						action={{
-							label: 'Update cookie',
+							label: 'Update token',
 							onClick: () => setSettingsOpen(true),
 						}}
 					/>

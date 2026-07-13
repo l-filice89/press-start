@@ -11,7 +11,7 @@ import {
 } from '../../src/repositories';
 import { createDb } from '../../src/repositories/db';
 import { user } from '../../src/schema';
-import { PSN_COOKIE_SETTING_KEY } from '../../src/services/settings';
+import { PSN_NPSSO_SETTING_KEY } from '../../src/services/settings';
 import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
 
 /**
@@ -50,6 +50,28 @@ function stubPsn(games: Record<string, unknown>[]) {
 		'fetch',
 		async (input: RequestInfo | URL, init?: RequestInit) => {
 			const url = String(input instanceof Request ? input.url : input);
+			// The NPSSO→bearer exchange the provider runs before the library call.
+			if (
+				url.startsWith(
+					'https://ca.account.sony.com/api/authz/v3/oauth/authorize',
+				)
+			) {
+				return new Response(null, {
+					status: 302,
+					headers: {
+						location:
+							'com.scee.psxandroid.scecompcall://redirect?code=test-auth-code',
+					},
+				});
+			}
+			if (
+				url.startsWith('https://ca.account.sony.com/api/authz/v3/oauth/token')
+			) {
+				return new Response(JSON.stringify({ access_token: 'test-bearer' }), {
+					status: 200,
+					headers: { 'content-type': 'application/json' },
+				});
+			}
 			if (!url.startsWith('https://web.np.playstation.com/')) {
 				return realFetch(input, init);
 			}
@@ -162,7 +184,7 @@ describe('discard (soft-delete tombstone, through the route)', () => {
 			externalId: 'PPSA-DISCARD_00',
 		});
 		await discard(g.id, true, cookie);
-		await setSetting(db(), userId, PSN_COOKIE_SETTING_KEY, 'test-psn-cookie');
+		await setSetting(db(), userId, PSN_NPSSO_SETTING_KEY, 'test-psn-npsso');
 
 		// …appears in the PSN purchase list. A normal sync would flip owned→true;
 		// the tombstone must veto that so the game stays hidden.

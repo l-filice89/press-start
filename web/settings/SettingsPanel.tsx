@@ -8,22 +8,23 @@ import {
 	cancelPsPlus,
 	fetchSettings,
 	saveFabHandedness,
-	savePsnCookie,
+	savePsnNpsso,
 } from './api';
 import './settings-panel.css';
 
 /**
- * The Settings surface (Story 4.1, FR-36): a focus-trapped modal editing the
- * PlayStation session cookie. The stored value is never shown — the field is
- * always empty and saving replaces the cookie wholesale. Epic 6 moves the
- * entry point into the FAB drawer's gear; until then the header gear opens it.
+ * The Settings surface (Story 4.1, re-credentialed in 9.1b, FR-36): a
+ * focus-trapped modal editing the PlayStation NPSSO token. The stored value is
+ * never shown — the field is always empty and saving replaces the token
+ * wholesale. The token cannot be read from Sony cross-origin (CORS), so the
+ * "Get / refresh token" control is a plain deep link the user copies from.
  */
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
 	const dialogRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 	const titleId = useId();
 	const instructionsId = useId();
-	const [cookie, setCookie] = useState('');
+	const [npsso, setNpsso] = useState('');
 	const queryClient = useQueryClient();
 	const { toast } = useToast();
 
@@ -33,10 +34,10 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 	});
 
 	const save = useMutation({
-		mutationFn: savePsnCookie,
-		// A failed cookie save already says so inline, below the button.
+		mutationFn: savePsnNpsso,
+		// A failed token save already says so inline, below the button.
 		onSuccess: () => {
-			setCookie('');
+			setNpsso('');
 			queryClient.invalidateQueries({ queryKey: ['settings'] });
 		},
 	});
@@ -75,7 +76,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 		initialFocusRef: inputRef,
 	});
 
-	const trimmed = cookie.trim();
+	const trimmed = npsso.trim();
 
 	return createPortal(
 		// biome-ignore lint/a11y/noStaticElementInteractions: the backdrop is a dismiss surface, not a control — Escape and the Close button are the accessible paths; this only mirrors them for pointer users.
@@ -101,45 +102,40 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 				</h2>
 
 				<section className="settings-panel__section">
-					<h3 className="settings-panel__heading">
-						PlayStation session cookie
-					</h3>
-					<p className="settings-panel__status" data-testid="psn-cookie-status">
-						{settings?.psnCookieSet
-							? 'A cookie is saved. Pasting a new one replaces it.'
-							: 'No cookie saved yet.'}
+					<h3 className="settings-panel__heading">PlayStation NPSSO token</h3>
+					<p className="settings-panel__status" data-testid="psn-npsso-status">
+						{settings?.psnNpssoSet
+							? 'A token is saved. Pasting a new one replaces it.'
+							: 'No token saved yet.'}
 					</p>
 					<ol className="settings-panel__instructions" id={instructionsId}>
 						<li>
-							Log in at{' '}
+							Sign in to PlayStation, then open{' '}
 							<a
-								href="https://library.playstation.com"
+								href="https://ca.account.sony.com/api/v1/ssocookie"
 								target="_blank"
 								rel="noreferrer"
+								data-testid="psn-npsso-link"
 							>
-								library.playstation.com
+								Get / refresh token
 							</a>
 						</li>
 						<li>
-							Open DevTools (F12) → Application → Cookies →
-							https://library.playstation.com
+							Copy the <code>npsso</code> value from the page
 						</li>
-						<li>
-							Copy the value of the <code>pdccws_p</code> cookie
-						</li>
-						<li>Paste it below and save</li>
+						<li>Paste it below and save — it lasts about 60 days</li>
 					</ol>
 					<textarea
 						ref={inputRef}
-						className="settings-panel__cookie-input"
-						aria-label="PlayStation session cookie"
+						className="settings-panel__token-input"
+						aria-label="PlayStation NPSSO token"
 						aria-describedby={instructionsId}
-						placeholder="Paste the pdccws_p cookie value"
+						placeholder="Paste the npsso token value"
 						rows={3}
 						maxLength={4096}
-						value={cookie}
+						value={npsso}
 						onChange={(e) => {
-							setCookie(e.target.value);
+							setNpsso(e.target.value);
 							save.reset();
 						}}
 					/>
@@ -149,14 +145,14 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 						disabled={!trimmed || save.isPending}
 						onClick={() => save.mutate(trimmed)}
 					>
-						{save.isPending ? 'Saving…' : 'Save cookie'}
+						{save.isPending ? 'Saving…' : 'Save token'}
 					</button>
 					<div
 						className="settings-panel__feedback"
 						role="status"
 						aria-live="polite"
 					>
-						{save.isSuccess && 'Cookie saved.'}
+						{save.isSuccess && 'Token saved.'}
 						{save.isError && 'Saving failed — try again.'}
 					</div>
 				</section>

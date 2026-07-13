@@ -19,7 +19,7 @@ import {
 import type { Db } from '../repositories/db';
 import {
 	clearPsPlusRefreshFailed,
-	getPsnCookie,
+	getPsnNpsso,
 	getPsnRegion,
 	markPsPlusRefreshFailed,
 	stampPsPlusRefreshedAt,
@@ -43,13 +43,15 @@ export type PsPlusCheckOutcome =
 export async function runPsPlusCheck(
 	db: Db,
 	userId: string,
-	env: { PSN_REGION?: string; PSN_SESSION_COOKIE?: string },
+	env: { PSN_REGION?: string; PSN_NPSSO?: string },
 ): Promise<PsPlusCheckOutcome> {
 	const region = await getPsnRegion(db, userId, env);
 	if (!region) return { ok: false, reason: 'no-region' };
 
+	// The catalog endpoint is public — the provider needs no credential for it,
+	// but the seam is one adapter, so the getter rides along unused.
 	const provider = createPsnProvider({
-		getCookie: () => getPsnCookie(db, userId, env),
+		getNpsso: () => getPsnNpsso(db, userId, env),
 	});
 
 	let catalogNames: string[];
@@ -134,7 +136,7 @@ export async function runScheduledPsPlusCheck(
 	env: {
 		AUTH_ALLOWED_EMAIL: string;
 		PSN_REGION?: string;
-		PSN_SESSION_COOKIE?: string;
+		PSN_NPSSO?: string;
 	},
 ): Promise<void> {
 	// ponytail: single-tenant — resolve THE user by the allowlist email. Loop

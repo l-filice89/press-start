@@ -101,7 +101,7 @@ flowchart LR
 
 - **Binds:** PSN + IGDB access; FR-33/34/36/38/41; the cookie→NPSSO swap.
 - **Prevents:** ad-hoc `fetch` calls to third parties; auth mechanics bleeding into sync logic.
-- **Rule:** Every third-party call goes through a `providers/` adapter (`PsnProvider`, `IgdbProvider`). The PSN auth mechanism (v1: `pdccws_p` cookie) lives **entirely inside** `PsnProvider`; swapping to NPSSO changes only that adapter. The **account region** (AD-23) is a `PsnProvider` input — the PS+ Extra catalog is per-region.
+- **Rule:** Every third-party call goes through a `providers/` adapter (`PsnProvider`, `IgdbProvider`). The PSN auth mechanism (the NPSSO token and the authorize→code→bearer exchange it rides through; story 9.1b, 2026-07-13 — the `pdccws_p` cookie is gone) lives **entirely inside** `PsnProvider`; the swap did in fact change only that adapter. The **account region** (AD-23) is a `PsnProvider` input — the PS+ Extra catalog is per-region.
 
 ### AD-6 — Nothing external on render, enforced structurally (NFR-3) [ADOPTED]
 
@@ -221,7 +221,7 @@ flowchart LR
 | Dates | Milestones & lifecycle dates are `DATE`/ISO-8601; write-once automatic, edit-only-in-detail (AD-11). Derived "Released" compares release date ≤ today (AD-8). |
 | State | Play status is the only user-set mutable state; everything else is computed (AD-7/8) or write-once (AD-10/11). |
 | Auth | better-auth magic link (FR-47); every tracking query is `user_id`-scoped (AD-13). |
-| Secrets | IGDB/Twitch creds + initial PSN cookie via Wrangler secrets; the **live** `pdccws_p` cookie lives in a D1 settings table, editable in-UI, read fresh per call. D1 file and secrets never committed. |
+| Secrets | IGDB/Twitch creds + a seed `PSN_NPSSO` via Wrangler secrets; the **live** NPSSO token lives in a D1 settings table (`psn_npsso`), editable in-UI, read fresh per call. D1 file and secrets never committed. |
 | Errors / feedback | Failures surface (AD-14); four UI channels (toast / summary modal / attention banner / loading) per EXPERIENCE.md; providers never silent-retry. |
 | Testing | Vitest via `@cloudflare/vitest-pool-workers` for Worker+D1; pure core unit-tested without runtime. Lint+format = Biome. |
 
@@ -239,7 +239,7 @@ flowchart LR
 | UI / build / PWA | React + Vite + vite-plugin-pwa |
 | Scheduling | Cloudflare Cron Triggers |
 | Auth | better-auth (magic link) |
-| PS data | `pdccws_p` cookie via persisted GraphQL (`getPurchasedGameList`); psn-api/NPSSO = deferred swap |
+| PS data | NPSSO token → bearer exchange, then persisted GraphQL (`getPurchasedGameList`); swap landed in story 9.1b (2026-07-13) |
 | Games DB | IGDB (Twitch OAuth2 client-credentials) |
 | Tests | Vitest + `@cloudflare/vitest-pool-workers` |
 | Lint + format | Biome v2 |
@@ -263,7 +263,7 @@ erDiagram
   GENRE { string name "IGDB vocabulary, FR-23" }
   EXTERNAL_LINK { string source "PSN|IGDB" string external_id }
   IMPORT_STRAGGLER { string source_title string notion_payload "AD-22a, not yet a GAME" }
-  SETTING { string key string value "region; live pdccws_p cookie; PS+ refreshed-at" }
+  SETTING { string key string value "region; live NPSSO token; PS+ refreshed-at" }
 ```
 
 Attribute ownership is an invariant (AD-19): `GAME` = shared catalog facts (stored inputs); `GAME_TRACKING` = per-user mutable state.

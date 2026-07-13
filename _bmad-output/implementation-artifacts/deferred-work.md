@@ -344,3 +344,15 @@ Consequences, per the story's stated branches:
 
 status: done 2026-07-13
 resolution: spike complete; the table above IS the deliverable. Firm: NPSSO gates Epic 9 and is a prerequisite of Story 9.2 — it needs a home (new Story 9.0 or a widened 9.2) before trophy work proceeds. Open, non-blocking: Story 9.4's persisted-query hash capture + auth-path confirmation, deferred behind the NPSSO swap it will likely ride on.
+
+- source_spec: `spec-9-1b-swap-psnprovider-cookie-to-npsso-bearer-vr-1.md`
+  summary: Playwright 6.4a ("Claimed with PS+" writes owned_via=membership) flakes under full-suite load — the test asserts the D1 row right after the dialog closes, without waiting on the ownership PUT to land.
+  evidence: PRE-EXISTING, not caused by 9.1b — reproduced on the baseline commit (7b2d979) with the story's changes stashed: 1 of 2 full `bun run test:e2e` runs failed the same test the same way. Passes in isolation and with --repeat-each 3. Fix is to await the write (response or a UI settle) before querying D1.
+
+- source_spec: `spec-9-1b-swap-psnprovider-cookie-to-npsso-bearer-vr-1.md`
+  summary: The NPSSO→bearer exchange stub is copy-pasted verbatim into `test/integration/sync.test.ts` and `test/integration/discard.test.ts`.
+  evidence: Two places to update when the exchange shape moves; both would keep passing against a stale shape while production breaks. Extract one shared helper next time either is touched.
+
+- source_spec: `spec-9-1b-swap-psnprovider-cookie-to-npsso-bearer-vr-1.md`
+  summary: The npsso charset guard in `src/routes/settings.ts` admits non-Latin1 codepoints, which the outbound Cookie header cannot carry.
+  evidence: Such a value saves fine, then fails at `fetch` with a TypeError → a 502 at sync time instead of a 400 at save time. Fails closed (no injection, no bad write), so it is a diagnosability nit, not a security hole.

@@ -43,6 +43,13 @@
       "when": 1783792501789,
       "tag": "0005_curvy_boomerang",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1784000000000,
+      "tag": "0006_drop_psn_cookie_setting",
+      "breakpoints": true
     }
   ]
 }

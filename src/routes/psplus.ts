@@ -6,7 +6,7 @@ import { type AuthVariables, requireAuth } from './auth';
 /**
  * The PS+ Extra catalog check trigger (Story 5.1, FR-38): button-fired,
  * in-Worker, user-scoped. The catalog endpoint is public, so there is no
- * expired-cookie path here — any provider failure surfaces as 502 with a
+ * expired-token path here — any provider failure surfaces as 502 with a
  * generic message (details go to `wrangler tail` from the service).
  */
 

@@ -6,24 +6,24 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SettingsPanel } from './SettingsPanel';
 
 /**
- * Settings panel (Story 4.1): the cookie field is never prefilled with the
- * stored secret, the refresh instructions name the cookie to copy, and Save
- * PUTs the pasted value. The no-echo guarantee is server-side (integration
- * tests); here we pin the client never even asks for the value.
+ * Settings panel (Story 4.1, re-credentialed in 9.1b): the NPSSO field is never
+ * prefilled with the stored secret, the instructions carry the ssocookie deep
+ * link, and Save PUTs the pasted token. The no-echo guarantee is server-side
+ * (integration tests); here we pin the client never even asks for the value.
  */
 
 function mockFetch(settings: {
-	psnCookieSet: boolean;
+	psnNpssoSet: boolean;
 	psnAuthExpired: boolean;
 }) {
 	const fetchMock = vi.fn(
 		async (url: string | URL | Request, _init?: RequestInit) => {
 			const href = String(url);
-			if (href.includes('/api/settings/psn-cookie')) {
+			if (href.includes('/api/settings/psn-npsso')) {
 				return {
 					ok: true,
 					status: 200,
-					json: async () => ({ psnCookieSet: true, psnAuthExpired: false }),
+					json: async () => ({ psnNpssoSet: true, psnAuthExpired: false }),
 				};
 			}
 			return {
@@ -52,48 +52,56 @@ function renderPanel(onClose = vi.fn()) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('SettingsPanel', () => {
-	it('shows instructions naming the pdccws_p cookie, with an always-empty field', async () => {
-		mockFetch({ psnCookieSet: true, psnAuthExpired: false });
+	it('shows the ssocookie deep link and an always-empty token field', async () => {
+		mockFetch({ psnNpssoSet: true, psnAuthExpired: false });
 		renderPanel();
 
 		expect(screen.getByRole('dialog')).toBeInTheDocument();
-		expect(screen.getByText(/pdccws_p/)).toBeInTheDocument();
-		// Saved-cookie state is reported as presence only — the field stays empty.
+		// The token cannot be read from Sony cross-origin — the control is a plain
+		// deep link the user copies the value from, opened in a new tab.
+		const link = screen.getByTestId('psn-npsso-link');
+		expect(link).toHaveAttribute(
+			'href',
+			'https://ca.account.sony.com/api/v1/ssocookie',
+		);
+		expect(link).toHaveAttribute('target', '_blank');
+		expect(link).toHaveAttribute('rel', 'noreferrer');
+		// Saved-token state is reported as presence only — the field stays empty.
 		await waitFor(() =>
-			expect(screen.getByTestId('psn-cookie-status')).toHaveTextContent(
-				/A cookie is saved/,
+			expect(screen.getByTestId('psn-npsso-status')).toHaveTextContent(
+				/A token is saved/,
 			),
 		);
-		expect(screen.getByLabelText('PlayStation session cookie')).toHaveValue('');
+		expect(screen.getByLabelText('PlayStation NPSSO token')).toHaveValue('');
 	});
 
-	it('saves the pasted cookie and never sends a GET for the stored value', async () => {
-		const fetchMock = mockFetch({ psnCookieSet: false, psnAuthExpired: true });
+	it('saves the pasted token and never sends a GET for the stored value', async () => {
+		const fetchMock = mockFetch({ psnNpssoSet: false, psnAuthExpired: true });
 		renderPanel();
 
-		const input = screen.getByLabelText('PlayStation session cookie');
-		await userEvent.type(input, '  fresh-cookie  ');
-		await userEvent.click(screen.getByRole('button', { name: 'Save cookie' }));
+		const input = screen.getByLabelText('PlayStation NPSSO token');
+		await userEvent.type(input, '  fresh-npsso  ');
+		await userEvent.click(screen.getByRole('button', { name: 'Save token' }));
 
 		await waitFor(() =>
-			expect(screen.getByRole('status')).toHaveTextContent('Cookie saved.'),
+			expect(screen.getByRole('status')).toHaveTextContent('Token saved.'),
 		);
 		const put = fetchMock.mock.calls.find(([url]) =>
-			String(url).includes('/api/settings/psn-cookie'),
+			String(url).includes('/api/settings/psn-npsso'),
 		);
 		expect(put?.[1]).toMatchObject({ method: 'PUT' });
 		// Whitespace-trimmed before sending; field cleared after save.
 		expect(JSON.parse(put?.[1]?.body as string)).toEqual({
-			cookie: 'fresh-cookie',
+			npsso: 'fresh-npsso',
 		});
 		expect(input).toHaveValue('');
 	});
 
 	it('disables Save while the field is blank and closes via the Close button', async () => {
-		mockFetch({ psnCookieSet: false, psnAuthExpired: false });
+		mockFetch({ psnNpssoSet: false, psnAuthExpired: false });
 		const { onClose } = renderPanel();
 
-		expect(screen.getByRole('button', { name: 'Save cookie' })).toBeDisabled();
+		expect(screen.getByRole('button', { name: 'Save token' })).toBeDisabled();
 		await userEvent.click(screen.getByRole('button', { name: 'Close' }));
 		expect(onClose).toHaveBeenCalledTimes(1);
 	});
@@ -101,7 +109,7 @@ describe('SettingsPanel', () => {
 	// Sign-out lives in the header alone (deferred-work triage 2026-07-13): the
 	// panel offers About/Help and no second sign-out entry point.
 	it('offers About/Help and no sign-out of its own (Story 6.3, FR-47)', async () => {
-		mockFetch({ psnCookieSet: false, psnAuthExpired: false });
+		mockFetch({ psnNpssoSet: false, psnAuthExpired: false });
 		renderPanel();
 
 		expect(screen.getByText(/About & Help/)).toBeInTheDocument();
@@ -109,7 +117,7 @@ describe('SettingsPanel', () => {
 	});
 
 	it('cancel PS+ is inert with no claims (Story 6.4 AC4)', async () => {
-		mockFetch({ psnCookieSet: false, psnAuthExpired: false });
+		mockFetch({ psnNpssoSet: false, psnAuthExpired: false });
 		renderPanel();
 		await waitFor(() =>
 			expect(screen.getByTestId('cancel-ps-plus')).toBeDisabled(),
@@ -132,7 +140,7 @@ describe('SettingsPanel', () => {
 					json: async () => ({
 						timezone: null,
 						syncAttention: [],
-						psnCookieSet: false,
+						psnNpssoSet: false,
 						psnAuthExpired: false,
 						psPlusClaimCount: 3,
 					}),
@@ -176,7 +184,7 @@ describe('SettingsPanel', () => {
 	});
 
 	it('toggles FAB handedness, PUTting the chosen side (Story 6.3, UX-DR10)', async () => {
-		const fetchMock = mockFetch({ psnCookieSet: false, psnAuthExpired: false });
+		const fetchMock = mockFetch({ psnNpssoSet: false, psnAuthExpired: false });
 		renderPanel();
 
 		// Default right is pressed; picking left PUTs left.

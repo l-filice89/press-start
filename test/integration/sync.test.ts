@@ -15,7 +15,7 @@ import { game, user } from '../../src/schema';
 import {
 	PSN_AUTH_EXPIRED,
 	PSN_AUTH_SETTING_KEY,
-	PSN_COOKIE_SETTING_KEY,
+	PSN_NPSSO_SETTING_KEY,
 	readSyncAttention,
 } from '../../src/services/settings';
 import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
@@ -42,9 +42,10 @@ const psn = (over: Record<string, unknown> = {}) => ({
 });
 
 /**
- * Stub the outbound PSN call only. These tests run in the same isolate as
- * the Worker under vitest-pool-workers, so the provider's global `fetch` is
- * this one; every non-PSN URL passes through to the real fetch.
+ * Stub the outbound PSN calls only — both the NPSSO→bearer exchange
+ * (ca.account.sony.com) and the GraphQL library call. These tests run in the
+ * same isolate as the Worker under vitest-pool-workers, so the provider's
+ * global `fetch` is this one; every other URL passes through to the real fetch.
  */
 const realFetch = globalThis.fetch;
 function stubPsn(games: Record<string, unknown>[], status = 200) {
@@ -52,6 +53,27 @@ function stubPsn(games: Record<string, unknown>[], status = 200) {
 		'fetch',
 		async (input: RequestInfo | URL, init?: RequestInit) => {
 			const url = String(input instanceof Request ? input.url : input);
+			if (
+				url.startsWith(
+					'https://ca.account.sony.com/api/authz/v3/oauth/authorize',
+				)
+			) {
+				return new Response(null, {
+					status: 302,
+					headers: {
+						location:
+							'com.scee.psxandroid.scecompcall://redirect?code=test-auth-code',
+					},
+				});
+			}
+			if (
+				url.startsWith('https://ca.account.sony.com/api/authz/v3/oauth/token')
+			) {
+				return new Response(JSON.stringify({ access_token: 'test-bearer' }), {
+					status: 200,
+					headers: { 'content-type': 'application/json' },
+				});
+			}
 			if (!url.startsWith('https://web.np.playstation.com/')) {
 				return realFetch(input, init);
 			}
@@ -83,7 +105,7 @@ beforeAll(async () => {
 		.from(user)
 		.where(eq(user.email, ALLOWED_EMAIL));
 	userId = row.id;
-	await setSetting(db(), userId, PSN_COOKIE_SETTING_KEY, 'test-psn-cookie');
+	await setSetting(db(), userId, PSN_NPSSO_SETTING_KEY, 'test-psn-npsso');
 });
 
 afterEach(() => vi.unstubAllGlobals());
