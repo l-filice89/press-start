@@ -1,7 +1,8 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { useToast } from '../components/Toast';
 import { useModalTrap } from '../components/useModalTrap';
 import {
 	type DateEdits,
@@ -11,6 +12,7 @@ import {
 	type ShelfGame,
 } from './api';
 import { OwnershipSourceDialog } from './OwnershipSourceDialog';
+import { RematchDialog } from './RematchDialog';
 import { MILESTONE_LABELS, useTrackingMutations } from './useTrackingMutations';
 import './detail-panel.css';
 
@@ -87,8 +89,14 @@ export function DetailPanel({
 	const titleId = useId();
 	const genreListId = useId();
 
+	const queryClient = useQueryClient();
+	const { toast } = useToast();
+
 	// The add input's draft; cleared only after a successful add.
 	const [genreDraft, setGenreDraft] = useState('');
+
+	// The rematch picker (PV-4) is stacked on top when open.
+	const [rematching, setRematching] = useState(false);
 
 	// Vocabulary suggestions for the datalist (Story 2.5). Persisted data only
 	// (NFR-3) — the API reads D1, never IGDB. Writes invalidate ['genres'].
@@ -138,11 +146,25 @@ export function DetailPanel({
 	// confirm is stacked on top, Escape belongs to it alone (`enabled` stands
 	// this trap's Escape down).
 	const onKeyDown = useModalTrap(dialogRef, onClose, {
-		// While the milestone confirm OR the buy-vs-claim source prompt is stacked
-		// on top, Escape belongs to it alone (Story 3.5 stacking rule).
-		enabled: !confirming && !sourcePrompt,
+		// While the milestone confirm, the buy-vs-claim source prompt, OR the
+		// rematch picker is stacked on top, Escape belongs to it alone (Story 3.5
+		// stacking rule).
+		enabled: !confirming && !sourcePrompt && !rematching,
 		initialFocusRef: closeRef,
 	});
+
+	// PV-4: the picked match overwrote this game's cover/title/genres, so the
+	// card DTO feeding this panel is stale — refresh the shelf/genres and close
+	// (onClose returns focus to the card, which re-renders with the new facts).
+	const onRematched = async () => {
+		setRematching(false);
+		toast({ message: `${game.title} — match updated` });
+		await Promise.all([
+			queryClient.invalidateQueries({ queryKey: ['shelf'] }),
+			queryClient.invalidateQueries({ queryKey: ['genres'] }),
+		]);
+		onClose();
+	};
 
 	// ARIA radio pattern (roving tabindex): the group is one tab stop — the
 	// checked status (or the first) — and arrows move focus between statuses
@@ -211,6 +233,9 @@ export function DetailPanel({
 						<h2 id={titleId} className="detail-panel__title">
 							{game.title}
 						</h2>
+						{/* Close stays FIRST in the DOM so it remains the focus-trap's
+						    first tab stop (and initial focus); CSS `order` puts the ✕
+						    back top-right and the rematch button to its left. */}
 						<button
 							ref={closeRef}
 							type="button"
@@ -219,6 +244,15 @@ export function DetailPanel({
 							onClick={onClose}
 						>
 							✕
+						</button>
+						{/* PV-4: correct a wrong IGDB match (wrong cover/genres from a
+						    same-name entry) — opens the games-DB picker. */}
+						<button
+							type="button"
+							className="detail-panel__rematch tap-target"
+							onClick={() => setRematching(true)}
+						>
+							Wrong match?
 						</button>
 					</header>
 
@@ -493,6 +527,14 @@ export function DetailPanel({
 					onPurchased={() => confirmSource('purchase')}
 					onClaimed={() => confirmSource('membership')}
 					onCancel={cancelSource}
+				/>
+			)}
+
+			{rematching && (
+				<RematchDialog
+					game={{ id: game.id, title: game.title }}
+					onClose={() => setRematching(false)}
+					onRematched={onRematched}
 				/>
 			)}
 		</>

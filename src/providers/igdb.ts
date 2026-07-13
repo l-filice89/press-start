@@ -182,7 +182,15 @@ export function createIgdbProvider(
 			// DLC/event entries, dropping out of a shorter candidate list
 			// entirely and leaving a real, released game unenriched. `id` is
 			// requested for the add-by-name previews (Stories 6.1/6.2).
-			body: `search "${query}"; fields id, name, first_release_date, cover.image_id, genres.name; limit 50;`,
+			//
+			// `where game_type = (...)` keeps only full games (PV-2): main_game(0),
+			// standalone_expansion(4), remake(8), remaster(9), expanded_game(10),
+			// port(11) — dropping DLC/bundle/season/pack/update/mod/episode noise
+			// that otherwise buries real games in search + candidate lists.
+			// NB: IGDB retired the `category` field in favour of `game_type` (same
+			// enum values); filtering on the dead `category` returned ZERO rows and
+			// emptied every search live — verified against the API 2026-07-13.
+			body: `search "${query}"; fields id, name, first_release_date, cover.image_id, genres.name; where game_type = (0,4,8,9,10,11); limit 50;`,
 			signal: AbortSignal.timeout(IGDB_TIMEOUT_MS),
 		});
 	}
@@ -263,7 +271,11 @@ export function createIgdbProvider(
 			return { igdbId: String(game.id), name: game.name, ...enrichment(game) };
 		},
 
-		async searchCandidates(title, limit = 10) {
+		// Default cap matches the query's own `limit 50` fetch — one ceiling, not
+		// two. A prolific franchise (Persona: 15+ full games post-PV-2 game_type
+		// filter) can bury the right game past a smaller cap (PV-3), so surface the
+		// whole filtered result set to the picker.
+		async searchCandidates(title, limit = 50) {
 			const games = await searchGames(title);
 			const candidates: IgdbCandidate[] = [];
 			for (const game of games) {

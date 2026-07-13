@@ -37,6 +37,15 @@ export async function unlinkGameGenre(db: Db, gameId: string, genreId: string) {
 		.where(and(eq(gameGenre.gameId, gameId), eq(gameGenre.genreId, genreId)));
 }
 
+/**
+ * Drop every genre link on a game — the rematch path (PV-4) replaces the wrong
+ * match's genres wholesale before relinking the new pick's. Genre rows survive
+ * (shared vocabulary); only the game↔genre edges go.
+ */
+export async function clearGameGenres(db: Db, gameId: string) {
+	await db.delete(gameGenre).where(eq(gameGenre.gameId, gameId));
+}
+
 // BINARY collation would sort `Zelda` before `action`; NOCASE keeps every
 // genre listing alphabetical regardless of the casing a name arrived with.
 const byNameNocase = sql`${genre.name} collate nocase`;

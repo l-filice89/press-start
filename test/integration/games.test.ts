@@ -8,6 +8,7 @@ import {
 	insertGame,
 	insertTrackingIfAbsent,
 	listExternalLinks,
+	listGenresForGame,
 	setDiscarded,
 } from '../../src/repositories';
 import { createDb } from '../../src/repositories/db';
@@ -282,6 +283,136 @@ describe('add a game by name (Story 6.1, through the route)', () => {
 		});
 		expect(res.status).toBe(200);
 		expect(await res.json()).toEqual({ available: false, candidate: null });
+	});
+});
+
+describe('rematch a game (PV-4, through the route)', () => {
+	const postRematch = (gameId: string, body: unknown, cookie?: string) =>
+		appFetch(`/api/games/${gameId}/rematch`, {
+			method: 'POST',
+			headers: {
+				'content-type': 'application/json',
+				...(cookie ? { cookie } : {}),
+			},
+			body: JSON.stringify(body),
+		});
+
+	const igdbIds = async (gameId: string) =>
+		(await listExternalLinks(db(), gameId))
+			.filter((l) => l.source === 'IGDB')
+			.map((l) => l.externalId);
+
+	const genreNames = async (gameId: string) =>
+		(await listGenresForGame(db(), gameId)).map((g) => g.name);
+
+	it('swaps the IGDB link, overwrites facts, and REPLACES genres (PV-1 correction)', async () => {
+		// A wrong same-name match: the 2004 movie tie-in won over the real game.
+		const created = await postGame(
+			{ title: 'Spider-Man 2', igdbId: 'tie-in-2004', genres: ['Platform'] },
+			sessionCookie,
+		);
+		expect(created.status).toBe(201);
+		const { gameId } = (await created.json()) as { gameId: string };
+
+		const res = await postRematch(
+			gameId,
+			{
+				igdbId: 'insomniac-2023',
+				name: "Marvel's Spider-Man 2",
+				coverUrl: 'https://images.igdb.com/igdb/image/upload/t_cover_big/n.jpg',
+				releaseDate: '2023-10-20',
+				genres: ['Adventure'],
+			},
+			sessionCookie,
+		);
+		expect(res.status).toBe(200);
+		expect((await res.json()) as { gameId: string }).toEqual({ gameId });
+
+		const [row] = await db().select().from(game).where(eq(game.id, gameId));
+		expect(row.title).toBe("Marvel's Spider-Man 2");
+		expect(row.titleNormalized).toBe(normalizeTitle("Marvel's Spider-Man 2"));
+		expect(row.releaseDate).toBe('2023-10-20');
+		expect(row.coverUrl).toContain('/n.jpg');
+		expect(row.unenriched).toBe(false);
+
+		// Old identity dropped, new one anchored (AD-20).
+		expect(await igdbIds(gameId)).toEqual(['insomniac-2023']);
+		// Genres REPLACED, not unioned — the wrong match's 'Platform' is gone.
+		expect(await genreNames(gameId)).toEqual(['Adventure']);
+		// Tracking is untouched by a rematch.
+		expect(await getTracking(db(), sessionUser, gameId)).toMatchObject({
+			playStatus: 'Not started',
+		});
+	});
+
+	it('rematch to a genre-less candidate REPLACES genres with none (documented wipe)', async () => {
+		const created = await postGame(
+			{ title: 'Genre Wipe Target', igdbId: 'gw-1', genres: ['Action', 'RPG'] },
+			sessionCookie,
+		);
+		const { gameId } = (await created.json()) as { gameId: string };
+		expect(await genreNames(gameId)).toEqual(['Action', 'RPG']);
+
+		// A correct match that happens to carry no genres — replace leaves none.
+		const res = await postRematch(
+			gameId,
+			{ igdbId: 'gw-2', name: 'Genre Wipe Target' },
+			sessionCookie,
+		);
+		expect(res.status).toBe(200);
+		expect(await genreNames(gameId)).toEqual([]);
+		expect(await igdbIds(gameId)).toEqual(['gw-2']);
+	});
+
+	it('CONFLICT: picking an IGDB id already on another game answers 409, writing nothing (AD-20)', async () => {
+		const a = await postGame(
+			{ title: 'Conflict Game A', igdbId: 'shared-999' },
+			sessionCookie,
+		);
+		const b = await postGame(
+			{ title: 'Conflict Game B', igdbId: 'own-888' },
+			sessionCookie,
+		);
+		const aId = ((await a.json()) as { gameId: string }).gameId;
+		const bId = ((await b.json()) as { gameId: string }).gameId;
+
+		const res = await postRematch(bId, { igdbId: 'shared-999' }, sessionCookie);
+		expect(res.status).toBe(409);
+
+		// No writes: both games keep their original links.
+		expect(await igdbIds(aId)).toEqual(['shared-999']);
+		expect(await igdbIds(bId)).toEqual(['own-888']);
+	});
+
+	it('NOT-FOUND: rematching a game the user does not track answers 404', async () => {
+		const res = await postRematch(
+			'no-such-game',
+			{ igdbId: 'whatever-1' },
+			sessionCookie,
+		);
+		expect(res.status).toBe(404);
+	});
+
+	it('rejects an unauthenticated rematch with 401 (requireAuth seam)', async () => {
+		const res = await postRematch('any-game', { igdbId: 'x' });
+		expect(res.status).toBe(401);
+	});
+
+	it('rejects a malformed body with 400 (bad cover), writing nothing', async () => {
+		const created = await postGame(
+			{ title: 'Rematch Validation', igdbId: 'valid-111' },
+			sessionCookie,
+		);
+		const { gameId } = (await created.json()) as { gameId: string };
+
+		const res = await postRematch(
+			gameId,
+			{ igdbId: 'valid-222', coverUrl: 'javascript:alert(1)' },
+			sessionCookie,
+		);
+		expect(res.status).toBe(400);
+		// The original link stands.
+		expect(await igdbIds(gameId)).toEqual(['valid-111']);
 	});
 });
 

@@ -4,7 +4,7 @@
  * title return an array (non-unique candidate key) while lookups by external
  * link return a single game.
  */
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, ne, sql } from 'drizzle-orm';
 import {
 	type EXTERNAL_LINK_SOURCES,
 	externalLink,
@@ -82,6 +82,31 @@ export async function addExternalLink(
 /** Every external link for a game. */
 export async function listExternalLinks(db: Db, gameId: string) {
 	return db.select().from(externalLink).where(eq(externalLink.gameId, gameId));
+}
+
+/**
+ * Drop a game's links for one source — the rematch path (PV-4) clears stale IGDB
+ * links so a later add/sync resolves the new id, not the wrong one. Leaves other
+ * sources (PSN) intact. `exceptExternalId` keeps one id: rematch anchors the new
+ * pick FIRST, then prunes the rest, so the game is never left with no identity
+ * even if a write in between fails.
+ */
+export async function removeExternalLinksBySource(
+	db: Db,
+	gameId: string,
+	source: ExternalLinkSource,
+	exceptExternalId?: string,
+) {
+	await db.delete(externalLink).where(
+		and(
+			eq(externalLink.gameId, gameId),
+			eq(externalLink.source, source),
+			// drizzle drops `undefined` clauses, so this is a no-op when unset.
+			exceptExternalId
+				? ne(externalLink.externalId, exceptExternalId)
+				: undefined,
+		),
+	);
 }
 
 /**

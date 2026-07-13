@@ -404,3 +404,34 @@ export async function ignoreStraggler(id: string): Promise<void> {
 		body: JSON.stringify({ id }),
 	});
 }
+
+/* ---- Rematch an already-added game (PV-4) ---- */
+
+export interface RematchPayload {
+	igdbId: string;
+	name?: string;
+	coverUrl?: string | null;
+	releaseDate?: string | null;
+	genres?: string[];
+}
+
+/**
+ * Re-point a wrongly-matched game at the chosen IGDB entry (PV-4). Overwrites
+ * its cover/date/title/genres in place. A 409 (the pick already belongs to
+ * another game) or 404 (not this user's game) throws via `callApi` with its
+ * status — the caller's onError toast surfaces it.
+ */
+export async function rematchGame(
+	gameId: string,
+	payload: RematchPayload,
+): Promise<{ gameId: string }> {
+	const body = await callApi(
+		`/api/games/${encodeURIComponent(gameId)}/rematch`,
+		{
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify(payload),
+		},
+	);
+	return z.object({ gameId: z.string() }).parse(body);
+}

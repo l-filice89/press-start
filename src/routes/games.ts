@@ -5,6 +5,7 @@ import { createDb } from '../repositories/db';
 import {
 	addGame,
 	previewAddGame,
+	rematchGame,
 	searchGamesForResolve,
 	todayForUser,
 } from '../services';
@@ -114,6 +115,54 @@ gamesRoute.get('/games/search', requireAuth, async (c) => {
 	}
 	const candidates = await searchGamesForResolve(igdbFromEnv(c.env), title);
 	return c.json(searchResponseSchema.parse({ candidates }), 200);
+});
+
+// Rematch an already-added game onto a different IGDB entry (PV-4): the
+// detail-panel correction for a wrong same-name match. The client passes the
+// chosen candidate (IGDB itself is not called here); the service swaps the link
+// and overwrites enrichment in place. `not-found` = not this user's game (404);
+// `conflict` = the pick already anchors another game (409, AD-20).
+const rematchBodySchema = z.object({
+	igdbId: z.string().min(1).max(64),
+	name: z.string().trim().min(1).max(200).optional(),
+	coverUrl: z
+		.string()
+		.max(500)
+		.regex(/^https:\/\//)
+		.nullish(),
+	releaseDate: z
+		.string()
+		.regex(/^\d{4}-\d{2}-\d{2}$/)
+		.refine((s) => {
+			const ms = Date.parse(`${s}T00:00:00Z`);
+			return !Number.isNaN(ms) && new Date(ms).toISOString().slice(0, 10) === s;
+		})
+		.nullish(),
+	genres: z.array(z.string().max(64)).max(20).optional(),
+});
+
+gamesRoute.post('/games/:id/rematch', requireAuth, async (c) => {
+	const gameId = c.req.param('id');
+	const body = rematchBodySchema.safeParse(
+		await c.req.json().catch(() => null),
+	);
+	if (!body.success) {
+		return c.json({ error: 'invalid rematch' }, 400);
+	}
+
+	const db = createDb(c.env.DB);
+	const outcome = await rematchGame(db, c.get('userId'), gameId, {
+		...body.data,
+		coverUrl: body.data.coverUrl ?? null,
+		releaseDate: body.data.releaseDate ?? null,
+	});
+	if (outcome === 'not-found') {
+		return c.json({ error: 'game not found' }, 404);
+	}
+	if (outcome === 'conflict') {
+		return c.json({ error: 'that match already belongs to another game' }, 409);
+	}
+	return c.json(addResponseSchema.parse({ gameId: outcome.gameId }), 200);
 });
 
 gamesRoute.post('/games', requireAuth, async (c) => {

@@ -12,6 +12,8 @@ import { normalizeTitle } from '../core';
 import type { IgdbCandidate, IgdbSearch } from '../providers';
 import {
 	addExternalLink,
+	clearGameGenres,
+	enrichGame,
 	findGameByExternalLink,
 	findGamesByNormalizedTitle,
 	findGenreByNameInsensitive,
@@ -19,6 +21,7 @@ import {
 	insertGame,
 	insertTrackingIfAbsent,
 	linkGameGenre,
+	removeExternalLinksBySource,
 	setDiscarded,
 	type TrackingPatch,
 	upsertGenre,
@@ -124,6 +127,21 @@ async function pickTitleCandidate(
 	return scored[0] ?? null;
 }
 
+/**
+ * Link genres to a game by name, auto-creating unknown ones (FR-24,
+ * case-insensitive reuse). Idempotent per name (`linkGameGenre` no-ops a repeat).
+ */
+async function linkGenresByName(db: Db, gameId: string, genres?: string[]) {
+	for (const rawName of genres ?? []) {
+		const name = rawName.trim().replace(/\s+/g, ' ');
+		if (!name) continue;
+		const genre =
+			(await findGenreByNameInsensitive(db, name)) ??
+			(await upsertGenre(db, name));
+		await linkGameGenre(db, gameId, genre.id);
+	}
+}
+
 /** FR-43 defaults: wishlisted (not owned) or owned-as-purchase, Not started. */
 function newTracking(owned: boolean, today: string): TrackingPatch {
 	return owned
@@ -219,16 +237,8 @@ export async function addGame(
 			externalId: input.igdbId,
 		});
 	}
-	// FR-24: unknown genres auto-create exactly once (case-insensitive reuse,
-	// same recipe as services/genres.addGenreToGame).
-	for (const rawName of input.genres ?? []) {
-		const name = rawName.trim().replace(/\s+/g, ' ');
-		if (!name) continue;
-		const genre =
-			(await findGenreByNameInsensitive(db, name)) ??
-			(await upsertGenre(db, name));
-		await linkGameGenre(db, created.id, genre.id);
-	}
+	// FR-24: unknown genres auto-create exactly once (case-insensitive reuse).
+	await linkGenresByName(db, created.id, input.genres);
 	await insertTrackingIfAbsent(
 		db,
 		userId,
@@ -236,4 +246,71 @@ export async function addGame(
 		newTracking(input.owned ?? false, today),
 	);
 	return { kind: 'created', gameId: created.id };
+}
+
+export interface RematchInput {
+	igdbId: string;
+	/** Chosen IGDB name — overwrites the game's title when given. */
+	name?: string;
+	coverUrl?: string | null;
+	releaseDate?: string | null;
+	genres?: string[];
+}
+
+export type RematchOutcome =
+	| { kind: 'rematched'; gameId: string }
+	| 'not-found'
+	| 'conflict';
+
+/**
+ * Re-point a wrongly-matched game at the right IGDB entry (PV-4), the
+ * detail-panel correction for PV-1 same-name mismatches. Edits the EXISTING
+ * game in place: swap its IGDB link, overwrite cover/date/title, and REPLACE
+ * its genres with the pick's (the old match was wrong, so its facts are too —
+ * see spec Design Notes). Never inserts a game and never touches tracking.
+ *
+ * ponytail: these writes are sequential, not one D1 transaction — same accepted
+ * ceiling as `resolveStraggler` (single-user, retryable, D1 has no interactive tx).
+ */
+export async function rematchGame(
+	db: Db,
+	userId: string,
+	gameId: string,
+	input: RematchInput,
+): Promise<RematchOutcome> {
+	// User-scope (AD-13): only a game this user tracks can be rematched.
+	if (!(await getTracking(db, userId, gameId))) return 'not-found';
+
+	// AD-20 identity: the picked IGDB id may already anchor a DIFFERENT game
+	// (a real duplicate) — surface it rather than silently attach. The same id
+	// already on THIS game is fine (idempotent re-pick / fact refresh).
+	const owner = await findGameByExternalLink(db, 'IGDB', input.igdbId);
+	if (owner && owner.id !== gameId) return 'conflict';
+
+	// Anchor the new identity FIRST, then prune the stale IGDB links (keeping the
+	// one just added). Add-before-delete so a failed write in between never leaves
+	// the game with NO IGDB link — it keeps its old identity and the rematch is
+	// cleanly retryable. Skip the insert when the id is already this game's.
+	if (!owner) {
+		await addExternalLink(db, {
+			gameId,
+			source: 'IGDB',
+			externalId: input.igdbId,
+		});
+	}
+	await removeExternalLinksBySource(db, gameId, 'IGDB', input.igdbId);
+	await enrichGame(db, gameId, {
+		coverUrl: input.coverUrl ?? null,
+		releaseDate: input.releaseDate ?? null,
+		...(input.name?.trim()
+			? {
+					title: input.name.trim(),
+					titleNormalized: normalizeTitle(input.name),
+				}
+			: {}),
+	});
+	await clearGameGenres(db, gameId);
+	await linkGenresByName(db, gameId, input.genres);
+
+	return { kind: 'rematched', gameId };
 }
