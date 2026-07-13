@@ -149,7 +149,7 @@ Three doors into the library. All of them record lifecycle dates silently (§4.5
 
 ### Auth & the multi-user seam
 
-- **FR-47** — **better-auth with magic link** for v1; Google OAuth is v1.x.
+- **FR-47** — **better-auth with magic link** for v1; **Google OAuth is v1.x, owned by Epic 8 story B1a** (added alongside magic link; the `AUTH_ALLOWED_EMAIL` gate still applies to the callback — dropping that gate is B1b, a separate and demand-driven decision).
 - **FR-48** — Single user in practice, but all user-entered tracking data (status, milestones, dates, ownership overrides) is **scoped to a user id from day one**. No sharing, roles, or tenant isolation is built — the door to publishing is left unwelded, nothing more.
 
 ### Hosting & data
@@ -171,6 +171,7 @@ Three doors into the library. All of them record lifecycle dates silently (§4.5
 
 - Trophy sync from PSN: completion % and a PSNProfiles-style letter grade (computable client-side once counts are synced).
 - Critic and user scores from games-DB sources, stored and refreshed on a schedule.
+- **Time to beat** — hours to finish the story and hours to 100%, shown next to the scores. Source: IGDB `/game_time_to_beats`, keyed by the `igdbId` already stored (open-q #6); HowLongToBeat is the fallback only if IGDB coverage is thin. Same stored-and-scheduled-refresh discipline as the scores. *(Not personal playtime tracking — that stays Future.)*
 - "Leaving PS+ Extra soon" warnings for backlog games.
 - Google sign-in.
 
@@ -188,7 +189,7 @@ Not in the v1 milestone. Epic 5 flags catalog membership on games *already track
 - Tunable play-next suggestions ("same genre" / "vary genre").
 - Stats and dashboards over the lifecycle-date history.
 - Sale detection + notifications for wishlisted games (mechanism sketch in the addendum).
-- Possibly playtime and other platforms.
+- Possibly **personal** playtime tracking (hours *Luca* put in — distinct from the v1.x time-to-beat estimate above) and other platforms.
 
 ### Non-goals
 
@@ -204,7 +205,8 @@ Not in the v1 milestone. Epic 5 flags catalog membership on games *already track
 All architecture-time decisions; none block this PRD.
 
 1. **Database** — free-tier candidates: Turso/libSQL, Cloudflare D1, Neon/Supabase Postgres, **Convex** (reactive backend-as-a-service; reputation for friendly pricing — evaluate alongside the SQL options). Re-verify free tiers at decision time.
-2. **PS auth** — can the NPSSO-token path (psn-api's auth) replace or complement the fragile `pdccws_p` cookie for library and catalog queries?
+2. **PS auth** — ~~can the NPSSO-token path (psn-api's auth) replace or complement the fragile `pdccws_p` cookie for library and catalog queries?~~ **Superseded by spike S-1** (`ARCHITECTURE-SPINE.md` → Deferred), which subsumes this and adds the wishlist + trophy endpoints to the probe.
 3. **Games DB** — IGDB vs RAWG for add-by-name search, genres, covers, release dates.
 4. **Scheduled job** — mechanism for the monthly PS+ Extra refresh within the stateless free tier (e.g. Cloudflare Cron Triggers).
-5. **Score source** (v1.x concern) — RAWG (Metacritic) vs IGDB vs OpenCritic.
+5. **Score source** (v1.x concern) — **RESOLVED (2026-07-13): IGDB.** `aggregated_rating` (critic) and `rating` (user) come from the `/games` endpoint the `IgdbProvider` already calls — no second adapter, no new credentials. OpenCritic is the fallback if coverage proves thin on real titles; RAWG is out.
+6. **Time-to-beat source** (v1.x concern) — **RESOLVED (2026-07-13): IGDB.** `/game_time_to_beats` returns `normally` / `completely` / `count` keyed by `game_id`, which joins on the `igdbId` already stored — same provider, same credentials, **no fuzzy title matching**. HowLongToBeat is the fallback only if IGDB coverage proves thin: its endpoint is unofficial (breaks on their rebuilds) and it has no shared id, so it would match on title. Open until the coverage check in Epic 10 Story 10.3's first task.

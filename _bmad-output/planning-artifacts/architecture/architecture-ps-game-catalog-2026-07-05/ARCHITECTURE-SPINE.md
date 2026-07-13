@@ -328,10 +328,10 @@ ps-game-catalog/
 
 ## Deferred
 
-- **NPSSO/psn-api auth swap** — a spike must confirm an NPSSO bearer token authorizes `getPurchasedGameList` + the PS+ catalog queries; then swap the `PsnProvider` auth (less frequent re-auth). Non-blocking; revisit when cookie-refresh friction bites or before any publish. (Isolated by AD-5.)
-- **RAWG as Metacritic score source** — v1.x (PRD open-q #5). Added as a second `providers/` adapter; genres/covers stay on IGDB.
+- **Spike S-1 — PSN auth surface** (one afternoon) — probe, under the current `pdccws_p` cookie and then under an NPSSO bearer: the PS Store **wishlist** endpoint, `getPurchasedGameList`, and the **trophy** endpoints. Output is an endpoint × auth-path table (append to `deferred-work.md`). It answers the old NPSSO-swap question (PRD open-q #2) **and** gates whether wishlist sync ships alongside trophy sync as one PSN epic or slips to Future. The swap itself stays a `PsnProvider` internal (isolated by AD-5); revisit regardless when cookie-refresh friction bites or before any publish.
+- **Critic & user scores — IGDB** (PRD open-q #5, RESOLVED 2026-07-13). `aggregated_rating` (critic) and `rating` (user) come from the same `/games` endpoint the `IgdbProvider` already calls — **no second adapter**. Scored fields + a scheduled refresh only. Fallback if coverage is thin on real titles: OpenCritic. RAWG is out.
 - **Sale detection** (PRD addendum) — a future daily Cron Trigger over wishlisted titles; prerequisite is capturing PS Store product IDs, which the v1 "View on PS Store" link (FR-16) already starts collecting.
-- **Trophy sync, critic/user scores, "leaving PS+ soon", Google OAuth** — v1.x (PRD §6); no v1 structure beyond the provider seam and `user_id` scoping.
+- **Trophy sync, critic/user scores, "leaving PS+ soon", Google OAuth (→ Epic 8/B1a)** — v1.x (PRD §6); no v1 structure beyond the provider seam and `user_id` scoping.
 - **Multi-tenant hardening** (roles, sharing, per-user rate isolation, D1-per-tenant) — only if publish happens; AD-13 keeps the door open, nothing more built.
 - **Release management** (release branches, tagged production releases, a Wrangler `staging` environment) — deferred to the publish milestone; v1 is trunk-based with CD from `main`. A later config change, not a rework.
 - **Convex / Postgres migration** — not needed at single-user free-tier scale; AD-4 makes it a repository-layer change if ever required.

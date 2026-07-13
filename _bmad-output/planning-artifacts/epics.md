@@ -1,5 +1,9 @@
 ---
 stepsCompleted: ['step-01-validate-prerequisites', 'step-02-design-epics', 'step-03-create-stories', 'step-04-final-validation']
+postV1Run:
+  date: 2026-07-13
+  scope: 'v1.x epics (E9, E10), Story 6.6, Epic 8 decomposition'
+  stepsCompleted: ['step-01-validate-prerequisites', 'step-02-design-epics', 'step-03-create-stories', 'step-04-final-validation']
 inputDocuments:
   - prds/prd-ps-game-catalog-2026-07-05/prd.md
   - prds/prd-ps-game-catalog-2026-07-05/addendum.md
@@ -7,6 +11,10 @@ inputDocuments:
   - ux-designs/ux-ps-game-catalog-2026-07-05/DESIGN.md
   - ux-designs/ux-ps-game-catalog-2026-07-05/EXPERIENCE.md
   - ../implementation-artifacts/epic-2-retro-2026-07-09.md
+  - ../roadmap.md
+  - sprint-change-proposal-2026-07-13.md
+  - ../implementation-artifacts/publication-blockers.md
+  - ../implementation-artifacts/post-v1-backlog.md
 ---
 
 # ps-game-catalog - Epic Breakdown
@@ -265,6 +273,23 @@ Each FR is assigned a **primary** epic; FRs that genuinely span epics list each 
 
 **TR coverage (added 2026-07-09):** TR-1 → E2.5 (framework + console-link auth) · TR-2 → E2.5 (Epic 1+2 backfill) · TR-3 → E2.5 (standing rule in `_bmad/custom/bmad-dev-auto.toml`).
 
+### Post-v1 Requirements (added 2026-07-13)
+
+The v1.x tier of `roadmap.md`. The PRD lists these as unnumbered bullets in §6, so they carry **VR-** IDs here; the multi-user blockers keep their existing **B-** IDs and `publication-blockers.md` stays their live source.
+
+- **VR-1** — **Spike S-1 — PSN auth surface** (one afternoon): probe the PS Store **wishlist** endpoint, `getPurchasedGameList`, and the **trophy** endpoints under the `pdccws_p` cookie, then under an NPSSO bearer. Output: an endpoint × auth-path table appended to `deferred-work.md`. Subsumes PRD open-q #2. [sprint-change-proposal-2026-07-13 §3.2]
+- **VR-2** — **Trophy sync from PSN**: per-game trophy counts synced and persisted; completion % and a PSNProfiles-style letter grade computed from them. [PRD §6 v1.x]
+- **VR-3** — **One-off trophy backfill**: for games with a Platinum but no dates on record, set `platinum_on` from PSN and assume `completed_on` = `platinum_on`. A backfill heuristic only — never the rule for games synced going forward. [roadmap.md]
+- **VR-4** — **Wishlist sync from PSN**: pull the PS Store wishlist and add those titles to the Press Start wishlist (PS Store product IDs are already captured, FR-16/FR-35). **Gated by VR-1**: reachable over `pdccws_p` → ships with VR-2; needs NPSSO → the auth swap becomes its prerequisite and it slips to Future. [roadmap.md]
+- **VR-5** — **Critic & user scores from IGDB**: `aggregated_rating` / `aggregated_rating_count` (critic) and `rating` / `rating_count` (user) from the `/games` endpoint `IgdbProvider` already calls — no second adapter. Persisted fields + a scheduled refresh; surfaced on the card/detail view. OpenCritic is the fallback only if coverage proves thin on real titles. [PRD open-q #5, RESOLVED 2026-07-13]
+- **VR-6** — **"Leaving PS+ Extra soon" warnings**: flag backlog games about to exit the region's catalog. [PRD §6 v1.x]
+- **VR-7** — **Shared IGDB match picker (PV-6)**: extract `<IgdbMatchPicker>` from `RematchDialog`, migrate `StragglersDialog`'s `ResolveView` onto it, and mount it in `AddGameDialog` behind a "Not the right game?" affordance — so a wrong auto-match is caught before the row exists. No new endpoint. [`implementation-artifacts/post-v1-backlog.md`]
+- **VR-8** — **Time to beat**: hours to finish the story and hours to 100% a game, shown next to the scores. **Source: IGDB `/game_time_to_beats`** (`normally` / `completely` + `count`), keyed by the `igdbId` already stored — same provider, same credentials, no fuzzy title matching. **HowLongToBeat is the fallback**, a second adapter behind the same port, only if IGDB coverage proves thin on real titles. Persisted fields + the same scheduled refresh as VR-5. [new 2026-07-13, sprint-change-proposal-2026-07-13-hltb]
+
+**Multi-user blockers (B1a–B6):** owned by Epic 8; the table in `implementation-artifacts/publication-blockers.md` is the live source and is not duplicated here.
+
+**Post-v1 coverage map:** VR-1, VR-2, VR-3, VR-4 → E9 · VR-5, VR-6, VR-8 → E10 · VR-7 → E6 (Story 6.6) · FR-50, FR-51, FR-52 → E7 · B1a–B6 → E8
+
 ## Epic List
 
 ### Epic 1: Foundation & the Seeded Shelf
@@ -301,7 +326,16 @@ The full per-region PS+ Extra catalog becomes a browsable, genre-filterable, sea
 
 ### Epic 8: Multi-user Readiness — _Post-v1.0.0, demand-driven_
 Everything that is correct while `AUTH_ALLOWED_EMAIL` is one address but breaks the moment a second user exists: real auth (registration/invite, drop the single-email gate), and turning the global facts (`ps_plus_extra` flag, PSN region, the cron's single-user refresh) into per-user data. The backlog is `publication-blockers.md` (B1–B6) — this epic is its home. **Sequenced after Epic 7 and only when a second user is actually wanted** — no plumbing is front-loaded; nothing here matters under single-user auth.
-**Blockers covered:** B1–B6 (see `publication-blockers.md`) · Epic 6 retro action item 4
+**Blockers covered:** B1a–B6 (see `publication-blockers.md`) · Epic 6 retro action item 4 · decomposed into Stories 8.0–8.5 (2026-07-13)
+
+### Epic 9: The PSN Record — Trophies (and maybe Wishlist) — _v1.x_
+Luca's trophy progress lands in Press Start: per-game completion % and a PSNProfiles-style letter grade, plus a one-off backfill that recovers the platinum/completion dates PSN knows and the app doesn't. Opens with the S-1 spike, which also decides whether PSN wishlist sync ships in this epic or slips to Future.
+**VRs covered:** VR-1, VR-2, VR-3, VR-4 (conditional on VR-1's outcome) · reuses AR-5 (`PsnProvider`), AR-11 (write-once dates), AR-15 (bulk work chunked)
+
+### Epic 10: Know Before You Play — Scores & Expiry Warnings — _v1.x, after Epic 7_
+Three decision-support signals on the card: what the world thinks of a game (IGDB critic + user scores), how long it takes (hours to beat the story, hours to 100%), and whether a backlog game is about to leave PS+ Extra. All stored and refreshed on a schedule — never fetched on render.
+**VRs covered:** VR-5, VR-6, VR-8 · reuses AR-5 (`IgdbProvider`), AR-6 (nothing external on render), AR-15 (bulk work chunked), AR-23 (per-region catalog)
+**Sequencing:** VR-6 diffs the `ps_plus_catalog` snapshot Story 7.1 builds, so this epic follows Epic 7. Stories 10.1 (scores) and 10.3 (time to beat) carry no such dependency and are pullable ahead alone; 10.3 rides 10.1's refresh job, so it follows 10.1.
 
 ---
 
@@ -1239,6 +1273,36 @@ So that I can find a game I already track without scrolling.
 
 > Closes the `spec-free-text-shelf-search` deferred-work item. Today `SearchBox.tsx` is a suggestion-combobox only; the visible shelf (`Shelf.tsx`) never sees the input. Pairs with the disambiguation rule (normalized-exact-match) shared across the add/revive paths.
 
+### Story 6.6: One picker for every IGDB match (PV-6)
+
+As Luca,
+I want to correct a wrong IGDB match **before** the game is added, from the same picker every other screen uses,
+So that a bad auto-match never becomes a row I have to go rematch — and there is one picker to fix, not three.
+
+**Acceptance Criteria:**
+
+**Given** the add-game modal has pre-filled a preview from IGDB's auto-match
+**When** the match is wrong
+**Then** a "Not the right game?" affordance opens the candidate picker inline, and picking a candidate **overwrites the whole draft** (cover, genres, release date) and resets the `seeded` ref — prior edits were edits to the wrong game [VR-7]
+
+**Given** the preview reports `available: false` (IGDB down or unset — `searchGamesForResolve` returns `[]`)
+**When** the add modal renders
+**Then** the affordance is hidden, never an always-empty picker [VR-7, NFR-4]
+
+**Given** the picker is stacked inside the add modal
+**When** I press Escape
+**Then** the picker closes first and the add modal stays open (the trap-stacking dance `DetailPanel` already does for rematch) [VR-7]
+
+**Given** `RematchDialog` and `StragglersDialog`'s `ResolveView` are today deliberate near-duplicates of the same picker
+**When** this story lands
+**Then** both are migrated onto the shared `<IgdbMatchPicker>` — no bespoke picker survives — while `resolveStraggler`, `rematchGame`, and straggler-kind handling stay page-side; only the candidate list/search UI is shared [VR-7]
+
+**Given** the existing `RematchDialog.test.tsx` and `StragglersDialog.test.tsx` suites, which drive the picker through its "Use this match" button
+**When** the migration completes
+**Then** they still pass unchanged — they are the migration's safety net — and a Playwright test covers the add-modal correction path (TR-3 standing rule)
+
+> No new endpoint, no server change: the picker reuses the existing `searchIgdb` → `GET /games/search` → `searchGamesForResolve` seam. Full scope and decisions: `implementation-artifacts/post-v1-backlog.md` (PV-6).
+
 ## Epic 7: Browse the PS+ Catalog & Add
 
 **Status: Post-v1.0.0** — not required for the first release. The MVP (Epics 1–6) is the personal shelf + tracking + PS+ *awareness*; browsing the full catalog is a discovery enhancement that earns its way in after v1 ships. Scheduled, not scoped into the v1 milestone.
@@ -1353,11 +1417,368 @@ So that discovery in the catalog turns into a tracked game (or a claimed one) in
 
 **Status: Post-v1.0.0, demand-driven** — sequenced after Epic 7 and only picked up when a second user is actually wanted. The app ships single-tenant by design (FR-48 "the app is mine today"); every item here is correct under one `AUTH_ALLOWED_EMAIL` and only wrong once a second user exists. No plumbing is front-loaded.
 
-The backlog is **`publication-blockers.md`** (kept as the live source, cross-referenced from `deferred-work.md`) — this epic is its home rather than a second copy of the table. Each blocker is a story:
+The backlog is **`publication-blockers.md`** (kept as the live source, cross-referenced from `deferred-work.md`) — this epic is its home rather than a second copy of the table. Each blocker is a story.
 
-- **B1 — Real auth** (registration/invite; drop or list-ify the single-email gate). Gates everything below.
-- **B2 + B3 — Global facts become per-user** (`ps_plus_extra` flag and PSN region — the "global fact that must become per-user" pair; do together).
-- **B4 + B5 — Per-user PS+/sync refresh** (cron loops all users, each with their own region + PSN cookie; mind the free-tier subrequest budget).
-- **B6 — `owned_via = NULL` legacy backfill** (data hygiene, lowest priority).
+**Order:** 8.2 (B1b) → 8.3 (B2+B3) → 8.4 (B4+B5) → 8.5 (B6), as `publication-blockers.md` states. **Story 8.1 (B1a, Google OAuth) sits outside that ordering** — single-tenant-safe, gates nothing, and is pullable into v1.x whenever wanted. Story 8.0 gates 8.2 onward, not 8.1.
 
-**Order:** B1 → B2+B3 → B4+B5 → B6, as `publication-blockers.md` states. When this epic is scoped for real, expand each blocker into ACs then (foundation-first: an auth-model + data-scoping design gate like Story 7.0), not now.
+### Story 8.0: Foundation — auth model & data-scoping design gate
+
+As the team,
+I want the multi-user auth model and the per-user data scoping designed and signed off before any of B1b–B6 is coded,
+So that registration, per-user PS+ facts, and a multi-user cron aren't improvised against a schema shaped for one tenant.
+
+**Acceptance Criteria:**
+
+**Given** Epic 8 is picked up for real (a second user is actually wanted)
+**When** design begins
+**Then** the architecture spine records the multi-user auth model — registration vs invite, what replaces `isAllowedEmail`, and what a second user may and may not see (no sharing, no roles: FR-48's seam, not a tenancy platform) — a reviewed `bmad-architecture` update [AR-13]
+
+**Given** `ps_plus_extra` is a column on the shared `GAME` row and PSN region is a single global `env.PSN_REGION`
+**When** the data scoping is designed
+**Then** the spine states where each global fact moves (user-scoped table vs derived per-user), honouring AR-19's shared-`GAME`-facts / per-user-`GAME_TRACKING`-state split, so 8.3 is a migration with a known target rather than a design exercise [B2, B3; AR-17, AR-19, AR-23]
+
+**Given** the cron must fan out over N users, each with a region and a PSN cookie
+**When** the design lands
+**Then** it names the free-tier subrequest budget per run and the chunking strategy that stays inside it as user count grows [B4, B5; NFR-1, NFR-2, AR-15]
+
+**Given** the design artifacts exist
+**When** Story 8.2 is picked up
+**Then** they gate it: no multi-user code merges before the auth model and the scoping target are signed off (foundation-first, the Story 7.0 pattern)
+
+> A design gate, not runtime code — its "done" is signed-off artifacts. Story 8.1 does **not** wait on it: adding an OAuth provider behind an unchanged allowlist gate changes no data model.
+
+### Story 8.1: Sign in with Google (B1a)
+
+As Luca,
+I want to sign in with my Google account instead of waiting for a magic-link email,
+So that getting into my own app takes one tap.
+
+**Acceptance Criteria:**
+
+**Given** better-auth is configured with magic link (FR-47)
+**When** this story lands
+**Then** Google is added as a provider **alongside** magic link — both paths work, neither replaces the other [FR-47, B1a; `src/services/auth.ts`]
+
+**Given** an OAuth callback for an email that is not `AUTH_ALLOWED_EMAIL`
+**When** it completes
+**Then** the `isAllowedEmail` gate **still rejects it** — the gate is unchanged by this story and applies to the OAuth path exactly as it does to magic link (dropping it is Story 8.2) [B1a, B1b]
+
+**Given** a rejected OAuth sign-in
+**When** the user lands back in the app
+**Then** the rejection is stated plainly, not swallowed into a blank login screen [NFR-4, AR-14]
+
+**Given** the sign-in screen
+**When** it renders
+**Then** the Google button and the magic-link form both appear, styled to the existing token system (no new palette) [UX-DR reuse]
+
+**Given** the Google client secret
+**When** it is configured
+**Then** it lives in a Worker secret, never in `wrangler.jsonc` or the repo [AR-1]
+
+> No schema migration; single-tenancy holds throughout. This is why it is pullable into v1.x ahead of the rest of the epic.
+
+### Story 8.2: Real users can register (B1b)
+
+As a second user,
+I want to register (or accept an invite) and get my own account,
+So that the app is no longer one hard-coded email address.
+
+**Acceptance Criteria:**
+
+**Given** Story 8.0's signed-off auth model
+**When** registration/invite is implemented
+**Then** `isAllowedEmail` (`src/services/auth.ts:34`) stops being the gate — a new user can reach an account through the designed path (magic link or Google, per 8.1) [B1b]
+
+**Given** two registered users
+**When** each signs in
+**Then** each sees only their own `GAME_TRACKING` rows — the AR-13/AR-17 user scoping that has been in the schema since Epic 1 is now actually exercised by more than one user id [FR-48, AR-13, AR-17]
+
+**Given** an unauthenticated or cross-user request
+**When** it hits any tracking read/write path
+**Then** it is refused — the scoping is enforced server-side, not by the UI hiding things [AR-13]
+
+> Gates 8.3–8.5. Nothing below matters until a second user exists.
+
+### Story 8.3: Per-user PS+ facts — region and catalog flag (B2 + B3)
+
+As a user in my own region,
+I want the PS+ Extra flag and the PSN region to be *mine*,
+So that another user's catalog check never rewrites what is playable for me.
+
+**Acceptance Criteria:**
+
+**Given** `ps_plus_extra` is today a global column on the shared `GAME` row, written from one user's catalog check (`setPsPlusExtraFlags`, `src/services/psplus.ts`)
+**When** this story lands
+**Then** the flag becomes per-user (per Story 8.0's chosen shape: user-scoped table or derived), so user B's check never lands on user A's row [B2; AR-19]
+
+**Given** PSN region is today a single global `env.PSN_REGION` seeded into every SETTING (`getPsnRegion`, `src/services/settings.ts`)
+**When** this story lands
+**Then** region is a per-user setting with an editor in the settings surface, ideally seeded from PSN on first sync [B3; AR-23]
+
+**Given** two users in different regions with the same game tracked
+**When** both catalog checks have run
+**Then** each user sees the PS+ pill according to **their** region's catalog — the two answers coexist [B2 + B3 together; AR-23]
+
+**Given** existing single-user data
+**When** the migration runs
+**Then** the current global flag and region are carried onto the existing user, losing nothing [AR-16]
+
+> B2 and B3 are one story on purpose: both are "a global fact that must become per-user", and a per-user flag is meaningless without a per-user region.
+
+### Story 8.4: The scheduled refresh serves every user (B4 + B5)
+
+As any user of the app,
+I want the monthly PS+ refresh and the sync to run for **my** account, not just the first one,
+So that the automation is not silently single-tenant.
+
+**Acceptance Criteria:**
+
+**Given** `runScheduledPsPlusCheck` (`src/services/psplus.ts:140`) resolves exactly one user by `AUTH_ALLOWED_EMAIL`
+**When** this story lands
+**Then** the cron loops **all** users, each with their own region (8.3) and their own `pdccws_p` cookie from SETTING (`getPsnCookie`) [B4, B5]
+
+**Given** the free-tier subrequest budget named in Story 8.0
+**When** the user count grows
+**Then** the run chunks to stay inside it rather than failing the whole cron [NFR-1, NFR-2, AR-15]
+
+**Given** one user's refresh fails (expired cookie, unset region)
+**When** the run continues
+**Then** the other users still refresh, and that user's failure surfaces to **that user** on next app open — never a silent skip, never a poisoned run [NFR-4, AR-14, FR-40]
+
+### Story 8.5: Backfill legacy `owned_via` rows (B6)
+
+As the maintainer,
+I want the pre-FR-9 rows to carry an acquisition source,
+So that `owned_via` means something on every row instead of being NULL on the oldest ones.
+
+**Acceptance Criteria:**
+
+**Given** `game_tracking` rows written before the FR-9 amendment carry `owned_via = NULL`
+**When** the backfill runs
+**Then** each is either resolved to `purchase`/`membership` from the PSN library or explicitly accepted as unknown — and the choice is recorded, not left ambiguous [B6]
+
+**Given** the backfill
+**When** it completes
+**Then** no user-entered data (status, milestones, dates) is touched — this is a hygiene pass over one column [AR-10]
+
+> Lowest priority in the epic; data hygiene, not a correctness gate.
+
+## Epic 9: The PSN Record — Trophies (and maybe Wishlist)
+
+**Status: v1.x** — enriches a working app. All PSN I/O stays behind `PsnProvider` (AR-5); nothing here changes the state model.
+
+Epic 4 fills the library from PlayStation. This epic brings across the *record*: trophy progress per game (completion % and a PSNProfiles-style letter grade), plus a one-off backfill that recovers milestone dates PSN knows and the app never captured. It opens with the S-1 spike, which answers one question — what does the `pdccws_p` cookie actually authorize — and that answer decides whether PSN wishlist sync (Story 9.4) ships here or slips to Future.
+
+### Story 9.1: Spike S-1 — what does `pdccws_p` authorize? (VR-1)
+
+As the team,
+I want a probed, written-down table of which PSN endpoints work under the session cookie and which need an NPSSO bearer,
+So that trophy sync and wishlist sync get sequenced on evidence instead of on a guess, and the long-open NPSSO question is closed.
+
+**Acceptance Criteria:**
+
+**Given** a valid `pdccws_p` cookie
+**When** the spike probes the PS Store **wishlist** endpoint, `getPurchasedGameList`, and the **trophy** endpoints
+**Then** each is recorded as reachable / not reachable, with the observed status and response shape [VR-1]
+
+**Given** an NPSSO bearer token
+**When** the same three are probed again
+**Then** the same table is filled for the NPSSO path — the output is an **endpoint × auth-path** table appended to `implementation-artifacts/deferred-work.md` [VR-1]
+
+**Given** the table
+**When** the spike closes
+**Then** it states the consequence explicitly: wishlist reachable over `pdccws_p` → **Story 9.4 stays in this epic**; wishlist needs NPSSO → the auth swap becomes its prerequisite, **9.4 is dropped to Future**, and 9.2/9.3 proceed on their own (unless trophies need NPSSO too — then the swap is promoted out of Deferred and gates this epic)
+
+**Given** the spike is complete
+**When** the planning docs are updated
+**Then** PRD open-q #2 is closed by it, and the spine's Deferred entry is resolved [sprint-change-proposal-2026-07-13 §3.2]
+
+> Timebox: one afternoon. A spike, not a feature — its "done" is a written table and a sequencing decision. No production code need survive it. Any auth swap it recommends stays a `PsnProvider` internal (AR-5).
+
+### Story 9.2: Trophy progress on every game (VR-2)
+
+As Luca,
+I want each game to show how far I got — completion % and a letter grade,
+So that "did I ever finish that?" gets a number, not just a status pill.
+
+**Acceptance Criteria:**
+
+**Given** a synced PSN account
+**When** the trophy sync runs (button, alongside the existing library sync)
+**Then** per-game trophy counts (earned/total, by tier) are fetched through `PsnProvider` and **persisted** — nothing is fetched on render [VR-2, AR-5, AR-6, NFR-3]
+
+**Given** persisted trophy counts
+**When** completion % and the letter grade are computed
+**Then** both are derived in the I/O-free domain core from the stored counts, with the grade bands documented in one place — never stored as a second source of truth [VR-2, AR-3, AR-8]
+
+**Given** a game with trophy data
+**When** its card and detail view render
+**Then** the completion % and grade show; a game with no trophy data shows nothing rather than a fake 0% [VR-2, UX-DR reuse]
+
+**Given** the trophy sync
+**When** it runs
+**Then** it **never** writes play status, milestones, or lifecycle dates — trophy data is its own surface (the milestone backfill is Story 9.3, a deliberate one-off) [AR-10, AR-11]
+
+**Given** an expired cookie or a PSN error mid-sync
+**When** the run fails
+**Then** the refresh instructions surface and the run stops — no silent retry, no partial write presented as complete [NFR-4, AR-14, FR-36]
+
+**Given** a library of ~175 games, each needing a trophy lookup
+**When** the sync runs
+**Then** it fits the free-tier subrequest/CPU budget — chunked or out-of-band if it does not [NFR-1, AR-15]
+
+### Story 9.3: One-off backfill — recover the platinum dates PSN knows (VR-3)
+
+As Luca,
+I want the platinum dates PSN has on record filled in for games where I never logged them,
+So that my milestone history isn't blank for everything I platinumed before this app existed.
+
+**Acceptance Criteria:**
+
+**Given** a game with a Platinum trophy earned on PSN and **no** `platinum_on` on record
+**When** the backfill runs
+**Then** `platinum_on` is set from PSN's earned date [VR-3]
+
+**Given** such a game also has **no** `completed_on`
+**When** the backfill runs
+**Then** `completed_on` is set to the same date as `platinum_on` — **a backfill heuristic only**, recorded as such, and explicitly **not** the rule for games synced going forward (Story 9.2 never writes milestones) [VR-3]
+
+**Given** a game that already carries `platinum_on` or `completed_on`
+**When** the backfill runs
+**Then** it is left untouched — write-once holds; the first value stands [FR-6, FR-45, AR-11]
+
+**Given** the backfill is a one-off over the whole library
+**When** it is run
+**Then** it runs out-of-band or chunked (never a blocking request), reports what it changed, and is safe to re-run (idempotent by construction — it only ever fills nulls) [AR-15, FR-37 posture]
+
+> The only place in the app where a sync writes a milestone. It is a one-time reconciliation with a documented heuristic, not a standing behaviour.
+
+### Story 9.4: Sync the PS Store wishlist (VR-4) — _conditional on Story 9.1_
+
+As Luca,
+I want the games I wishlisted on the PS Store to appear in my Press Start wishlist,
+So that the two lists stop drifting apart and the store wishlist stops being a second place I have to check.
+
+**Acceptance Criteria:**
+
+**Given** Story 9.1 concluded the wishlist endpoint is reachable over `pdccws_p`
+**When** this story is picked up
+**Then** it proceeds in this epic — **if the spike concluded otherwise, this story is removed from Epic 9 and filed to Future** with the NPSSO swap as its prerequisite [VR-1, VR-4]
+
+**Given** the PS Store wishlist
+**When** the sync runs
+**Then** each wishlisted product is matched to the library by stored PS Store product id first, then normalized title (the FR-34 matching order), and unmatched titles are **added as wishlisted games** (not owned, `wishlisted_on` recorded, status `Not started`) [VR-4, FR-43, AR-9, AR-18]
+
+**Given** a wishlist entry that matches a game I already **own**
+**When** the sync runs
+**Then** nothing changes — ownership is never unset, and the store wishlist does not un-own anything [FR-10, AR-10]
+
+**Given** a wishlist entry that no longer appears on PSN
+**When** the sync runs
+**Then** the Press Start game is **not** deleted — sync is append-only to user data; removal stays the user's decision [AR-10]
+
+**Given** the sync completes
+**When** the summary shows
+**Then** it names games added, entries already tracked, and anything needing attention — the FR-37 posture [FR-37, NFR-4]
+
+## Epic 10: Know Before You Play — Scores & Expiry Warnings
+
+**Status: v1.x, after Epic 7** — Story 10.2 diffs the `ps_plus_catalog` snapshot Story 7.1 builds, so this epic follows Epic 7. **Stories 10.1 and 10.3 carry no such dependency and are pullable ahead alone** (10.3 extends 10.1's refresh job, so it follows 10.1).
+
+Three signals that help pick what to play (or buy) next: what the world thinks of a game, how much of your life it will take, and whether a backlog game is about to disappear from the subscription. All are stored and refreshed on a schedule — never fetched on render (NFR-3).
+
+### Story 10.1: Critic & user scores on every game (VR-5)
+
+As Luca,
+I want to see how a game was received before I sink a weekend into it,
+So that the shelf helps me choose, not just remember.
+
+**Acceptance Criteria:**
+
+**Given** the `IgdbProvider` already calls IGDB's `/games` endpoint for covers, genres, and release dates
+**When** scores are added
+**Then** `aggregated_rating` + `aggregated_rating_count` (critic) and `rating` + `rating_count` (user) are requested on the **same call** and persisted — **no second provider adapter, no new credentials** [VR-5, AR-5, AR-6]
+
+**Given** the score fields exist
+**When** the **first task** of this story runs
+**Then** coverage is verified against the library's **real titles** — how many of the ~175 games actually carry a critic score — and the result is recorded. If coverage is thin, OpenCritic is the fallback (a second adapter behind the same port); RAWG is out [VR-5, sprint-change-proposal-2026-07-13 §3.3]
+
+**Given** a game with scores
+**When** its card and detail view render
+**Then** critic and user scores show, from stored data, with their sample counts available — a score backed by 3 reviews must not read like one backed by 300 [VR-5, NFR-3, AR-6]
+
+**Given** a game IGDB has no score for (unreleased, obscure, or unenriched)
+**When** it renders
+**Then** the score area is absent, never a zero or a fabricated placeholder [VR-5]
+
+**Given** scores drift as reviews land
+**When** the scheduled refresh runs (a Cron Trigger, aligned with the existing scheduled work)
+**Then** stored scores are updated within the free-tier budget — batched/chunked over the library, not one subrequest per game per run [VR-5, NFR-1, NFR-2, AR-15]
+
+**Given** a failed score refresh
+**When** the next app open happens
+**Then** the failure surfaces (the FR-40 posture) rather than leaving stale scores silently passing as current [NFR-4, AR-14]
+
+### Story 10.2: "Leaving PS+ Extra soon" (VR-6)
+
+As Luca,
+I want a warning on backlog games that are about to leave the PS+ Extra catalog,
+So that I play them before they vanish instead of finding out when the shelf goes quiet.
+
+**Acceptance Criteria:**
+
+**Given** the `ps_plus_catalog` table (Story 7.1) holds the region's current snapshot
+**When** the monthly refresh runs
+**Then** the **previous** snapshot is retained long enough to diff against the new one — a game present before and absent now has left the catalog [VR-6, AR-23]
+
+**Given** a tracked, non-owned backlog game whose catalog membership is ending
+**When** the shelf renders
+**Then** it carries a "leaving soon" warning, visually distinct from the steady-state PS+ Extra pill [VR-6, UX-DR reuse]
+
+**Given** the app cannot know Sony's *future* removals (no departure date is published)
+**When** the warning is defined
+**Then** it is grounded in what is observable — a game that **left** the catalog while still in the backlog is flagged as gone/expired, and any predictive "leaving soon" signal is only claimed if the ingest genuinely exposes an end date. **The warning never guesses** [VR-6, NFR-4, PRD §6 non-goal: "automating anything Sony's API can't give reliably"]
+
+**Given** a game that has left the catalog
+**When** it is still un-owned and in the backlog
+**Then** its PS+ pill clears (both-directions discipline, Story 5.1) and the game stops counting as **Playable now** — the warning is the human-facing half of a flag change that already happens [FR-14, FR-38]
+
+**Given** an owned game
+**When** the catalog changes
+**Then** no warning — ownership makes catalog membership irrelevant (FR-38: the flag is hidden the moment a game is owned) [FR-38]
+
+> **Open at design time:** whether the PS+ ingest exposes any leave-date signal at all. If it does not, this story ships as *"left the catalog"* (observable, honest) rather than *"leaving soon"* (a guess) — and that is the correct outcome, not a degraded one.
+
+### Story 10.3: Time to beat — the story, and 100% (VR-8)
+
+As Luca,
+I want to know how many hours a game takes to finish and how many to 100% it,
+So that I pick a game that fits the time I actually have, instead of stalling out 40 hours into a 90-hour completionist grind.
+
+**Depends on Story 10.1** — it extends the same fields-on-`/games` habit and rides the same scheduled refresh job. Not on Epic 7.
+
+**Acceptance Criteria:**
+
+**Given** every enriched game already stores an `igdbId`, and IGDB exposes `/game_time_to_beats` (`normally`, `completely`, `count`, keyed by `game_id`)
+**When** time-to-beat is added
+**Then** it is fetched from **IGDB** — the provider, credentials, and rate-limit budget the `IgdbProvider` already owns — and persisted as hours-to-beat-the-story, hours-to-100%, and the submission count. **No fuzzy title matching**: the join is on `igdbId`, not on a name [VR-8, AR-5, AR-6]
+
+**Given** IGDB's numbers are its own user submissions, not HowLongToBeat's
+**When** the **first task** of this story runs
+**Then** coverage is verified against the library's **real titles** — how many of the ~175 games carry a `normally` and a `completely` value — and the result is recorded next to Story 10.1's score-coverage finding. **HowLongToBeat is the fallback and only the fallback**: a second adapter behind the same port, taken only if IGDB coverage is thin. Its cost is named up front — an unofficial endpoint that breaks on their rebuilds, and matching by title because there is no shared id [VR-8, AR-5]
+
+**Given** a game with time-to-beat data
+**When** its card and detail view render
+**Then** both numbers show from stored data, next to the scores, labelled so the difference is unmistakable — **story** vs **100%** — with the submission count available, since 4 submissions and 400 are not the same claim [VR-8, NFR-3, UX-DR reuse]
+
+**Given** a game IGDB has no time-to-beat data for (unreleased, obscure, or unenriched), or has only one of the two values
+**When** it renders
+**Then** the missing value is **absent** — never a zero, never an estimate, never a completionist figure silently standing in for the story figure [VR-8, NFR-4]
+
+**Given** these numbers drift as more players submit
+**When** the Story 10.1 score refresh runs
+**Then** time-to-beat is refreshed **in the same scheduled pass** — one cron, one chunked walk of the library, not a second job competing for the same free-tier budget [VR-8, NFR-1, NFR-2, AR-15]
+
+**Given** a failed refresh
+**When** the next app open happens
+**Then** the failure surfaces (the FR-40 posture) rather than leaving stale hours passing as current [NFR-4, AR-14]
