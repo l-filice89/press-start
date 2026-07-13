@@ -285,3 +285,7 @@ status: open
 - source_spec: `spec-pv-2-igdb-category-filter.md`
   summary: A legit IGDB game whose `category` field is unset/null is silently excluded by `where category = (...)`, so a title that matched before PV-2 can now return zero results with no signal (enrich fails closed silently; straggler resolution shows nothing).
   evidence: IGDB v4 `category` defaults to main_game(0), so near-all games carry a value — low probability, but incomplete entries exist. No unfiltered fallback in the shared query. Accepted tradeoff of server-side filtering (backlog framing); PV-4 rematch is the recovery path. Add a fallback (retry without the where-clause on empty results) only if this bites a real owned game in practice.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-6-one-picker-for-every-igdb-match-pv-6.md`
+  summary: Stacked modals leave the dialog underneath live to assistive tech — the covered dialog keeps `role="dialog" aria-modal="true"` and is neither `inert` nor `aria-hidden`, so a screen-reader user can still reach its fields and buttons.
+  evidence: Project-wide pattern, not introduced by 6.6 — `SettingsPanel` + `ConfirmDialog` (cancel-PS+), `StragglersDialog` + `ConfirmDialog` (ignore), and `DetailPanel` + `RematchDialog` all stack this way; `useModalTrap`'s `enabled` flag hands over Escape but nothing hides the layer below. One shared fix belongs in `useModalTrap` (mark the container `inert` while disabled), not in any single dialog.

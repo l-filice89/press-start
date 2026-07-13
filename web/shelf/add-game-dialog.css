@@ -36,6 +36,20 @@
 	font-size: 0.9rem;
 }
 
+/* "Not the right game?" — a quiet text-link affordance, not a third CTA. */
+.add-game__rematch {
+	margin: 0 0 var(--space-3);
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--color-accent-electric);
+	font: inherit;
+	font-family: var(--font-ui);
+	font-size: 0.9rem;
+	text-decoration: underline;
+	cursor: pointer;
+}
+
 .add-game__body {
 	display: flex;
 	gap: var(--space-3);
