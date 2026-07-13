@@ -131,9 +131,9 @@ development_status:
   # Epic 9: The PSN Record — Trophies (and maybe Wishlist) — v1.x
   epic-9: in-progress
   9-1-spike-s-1-what-does-pdccws-p-authorize-vr-1: done # DW-10: trophies need NPSSO; wishlist = persisted query storeRetrieveWishlist
-  9-1b-swap-psnprovider-cookie-to-npsso-bearer-vr-1: backlog # gates 9.2; full cookie→NPSSO swap, touches Epic 4 auth path
+  9-1b-swap-psnprovider-cookie-to-npsso-bearer-vr-1: done # NPSSO bearer swap; cookie path deleted, migration 0006 drops the stale row
   9-1c-final-wishlist-spike-capture-storeretrievewishlist-hash-vr-1: backlog # gates 9.4; sequenced after 9-3 (runs on the bearer 9-1b lands)
-  9-2-trophy-progress-on-every-game-vr-2: backlog # blocked on 9-1b
+  9-2-trophy-progress-on-every-game-vr-2: backlog # unblocked: 9-1b landed the bearer
   9-3-one-off-backfill-recover-the-platinum-dates-psn-knows-vr-3: backlog
   9-4-sync-the-ps-store-wishlist-vr-4: backlog # conditional on Story 9.1c
   epic-9-retrospective: optional

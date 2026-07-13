@@ -4,6 +4,7 @@ type: 'feature'
 created: '2026-07-13'
 status: 'done'
 baseline_revision: '7b2d9798fc645c89858185ff9e18d2b99dc5d935'
+final_revision: 'ee18dc84ce1b41f7529f8559514c60a425f6cdb0'
 review_loop_iteration: 0
 followup_review_recommended: true # HIGH finding auto-forced it; the independent pass RAN in this story (see Auto Run Result)
 context: []
