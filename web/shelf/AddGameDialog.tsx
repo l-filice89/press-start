@@ -66,6 +66,7 @@ export function AddGameDialog({
 		setCoverUrl(candidate.coverUrl ?? '');
 	}
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: seeds off the preview alone — applyCandidate is re-created every render and only ever writes state, so listing it would re-run this on every render for nothing (the `seeded` gate makes it a no-op anyway).
 	useEffect(() => {
 		const candidate = preview?.candidate;
 		if (!candidate || seeded.current) return;

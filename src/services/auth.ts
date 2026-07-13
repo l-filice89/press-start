@@ -118,10 +118,7 @@ export function createAuth(env: Env, options: CreateAuthOptions) {
 						// that address — the allowlist compares a string, so admitting an
 						// unverified one would let a provider hand us the owner's address
 						// without the owner ever proving control of it.
-						if (
-							!isAllowedEmail(newUser.email, env) ||
-							!newUser.emailVerified
-						) {
+						if (!isAllowedEmail(newUser.email, env) || !newUser.emailVerified) {
 							throw new APIError('FORBIDDEN', {
 								code: 'ACCESS_DENIED',
 								message: 'ACCESS_DENIED',

@@ -92,7 +92,9 @@ test('the login gate offers Google alongside the magic link (8.1)', async ({
 }) => {
 	await page.goto('/');
 
-	await expect(page.getByRole('textbox', { name: /magic link/i })).toBeVisible();
+	await expect(
+		page.getByRole('textbox', { name: /magic link/i }),
+	).toBeVisible();
 	await expect(
 		page.getByRole('button', { name: 'Email me a sign-in link' }),
 	).toBeVisible();
