@@ -49,8 +49,8 @@
 	],
 	/**
 	 * Non-secret auth config (FR-47/FR-48). Secrets (BETTER_AUTH_SECRET,
-	 * RESEND_API_KEY) are Wrangler secrets in production and `.dev.vars`
-	 * locally — never here.
+	 * RESEND_API_KEY, and Story 8.1's GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET)
+	 * are Wrangler secrets in production and `.dev.vars` locally — never here.
 	 */
 	"vars": {
 		"AUTH_ALLOWED_EMAIL": "l.filice.89@gmail.com",

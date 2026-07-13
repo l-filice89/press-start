@@ -13,6 +13,7 @@ Let Luca capture a game the instant he discovers it — type a name, pick an IGD
 - Story 6.3: Chores — CSV export & settings
 - Story 6.4: Ownership source — purchased vs claimed, and un-claim on cancel
 - Story 6.5: Free-text shelf search
+- Story 6.6: One picker for every IGDB match (PV-6)
 
 ## Requirements & Constraints
 
@@ -24,6 +25,7 @@ Let Luca capture a game the instant he discovers it — type a name, pick an IGD
 - CSV export streams the full library (games, statuses, milestones, lifecycle dates, genres, ownership) from D1 as a download. It is the user-held second copy behind D1 Time Travel.
 - Ownership provenance (Story 6.4): a manual owned-toggle on a game that carries the PS+ Extra pill must ask "Did you buy this, or claim it with PS+?" and write `owned_via = 'purchase'` or `'membership'`. A non-PS+ game defaults silently to `purchase` (only a PS+ game is ambiguous). The detail panel states the source plainly ("Owned · via PS+" vs "Owned · purchased"). A settings action "I cancelled PS+" un-owns every `membership` row (purchases untouched, count named in a confirm first); any of those games still in the Extra catalog re-shows its PS+ pill. Un-own reverses ownership only — never deletes tracking, milestones, or dates. This is distinct from PS+ Extra *catalog availability*: a catalog game never claimed stays un-owned.
 - Free-text shelf search (Story 6.5): typing in the search bar filters the *visible shelf* live by title substring (normalized, case/diacritic-insensitive) — distinct from 6.1's add-a-new-game suggestions. No match shows an empty state that still offers the `＋ Add "<name>"` row; clearing the input restores the full shelf.
+- Correctable auto-match (Story 6.6): the add preview's IGDB auto-match must be correctable *before* the row exists. A "Not the right game?" affordance opens the candidate picker inline; picking a candidate overwrites the whole draft (cover, genres, release date) and resets the seeded-draft guard — prior edits were edits to the wrong game. When the preview reports the provider unavailable (search returns no candidates because IGDB is down/unset), the affordance is hidden rather than opening an always-empty picker. Every IGDB candidate picker in the app must end up being the same shared component — no bespoke copy survives this story.
 
 ## Technical Decisions
 
@@ -31,6 +33,8 @@ Let Luca capture a game the instant he discovers it — type a name, pick an IGD
 - All DB access goes through `repositories/` (Drizzle); no raw D1 in services/routes/core. All third-party access through `providers/` adapters only, and only at ingest/add time — never on a render/read path.
 - Zod validates every SPA↔Worker boundary; Hono typed-RPC client + TanStack Query on the read side.
 - `owned_via` is an existing `game_tracking` column (introduced by Epic 4's FR-9 amendment); 6.4 adds the manual-set prompt and the cancel-PS+ reversal flow around it — no new migration for the flag itself.
+- 6.6 is UI consolidation only: no new endpoint, no server change, no schema change. It reuses the existing IGDB candidate-search seam end to end. Unlike rematch (which swaps the provider link on an existing row) the add-modal picker only replaces local draft state — no row exists yet. Mutation logic (straggler resolve, rematch, straggler-kind handling) stays page-side; only the candidate list/search UI is shared.
+- The existing rematch and stragglers dialog test suites drive the picker through its confirm button and must keep passing unchanged through the extraction — they are the migration's safety net. The new add-modal correction path gets Playwright coverage per the standing end-to-end rule.
 
 ## UX & Interaction Patterns
 
@@ -39,6 +43,7 @@ Let Luca capture a game the instant he discovers it — type a name, pick an IGD
 - FAB upward drawer holds the chores (Export CSV, Settings, About/Help). Its shell is shared with Epic 4's Sync/PS+ items — whichever epic ships first stands up the shell; the other adds its items, need-scoped. If Epic 6 lands first, Story 6.3 creates the shell. No "Add" lives in the drawer (add is the search bar).
 - Attention banner: full-width under-header, shown only when action is needed, amber for stragglers, persistent until the condition clears.
 - Empty states: no filter/search match → offer the add path; empty library → `INSERT GAMES` with Sync / Add actions.
+- Stacked modals (6.6): the candidate picker opens *inside* the add modal. Escape closes the picker first and leaves the add modal open — the same focus-trap stacking the detail panel already performs for rematch.
 
 ## Cross-Story Dependencies
 
@@ -46,3 +51,4 @@ Let Luca capture a game the instant he discovers it — type a name, pick an IGD
 - 6.3's FAB drawer shell is shared with Epic 4 (see above).
 - 6.4's cancel-PS+ control lives on the Story 6.3 settings surface, and its provenance rules build on Epic 4's `owned_via` and Epic 5's PS+ Extra catalog membership. It is explicitly *not* the same as Extra-catalog availability.
 - 6.5 pairs with the normalized-exact-match disambiguation rule shared across the add/revive paths; today the search box is suggestion-only and the visible shelf never sees the input.
+- 6.6 builds on 6.1's add preview (the draft it corrects) and on 6.2's straggler-resolution picker (one of the two existing pickers it absorbs, alongside rematch). It should land after 6.1/6.2 exist, and it touches all three IGDB-picker surfaces at once.

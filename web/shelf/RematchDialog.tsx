@@ -1,22 +1,20 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { useId, useRef, useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useToast } from '../components/Toast';
 import { useModalTrap } from '../components/useModalTrap';
-import { type IgdbCandidate, rematchGame, searchIgdb } from './api';
+import { type IgdbCandidate, rematchGame } from './api';
+import { IgdbMatchPicker } from './IgdbMatchPicker';
 import './stragglers-dialog.css';
 
 /**
  * Rematch a wrongly-matched game (PV-4) — the detail-panel correction for a
  * same-name mismatch (PV-1) and the cleanup path for already-wrong covers
  * (PV-5). A title-seeded IGDB search; picking a candidate re-points the game's
- * IGDB link and overwrites its cover/date/title/genres in place. Reuses the
- * games-DB search seam and the stragglers picker's markup/CSS.
+ * IGDB link and overwrites its cover/date/title/genres in place.
  *
- * ponytail: deliberately near-duplicates StragglersDialog's ResolveView rather
- * than sharing a component — that view is entangled with the import/unenriched
- * straggler kinds and its own resolve mutation. Two callers ≠ three; extract a
- * shared `<IgdbMatchPicker>` only if a third picker appears.
+ * The shell (portal, backdrop, trap) and the rematch mutation stay here; the
+ * candidate search/list is the shared `<IgdbMatchPicker>` (Story 6.6).
  */
 export function RematchDialog({
 	game,
@@ -31,22 +29,6 @@ export function RematchDialog({
 	const headingId = useId();
 	const { toast } = useToast();
 	const onKeyDown = useModalTrap(dialogRef, onClose);
-
-	const [term, setTerm] = useState(game.title);
-	// Committed query — set on submit so a keystroke doesn't fire an IGDB call.
-	const [query, setQuery] = useState(game.title);
-
-	const {
-		data: candidates = [],
-		isFetching,
-		isError,
-	} = useQuery({
-		queryKey: ['igdb-search', query],
-		queryFn: ({ signal }) => searchIgdb(query, signal),
-		enabled: query.trim() !== '',
-		staleTime: 60_000,
-		retry: false,
-	});
 
 	const mutation = useMutation({
 		mutationFn: (candidate: IgdbCandidate) =>
@@ -71,8 +53,6 @@ export function RematchDialog({
 		},
 	});
 
-	const empty = query.trim() !== '' && !isFetching && candidates.length === 0;
-
 	return createPortal(
 		// biome-ignore lint/a11y/noStaticElementInteractions: the backdrop is a dismiss surface, not a control — Escape and the Back button are the accessible paths; this only mirrors them for pointer users.
 		<div
@@ -96,76 +76,13 @@ export function RematchDialog({
 					Pick the right match for “{game.title}”
 				</h2>
 
-				<div className="stragglers__resolve-view">
-					<form
-						className="stragglers__search"
-						onSubmit={(e) => {
-							e.preventDefault();
-							setQuery(term);
-						}}
-					>
-						<label className="stragglers__field">
-							<span>Search the games DB</span>
-							<input
-								type="text"
-								value={term}
-								maxLength={200}
-								onChange={(e) => setTerm(e.target.value)}
-							/>
-						</label>
-						<button type="submit" className="stragglers__search-btn tap-target">
-							Search
-						</button>
-					</form>
-
-					{isFetching && (
-						<p className="stragglers__notice" role="status">
-							Searching…
-						</p>
-					)}
-					{(isError || empty) && (
-						<p className="stragglers__notice" role="status">
-							No games-DB match found — it may be down, or try a different name.
-						</p>
-					)}
-
-					<ul className="stragglers__candidates">
-						{candidates.map((c) => (
-							<li key={c.igdbId} className="stragglers__candidate">
-								{c.coverUrl && (
-									<img
-										className="stragglers__cover"
-										src={c.coverUrl}
-										alt=""
-										data-testid="rematch-candidate-cover"
-									/>
-								)}
-								<span className="stragglers__candidate-name">
-									{c.name}
-									{c.releaseDate ? ` (${c.releaseDate.slice(0, 4)})` : ''}
-								</span>
-								<button
-									type="button"
-									className="stragglers__use tap-target"
-									disabled={mutation.isPending}
-									onClick={() => mutation.mutate(c)}
-								>
-									Use this match
-								</button>
-							</li>
-						))}
-					</ul>
-
-					<div className="stragglers__actions">
-						<button
-							type="button"
-							className="stragglers__close tap-target"
-							onClick={onClose}
-						>
-							Back
-						</button>
-					</div>
-				</div>
+				<IgdbMatchPicker
+					initialTerm={game.title}
+					pending={mutation.isPending}
+					coverTestId="rematch-candidate-cover"
+					onPick={(c) => mutation.mutate(c)}
+					onBack={onClose}
+				/>
 			</div>
 		</div>,
 		document.body,

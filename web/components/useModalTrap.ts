@@ -8,7 +8,8 @@ import { FOCUSABLE_SELECTOR } from './focusable';
  *    (which must carry `tabIndex={-1}`);
  *  - document-capture Escape → `onDismiss`, working no matter where focus
  *    sits — with an `enabled` stand-down for stacked dialogs (a DetailPanel
- *    under a milestone confirm must leave Escape to the confirm);
+ *    under a milestone confirm must leave Escape to the confirm), which also
+ *    marks the covered dialog `inert` so AT can't reach it;
  *  - a Tab-cycle `onKeyDown` for the container, bounded by the shared
  *    FOCUSABLE_SELECTOR, including the container-self branch: focus can sit
  *    on the `tabIndex={-1}` root (open, or a click on static text), where an
@@ -51,6 +52,19 @@ export function useModalTrap(
 			if (restoreFocus && !preventRestoreRef?.current) opener?.focus();
 		};
 	}, []);
+
+	// A stacked dialog covers this one (`enabled: false`): `inert` takes the
+	// covered layer out of the tab order AND out of the accessibility tree, so a
+	// screen-reader user can't reach the fields underneath the top dialog. The
+	// Escape stand-down alone left it live to AT.
+	useEffect(() => {
+		const el = containerRef.current;
+		if (!el) return;
+		el.inert = !enabled;
+		return () => {
+			el.inert = false;
+		};
+	}, [enabled, containerRef]);
 
 	const onDismissRef = useRef(onDismiss);
 	onDismissRef.current = onDismiss;

@@ -78,3 +78,27 @@ test('baseline fixture is exact — reset leaves no residue from prior runs', as
 	const users = await d1Query<{ n: number }>('SELECT COUNT(*) AS n FROM user;');
 	expect(users[0]?.n).toBe(1);
 });
+
+/**
+ * Story 8.1 (B1a): both sign-in paths are offered on the gate. The Google
+ * round-trip itself is NOT drivable here — the e2e env has no Google
+ * credentials and Playwright can't (and shouldn't) drive Google's consent
+ * screen — so the OAuth allowlist gate is pinned in `auth.test.ts`
+ * (real workerd + D1). What the browser CAN prove is that adding Google didn't
+ * displace the magic link: both CTAs render on the same gate.
+ */
+test('the login gate offers Google alongside the magic link (8.1)', async ({
+	page,
+}) => {
+	await page.goto('/');
+
+	await expect(
+		page.getByRole('textbox', { name: /magic link/i }),
+	).toBeVisible();
+	await expect(
+		page.getByRole('button', { name: 'Email me a sign-in link' }),
+	).toBeVisible();
+	await expect(
+		page.getByRole('button', { name: 'Continue with Google' }),
+	).toBeVisible();
+});

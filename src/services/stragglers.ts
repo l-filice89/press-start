@@ -109,13 +109,7 @@ async function ensureGenres(db: Db, gameId: string, genres?: string[]) {
 	}
 }
 
-/**
- * Attach the permanent IGDB identity unless that id is already linked.
- * ponytail: if the id is already linked to a DIFFERENT game (only reachable on
- * the unenriched path, where the target game is fixed), this silently no-ops —
- * the game is enriched but unlinked, i.e. a duplicate of the linked one. Rare
- * in a single-user catalog; add a conflict outcome if it ever surfaces.
- */
+/** Attach the permanent IGDB identity unless that id is already linked. */
 async function anchorIgdb(db: Db, gameId: string, igdbId: string) {
 	if (!(await findGameByExternalLink(db, 'IGDB', igdbId))) {
 		await addExternalLink(db, { gameId, source: 'IGDB', externalId: igdbId });
@@ -137,7 +131,9 @@ export interface ResolveInput {
 export type ResolveOutcome =
 	| { kind: 'resolved'; gameId: string }
 	| 'not-found'
-	| 'invalid';
+	| 'invalid'
+	/** The chosen IGDB game is already in the catalog as a different row. */
+	| { kind: 'conflict'; gameId: string };
 
 function parsePayload(raw: string | null): Record<string, string> | null {
 	if (!raw) return null;
@@ -166,6 +162,14 @@ export async function resolveStraggler(
 ): Promise<ResolveOutcome> {
 	if (input.kind === 'unenriched') {
 		if (!(await getTracking(db, userId, input.id))) return 'not-found';
+		// The target game is fixed here, so an IGDB id already linked to ANOTHER
+		// row cannot be anchored: enriching anyway would leave two catalog rows for
+		// one IGDB game — the duplicate FR-29 exists to prevent. Answer conflict and
+		// let the user open the game they already have (and discard this row).
+		const linked = await findGameByExternalLink(db, 'IGDB', input.igdbId);
+		if (linked && linked.id !== input.id) {
+			return { kind: 'conflict', gameId: linked.id };
+		}
 		await anchorIgdb(db, input.id, input.igdbId);
 		const rename = input.name?.trim()
 			? {

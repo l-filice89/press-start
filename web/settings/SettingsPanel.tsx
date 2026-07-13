@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { useToast } from '../components/Toast';
 import { useModalTrap } from '../components/useModalTrap';
 import {
 	cancelPsPlus,
@@ -17,19 +18,14 @@ import './settings-panel.css';
  * always empty and saving replaces the cookie wholesale. Epic 6 moves the
  * entry point into the FAB drawer's gear; until then the header gear opens it.
  */
-export function SettingsPanel({
-	onClose,
-	onSignOut,
-}: {
-	onClose: () => void;
-	onSignOut: () => void;
-}) {
+export function SettingsPanel({ onClose }: { onClose: () => void }) {
 	const dialogRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 	const titleId = useId();
 	const instructionsId = useId();
 	const [cookie, setCookie] = useState('');
 	const queryClient = useQueryClient();
+	const { toast } = useToast();
 
 	const { data: settings } = useQuery({
 		queryKey: ['settings'],
@@ -38,6 +34,7 @@ export function SettingsPanel({
 
 	const save = useMutation({
 		mutationFn: savePsnCookie,
+		// A failed cookie save already says so inline, below the button.
 		onSuccess: () => {
 			setCookie('');
 			queryClient.invalidateQueries({ queryKey: ['settings'] });
@@ -48,6 +45,9 @@ export function SettingsPanel({
 	const setHandedness = useMutation({
 		mutationFn: saveFabHandedness,
 		onSuccess: () => queryClient.invalidateQueries({ queryKey: ['settings'] }),
+		// Not optimistic, so the toggle never lies about the stored side — but a
+		// failure was silent until now (NFR-4).
+		onError: () => toast({ message: 'Couldn’t save that setting. Try again.' }),
 	});
 
 	// "I cancelled PS+" (Story 6.4 AC4): count-confirmed bulk un-own of PS+
@@ -62,6 +62,10 @@ export function SettingsPanel({
 			// settings count and the shelf so the pill re-shows without a reload.
 			queryClient.invalidateQueries({ queryKey: ['settings'] });
 			queryClient.invalidateQueries({ queryKey: ['shelf'] });
+		},
+		onError: () => {
+			setConfirmingCancel(false);
+			toast({ message: 'Couldn’t un-claim your PS+ games. Try again.' });
 		},
 	});
 
@@ -210,14 +214,6 @@ export function SettingsPanel({
 						own backup. Add a game by name from the search bar; games needing a
 						match surface in the amber banner.
 					</p>
-					<button
-						type="button"
-						className="settings-panel__signout tap-target"
-						data-testid="settings-sign-out"
-						onClick={onSignOut}
-					>
-						Sign out
-					</button>
 				</section>
 
 				<div className="settings-panel__actions">

@@ -183,14 +183,17 @@ export function createIgdbProvider(
 			// entirely and leaving a real, released game unenriched. `id` is
 			// requested for the add-by-name previews (Stories 6.1/6.2).
 			//
-			// `where game_type = (...)` keeps only full games (PV-2): main_game(0),
-			// standalone_expansion(4), remake(8), remaster(9), expanded_game(10),
-			// port(11) — dropping DLC/bundle/season/pack/update/mod/episode noise
-			// that otherwise buries real games in search + candidate lists.
+			// `where game_type = (...)` keeps only playable games (PV-2): main_game(0),
+			// expansion(2), standalone_expansion(4), episode(6), remake(8),
+			// remaster(9), expanded_game(10), port(11) — dropping DLC/bundle/season/
+			// pack/update/mod noise that otherwise buries real games in search +
+			// candidate lists. Expansion + episode were readmitted 2026-07-13 (the
+			// widened result set has room): titles people genuinely own and track
+			// (Witcher 3: Blood and Wine, Life is Strange episodes) live there.
 			// NB: IGDB retired the `category` field in favour of `game_type` (same
 			// enum values); filtering on the dead `category` returned ZERO rows and
 			// emptied every search live — verified against the API 2026-07-13.
-			body: `search "${query}"; fields id, name, first_release_date, cover.image_id, genres.name; where game_type = (0,4,8,9,10,11); limit 50;`,
+			body: `search "${query}"; fields id, name, first_release_date, cover.image_id, genres.name; where game_type = (0,2,4,6,8,9,10,11); limit 50;`,
 			signal: AbortSignal.timeout(IGDB_TIMEOUT_MS),
 		});
 	}

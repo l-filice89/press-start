@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, inject, it } from 'vitest';
 import { normalizeTitle } from '../../src/core';
 import {
+	addExternalLink,
 	getStragglerById,
 	getTracking,
 	insertGame,
@@ -189,6 +190,39 @@ describe('straggler resolution (Story 6.2, through the route)', () => {
 			owned: false,
 			wishlistedOn: '2026-07-10',
 		});
+	});
+
+	it('refuses to resolve an unenriched game onto an IGDB id already linked to another game (409, no duplicate)', async () => {
+		const linked = await insertGame(db(), {
+			title: 'Celeste',
+			titleNormalized: normalizeTitle('Celeste'),
+			unenriched: false,
+		});
+		await addExternalLink(db(), {
+			gameId: linked.id,
+			source: 'IGDB',
+			externalId: 'igdb-celeste-linked',
+		});
+		// The user's name-only typo row for the SAME IGDB game.
+		const typo = await insertGame(db(), {
+			title: 'Caleste',
+			titleNormalized: normalizeTitle('Caleste'),
+			unenriched: true,
+		});
+		await insertTrackingIfAbsent(db(), sessionUser, typo.id, {
+			owned: false,
+			playStatus: 'Not started',
+		});
+
+		const res = await post(
+			'/api/stragglers/resolve',
+			{ id: typo.id, kind: 'unenriched', igdbId: 'igdb-celeste-linked' },
+			sessionCookie,
+		);
+		expect(res.status).toBe(409);
+		expect(((await res.json()) as { gameId: string }).gameId).toBe(linked.id);
+		// The typo row is left alone — still a straggler, not a second Celeste.
+		expect((await gameById(typo.id))?.unenriched).toBeTruthy();
 	});
 
 	it('resolving an import straggler onto an existing name-only game enriches + de-flags it (no orphan)', async () => {

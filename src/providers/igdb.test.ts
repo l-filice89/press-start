@@ -148,7 +148,7 @@ describe('createIgdbProvider query (PV-2 game_type filter)', () => {
 		const body = String((gamesCall?.[1] as RequestInit).body);
 		// `game_type`, NOT the retired `category` field — the latter matches zero
 		// rows live and empties every search (fixed 2026-07-13).
-		expect(body).toContain('where game_type = (0,4,8,9,10,11);');
+		expect(body).toContain('where game_type = (0,2,4,6,8,9,10,11);');
 		expect(body).not.toContain('category');
 	});
 });

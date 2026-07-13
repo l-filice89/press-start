@@ -10,9 +10,9 @@ import {
 	ignoreStraggler,
 	resolveStraggler,
 	type Straggler,
-	searchIgdb,
 	setDiscarded,
 } from './api';
+import { IgdbMatchPicker } from './IgdbMatchPicker';
 import './stragglers-dialog.css';
 
 /**
@@ -29,13 +29,15 @@ export function StragglersDialog({ onClose }: { onClose: () => void }) {
 	const headingId = useId();
 	const queryClient = useQueryClient();
 	const { toast } = useToast();
-	const onKeyDown = useModalTrap(dialogRef, onClose);
-
 	const [selected, setSelected] = useState<Straggler | null>(null);
 	// The import row awaiting the ignore confirm gate (null = no gate open).
 	const [confirmingIgnore, setConfirmingIgnore] = useState<Straggler | null>(
 		null,
 	);
+	const onKeyDown = useModalTrap(dialogRef, onClose, {
+		// The ignore confirm stacks on top: hand it Escape (Story 3.5 rule).
+		enabled: !confirmingIgnore,
+	});
 
 	const { data: stragglers = [], isPending } = useQuery({
 		queryKey: ['stragglers'],
@@ -151,9 +153,16 @@ export function StragglersDialog({ onClose }: { onClose: () => void }) {
 								queryClient.invalidateQueries({ queryKey: ['genres'] }),
 							]);
 						}}
-						onError={() => {
+						onError={(error) => {
+							// 409: that IGDB game is already in the library under another
+							// row, so retrying the same pick can never work — say what to do
+							// instead (pick a different match, or discard this row).
+							const conflict =
+								(error as { status?: number } | null)?.status === 409;
 							toast({
-								message: `Couldn’t resolve ${selected.title}. Try again.`,
+								message: conflict
+									? `That game is already in your library. Pick a different match, or discard “${selected.title}”.`
+									: `Couldn’t resolve ${selected.title}. Try again.`,
 							});
 							setSelected(null);
 							queryClient.invalidateQueries({ queryKey: ['stragglers'] });
@@ -249,24 +258,8 @@ function ResolveView({
 	straggler: Straggler;
 	onCancel: () => void;
 	onResolved: () => void | Promise<void>;
-	onError: () => void;
+	onError: (error: unknown) => void;
 }) {
-	const [term, setTerm] = useState(straggler.title);
-	// Committed query — set on submit so a keystroke doesn't fire an IGDB call.
-	const [query, setQuery] = useState(straggler.title);
-
-	const {
-		data: candidates = [],
-		isFetching,
-		isError,
-	} = useQuery({
-		queryKey: ['igdb-search', query],
-		queryFn: ({ signal }) => searchIgdb(query, signal),
-		enabled: query.trim() !== '',
-		staleTime: 60_000,
-		retry: false,
-	});
-
 	const mutation = useMutation({
 		mutationFn: (candidate: IgdbCandidate) =>
 			resolveStraggler({
@@ -285,78 +278,15 @@ function ResolveView({
 		onError,
 	});
 
-	const empty = query.trim() !== '' && !isFetching && candidates.length === 0;
-
+	// The search/candidate UI is the shared picker (Story 6.6); the resolve
+	// mutation and the straggler kinds stay page-side.
 	return (
-		<div className="stragglers__resolve-view">
-			<form
-				className="stragglers__search"
-				onSubmit={(e) => {
-					e.preventDefault();
-					setQuery(term);
-				}}
-			>
-				<label className="stragglers__field">
-					<span>Search the games DB</span>
-					<input
-						type="text"
-						value={term}
-						maxLength={200}
-						onChange={(e) => setTerm(e.target.value)}
-					/>
-				</label>
-				<button type="submit" className="stragglers__search-btn tap-target">
-					Search
-				</button>
-			</form>
-
-			{isFetching && (
-				<p className="stragglers__notice" role="status">
-					Searching…
-				</p>
-			)}
-			{(isError || empty) && (
-				<p className="stragglers__notice" role="status">
-					No games-DB match found — it may be down, or try a different name.
-				</p>
-			)}
-
-			<ul className="stragglers__candidates">
-				{candidates.map((c) => (
-					<li key={c.igdbId} className="stragglers__candidate">
-						{c.coverUrl && (
-							<img
-								className="stragglers__cover"
-								src={c.coverUrl}
-								alt=""
-								data-testid="straggler-candidate-cover"
-							/>
-						)}
-						<span className="stragglers__candidate-name">
-							{c.name}
-							{c.releaseDate ? ` (${c.releaseDate.slice(0, 4)})` : ''}
-						</span>
-						<button
-							type="button"
-							className="stragglers__use tap-target"
-							disabled={mutation.isPending}
-							onClick={() => mutation.mutate(c)}
-						>
-							Use this match
-						</button>
-					</li>
-				))}
-			</ul>
-
-			<div className="stragglers__actions">
-				<button
-					type="button"
-					className="stragglers__close tap-target"
-					onClick={onCancel}
-				>
-					Back
-				</button>
-			</div>
-		</div>
+		<IgdbMatchPicker
+			initialTerm={straggler.title}
+			pending={mutation.isPending}
+			coverTestId="straggler-candidate-cover"
+			onPick={(c) => mutation.mutate(c)}
+			onBack={onCancel}
+		/>
 	);
 }

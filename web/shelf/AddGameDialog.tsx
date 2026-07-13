@@ -3,9 +3,11 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useToast } from '../components/Toast';
 import { useModalTrap } from '../components/useModalTrap';
-import { addGame, fetchAddPreview } from './api';
+import { addGame, fetchAddPreview, type IgdbCandidate } from './api';
+import { IgdbMatchPicker } from './IgdbMatchPicker';
 import { openDetail } from './open-detail';
 import './add-game-dialog.css';
+import './stragglers-dialog.css';
 
 /**
  * The add-by-name preview (Story 6.1, FR-41/43, UX-DR16/18): opened from the
@@ -49,18 +51,32 @@ export function AddGameDialog({
 	const [coverUrl, setCoverUrl] = useState('');
 	const [owned, setOwned] = useState(false);
 	const seeded = useRef(false);
-	useEffect(() => {
-		const candidate = preview?.candidate;
-		if (!candidate || seeded.current) return;
+	// The candidate the user corrected to (Story 6.6 / PV-6) — it replaces the
+	// auto-match wholesale, including the igdbId Save sends.
+	const [picked, setPicked] = useState<IgdbCandidate | null>(null);
+	const [picking, setPicking] = useState(false);
+
+	function applyCandidate(candidate: IgdbCandidate) {
+		// The prior draft was edits to the WRONG game — overwrite it whole, and
+		// close the seeding gate so the in-flight preview can't clobber the pick.
 		seeded.current = true;
 		setDraftTitle(candidate.name);
 		setReleaseDate(candidate.releaseDate ?? '');
 		setGenresText(candidate.genres.join(', '));
 		setCoverUrl(candidate.coverUrl ?? '');
+	}
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: seeds off the preview alone — applyCandidate is re-created every render and only ever writes state, so listing it would re-run this on every render for nothing (the `seeded` gate makes it a no-op anyway).
+	useEffect(() => {
+		const candidate = preview?.candidate;
+		if (!candidate || seeded.current) return;
+		applyCandidate(candidate);
 	}, [preview]);
 
 	const onKeyDown = useModalTrap(dialogRef, onClose, {
 		initialFocusRef: titleRef,
+		// The stacked picker owns Escape while it is open (Story 3.5 rule).
+		enabled: !picking,
 	});
 
 	const mutation = useMutation({
@@ -97,7 +113,7 @@ export function AddGameDialog({
 		// Block until the preview settles: saving mid-flight would POST name-only
 		// and silently drop an IGDB match still in flight.
 		if (mutation.isPending || previewPending || !draftTitle.trim()) return;
-		const candidate = preview?.candidate;
+		const candidate = picked ?? preview?.candidate;
 		mutation.mutate({
 			title: draftTitle,
 			// ponytail: the IGDB id sticks even if the title is edited — an
@@ -158,6 +174,23 @@ export function AddGameDialog({
 					<p className="add-game__notice" role="status">
 						No games-DB match — saving the name only.
 					</p>
+				)}
+				{/* Correct a wrong auto-match BEFORE the row exists (Story 6.6 /
+				    PV-6). Hidden when the games DB is unavailable — the picker's
+				    search would answer [] every time, an always-empty dead end. */}
+				{!previewPending && !unavailable && (
+					<button
+						type="button"
+						className="add-game__rematch tap-target"
+						data-testid="add-game-rematch"
+						// Correcting mid-POST would rewrite the draft under an
+						// already-sent payload: the row commits the OLD game while the
+						// toast names the NEW one.
+						disabled={mutation.isPending}
+						onClick={() => setPicking(true)}
+					>
+						Not the right game?
+					</button>
 				)}
 
 				<div className="add-game__body">
@@ -235,7 +268,75 @@ export function AddGameDialog({
 					</button>
 				</div>
 			</div>
+
+			{picking && (
+				<StackedPicker
+					// A blanked Title would seed an empty term — no search, no list, no
+					// notice. Fall back to the name the user typed to get here.
+					initialTerm={draftTitle.trim() || title}
+					onPick={(c) => {
+						setPicked(c);
+						applyCandidate(c);
+						setPicking(false);
+					}}
+					onClose={() => setPicking(false)}
+				/>
+			)}
 		</div>,
 		document.body,
+	);
+}
+
+/**
+ * The picker stacked over the add modal: its own shell + trap, so Escape closes
+ * it first and the add modal (and its draft) survives. Rendered in place rather
+ * than in the shared picker because it is the only consumer that stacks.
+ */
+function StackedPicker({
+	initialTerm,
+	onPick,
+	onClose,
+}: {
+	initialTerm: string;
+	onPick: (candidate: IgdbCandidate) => void;
+	onClose: () => void;
+}) {
+	const dialogRef = useRef<HTMLDivElement>(null);
+	const headingId = useId();
+	// restoreFocus: closing the picker (Escape, Back, or a pick) must land focus
+	// back on the affordance — otherwise it falls to <body>, where the add
+	// modal's Tab-cycle branch no-ops and focus walks out of the open dialog.
+	const onKeyDown = useModalTrap(dialogRef, onClose, { restoreFocus: true });
+
+	return (
+		// biome-ignore lint/a11y/noStaticElementInteractions: the backdrop is a dismiss surface, not a control — Escape and the Back button are the accessible paths; this only mirrors them for pointer users.
+		<div
+			className="stragglers__backdrop"
+			data-testid="add-game-picker-backdrop"
+			onMouseDown={(e) => {
+				if (e.target === e.currentTarget) onClose();
+			}}
+		>
+			<div
+				ref={dialogRef}
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby={headingId}
+				tabIndex={-1}
+				className="stragglers"
+				data-testid="add-game-picker"
+				onKeyDown={onKeyDown}
+			>
+				<h2 id={headingId} className="stragglers__heading">
+					Pick the right match
+				</h2>
+				<IgdbMatchPicker
+					initialTerm={initialTerm}
+					coverTestId="add-game-candidate-cover"
+					onPick={onPick}
+					onBack={onClose}
+				/>
+			</div>
+		</div>
 	);
 }

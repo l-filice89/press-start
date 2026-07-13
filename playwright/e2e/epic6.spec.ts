@@ -503,17 +503,18 @@ test('Export CSV: the FAB item downloads the library as a CSV file (6.3)', async
 	expect(content.startsWith('Title,State,')).toBe(true);
 });
 
-test('Settings: sign out and About/Help are available (6.3)', async ({
+test('Settings: About/Help is available; sign-out lives in the header (6.3)', async ({
 	page,
 }) => {
 	await page.goto('/');
 	await page.getByRole('button', { name: 'Settings' }).click();
 	const panel = page.getByTestId('settings-panel');
 	await expect(panel.getByText(/About & Help/)).toBeVisible();
-	// The affordance only — CLICKING sign-out revokes the one shared
-	// storage-state session and every parallel test 401s off the shelf.
-	// The click → onSignOut wiring is pinned in SettingsPanel.test.tsx.
-	await expect(panel.getByTestId('settings-sign-out')).toBeVisible();
+	// One sign-out entry point, the header's (deferred-work triage 2026-07-13).
+	// The affordance only — CLICKING it revokes the one shared storage-state
+	// session and every parallel test 401s off the shelf.
+	await expect(panel.getByTestId('settings-sign-out')).toHaveCount(0);
+	await expect(page.getByRole('button', { name: /sign out/i })).toBeVisible();
 });
 
 /**
@@ -766,4 +767,95 @@ test('Settings: FAB handedness moves the button and persists across a reload (6.
 	await page.getByRole('button', { name: 'Settings' }).click();
 	await page.getByTestId('handedness-right').click();
 	await expect(page.getByTestId('fab')).not.toHaveClass(/fab--left/);
+});
+
+/**
+ * Story 6.6 (PV-6): correct a wrong IGDB auto-match BEFORE the row exists.
+ * The e2e env has no IGDB creds, so the preview + search responses are stubbed
+ * (justified interception, the epic1-shelf pattern) — the wire shapes are
+ * Vitest-pinned in `igdb.test.ts` / `games.test.ts`. Everything else is real:
+ * the picker, the draft overwrite, the trap stacking and the D1 write.
+ */
+test('add: "Not the right game?" picks a different match, overwrites the draft, and saves the picked igdbId (6.6)', async ({
+	page,
+}) => {
+	const title = `Picker Corrected ${randomUUID().slice(0, 8)}`;
+	const wrong = {
+		igdbId: '900001',
+		name: `${title} (the wrong one)`,
+		coverUrl: null,
+		releaseDate: '2004-06-28',
+		genres: ['Platform'],
+	};
+	const right = {
+		igdbId: '900002',
+		name: `${title} Remastered`,
+		coverUrl: null,
+		releaseDate: '2023-10-20',
+		genres: ['Adventure'],
+	};
+
+	await page.route(
+		(url) => url.pathname === '/api/games/preview',
+		(route) => route.fulfill({ json: { available: true, candidate: wrong } }),
+	);
+	await page.route(
+		(url) => url.pathname === '/api/games/search',
+		(route) => route.fulfill({ json: { candidates: [wrong, right] } }),
+	);
+
+	try {
+		await page.goto('/');
+		await page
+			.getByRole('searchbox', { name: 'Search your library' })
+			.fill(title);
+		await page.getByTestId('search-add-option').click();
+
+		const dialog = page.getByTestId('add-game-dialog');
+		await expect(dialog.getByLabel('Title')).toHaveValue(wrong.name);
+
+		// Correct the match: the stacked picker lists both candidates.
+		await dialog.getByTestId('add-game-rematch').click();
+		const picker = page.getByTestId('add-game-picker');
+		await expect(picker).toBeVisible();
+
+		// Escape closes the PICKER only — the add modal and its draft survive.
+		await page.keyboard.press('Escape');
+		await expect(picker).toBeHidden();
+		await expect(dialog).toBeVisible();
+
+		await dialog.getByTestId('add-game-rematch').click();
+		await picker
+			.getByRole('listitem')
+			.filter({ hasText: right.name })
+			.getByRole('button', { name: 'Use this match' })
+			.click();
+
+		// The whole draft is the picked game's now, not the auto-match's.
+		await expect(picker).toBeHidden();
+		await expect(dialog.getByLabel('Title')).toHaveValue(right.name);
+		await expect(dialog.getByLabel('Release date')).toHaveValue('2023-10-20');
+		await expect(dialog.getByLabel('Genres (comma-separated)')).toHaveValue(
+			'Adventure',
+		);
+
+		await dialog.getByRole('button', { name: 'Add to wishlist' }).click();
+		await expect(
+			page.getByTestId('toast').getByText(`${right.name} — added to wishlist`),
+		).toBeVisible();
+
+		// Saved against the PICKED igdb id — the wrong auto-match never lands.
+		const rows = await d1Query<{ external_id: string }>(
+			`SELECT l.external_id FROM external_link l
+			 JOIN game g ON g.id = l.game_id
+			 WHERE g.title = '${right.name}' AND l.source = 'IGDB'`,
+		);
+		expect(rows).toHaveLength(1);
+		expect(rows[0].external_id).toBe(right.igdbId);
+	} finally {
+		await d1Execute(
+			`DELETE FROM game_tracking WHERE game_id IN (SELECT id FROM game WHERE title LIKE '${title}%');`,
+		);
+		await d1Execute(`DELETE FROM game WHERE title LIKE '${title}%';`);
+	}
 });

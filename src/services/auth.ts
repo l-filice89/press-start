@@ -14,6 +14,7 @@
  */
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { APIError } from 'better-auth/api';
 import { magicLink } from 'better-auth/plugins/magic-link';
 import {
 	createEmailProvider,
@@ -52,6 +53,16 @@ export function createAuth(env: Env, options: CreateAuthOptions) {
 		throw new Error('BETTER_AUTH_SECRET is not set — refusing to serve auth');
 	}
 
+	// Fail loud on a half-applied Google secret (AD-14, the BETTER_AUTH_SECRET
+	// rule): silently skipping the provider would leave "Continue with Google"
+	// erroring in production with nothing anywhere saying the id or the secret
+	// never landed. Neither set = magic link only, which is a valid deployment.
+	if (Boolean(env.GOOGLE_CLIENT_ID) !== Boolean(env.GOOGLE_CLIENT_SECRET)) {
+		throw new Error(
+			'Google OAuth is half-configured — set BOTH GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET, or neither',
+		);
+	}
+
 	const emailProvider = options.emailProvider ?? createEmailProvider(env);
 
 	return betterAuth({
@@ -64,6 +75,59 @@ export function createAuth(env: Env, options: CreateAuthOptions) {
 			schema,
 		}),
 		telemetry: { enabled: false },
+		// Google (Story 8.1 / B1a) sits ALONGSIDE magic link — neither replaces
+		// the other. Registered only when both credentials are present, so dev,
+		// e2e and any deploy without them keep working on magic link alone.
+		...(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
+			? {
+					socialProviders: {
+						google: {
+							clientId: env.GOOGLE_CLIENT_ID,
+							clientSecret: env.GOOGLE_CLIENT_SECRET,
+						},
+					},
+				}
+			: {}),
+		// THE allowlist gate for the OAuth path (FR-48 stays intact; dropping the
+		// allowlist is Story 8.2). It cannot live at the route boundary the way
+		// the magic-link pre-gate does: the email only exists AFTER better-auth
+		// exchanges the authorization code. This hook runs inside that exchange,
+		// before the user row is written, so a rejected account leaves NO
+		// database residue.
+		//
+		// The MESSAGE is the wire contract, not the `code`: better-auth's
+		// `handleOAuthUserInfo` catches an APIError from this hook and returns
+		// `{ error: e.message }`, and the callback then redirects to
+		// `?error=${message.split(' ').join('_')}`. A prose message would arrive
+		// at the login screen as `?error=That_account_is_not_allowed…`. So the
+		// message IS the code — `ACCESS_DENIED`, no spaces — and `web/Login.tsx`
+		// matches it. `code` is kept for the paths that rethrow the APIError.
+		//
+		// Scope note: this gates user CREATION. Linking a Google account to an
+		// EXISTING user row never runs it — safe today because the allowlist is a
+		// single exact email (an unallowed address has no row to link into), but
+		// Story 8.2 (real registration) must gate the link path too.
+		databaseHooks: {
+			user: {
+				create: {
+					before: async (newUser: {
+						email: string;
+						emailVerified: boolean;
+					}) => {
+						// An unverified provider-supplied email is an unproven claim to
+						// that address — the allowlist compares a string, so admitting an
+						// unverified one would let a provider hand us the owner's address
+						// without the owner ever proving control of it.
+						if (!isAllowedEmail(newUser.email, env) || !newUser.emailVerified) {
+							throw new APIError('FORBIDDEN', {
+								code: 'ACCESS_DENIED',
+								message: 'ACCESS_DENIED',
+							});
+						}
+					},
+				},
+			},
+		},
 		plugins: [
 			magicLink({
 				// Explicit so the email copy's "expires in N minutes" can never
