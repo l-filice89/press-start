@@ -86,6 +86,46 @@ test('owned toggle hit area is at least 44x44 in both viewports (1.5g)', async (
 	}
 });
 
+test('phone viewport never scrolls sideways', async ({ page }) => {
+	// A long title is the trigger: `.card__title` is `white-space: nowrap`, so a
+	// bare `1fr` track floors at the untruncated title's width and drags the
+	// whole page past the viewport. Short-titled fixtures can't reproduce it.
+	const game = createGame({
+		title: `Marvels Spider Man Miles Morales Ultimate Launch Edition ${randomUUID().slice(0, 8)}`,
+	});
+	try {
+		await seedGames([game]);
+		await page.setViewportSize(PHONE);
+		await page.goto('/');
+		await expect(
+			page.getByTestId('shelf-card').filter({ hasText: game.title }),
+		).toBeVisible();
+
+		const { scrollWidth, clientWidth } = await page.evaluate(() => ({
+			scrollWidth: document.documentElement.scrollWidth,
+			clientWidth: document.documentElement.clientWidth,
+		}));
+		expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
+	} finally {
+		await deleteGames([game.id]);
+	}
+});
+
+test('phone Add bar sits inside the viewport, above the pinned search', async ({
+	page,
+}) => {
+	await page.setViewportSize(PHONE);
+	await page.goto('/');
+	const search = page.getByPlaceholder('Search your library');
+	await search.fill('Some Unowned Title');
+	const add = page.getByTestId('search-add-option');
+	await expect(add).toBeVisible();
+	// Search is bottom-pinned on phone: the Add bar hangs above it, not below
+	// the viewport's bottom edge (where it was unreachable).
+	const box = (await add.boundingBox()) as { y: number; height: number };
+	expect(box.y + box.height).toBeLessThanOrEqual(PHONE.height);
+});
+
 test('phone viewport grid renders 2-up (1.5c)', async ({ page }) => {
 	await page.setViewportSize(PHONE);
 	await page.goto('/');

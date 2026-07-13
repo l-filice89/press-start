@@ -21,10 +21,12 @@
 	display: contents;
 }
 
-/* Phone: lean 2-up grid, tighter gaps. */
+/* Phone: lean 2-up grid, tighter gaps. minmax(0, 1fr), not 1fr: a bare 1fr
+   floors each track at the item's min-content — the cover art's intrinsic
+   width — which blows the grid (and the page) far past the viewport. */
 @media (max-width: 600px) {
 	.shelf__grid {
-		grid-template-columns: repeat(2, 1fr);
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: var(--space-3);
 	}
 }
