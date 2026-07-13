@@ -149,7 +149,7 @@ Three doors into the library. All of them record lifecycle dates silently (§4.5
 
 ### Auth & the multi-user seam
 
-- **FR-47** — **better-auth with magic link** for v1; Google OAuth is v1.x.
+- **FR-47** — **better-auth with magic link** for v1; **Google OAuth is v1.x, owned by Epic 8 story B1a** (added alongside magic link; the `AUTH_ALLOWED_EMAIL` gate still applies to the callback — dropping that gate is B1b, a separate and demand-driven decision).
 - **FR-48** — Single user in practice, but all user-entered tracking data (status, milestones, dates, ownership overrides) is **scoped to a user id from day one**. No sharing, roles, or tenant isolation is built — the door to publishing is left unwelded, nothing more.
 
 ### Hosting & data
@@ -204,7 +204,7 @@ Not in the v1 milestone. Epic 5 flags catalog membership on games *already track
 All architecture-time decisions; none block this PRD.
 
 1. **Database** — free-tier candidates: Turso/libSQL, Cloudflare D1, Neon/Supabase Postgres, **Convex** (reactive backend-as-a-service; reputation for friendly pricing — evaluate alongside the SQL options). Re-verify free tiers at decision time.
-2. **PS auth** — can the NPSSO-token path (psn-api's auth) replace or complement the fragile `pdccws_p` cookie for library and catalog queries?
+2. **PS auth** — ~~can the NPSSO-token path (psn-api's auth) replace or complement the fragile `pdccws_p` cookie for library and catalog queries?~~ **Superseded by spike S-1** (`ARCHITECTURE-SPINE.md` → Deferred), which subsumes this and adds the wishlist + trophy endpoints to the probe.
 3. **Games DB** — IGDB vs RAWG for add-by-name search, genres, covers, release dates.
 4. **Scheduled job** — mechanism for the monthly PS+ Extra refresh within the stateless free tier (e.g. Cloudflare Cron Triggers).
-5. **Score source** (v1.x concern) — RAWG (Metacritic) vs IGDB vs OpenCritic.
+5. **Score source** (v1.x concern) — **RESOLVED (2026-07-13): IGDB.** `aggregated_rating` (critic) and `rating` (user) come from the `/games` endpoint the `IgdbProvider` already calls — no second adapter, no new credentials. OpenCritic is the fallback if coverage proves thin on real titles; RAWG is out.
