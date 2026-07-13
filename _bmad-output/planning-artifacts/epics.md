@@ -284,10 +284,11 @@ The v1.x tier of `roadmap.md`. The PRD lists these as unnumbered bullets in §6,
 - **VR-5** — **Critic & user scores from IGDB**: `aggregated_rating` / `aggregated_rating_count` (critic) and `rating` / `rating_count` (user) from the `/games` endpoint `IgdbProvider` already calls — no second adapter. Persisted fields + a scheduled refresh; surfaced on the card/detail view. OpenCritic is the fallback only if coverage proves thin on real titles. [PRD open-q #5, RESOLVED 2026-07-13]
 - **VR-6** — **"Leaving PS+ Extra soon" warnings**: flag backlog games about to exit the region's catalog. [PRD §6 v1.x]
 - **VR-7** — **Shared IGDB match picker (PV-6)**: extract `<IgdbMatchPicker>` from `RematchDialog`, migrate `StragglersDialog`'s `ResolveView` onto it, and mount it in `AddGameDialog` behind a "Not the right game?" affordance — so a wrong auto-match is caught before the row exists. No new endpoint. [`implementation-artifacts/post-v1-backlog.md`]
+- **VR-8** — **Time to beat**: hours to finish the story and hours to 100% a game, shown next to the scores. **Source: IGDB `/game_time_to_beats`** (`normally` / `completely` + `count`), keyed by the `igdbId` already stored — same provider, same credentials, no fuzzy title matching. **HowLongToBeat is the fallback**, a second adapter behind the same port, only if IGDB coverage proves thin on real titles. Persisted fields + the same scheduled refresh as VR-5. [new 2026-07-13, sprint-change-proposal-2026-07-13-hltb]
 
 **Multi-user blockers (B1a–B6):** owned by Epic 8; the table in `implementation-artifacts/publication-blockers.md` is the live source and is not duplicated here.
 
-**Post-v1 coverage map:** VR-1, VR-2, VR-3, VR-4 → E9 · VR-5, VR-6 → E10 · VR-7 → E6 (Story 6.6) · FR-50, FR-51, FR-52 → E7 · B1a–B6 → E8
+**Post-v1 coverage map:** VR-1, VR-2, VR-3, VR-4 → E9 · VR-5, VR-6, VR-8 → E10 · VR-7 → E6 (Story 6.6) · FR-50, FR-51, FR-52 → E7 · B1a–B6 → E8
 
 ## Epic List
 
@@ -332,9 +333,9 @@ Luca's trophy progress lands in Press Start: per-game completion % and a PSNProf
 **VRs covered:** VR-1, VR-2, VR-3, VR-4 (conditional on VR-1's outcome) · reuses AR-5 (`PsnProvider`), AR-11 (write-once dates), AR-15 (bulk work chunked)
 
 ### Epic 10: Know Before You Play — Scores & Expiry Warnings — _v1.x, after Epic 7_
-Two decision-support signals on the card: what the world thinks of a game (IGDB critic + user scores) and whether a backlog game is about to leave PS+ Extra. Both stored and refreshed on a schedule — never fetched on render.
-**VRs covered:** VR-5, VR-6 · reuses AR-5 (`IgdbProvider`), AR-6 (nothing external on render), AR-23 (per-region catalog)
-**Sequencing:** VR-6 diffs the `ps_plus_catalog` snapshot Story 7.1 builds, so this epic follows Epic 7. Story 10.1 (scores) carries no such dependency and is pullable ahead alone.
+Three decision-support signals on the card: what the world thinks of a game (IGDB critic + user scores), how long it takes (hours to beat the story, hours to 100%), and whether a backlog game is about to leave PS+ Extra. All stored and refreshed on a schedule — never fetched on render.
+**VRs covered:** VR-5, VR-6, VR-8 · reuses AR-5 (`IgdbProvider`), AR-6 (nothing external on render), AR-15 (bulk work chunked), AR-23 (per-region catalog)
+**Sequencing:** VR-6 diffs the `ps_plus_catalog` snapshot Story 7.1 builds, so this epic follows Epic 7. Stories 10.1 (scores) and 10.3 (time to beat) carry no such dependency and are pullable ahead alone; 10.3 rides 10.1's refresh job, so it follows 10.1.
 
 ---
 
@@ -1682,9 +1683,9 @@ So that the two lists stop drifting apart and the store wishlist stops being a s
 
 ## Epic 10: Know Before You Play — Scores & Expiry Warnings
 
-**Status: v1.x, after Epic 7** — Story 10.2 diffs the `ps_plus_catalog` snapshot Story 7.1 builds, so this epic follows Epic 7. **Story 10.1 carries no such dependency and is pullable ahead alone.**
+**Status: v1.x, after Epic 7** — Story 10.2 diffs the `ps_plus_catalog` snapshot Story 7.1 builds, so this epic follows Epic 7. **Stories 10.1 and 10.3 carry no such dependency and are pullable ahead alone** (10.3 extends 10.1's refresh job, so it follows 10.1).
 
-Two signals that help pick what to play (or buy) next: what the world thinks of a game, and whether a backlog game is about to disappear from the subscription. Both are stored and refreshed on a schedule — never fetched on render (NFR-3).
+Three signals that help pick what to play (or buy) next: what the world thinks of a game, how much of your life it will take, and whether a backlog game is about to disappear from the subscription. All are stored and refreshed on a schedule — never fetched on render (NFR-3).
 
 ### Story 10.1: Critic & user scores on every game (VR-5)
 
@@ -1747,3 +1748,37 @@ So that I play them before they vanish instead of finding out when the shelf goe
 **Then** no warning — ownership makes catalog membership irrelevant (FR-38: the flag is hidden the moment a game is owned) [FR-38]
 
 > **Open at design time:** whether the PS+ ingest exposes any leave-date signal at all. If it does not, this story ships as *"left the catalog"* (observable, honest) rather than *"leaving soon"* (a guess) — and that is the correct outcome, not a degraded one.
+
+### Story 10.3: Time to beat — the story, and 100% (VR-8)
+
+As Luca,
+I want to know how many hours a game takes to finish and how many to 100% it,
+So that I pick a game that fits the time I actually have, instead of stalling out 40 hours into a 90-hour completionist grind.
+
+**Depends on Story 10.1** — it extends the same fields-on-`/games` habit and rides the same scheduled refresh job. Not on Epic 7.
+
+**Acceptance Criteria:**
+
+**Given** every enriched game already stores an `igdbId`, and IGDB exposes `/game_time_to_beats` (`normally`, `completely`, `count`, keyed by `game_id`)
+**When** time-to-beat is added
+**Then** it is fetched from **IGDB** — the provider, credentials, and rate-limit budget the `IgdbProvider` already owns — and persisted as hours-to-beat-the-story, hours-to-100%, and the submission count. **No fuzzy title matching**: the join is on `igdbId`, not on a name [VR-8, AR-5, AR-6]
+
+**Given** IGDB's numbers are its own user submissions, not HowLongToBeat's
+**When** the **first task** of this story runs
+**Then** coverage is verified against the library's **real titles** — how many of the ~175 games carry a `normally` and a `completely` value — and the result is recorded next to Story 10.1's score-coverage finding. **HowLongToBeat is the fallback and only the fallback**: a second adapter behind the same port, taken only if IGDB coverage is thin. Its cost is named up front — an unofficial endpoint that breaks on their rebuilds, and matching by title because there is no shared id [VR-8, AR-5]
+
+**Given** a game with time-to-beat data
+**When** its card and detail view render
+**Then** both numbers show from stored data, next to the scores, labelled so the difference is unmistakable — **story** vs **100%** — with the submission count available, since 4 submissions and 400 are not the same claim [VR-8, NFR-3, UX-DR reuse]
+
+**Given** a game IGDB has no time-to-beat data for (unreleased, obscure, or unenriched), or has only one of the two values
+**When** it renders
+**Then** the missing value is **absent** — never a zero, never an estimate, never a completionist figure silently standing in for the story figure [VR-8, NFR-4]
+
+**Given** these numbers drift as more players submit
+**When** the Story 10.1 score refresh runs
+**Then** time-to-beat is refreshed **in the same scheduled pass** — one cron, one chunked walk of the library, not a second job competing for the same free-tier budget [VR-8, NFR-1, NFR-2, AR-15]
+
+**Given** a failed refresh
+**When** the next app open happens
+**Then** the failure surfaces (the FR-40 posture) rather than leaving stale hours passing as current [NFR-4, AR-14]

@@ -16,6 +16,7 @@ in), **Non-goals** (decided against — listed so they stop getting re-proposed)
 | **Trophy sync from PSN** | Completion % + PSNProfiles-style letter grade per game. **Owned by Epic 9, story 9.2**; the one-off backfill is **story 9.3** — for games with a Platinum but no dates on record, set the platinum date from PSN and **assume completion date = platinum date**, a backfill heuristic only, not the rule for games synced going forward. | `prd.md:172`, `brief.md:80`, `epics.md` (Epic 9) |
 | **Sync the PS+ / PS Store wishlist** | Pull the wishlist from PSN and add those titles to the Press Start wishlist. We already store the PS Store link per game (FR-16 captures product IDs), so the join exists — the missing half is reading the wishlist from PSN. **Epic 9, story 9.4 — conditional**: gated by spike S-1 (story 9.1). Reachable over `pdccws_p` → it stays in Epic 9 alongside trophy sync; needs NPSSO → the swap becomes its prerequisite and the story is **dropped from Epic 9 to Future**. | new (2026-07-13), `epics.md` (Epic 9) |
 | **Critic & user scores** | **Source decided (2026-07-13): IGDB** — `aggregated_rating` (critic) + `rating` (user) come off the `/games` endpoint `IgdbProvider` already calls, so **no second adapter**. Scored fields + a scheduled refresh. OpenCritic only if coverage proves thin on real titles; RAWG is out. **Owned by Epic 10, story 10.1** — no dependency on Epic 7, so it is pullable ahead of the rest of its epic. | `prd.md:173`, `prd.md:211`, `epics.md` (Epic 10) |
+| **Time to beat (story + 100%)** | Hours to finish the story, hours to 100%, next to the scores. **Source decided (2026-07-13): IGDB** — `/game_time_to_beats` (`normally` / `completely` / `count`) joins on the `igdbId` already stored, so same provider, same credentials, **no fuzzy title matching**. **HowLongToBeat is the fallback only** if IGDB coverage proves thin on real titles — its endpoint is unofficial (breaks on their rebuilds) and has no shared id, so it would match on title. **Owned by Epic 10, story 10.3**; rides 10.1's refresh cron, so it follows 10.1 but not Epic 7. | new (2026-07-13), `epics.md` (Story 10.3), `prd.md` open-q #6 |
 | **"Leaving PS+ Extra soon" warnings** | Flag backlog games about to exit the catalog. **Owned by Epic 10, story 10.2**, which diffs the `ps_plus_catalog` snapshot Epic 7 story 7.1 builds — so it **follows Epic 7**. Open at design time: if the PS+ ingest exposes no leave-date, it ships as *"left the catalog"* (observable) rather than *"leaving soon"* (a guess). | `prd.md:174`, `brief.md:82`, `epics.md` (Epic 10) |
 | **PV-6 — shared IGDB match picker** | Extract `<IgdbMatchPicker>` from `RematchDialog`, migrate `StragglersDialog`, mount in `AddGameDialog`. Last open item of the post-launch batch. **Owned by Epic 6, story 6.6.** | `implementation-artifacts/post-v1-backlog.md`, `epics.md` (Story 6.6) |
 
@@ -48,7 +49,9 @@ idempotent) → 9.4 wishlist sync, conditional on 9.1.
 
 **Epic 10 — Know Before You Play: scores & expiry warnings** (v1.x, after Epic 7)
 10.1 IGDB critic + user scores (coverage on real titles is verified as the story's
-first task) → 10.2 catalog-expiry warning, which needs 7.1's stored snapshot.
+first task) → 10.2 catalog-expiry warning, which needs 7.1's stored snapshot →
+10.3 time to beat (story + 100%) from IGDB `/game_time_to_beats`, same coverage-check-
+first discipline, HLTB as fallback; extends 10.1's refresh job, independent of Epic 7.
 
 ## Future — earns its way in later
 
@@ -58,7 +61,7 @@ first task) → 10.2 catalog-expiry warning, which needs 7.1's stored snapshot.
 - **Tunable play-next suggestions** ("same genre" / "vary genre"). (`prd.md:188`)
 - **Stats and dashboards** over the lifecycle-date history. (`prd.md:189`)
 - **Genre merge/rename tool** — genres are per-game editable only today. (`prd.md:102`, FR-25)
-- **Playtime; non-PlayStation platforms.** (`prd.md:191`)
+- **Personal playtime tracking** (hours *Luca* actually put in) — distinct from the v1.x time-to-beat estimate, which is a game fact, not a personal one. **Non-PlayStation platforms.** (`prd.md:191`)
 
 ## Deferred technical work
 
