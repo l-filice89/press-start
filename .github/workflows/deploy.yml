@@ -1,11 +1,19 @@
 name: Deploy
 
+# Production ships on an explicit act, not on every merge: a PR landing on main
+# is not automatically a release. Publishing a GitHub Release (which carries the
+# tag and the notes) is the trigger; `workflow_dispatch` stays as the escape
+# hatch for a redeploy of the current release (infra-only change, failed run) at
+# a ref you choose.
+#
+# `release: published` checks out the released TAG, not main's HEAD — anything
+# merged after the tag ships with the next release, which is the whole point.
 on:
-  push:
-    branches:
-      - main
+  release:
+    types: [published]
+  workflow_dispatch:
 
-# Two rapid merges to main must not race wrangler d1 migrations apply /
+# Two rapid releases must not race wrangler d1 migrations apply /
 # wrangler deploy against the same production D1 database — queue instead
 # of running concurrently, and never cancel a deploy mid-flight.
 concurrency:
@@ -40,8 +48,8 @@ jobs:
       - name: Install dependencies (frozen lockfile)
         run: bun install --frozen-lockfile
 
-      # A push straight to main (or a merge that skipped/raced CI) must not
-      # deploy broken or unlinted code — re-run the same gate CI runs.
+      # A release cut from a commit that skipped/raced CI must not deploy broken
+      # or unlinted code — re-run the same gate CI runs.
       - name: Lint (Biome)
         run: bun run lint
 

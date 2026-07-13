@@ -4,6 +4,30 @@ All notable changes to PRESS START are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/); this project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] — 2026-07-13
+
+Mobile layout repair.
+
+### Fixed
+- **The phone layout overflowed the screen** — the shelf grid's columns sized
+  themselves to the widest untruncated game title, dragging the whole page about
+  twice the width of the viewport. Everything read shifted and clipped, and the
+  page scrolled sideways. Cards now fit the screen.
+- **Adding a game was impossible on a phone** — the `＋ Add` bar hangs under the
+  search field, and on phone the field is pinned to the bottom edge, so the bar
+  rendered below the viewport where it could not be reached. It now sits above
+  the field.
+- **The search bar landed on top of the sign-out button** — the phone's
+  bottom-pinned search was pinning to the header instead of the screen. It pins
+  to the screen now, and the header's controls wrap instead of overflowing.
+- **Settings and the straggler list scrolled sideways** — an unbreakable PSN URL
+  and a row of actions that never wrapped. Both wrap now.
+
+### Changed
+- **Production deploys on a published GitHub Release**, no longer on every push
+  to `main` — merging a PR is not by itself a release. Publishing the release
+  for a tag is what ships it.
+
 ## [1.1.0] — 2026-07-13
 
 Post-v1 IGDB match quality & correction.

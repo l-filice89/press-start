@@ -49,6 +49,7 @@
 .stragglers__row,
 .stragglers__candidate {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	gap: var(--space-2);
 	padding: var(--space-2);
@@ -56,9 +57,12 @@
 	border-radius: var(--radius-sm);
 }
 
+/* min-width: 0 — a flex item's auto minimum is its min-content (the longest
+   word), which on a phone pushes the actions off the row instead of wrapping. */
 .stragglers__title,
 .stragglers__candidate-name {
-	flex: 1;
+	flex: 1 1 8rem;
+	min-width: 0;
 	color: var(--color-text-primary);
 	font-family: var(--font-ui);
 	font-size: 0.95rem;
@@ -113,6 +117,7 @@
 .stragglers__resolve,
 .stragglers__use,
 .stragglers__search-btn {
+	white-space: nowrap;
 	padding: var(--space-2) var(--space-3);
 	border: 1px solid var(--color-border-hairline);
 	border-radius: var(--radius-sm);
@@ -126,6 +131,7 @@
 /* Discard a name-only mistake — reversible (UNDO toast), so a restrained
    magenta secondary next to the green "Find a match". */
 .stragglers__discard {
+	white-space: nowrap;
 	padding: var(--space-2) var(--space-3);
 	border: 1px solid var(--color-border-hairline);
 	border-radius: var(--radius-sm);

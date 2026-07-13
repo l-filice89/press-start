@@ -110,7 +110,10 @@ fresh remote environment:
   a quality gate (lint → typecheck → test → build) plus Playwright e2e and,
   on PRs, an e2e burn-in that reruns changed specs 5×. All feed one `ci-ok`
   merge gate.
-- **CD** (`.github/workflows/deploy.yml`) runs on push to `main`: re-runs the
+- **CD** (`.github/workflows/deploy.yml`) runs when a **GitHub Release is
+  published** (and on manual `workflow_dispatch`) — merging a PR to `main` is
+  not itself a release. The release's tag is the deployed ref, so work merged
+  after it ships with the next release. The job re-runs the
   gate → `wrangler d1 migrations apply ps-game-catalog --remote` →
   `wrangler deploy` → syncs the auth/email secrets → smoke-tests `/api/health`
   and `/api/auth/get-session`, strictly in that order. If the migration step

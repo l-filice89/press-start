@@ -20,6 +20,9 @@
 	border: 1px solid var(--color-border-hairline);
 	border-radius: var(--radius-lg);
 	background: var(--color-surface-raised);
+	/* The PSN cookie instructions carry an unbreakable URL — on a phone it
+	   pushes the panel into a sideways scroll unless it can break mid-word. */
+	overflow-wrap: anywhere;
 }
 
 .settings-panel__title {
