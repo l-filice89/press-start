@@ -107,7 +107,7 @@ development_status:
   6-3-chores-csv-export-settings: done # 2026-07-11
   6-4-ownership-source-purchased-vs-claimed-un-claim-on-cancel: done # 2026-07-12 (dev-auto): buy-vs-claim prompt + via threading + detail source copy + cancel-PS+ un-own; followup_review_recommended:true (2 medium write-path patches)
   6-5-free-text-shelf-search: done # 2026-07-12 (dev-auto): SHELF_SEARCH_EVENT + module mirror lifts the term to FilteredShelf; matchesTitleQuery normalized-substring filter; no-match empty state offers ＋ Add; turns epic1 1.7d green; followup_review_recommended:true (3 medium a11y/wiring patches)
-  6-6-one-picker-for-every-igdb-match-pv-6: backlog # post-v1 (PV-6); epic-6 shipped v1.0.0 without it
+  6-6-one-picker-for-every-igdb-match-pv-6: done # 2026-07-13 (dev-auto): shared <IgdbMatchPicker>; Rematch + Stragglers migrated (suites unedited), add modal gains "Not the right game?" (whole-draft overwrite, picked igdbId); 4 review patches, 1 defer (stacked-modal a11y)
   epic-6-retrospective: done # 2026-07-12 — epic-6-retro-2026-07-12.md; epic marker stays in-progress until the main merge + v1.0.0 tag (Luca's release gate)
 
   # Epic 7: Browse the PS+ Catalog & Add — POST-v1.0.0 (not in the v1 milestone)
