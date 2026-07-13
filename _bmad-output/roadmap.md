@@ -8,6 +8,22 @@ Tiers are the ones the planning docs already use: **v1.x** (explicitly next),
 **Post-v1.0.0 epics** (scoped, waiting on demand), **Future** (earns its way
 in), **Non-goals** (decided against — listed so they stop getting re-proposed).
 
+## Version map (2026-07-13)
+
+Shipped: **v1.0.0**, **v1.1.0**, **v1.1.1**. Rule: **one epic per minor, in dependency
+order.** The only two stories that ship outside their epic are the ones `epics.md`
+already declares outliers (6.6 closes Epic 6; 8.1 is single-tenant-safe and sits
+outside Epic 8's ordering) — they are swept into one release rather than each
+getting a version.
+
+| Version | Contents | Notes |
+| --- | --- | --- |
+| **v1.2.0** | Story 6.6 (shared IGDB match picker) + Story 8.1 (Google sign-in) | The two orphan stories. No schema change, no design gate. |
+| **v1.3.0** | Epic 9 — trophies (9.1 spike → 9.2 sync → 9.3 backfill → 9.4 wishlist) | 9.4 is conditional on the 9.1 spike; if it drops to Future the release still ships. |
+| **v1.4.0** | Epic 7 — browse the PS+ catalog (7.0–7.3) | 7.0 is a design gate. Builds the `ps_plus_catalog` snapshot v1.5.0 needs. |
+| **v1.5.0** | Epic 10 — scores & expiry (10.1 → 10.3 → 10.2) | 10.1/10.3 carry no dependency and are pullable ahead of Epic 7 if the card value is wanted sooner — the cost of keeping the epic whole. |
+| **v2.0.0** | Epic 8 remainder (8.0, 8.2–8.5) — multi-user | Breaking: drops the `AUTH_ALLOWED_EMAIL` gate, migrates global facts to per-user. Demand-driven, no date. |
+
 ## v1.x — enriches a working app, explicitly next
 
 | Item | What it is | Source |
