@@ -89,12 +89,18 @@ jobs:
       # resolution; without them those degrade to name-only adds. Synced here
       # too so a fresh redeploy never silently drops them (the client id is a
       # public Twitch app id, kept as a secret only for a uniform sync path).
+      # GOOGLE_CLIENT_ID/SECRET enable "Continue with Google" (Story 8.1).
+      # BOTH OR NEITHER: createAuth throws on a half-configured pair, which
+      # takes magic link down with it — so they are pushed as one step, and
+      # both GitHub secrets must be set (or both left unset) together.
       - name: Sync auth + IGDB secrets to the Worker
         run: |
           echo "${{ secrets.BETTER_AUTH_SECRET }}" | bunx wrangler secret put BETTER_AUTH_SECRET
           echo "${{ secrets.RESEND_API_KEY }}" | bunx wrangler secret put RESEND_API_KEY
           echo "${{ secrets.IGDB_CLIENT_ID }}" | bunx wrangler secret put IGDB_CLIENT_ID
           echo "${{ secrets.IGDB_CLIENT_SECRET }}" | bunx wrangler secret put IGDB_CLIENT_SECRET
+          echo "${{ secrets.GOOGLE_CLIENT_ID }}" | bunx wrangler secret put GOOGLE_CLIENT_ID
+          echo "${{ secrets.GOOGLE_CLIENT_SECRET }}" | bunx wrangler secret put GOOGLE_CLIENT_SECRET
 
       # A successful `wrangler deploy` only means the upload succeeded, not
       # that the Worker actually serves traffic correctly — smoke-test it
