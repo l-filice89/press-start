@@ -19,7 +19,7 @@ getting a version.
 | Version | Contents | Notes |
 | --- | --- | --- |
 | **v1.2.0** | Story 6.6 (shared IGDB match picker) + Story 8.1 (Google sign-in) | The two orphan stories. No schema change, no design gate. |
-| **v1.3.0** | Epic 9 — trophies (9.1 spike → 9.2 sync → 9.3 backfill → 9.4 wishlist) | 9.4 is conditional on the 9.1 spike; if it drops to Future the release still ships. |
+| **v1.3.0** | Epic 9 — trophies (9.1 spike ✓ → 9.1b NPSSO swap → 9.2 sync → 9.3 backfill → 9.1c wishlist spike → 9.4 wishlist) | S-1 (DW-10) found trophies need NPSSO, so the cookie→bearer swap (9.1b) now gates 9.2. 9.4 is conditional on the 9.1c hash capture; if it drops to Future the release still ships. |
 | **v1.4.0** | Epic 7 — browse the PS+ catalog (7.0–7.3) | 7.0 is a design gate. Builds the `ps_plus_catalog` snapshot v1.5.0 needs. |
 | **v1.5.0** | Epic 10 — scores & expiry (10.1 → 10.3 → 10.2) | 10.1/10.3 carry no dependency and are pullable ahead of Epic 7 if the card value is wanted sooner — the cost of keeping the epic whole. |
 | **v2.0.0** | Epic 8 remainder (8.0, 8.2–8.5) — multi-user | Breaking: drops the `AUTH_ALLOWED_EMAIL` gate, migrates global facts to per-user. Demand-driven, no date. |
@@ -29,8 +29,8 @@ getting a version.
 | Item | What it is | Source |
 | --- | --- | --- |
 | **Google sign-in** | better-auth is already the auth layer with magic link; Google OAuth was always the long-term path. **Owned by Epic 8, story 8.1 (B1a)** — added alongside magic link, with the `AUTH_ALLOWED_EMAIL` gate still applying to the callback. Single-tenant-safe and no schema change, so it ships in v1.x ahead of the rest of its epic and does not wait on the 8.0 design gate; dropping the gate is story 8.2 (B1b) and stays demand-driven. | `prd.md:152` (FR-47), `brief.md:83`, `epics.md` (Story 8.1) |
-| **Trophy sync from PSN** | Completion % + PSNProfiles-style letter grade per game. **Owned by Epic 9, story 9.2**; the one-off backfill is **story 9.3** — for games with a Platinum but no dates on record, set the platinum date from PSN and **assume completion date = platinum date**, a backfill heuristic only, not the rule for games synced going forward. | `prd.md:172`, `brief.md:80`, `epics.md` (Epic 9) |
-| **Sync the PS+ / PS Store wishlist** | Pull the wishlist from PSN and add those titles to the Press Start wishlist. We already store the PS Store link per game (FR-16 captures product IDs), so the join exists — the missing half is reading the wishlist from PSN. **Epic 9, story 9.4 — conditional**: gated by spike S-1 (story 9.1). Reachable over `pdccws_p` → it stays in Epic 9 alongside trophy sync; needs NPSSO → the swap becomes its prerequisite and the story is **dropped from Epic 9 to Future**. | new (2026-07-13), `epics.md` (Epic 9) |
+| **Trophy sync from PSN** | Completion % + PSNProfiles-style letter grade per game. **Owned by Epic 9, story 9.2**; the one-off backfill is **story 9.3** — for games with a Platinum but no dates on record, set the platinum date from PSN and **assume completion date = platinum date**, a backfill heuristic only, not the rule for games synced going forward. **Prerequisite (from S-1 / DW-10): the trophy endpoints require NPSSO, so the cookie→bearer swap (story 9.1b) ships first.** | `prd.md:172`, `brief.md:80`, `epics.md` (Epic 9), `implementation-artifacts/deferred-work.md` (DW-10) |
+| **Sync the PS+ / PS Store wishlist** | Pull the wishlist from PSN and add those titles to the Press Start wishlist. We already store the PS Store link per game (FR-16 captures product IDs), so the join exists — the missing half is reading the wishlist from PSN. **Epic 9, story 9.4 — conditional on story 9.1c.** S-1 (DW-10) identified the endpoint (`storeRetrieveWishlist`, an Apollo persisted query) but its hash isn't client-computable; story 9.1c captures the real hash + confirms the auth path. Reachable → stays in Epic 9; unreachable under either credential → **dropped to Future**. Not a blocker for 9.2/9.3. | new (2026-07-13), `epics.md` (Epic 9), `implementation-artifacts/deferred-work.md` (DW-10) |
 | **Critic & user scores** | **Source decided (2026-07-13): IGDB** — `aggregated_rating` (critic) + `rating` (user) come off the `/games` endpoint `IgdbProvider` already calls, so **no second adapter**. Scored fields + a scheduled refresh. OpenCritic only if coverage proves thin on real titles; RAWG is out. **Owned by Epic 10, story 10.1** — no dependency on Epic 7, so it is pullable ahead of the rest of its epic. | `prd.md:173`, `prd.md:211`, `epics.md` (Epic 10) |
 | **Time to beat (story + 100%)** | Hours to finish the story, hours to 100%, next to the scores. **Source decided (2026-07-13): IGDB** — `/game_time_to_beats` (`normally` / `completely` / `count`) joins on the `igdbId` already stored, so same provider, same credentials, **no fuzzy title matching**. **HowLongToBeat is the fallback only** if IGDB coverage proves thin on real titles — its endpoint is unofficial (breaks on their rebuilds) and has no shared id, so it would match on title. **Owned by Epic 10, story 10.3**; rides 10.1's refresh cron, so it follows 10.1 but not Epic 7. | new (2026-07-13), `epics.md` (Story 10.3), `prd.md` open-q #6 |
 | **"Leaving PS+ Extra soon" warnings** | Flag backlog games about to exit the catalog. **Owned by Epic 10, story 10.2**, which diffs the `ps_plus_catalog` snapshot Epic 7 story 7.1 builds — so it **follows Epic 7**. Open at design time: if the PS+ ingest exposes no leave-date, it ships as *"left the catalog"* (observable) rather than *"leaving soon"* (a guess). | `prd.md:174`, `brief.md:82`, `epics.md` (Epic 10) |
@@ -58,10 +58,13 @@ no schema change, ships in v1.x whenever wanted, and does not wait on 8.0.
 Live detail: `implementation-artifacts/publication-blockers.md`.
 
 **Epic 9 — The PSN Record: trophies (and maybe wishlist)** (v1.x)
-9.1 spike S-1 → 9.2 trophy sync (counts persisted; % and letter grade derived in
-the domain core; the sync never writes milestones) → 9.3 the one-off milestone
-backfill (the only place a sync writes a milestone; fills nulls only, so it is
-idempotent) → 9.4 wishlist sync, conditional on 9.1.
+9.1 spike S-1 (✓ done, DW-10) → 9.1b full cookie→NPSSO swap (S-1 found trophies
+need the bearer; it also serves the library sync, so it replaces the cookie) →
+9.2 trophy sync (counts persisted; % and letter grade derived in the domain core;
+the sync never writes milestones) → 9.3 the one-off milestone backfill (the only
+place a sync writes a milestone; fills nulls only, so it is idempotent) → 9.1c
+final wishlist spike (capture the `storeRetrieveWishlist` hash + auth path) → 9.4
+wishlist sync, conditional on 9.1c.
 
 **Epic 10 — Know Before You Play: scores & expiry warnings** (v1.x, after Epic 7)
 10.1 IGDB critic + user scores (coverage on real titles is verified as the story's
@@ -81,7 +84,7 @@ first discipline, HLTB as fallback; extends 10.1's refresh job, independent of E
 
 ## Deferred technical work
 
-- **Spike S-1 — PSN auth surface** (one afternoon, next up) — **now Epic 9, story 9.1.** Probe the **wishlist** endpoint, `getPurchasedGameList` and the **trophy** endpoints under `pdccws_p`, then under an NPSSO bearer. Output: an endpoint × auth-path table. Subsumes the old NPSSO-swap spike (PRD open-q #2) and **gates wishlist sync** (story 9.4) above. The swap stays isolated behind `PsnProvider`; revisit regardless when cookie-refresh friction bites or before any publish. (`ARCHITECTURE-SPINE.md` → Deferred)
+- **Spike S-1 — PSN auth surface** — ✓ **done 2026-07-13 (Epic 9, story 9.1; results in DW-10).** Probed the wishlist, `getPurchasedGameList`, and trophy endpoints under `pdccws_p` and an NPSSO bearer. Findings: trophies need NPSSO (cookie → 401); the bearer also serves the library sync; the wishlist is a persisted query whose hash isn't client-computable. Closed PRD open-q #2 and the spine's Deferred NPSSO entry. Follow-on work homed as story 9.1b (full cookie→NPSSO swap) and story 9.1c (wishlist hash capture).
 - **Release management** — release branches, tags, Wrangler `staging` env. Deferred to the publish milestone; v1 is trunk-based. (`ARCHITECTURE-SPINE.md:288`)
 - **Convex / Postgres migration** — not needed at single-user scale; a repository-layer change if ever. (`ARCHITECTURE-SPINE.md:337`)
 - **Code-level debt** — see `implementation-artifacts/deferred-work.md`. Live ones worth naming: the **episodic-title regression** PV-2's category whitelist introduced (Hitman seasons, Life is Strange enrich to null); stragglers resolving to an already-linked igdbId writing **duplicate catalog rows**; DW-9 infinite-scroll Playwright flake. Accepted shortcuts with named ceilings: `/ponytail-debt`.

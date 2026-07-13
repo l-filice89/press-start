@@ -46,3 +46,6 @@ __pycache__/
 *.log
 npm-debug.log*
 *.stackdump
+
+# local-only scratch (PSN probe etc.) — never committed
+/tmp/

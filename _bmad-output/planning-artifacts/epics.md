@@ -1583,7 +1583,7 @@ So that `owned_via` means something on every row instead of being NULL on the ol
 
 **Status: v1.x** — enriches a working app. All PSN I/O stays behind `PsnProvider` (AR-5); nothing here changes the state model.
 
-Epic 4 fills the library from PlayStation. This epic brings across the *record*: trophy progress per game (completion % and a PSNProfiles-style letter grade), plus a one-off backfill that recovers milestone dates PSN knows and the app never captured. It opens with the S-1 spike, which answers one question — what does the `pdccws_p` cookie actually authorize — and that answer decides whether PSN wishlist sync (Story 9.4) ships here or slips to Future.
+Epic 4 fills the library from PlayStation. This epic brings across the *record*: trophy progress per game (completion % and a PSNProfiles-style letter grade), plus a one-off backfill that recovers milestone dates PSN knows and the app never captured. It opened with the S-1 spike (Story 9.1, **done 2026-07-13** — see `implementation-artifacts/deferred-work.md` DW-10), which probed what the `pdccws_p` cookie authorizes. Verdict: **trophies require an NPSSO bearer** (the cookie is rejected 401 by the trophy host), and the bearer is a *superset* — it also serves the existing library sync. So the epic now runs on a **full cookie→NPSSO swap (Story 9.1b)**, which gates trophy sync. The wishlist endpoint was identified (`storeRetrieveWishlist`, an Apollo persisted query) but its hash and auth path still need one capture (Story 9.1c), on which Story 9.4 is conditional.
 
 ### Story 9.1: Spike S-1 — what does `pdccws_p` authorize? (VR-1)
 
@@ -1610,6 +1610,60 @@ So that trophy sync and wishlist sync get sequenced on evidence instead of on a 
 **Then** PRD open-q #2 is closed by it, and the spine's Deferred entry is resolved [sprint-change-proposal-2026-07-13 §3.2]
 
 > Timebox: one afternoon. A spike, not a feature — its "done" is a written table and a sequencing decision. No production code need survive it. Any auth swap it recommends stays a `PsnProvider` internal (AR-5).
+>
+> **Outcome (done 2026-07-13, DW-10):** trophies need NPSSO (cookie → 401); the bearer also serves `getPurchasedGameList`; the wishlist is a persisted query `storeRetrieveWishlist` whose hash is not client-computable. Consequences homed as Stories 9.1b (swap) and 9.1c (wishlist hash capture) below.
+
+### Story 9.1b: Swap `PsnProvider` from the `pdccws_p` cookie to an NPSSO bearer (VR-1) — _gates Story 9.2_
+
+As Luca,
+I want the app to authenticate to PlayStation with an NPSSO token instead of the short-lived session cookie,
+So that trophy sync is possible at all and I stop re-pasting a cookie that expires every few days.
+
+**Acceptance Criteria:**
+
+**Given** the S-1 evidence that the NPSSO bearer serves both `getPurchasedGameList` and the trophy endpoints while the `pdccws_p` cookie serves neither trophies (401) nor is durable,
+**When** `PsnProvider` authenticates,
+**Then** it reads a stored `npsso` token, performs the authorize → code → access-token exchange, and calls PSN with the resulting bearer — the whole mechanism confined to `PsnProvider` (AR-5), no auth detail leaking into services, routes, or core [VR-1, AR-5]
+
+**Given** the access token is short-lived (~1 hour) and the exchange returns an offline refresh token,
+**When** a call finds the cached bearer expired,
+**Then** the adapter refreshes it from the refresh token without user interaction, and only a fully-expired/invalid NPSSO (~60-day life) raises the alarm — by **reusing the existing expired-credential path unchanged**: it sets the same `psn_auth: 'expired'` setting flag the cookie uses today, so the same needs-attention banner and re-paste prompt fire with no new UI surface [FR-36, NFR-4, AR-14]
+
+**Given** the settings table today stores `psn_cookie` with a paste field in the Settings panel,
+**When** the swap ships,
+**Then** the `npsso` field **takes the place of the cookie slot in the same Settings location** (not a new field beside it): the cookie input, its label, and its help text are replaced by the NPSSO equivalents, the setting key moves `psn_cookie` → `psn_npsso`, the `PSN_SESSION_COOKIE` seed secret becomes `PSN_NPSSO`, and the dead cookie read path (`getPsnCookie`) is removed — not left as parallel dead weight [AR-5, FR-36]
+
+**Given** the ~60-day NPSSO re-paste is the only manual step and hunting for the token is the friction,
+**When** the user opens that Settings field,
+**Then** a "Get / refresh token" control **deep-links** to `https://ca.account.sony.com/api/v1/ssocookie` in a new tab — a signed-in Sony session renders `{"npsso":"…"}` to copy straight into the field; a signed-out one lands on Sony login first (try-the-session-first, fall back to manual login). It is a plain link, no cross-origin read — CORS forbids scraping the value silently [FR-36]
+
+**Given** the existing library sync (Epic 4) and PS+ Extra catalog paths currently run on the cookie,
+**When** the swap ships,
+**Then** both are migrated to the bearer and verified green — the swap is a *replacement*, and Epic 4's append-only + degenerate-response guarantees (200-with-errors fails closed, existing data survives) are re-asserted against the bearer with a captured-payload hazard test [AR-5, FR-10, DEGENERATE-RESPONSE GUARD]
+
+**Given** an expired or invalid NPSSO mid-sync,
+**When** the exchange or a call fails,
+**Then** the refresh instructions surface and the run stops — no silent retry, no partial write presented as complete [NFR-4, AR-14, FR-36]
+
+> The one story that touches the working Epic 4 auth path. All risk is contained behind `PsnProvider`; the probe already confirmed the bearer returns byte-identical `data{purchasedTitlesRetrieve}`.
+
+### Story 9.1c: Final wishlist spike — capture the `storeRetrieveWishlist` hash and confirm its auth path (VR-1) — _gates Story 9.4_
+
+As the team,
+I want the real persisted-query hash for the PS Store wishlist and a confirmed answer on which credential it needs,
+So that Story 9.4 is sequenced on evidence instead of the open question S-1 left behind.
+
+**Acceptance Criteria:**
+
+**Given** S-1 identified the wishlist as the Apollo persisted query `storeRetrieveWishlist` (freeform GraphQL is refused; the computed sha256 candidates 404'd because Apollo hashes the printed AST),
+**When** a real client-side navigation to the wishlist is captured,
+**Then** the actual `sha256Hash` is recorded from that request — not computed, not guessed [VR-1]
+
+**Given** the captured hash,
+**When** the wishlist endpoint is probed under the NPSSO bearer (and, if it matters, the cookie),
+**Then** its reachability and required auth path are recorded in `deferred-work.md` (extending DW-10): reachable → **Story 9.4 stays in Epic 9**; not reachable under either → 9.4 drops to Future [VR-1, VR-4]
+
+> A spike, timeboxed. Runs after 9.1b so the probe uses the bearer the app will actually carry. Its deliverable is the recorded hash + auth-path decision; no production code need survive it.
 
 ### Story 9.2: Trophy progress on every game (VR-2)
 
@@ -1669,7 +1723,7 @@ So that my milestone history isn't blank for everything I platinumed before this
 
 > The only place in the app where a sync writes a milestone. It is a one-time reconciliation with a documented heuristic, not a standing behaviour.
 
-### Story 9.4: Sync the PS Store wishlist (VR-4) — _conditional on Story 9.1_
+### Story 9.4: Sync the PS Store wishlist (VR-4) — _conditional on Story 9.1c_
 
 As Luca,
 I want the games I wishlisted on the PS Store to appear in my Press Start wishlist,
@@ -1677,9 +1731,9 @@ So that the two lists stop drifting apart and the store wishlist stops being a s
 
 **Acceptance Criteria:**
 
-**Given** Story 9.1 concluded the wishlist endpoint is reachable over `pdccws_p`
+**Given** Story 9.1c captured the `storeRetrieveWishlist` hash and concluded the wishlist endpoint is reachable (under the bearer the app now carries post-9.1b, or the cookie)
 **When** this story is picked up
-**Then** it proceeds in this epic — **if the spike concluded otherwise, this story is removed from Epic 9 and filed to Future** with the NPSSO swap as its prerequisite [VR-1, VR-4]
+**Then** it proceeds in this epic — **if 9.1c concluded the endpoint is reachable under neither credential, this story is removed from Epic 9 and filed to Future** [VR-1, VR-4]
 
 **Given** the PS Store wishlist
 **When** the sync runs

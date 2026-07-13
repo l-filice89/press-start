@@ -321,3 +321,26 @@ resolution: discarded (watch closed) 2026-07-13 triage — 1.7c has not flaked a
   summary: The OAuth allowlist gate covers user CREATION only — linking a Google account into an EXISTING user row never runs it.
   evidence: `account.accountLinking` is at better-auth defaults (enabled, google trusted), so `handleOAuthUserInfo` links by matching email without calling `user.create.before`. Safe today by construction (the allowlist is one exact email, so a non-allowlisted address has no row to link into) and noted in the code, but Story 8.2 — which widens the allowlist into real registration — must gate the link path too.
   decision: 2026-07-13 Homed in Story 8.2, epics.md — carried as an AC: the admission rule gates the LINK path, not just user creation. Safe by construction under one allowlisted email; unsafe the moment registration opens, which IS Story 8.2. Ledger closes when 8.2 ships.
+
+### DW-10: Spike S-1 — endpoint x auth-path table: trophies REQUIRE NPSSO (gates Epic 9); wishlist endpoint identified, reachability pending one hash capture
+
+origin: spec-9-1-spike-s-1-what-does-pdccws-p-authorize-vr-1.md, probed live 2026-07-13 via `tmp/probe-psn-auth.ts`
+location: src/providers/psn.ts (auth is a PsnProvider internal, AR-5); tmp/probe-psn-auth.ts (the harness, re-runnable)
+reason: Story 9.1 asked what the `pdccws_p` web session cookie authorizes vs an NPSSO bearer. Probed live against PSN, both auth paths, observed status + response shape. Two probe runs; the second run's cookie column was invalid (an expired/wrong cookie answered `getPurchasedGameList` with the 200+Access-denied shape — the Epic 4 degenerate response), so the cookie facts below are taken from the FIRST run where the cookie was valid:
+
+| Endpoint | `pdccws_p` cookie | NPSSO bearer |
+| --- | --- | --- |
+| `getPurchasedGameList` (GraphQL persisted) | **200 — `data{purchasedTitlesRetrieve}`** | **200 — `data{purchasedTitlesRetrieve}`** |
+| `trophyTitles` (trophy v1 REST, `m.np.playstation.com`) | **401 — `json{error}`** | **200 — `json{trophyTitles,nextOffset,totalItemCount}`** |
+| wishlist `storeRetrieveWishlist` (persisted, real op) | **404 — persisted query id not in list** (our computed hash guess; real hash not yet captured) | same 404 |
+| wishlist — raw freeform GraphQL | **400 — freeform not allowed; must send by persisted id** | same 400 |
+
+Consequences, per the story's stated branches:
+
+1. **Trophies REQUIRE NPSSO.** The session cookie is rejected outright (401) by the trophy host `m.np.playstation.com`; the bearer returns data. Story 9.1's third branch fires: the NPSSO auth swap is **promoted out of Deferred and gates Epic 9** — Story 9.2 cannot fetch trophies under the cookie.
+2. **The bearer also serves `getPurchasedGameList`**, so NPSSO is a superset of the cookie's reach on everything probed. The swap is a replacement, not a second parallel credential — one credential covers library + trophies, and NPSSO lives ~60 days (with an offline refresh token) vs the cookie's hours-to-days.
+3. **Story 9.4 (wishlist sync) — endpoint IDENTIFIED, not dropped.** PSN refuses freeform GraphQL by design; the real client fetches the wishlist as an Apollo persisted query named **`storeRetrieveWishlist`** (found in the wishlist JS bundle `pages/library/wishlist-*.js`; full document captured, returns `storeWishlistSecure` with PS Store product ids — exactly the FR-34 join key). What's missing is only the persisted-query hash: Apollo hashes the printed AST, so the two sha256 candidates computed from the document text both 404'd. The real hash is obtainable by capturing one client-side-nav request to the wishlist (filter Network for `storeRetrieveWishlist`, copy `sha256Hash`, re-run with `PSN_WISHLIST_HASH=`). Its auth path is still unknown — the 404 (unknown query id) resolves before auth, masking whether cookie or bearer is needed. **9.4 stays conditional but is no longer "unreachable"; it does NOT block 9.2/9.3.** Since the epic now runs on NPSSO anyway, 9.4 becomes a cheap follow-on once the hash is captured and tested under the bearer.
+4. PRD open-q #2 (NPSSO swap) and the spine's Deferred NPSSO entry are **closed by this table**: the swap is not optional, it is required for trophies.
+
+status: done 2026-07-13
+resolution: spike complete; the table above IS the deliverable. Firm: NPSSO gates Epic 9 and is a prerequisite of Story 9.2 — it needs a home (new Story 9.0 or a widened 9.2) before trophy work proceeds. Open, non-blocking: Story 9.4's persisted-query hash capture + auth-path confirmation, deferred behind the NPSSO swap it will likely ride on.
