@@ -81,6 +81,7 @@ first discipline, HLTB as fallback; extends 10.1's refresh job, independent of E
 - **Stats and dashboards** over the lifecycle-date history. (`prd.md:189`)
 - **Genre merge/rename tool** — genres are per-game editable only today. (`prd.md:102`, FR-25)
 - **Personal playtime tracking** (hours *Luca* actually put in) — distinct from the v1.x time-to-beat estimate, which is a game fact, not a personal one. **Non-PlayStation platforms.** (`prd.md:191`)
+- **Full trophy/platinum history across older PlayStation platforms (PS3/Vita)** — the library sync filters to `platform: ['ps4','ps5']` (`src/providers/psn.ts`), so PS3/Vita games never enter the library, and trophy sync + the 9.3 backfill only ever act on library games. On the reference account this reached 26 of ~53 earned platinums; the rest are older-platform titles (God of War III, Bayonetta, Arkham Asylum, …). The trophy API already returns all of them (137 titles, `npServiceName` `trophy`/`trophy2`), so the missing half is sourcing those games into the library by another path — trophy-title-driven, since the purchased-games query is PS4/PS5-only. Nice-to-have for a complete "whole playing history," not needed now. (new 2026-07-14, from the Epic 9 manual-test finding)
 
 ## Deferred technical work
 
