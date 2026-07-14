@@ -1664,6 +1664,8 @@ So that Story 9.4 is sequenced on evidence instead of the open question S-1 left
 **Then** its reachability and required auth path are recorded in `deferred-work.md` (extending DW-10): reachable → **Story 9.4 stays in Epic 9**; not reachable under either → 9.4 drops to Future [VR-1, VR-4]
 
 > A spike, timeboxed. Runs after 9.1b so the probe uses the bearer the app will actually carry. Its deliverable is the recorded hash + auth-path decision; no production code need survive it.
+>
+> **Outcome (done 2026-07-14, DW-10 extension):** the wishlist read is **server-side-rendered** — `__NEXT_DATA__` carries the data, the browser issues no client-side `storeRetrieveWishlist` request, so no hash is client-observable. The bundle's query, hashed with the app's own `parse`/`print` pipeline (validated exact against the client-executed `getCartItemCount` query), returns `PersistedQueryNotFound` under the bearer for every candidate; freeform stays refused. **Reachable under neither credential → Story 9.4 is removed from Epic 9 and filed to Future.**
 
 ### Story 9.2: Trophy progress on every game (VR-2)
 
@@ -1723,17 +1725,19 @@ So that my milestone history isn't blank for everything I platinumed before this
 
 > The only place in the app where a sync writes a milestone. It is a one-time reconciliation with a documented heuristic, not a standing behaviour.
 
-### Story 9.4: Sync the PS Store wishlist (VR-4) — _conditional on Story 9.1c_
+### Story 9.4: Sync the PS Store wishlist (VR-4) — **DROPPED TO FUTURE (2026-07-14, DW-10 extension)**
+
+> **Removed from Epic 9.** Story 9.1c found the wishlist read is server-side-rendered on `library.playstation.com` — the browser issues no client-side `storeRetrieveWishlist` request, and the bundle's query returns `PersistedQueryNotFound` under the NPSSO bearer for every hash variant (the hashing recipe validated exact against the client-executed `getCartItemCount` query). Freeform GraphQL stays refused. The endpoint is reachable under neither credential from the app's server-to-server position, so per this story's own first AC it is filed to Future. **Revisit if PSN re-exposes a client-side wishlist fetch or publishes a REST wishlist endpoint.** The acceptance criteria below are preserved for that revisit.
 
 As Luca,
 I want the games I wishlisted on the PS Store to appear in my Press Start wishlist,
 So that the two lists stop drifting apart and the store wishlist stops being a second place I have to check.
 
-**Acceptance Criteria:**
+**Acceptance Criteria (preserved for a Future revisit):**
 
 **Given** Story 9.1c captured the `storeRetrieveWishlist` hash and concluded the wishlist endpoint is reachable (under the bearer the app now carries post-9.1b, or the cookie)
 **When** this story is picked up
-**Then** it proceeds in this epic — **if 9.1c concluded the endpoint is reachable under neither credential, this story is removed from Epic 9 and filed to Future** [VR-1, VR-4]
+**Then** it proceeds in this epic — **if 9.1c concluded the endpoint is reachable under neither credential, this story is removed from Epic 9 and filed to Future** [VR-1, VR-4] — _9.1c concluded NEITHER; this story is Future._
 
 **Given** the PS Store wishlist
 **When** the sync runs

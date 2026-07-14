@@ -380,3 +380,23 @@ resolution: spike complete; the table above IS the deliverable. Firm: NPSSO gate
 - source_spec: `spec-9-3-one-off-backfill-recover-the-platinum-dates-psn-knows-vr-3.md`
   summary: Two concurrent backfill runs (two tabs) are not locked, and neither is the trophy sync.
   evidence: The COALESCE write makes the duplicate write a no-op, so no data is corrupted — but both loops report the same dates as "filled" and the PSN fan-out is doubled. Same posture as the existing library sync; a single-flight guard would cover all three.
+
+### DW-10 extension (Story 9.1c, 2026-07-14): wishlist reachable under NEITHER credential — Story 9.4 dropped to Future
+
+origin: spec-9-1c-final-wishlist-spike-capture-storeretrievewishlist-hash-vr-1.md; investigated live 2026-07-14 via a signed-in browser session (Claude-in-Chrome)
+
+reason: S-1 (DW-10) left the wishlist's persisted-query hash and auth path open; Story 9.1c was to capture the hash and decide Story 9.4's fate. Finding, from observation:
+
+1. **The wishlist read is server-side-rendered.** `__NEXT_DATA__` on `library.playstation.com/wishlist` already carries `storeWishlistSecure` and the real wishlist titles. The browser issues NO client-side `storeRetrieveWishlist` request on load or scroll — Sony's Next.js server runs the persisted query against its own manifest and ships the data pre-rendered. There is no client request to capture (so DW-10's planned DevTools capture cannot exist on the current site).
+
+2. **The bundle's query is not in the client-reachable persisted allowlist.** The gql document was extracted from `wishlist-819ebbe0…js` and hashed with the app's own `parse`/`print` (from its webpack modules) as `sha256(print(addTypename(parse(doc))))`. That recipe was validated EXACT against `getCartItemCount` — a query the app DOES run client-side — reproducing its registered hash `98136bcbc72e0fefccd8ecd6d3b3309225a6889c19df6e54581d86ff1c15d88a` byte-for-byte. Applied to the wishlist doc, every candidate (raw / trimmed / collapsed / print ± __typename ± root) returns HTTP 404 `PersistedQueryNotFound`. Freeform GraphQL stays refused (400).
+
+| Endpoint | NPSSO bearer (client-observable) |
+| --- | --- |
+| `getCartItemCount` (control, client-executed) | 200 — hash reproduced exactly, registered |
+| `storeRetrieveWishlist` (bundle doc, all hash variants) | **404 — PersistedQueryNotFound** |
+| `storeRetrieveWishlist` (freeform) | **400 — persisted-only / CSRF** |
+| wishlist page data | served via SSR `__NEXT_DATA__`, no client GraphQL call |
+
+status: done 2026-07-14
+resolution: Wishlist reachable under NEITHER credential from the app's server-to-server position — the only working path is Sony's server-side persisted manifest, not client-observable and not obtainable by the Worker. Per Story 9.1c's contract and Story 9.4's first AC, **Story 9.4 is removed from Epic 9 and filed to Future.** Epic 9 ships with 9.1b + 9.2 + 9.3. Future revisit: if PSN re-exposes a client-side wishlist fetch, or publishes a REST wishlist endpoint, capture the hash then and restore 9.4.

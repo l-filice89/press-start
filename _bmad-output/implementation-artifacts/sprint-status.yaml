@@ -132,11 +132,11 @@ development_status:
   epic-9: in-progress
   9-1-spike-s-1-what-does-pdccws-p-authorize-vr-1: done # DW-10: trophies need NPSSO; wishlist = persisted query storeRetrieveWishlist
   9-1b-swap-psnprovider-cookie-to-npsso-bearer-vr-1: done # NPSSO bearer swap; cookie path deleted, migration 0006 drops the stale row
-  9-1c-final-wishlist-spike-capture-storeretrievewishlist-hash-vr-1: backlog # gates 9.4; sequenced after 9-3 (runs on the bearer 9-1b lands)
+  9-1c-final-wishlist-spike-capture-storeretrievewishlist-hash-vr-1: done # wishlist read is SSR; hash not client-observable, PersistedQueryNotFound under bearer
   9-2-trophy-progress-on-every-game-vr-2: done # trophy counts persisted; % + grade derived in core; batched D1 writes
   9-3-one-off-backfill-recover-the-platinum-dates-psn-knows-vr-3: done # chunked cursor backfill; per-title npServiceName (migration 0008)
-  9-4-sync-the-ps-store-wishlist-vr-4: backlog # conditional on Story 9.1c
-  epic-9-retrospective: optional
+  9-4-sync-the-ps-store-wishlist-vr-4: future # DROPPED per 9.1c (DW-10 ext): wishlist unreachable under either credential; revisit if PSN exposes a client fetch/REST endpoint
+  epic-9-retrospective: ready # 9.1b + 9.2 + 9.3 done; 9.4 dropped to Future
 
   # Epic 10: Know Before You Play — Scores & Expiry Warnings — v1.x, after Epic 7
   epic-10: backlog
