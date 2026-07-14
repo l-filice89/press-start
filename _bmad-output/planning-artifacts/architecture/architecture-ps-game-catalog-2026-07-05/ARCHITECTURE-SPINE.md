@@ -7,7 +7,7 @@ paradigm: layered + ports-and-adapters (two seams — persistence, external prov
 scope: 'Whole-app v1 architecture for a single-user installable PWA (React SPA + one Cloudflare Worker API on D1) that replaces a Notion game-tracking database on free-tier hosting.'
 status: final
 created: '2026-07-05'
-updated: '2026-07-05'
+updated: '2026-07-14'
 binds:
   - prd-ps-game-catalog-2026-07-05 (FR-1..FR-49, NFR-1..NFR-4)
   - ux-ps-game-catalog-2026-07-05 (DESIGN.md, EXPERIENCE.md)
@@ -119,7 +119,7 @@ flowchart LR
 
 - **Binds:** Released, Wishlisted, Playable-now; and, by contrast, the stored inputs they consume.
 - **Prevents:** a stored derived flag drifting out of sync with its inputs; **and** the opposite error — treating a fetched fact (cover, PS+ Extra membership) as "derived" and refusing to store it.
-- **Rule:** Released, Wishlisted (= not owned), and Playable-now (owned-or-in-PS+Extra-catalog AND released) are **computed, never persisted** — no `wishlisted` column exists. This is disjoint from **stored inputs** — `cover_url`, `store_url`, and PS+ Extra **catalog membership** are *facts fetched from a third party*, persisted by ingest jobs (AD-6, AD-19), never user-writable; Playable-now derives *from* the stored PS+ Extra fact. "Anything that can be computed is computed" governs derivations, not fetched facts.
+- **Rule (amended 2026-07-14, Epic 7):** Released, Wishlisted (= **not owned AND not in the PS+ catalog** — a game you can play through the subscription is not a thing you still want to buy), and Playable-now (owned-or-in-PS+Extra-catalog AND released) are **computed, never persisted** — no `wishlisted` column exists. This is disjoint from **stored inputs** — `cover_url`, `store_url`, and PS+ Extra **catalog membership** are *facts fetched from a third party*, persisted by ingest jobs (AD-6, AD-19), never user-writable; Playable-now derives *from* the stored PS+ Extra fact. "Anything that can be computed is computed" governs derivations, not fetched facts.
 
 ### AD-9 — One title-normalization function (FR-27/34/42) [ADOPTED]
 
@@ -191,7 +191,7 @@ flowchart LR
 
 - **Binds:** PS4/PS5 collapse (AD-9); sync matching + conflict flagging (FR-34).
 - **Prevents:** a dev modeling one external id per source, which the PS4/PS5 collapse (two PSN ids → one `GAME`) immediately violates.
-- **Rule:** A `GAME` may hold **multiple** `EXTERNAL_LINK` rows per source (both PS4 and PS5 PSN ids resolve to the one PS5 game). Sync matches stored links first (AD-9). The FR-34 conflict is redefined: **an external id that resolves to a *different* `GAME`** than the title match — flagged in the sync summary's needs-attention list, never silently merged.
+- **Rule (namespace fixed 2026-07-14, Epic 7):** `source='PSN'` external ids are **`np_title_id` values only** (`CUSA…`/`PPSA…`, what `sync-reconcile` already writes). A store **`product_id` is a different source** (`'PSN_PRODUCT'`) and is never written into the `'PSN'` namespace — the unique index makes the two mutually unjoinable, so mixing them would make an add-from-catalog of an already-synced game miss on link, match on title, and (by this AD's own clash rule) create a **mandatory duplicate**. A `GAME` may hold **multiple** `EXTERNAL_LINK` rows per source (both PS4 and PS5 PSN ids resolve to the one PS5 game). Sync matches stored links first (AD-9). The FR-34 conflict is redefined: **an external id that resolves to a *different* `GAME`** than the title match — flagged in the sync summary's needs-attention list, never silently merged.
 
 ### AD-21 — The milestone-log status side-effect has one owner [ADOPTED]
 
@@ -211,6 +211,44 @@ flowchart LR
 - **Prevents:** the manual check and the cron check running against different regions; region living nowhere.
 - **Rule:** The account **region** is persisted in the `SETTING` table (seeded from config, or derived and persisted from PSN on first sync). Both the button-triggered and cron-triggered PS+ Extra checks read it; catalog membership (AD-19) is stored per region.
 
+### AD-24 — `PS_PLUS_CATALOG` is a snapshot table, never a `GAME` [Epic 7]
+
+- **Binds:** stories 7.1/7.2/7.3; the Story 5.1 flag check.
+- **Prevents:** a dev upserting catalog products into `GAME` (which would break "availability is not ownership", AD-10) or hanging `GAME_TRACKING` off a catalog row.
+- **Rule:** Catalog products live in **`PS_PLUS_CATALOG`**, keyed **`(region, tier, product_id)`** with `tier` defaulting to `'extra'` (Premium's Classics catalog layers on without a migration rewrite). Its columns are **exactly what the store payload gives** — `product_id`, `np_title_id`, `name`, `title_normalized` (AD-9), `cover_url`, `platforms`, `store_classification`, `store_url` — plus `first_seen_at` / `last_seen_at`. There is **no `release_date` column**: the payload has none (see Deferred). A catalog row becomes a `GAME` **only** through the explicit add path (7.3).
+- **What the 7.3 add writes** (or two devs pick differently, both legally): the new `GAME` gets `EXTERNAL_LINK('PSN_PRODUCT', product_id)` (AD-20), IGDB-enriched genres (AD-26), and a `GAME_TRACKING` row of exactly **`{owned: false, ownership_type: 'ps_plus', wishlisted_on: null}`** — *not* add-by-name's `{owned: true, via: 'purchase'}` default (a lie about ownership, AD-10), and *not* a bare `owned:false` that would make AD-8 derive **Wishlisted** for a game you can play right now. `store_url` from the catalog row powers "Claim now".
+
+### AD-25 — Destinations and cross-tree intent travel through the router, never window events [Epic 7]
+
+- **Binds:** `web/` shell, shelf, the new catalog destination (7.2), detail; supersedes the Story 6.1 event pattern.
+- **Prevents:** the Epic 6 mount-race class (a listener not yet mounted swallowing an event; two live surfaces fed by one input) inheriting into a second destination — Epic 6 retro action item 2.
+- **Rule:** **react-router (declarative/library mode)** owns navigation: `/` shelf, `/catalog` the catalog destination, `/game/:id` detail, `?q=` the search term. `OPEN_DETAIL_EVENT`, `SEED_SEARCH_EVENT`, and `SHELF_SEARCH_EVENT` are **deleted**, replaced by `navigate()` / `useSearchParams`. Adding a new `window` `CustomEvent` for cross-tree state is an **architecture violation, not a judgment call**. Imports come from `react-router` + `react-router/dom` (`react-router-dom` no longer exists in v8).
+- **`?q=` belongs to the active destination.** The `SearchBox` is a single global component in the header, rendered above the route outlet — so one input feeding both a shelf `?q=` and a catalog `?q=` would **reintroduce the exact "two live surfaces from one input" class through the URL** instead of a CustomEvent. The header box writes **only the current route's** param, the term is **cleared on destination change**, and the "Add ⟨term⟩ to library" affordance is **shelf-only**.
+- **`/game/:id` resolves through its own by-id read route** (`GET /api/games/:id`) — **never** an id lookup in the `['shelf']` list cache. Otherwise 7.3's add-then-navigate lands on the new id before the shelf query refetches and the route renders not-found: the same mount-race, now with a hard 404 on reload. A pending fetch is a **loading state**; only a *resolved* 404 is "not found".
+- **Scope note (not a doc-only change):** the three events are live in `web/shelf/SearchBox.tsx`, `web/shelf/open-detail.ts`, consumed by `web/shelf/Shelf.tsx`, and asserted in `Shelf.test.tsx`, `SearchBox.test.tsx`, `SyncSummaryModal.test.tsx` — the deletion is a real refactor that rewrites those suites. It lands in 7.2, which owns the second destination.
+- **Already satisfied:** `wrangler.jsonc` sets `assets.not_found_handling: "single-page-application"` (root + `e2e` env) and carves `/api/*` out via `run_worker_first`, so deep links survive reload and `/api/*` still reaches the Worker. **Keep both** — a router change must not touch that carve-out.
+
+### AD-26 — Two genre vocabularies, never merged [Epic 7]
+
+- **Binds:** the catalog genre filter (7.2) vs. the shelf genre filter (FR-23); the 7.3 add path.
+- **Prevents:** PS facet keys being written into `GENRE`/`GAME_GENRE` (IGDB vocabulary, AD-19), so the shelf's genre pills silently grow a `ROLE_PLAYING_GAMES` next to `Role-playing (RPG)`.
+- **Rule:** PS-store genres are the **19 locale-independent `productGenres` facet keys** (`ACTION`, `ADVENTURE`, `ROLE_PLAYING_GAMES`, …), stored in **`PS_PLUS_CATALOG_GENRE`** — catalog-local, region+tier-scoped. `GENRE`/`GAME_GENRE` stays **IGDB-only**. Localized display names are rendered, never stored. On add (7.3), the new `GAME`'s genres come from **IGDB enrichment**, not from the catalog facet.
+
+### AD-27 — One catalog fetch feeds both the snapshot and the flag check [Epic 7]
+
+- **Binds:** `runPsPlusCheck` (`services/psplus.ts`), the cron path (5.2), story 7.1.
+- **Prevents:** two fetch paths — one to persist the catalog, one to flag tracked games — drifting to different regions, pages, or guards (the both-directions bug class AD-23 exists for).
+- **Rule:** The ingest fetches **once**, upserts + prunes `PS_PLUS_CATALOG`, and the tracked-game `ps_plus_extra` flag pass (AD-19/23) then reads **the table**, not a second fetch. The **empty-catalog wipe guard** (a 200 with zero products = provider failure — the guard inside `runPsPlusCheck`) runs **before any prune or clear**; it now guards two datasets, so it stays a hard abort.
+- **`PS_PLUS_CATALOG` is the single source of truth for membership.** `game.ps_plus_extra` is a **denormalized cache** of it, maintained for **every** tracked game with a normalized-title match — **owned games included**. (Today's flag pass writes only tracked *non-owned* rows, so an owned catalog game is `true` in the table and `false` on the flag: the shelf pill and the catalog grid would give opposite answers, both "correct". Story 7.1 fixes the flag pass.) Every membership read — shelf pill, Playable-now, the catalog grid's in-library marker — goes through **one `core/` function**, never a hand-rolled join.
+
+### AD-28 — The genre sweep is a separate, chunked, additive pass [Epic 7]
+
+- **Binds:** the 7.1 ingest.
+- **Prevents:** the genre sweep being coupled into the membership pass, so one flaky genre query takes down the whole snapshot — and an unbounded page count (the sweep grows with the catalog and the facet list, both outside our control) silently walking into AD-15's 50-external-subrequest cap.
+- **Rule:** Per-game genre is **not in the product record** — it is only obtainable by re-querying the category once per genre facet key (`filterBy: ["productGenres:HORROR"]`). So the **membership pass** (products) and the **genre-tagging sweep** are separate chunked passes with a resumable cursor (the Story 9.3 backfill pattern). Genre tags are **additive**; a failed genre pass leaves the snapshot valid but partially tagged — it never blocks or invalidates the membership snapshot.
+- **Generation-stamped, or the sweep corrupts the snapshot:** each membership pass stamps a **snapshot generation** on the rows it writes; the sweep **carries that generation**, tags only rows belonging to it, and a generation change (a cron prune landing mid-sweep) **invalidates the cursor** rather than resuming into a re-ordered product list and silently skipping a band of games. `PS_PLUS_CATALOG_GENRE` rows **cascade-delete** with their pruned product, so a prune can never leave orphan genre tags.
+- **Today's arithmetic does *not* trip the cap** (~490 products ≈ 5 base pages + ~25 genre pages + the bearer exchange ≈ 30 of 50): the decoupling is bought for partial-failure isolation and headroom, **not** because the sweep overflows today. Do not "optimize" it back into one pass on the grounds that 30 < 50.
+
 ## Consistency Conventions
 
 | Concern | Convention |
@@ -221,6 +259,8 @@ flowchart LR
 | Dates | Milestones & lifecycle dates are `DATE`/ISO-8601; write-once automatic, edit-only-in-detail (AD-11). Derived "Released" compares release date ≤ today (AD-8). |
 | State | Play status is the only user-set mutable state; everything else is computed (AD-7/8) or write-once (AD-10/11). |
 | Auth | better-auth magic link (FR-47); every tracking query is `user_id`-scoped (AD-13). |
+| Navigation | react-router owns destinations and cross-tree intent (AD-25); URL is the state. **No `window` `CustomEvent` for cross-tree state.** |
+| Genre vocabularies | IGDB genres → `GENRE`/`GAME_GENRE` (the shelf). PS facet keys → `PS_PLUS_CATALOG_GENRE` (the catalog). Never merged (AD-26). |
 | Secrets | IGDB/Twitch creds + a seed `PSN_NPSSO` via Wrangler secrets; the **live** NPSSO token lives in a D1 settings table (`psn_npsso`), editable in-UI, read fresh per call. D1 file and secrets never committed. |
 | Errors / feedback | Failures surface (AD-14); four UI channels (toast / summary modal / attention banner / loading) per EXPERIENCE.md; providers never silent-retry. |
 | Testing | Vitest via `@cloudflare/vitest-pool-workers` for Worker+D1; pure core unit-tested without runtime. Lint+format = Biome. |
@@ -236,7 +276,8 @@ flowchart LR
 | API router | Hono (+ typed RPC client) |
 | Validation | Zod |
 | Client server-state | TanStack Query |
-| UI / build / PWA | React + Vite + vite-plugin-pwa |
+| UI / build / PWA | React 19.2 + Vite 8 + vite-plugin-pwa |
+| Routing | **react-router 8.2.x** — to add in 7.2, not yet a dependency. Declarative/library mode (no Vite plugin, so no Vite floor). ESM-only; peer React ≥19.2.7 (repo: 19.2.7 ✓); `engines.node ≥22.22` is metadata only — CI and the build run **Bun 1.3.14**, no Node. Import from `react-router` / `react-router/dom` (`react-router-dom` is gone in v8). AD-25 |
 | Scheduling | Cloudflare Cron Triggers |
 | Auth | better-auth (magic link) |
 | PS data | NPSSO token → bearer exchange, then persisted GraphQL (`getPurchasedGameList`); swap landed in story 9.1b (2026-07-13) |
@@ -257,6 +298,7 @@ erDiagram
   GENRE ||--o{ GAME_GENRE : groups
   GAME ||--o{ EXTERNAL_LINK : "identified by (many per source, AD-20)"
   USER ||--o{ SETTING : configures
+  PS_PLUS_CATALOG ||--o{ PS_PLUS_CATALOG_GENRE : "tagged (PS facet keys, AD-26)"
 
   GAME { string title string title_normalized "non-unique, AD-9/18" date release_date string cover_url string store_url bool ps_plus_extra "catalog membership, per region" bool unenriched "AD-22b" }
   GAME_TRACKING { string user_id PK string game_id PK string play_status "nullable per FR-2" date completed_on date platinum_on date started_on date bought_on date wishlisted_on bool owned string ownership_type }
@@ -264,9 +306,11 @@ erDiagram
   EXTERNAL_LINK { string source "PSN|IGDB" string external_id }
   IMPORT_STRAGGLER { string source_title string notion_payload "AD-22a, not yet a GAME" }
   SETTING { string key string value "region; live NPSSO token; PS+ refreshed-at" }
+  PS_PLUS_CATALOG { string region PK string tier PK "default 'extra'" string product_id PK string np_title_id string name string title_normalized "AD-9, non-unique" string cover_url string platforms string store_classification string store_url date first_seen_at date last_seen_at }
+  PS_PLUS_CATALOG_GENRE { string region PK string tier PK string product_id PK string genre_key PK "PS facet enum, NOT IGDB (AD-26)" }
 ```
 
-Attribute ownership is an invariant (AD-19): `GAME` = shared catalog facts (stored inputs); `GAME_TRACKING` = per-user mutable state.
+Attribute ownership is an invariant (AD-19): `GAME` = shared catalog facts (stored inputs); `GAME_TRACKING` = per-user mutable state. `PS_PLUS_CATALOG` is a **third** owner class — a fetched store snapshot that is neither (AD-24): no `user_id`, no tracking, no link to `GAME` except the AD-9 normalized title used to mark "already in my library" at render.
 
 Deployment & environments:
 
@@ -316,7 +360,11 @@ ps-game-catalog/
 | State model & effective/derived state (§2) | `core/` | AD-3, AD-7, AD-8, AD-11, AD-12 |
 | Seed import (§4.1) | `scripts/` (out-of-band) + `services/` | AD-9, AD-10, AD-15, AD-18, AD-20, AD-22 |
 | PS library sync (§4.2) | `services/` + `providers/psn` | AD-5, AD-9, AD-10, AD-14, AD-20 |
-| PS+ Extra check (§4.3) | `services/` + Cron Trigger | AD-1, AD-5, AD-14, AD-19, AD-23 |
+| PS+ Extra check (§4.3) | `services/` + Cron Trigger | AD-1, AD-5, AD-14, AD-19, AD-23, AD-27 |
+| PS+ catalog snapshot + genre sweep (7.1) | `services/psplus` + `providers/psn` + `repositories/` | AD-24, AD-26, AD-27, AD-28, AD-15 |
+| Catalog destination — browse/filter/search (7.2) | `web/catalog/` + read routes | AD-6, AD-25, AD-26 |
+| Add or claim from the catalog (7.3) | `services/` + `providers/igdb` | AD-10, AD-18, AD-24, AD-26 |
+| Navigation & cross-tree intent | `web/` router | AD-25 |
 | Add-by-name (§4.4) | `services/` + `providers/igdb` | AD-5, AD-9, AD-14, AD-18, AD-22 |
 | Stragglers (§4.1/4.4) | `services/` + attention banner | AD-22 |
 | State model & milestone writes (§2) | `core/` | AD-7, AD-11, AD-12, AD-21 |
@@ -335,3 +383,5 @@ ps-game-catalog/
 - **Multi-tenant hardening** (roles, sharing, per-user rate isolation, D1-per-tenant) — only if publish happens; AD-13 keeps the door open, nothing more built.
 - **Release management** (release branches, tagged production releases, a Wrangler `staging` environment) — deferred to the publish milestone; v1 is trunk-based with CD from `main`. A later config change, not a rework.
 - **Convex / Postgres migration** — not needed at single-user free-tier scale; AD-4 makes it a repository-layer change if ever required.
+- **Catalog `release_date`** (Epic 7 story 7.1 AC) — **not obtainable.** The live `categoryGridRetrieve` payload (probed 2026-07-14, `de-de`, 490 products) exposes `productReleaseDate` only as a *sort key and facet*, never as a product field; a per-product fetch would cost ~490 external subrequests and violates AD-15. **Story 7.1's AC must drop the release-date column** — the architecture will not carry a field the source can't fill. If a release date is ever wanted on a catalog card, it comes from IGDB *after* add (7.3), where the game is a `GAME` and already enriched.
+- **PS+ Premium (Classics) tier** — the `tier` column (AD-24) and the region+tier key exist from row one; the Premium category id and a tier filter are a later epic's config + UI change, not a migration.

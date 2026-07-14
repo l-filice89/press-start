@@ -2,7 +2,7 @@
 name: PRESS START
 description: Arcade-neon personal game shelf. Dark-only, cover-forward, glance-and-go. Electric cyan does the work; hot magenta is reserved for what you're playing right now.
 status: final
-updated: 2026-07-05
+updated: 2026-07-14
 colors:
   bg-void: '#05090f'
   surface: '#0b1622'
@@ -57,7 +57,9 @@ components:
   confirm-modal: 'Milestone fat-finger gate.'
   popover: 'Inline status + milestone menu off the pill.'
   detail-panel: 'Flip-then-grow editable detail.'
-  search-bar: 'Persistent find-or-add.'
+  search-bar: 'Persistent find-or-add; scoped to the active destination.'
+  destination-toggle: 'Header segmented control — SHELF | CATALOG.'
+  catalog-card: 'Cover + title + PS+ flag; Add / Claim / In-library. No status pill, no owned toggle, no flip.'
 ---
 
 # PRESS START — Design Spine
@@ -110,7 +112,7 @@ Four faces, split by job — **stylize the chrome, keep the data plain.**
 
 Scale: 4 / 8 / 12 / 16 / 24 / 32. Tight gaps between related elements (cover → name → pill), larger gaps between surfaces.
 
-The shelf is a **cover-forward responsive grid**: 3-up on the phone frame, auto-fill (~150px min) on desktop, infinite scroll. Covers are 3:4. One screen holds everything; every action surfaces *over* the shelf — the user never navigates away.
+The shelf is a **cover-forward responsive grid**: 3-up on the phone frame, auto-fill (~150px min) on desktop, infinite scroll. Covers are 3:4. The **Catalog** reuses that grid exactly (2-up on phone), so the two destinations read as one product. Every action surfaces *over* the active destination — modals, popovers, sheets. *(Amended 2026-07-14: "one screen holds everything" no longer holds — there are two destinations, switched by the header toggle. The over-the-surface posture is what survives.)*
 
 ## Elevation & Depth
 
@@ -137,6 +139,8 @@ Covers follow their container corners. Two filter-pill *shapes* encode behavior:
 - **Detail panel** — flip-then-grow; centered ~760px on desktop, full-screen on mobile.
 - **Search bar** — persistent, pill-shaped, cyan-edged with a focus glow; bottom-pinned on mobile, header-left on desktop. The hero find-or-add surface; results dropdown lists library matches + the `＋ Add` row.
 - **Popover** — `surface-raised` with glow-ring, anchored to the tapped status pill (flips above/below to stay on-screen); holds the status radio list + the two milestone rows.
+- **Destination toggle** — header segmented control, `SHELF | CATALOG` (Orbitron 600, uppercase, tracked). Active segment is a **solid electric fill with dark ink** and a cyan halo; inactive is muted text on `surface-raised`. Pill-shaped (`999px`), matching the filter/status pill family. Desktop: inline beside the wordmark. Phone: full-width on its own row under the wordmark. → `mockups/catalog-nav-options.html`
+- **Catalog card** — the shelf card's chrome, minus everything that implies ownership. Cover art, `◈ PS+` flag top-left, title below (Orbitron, ellipsis). **No status pill, no owned toggle, no magenta bloom, no flip.** Bottom overlay carries the action: **`＋ Add`** (solid electric, dark ink) beside **`Claim now`** (hairline outline, cyan ink) — or, when the game is already tracked, a single **`In library`** marker in `milestone-silver` and *no* action. Silver here means "already yours", consistent with its milestone meaning: earned, not available.
 - **Skeleton** — cover-shaped shimmer (`surface` → lighter sweep) on first load.
 
 ## Do's and Don'ts

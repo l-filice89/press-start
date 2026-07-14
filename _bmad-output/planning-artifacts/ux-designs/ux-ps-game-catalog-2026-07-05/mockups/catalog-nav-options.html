@@ -1,0 +1,314 @@
+<title>PRESS START — Catalog nav options (Story 7.0)</title>
+<style>
+  :root{
+    --void:#05090f; --surface:#0b1622; --raised:#0a1120;
+    --hairline:#163043; --soft:#12283a;
+    --text:#eafaff; --text-2:#8fb0c4; --muted:#6b8ba0;
+    --blue:#0070cc; --electric:#12b3ff; --glow:#35e0ff;
+    --magenta:#ff2e88; --magenta-ink:#ff8bc2; --silver:#d6e6f5;
+    --dormant:#3d5566; --amber:#ffb254; --green:#8fe6a8;
+    --display:'Orbitron','Eurostile','Bahnschrift','Arial Narrow',system-ui,sans-serif;
+    --ui:'Rajdhani','Bahnschrift','Arial Narrow',system-ui,sans-serif;
+    --body:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+    --mono:'JetBrains Mono','Cascadia Mono',ui-monospace,monospace;
+  }
+  /* Deliberate single-theme commit: the app is dark-only by design (DESIGN.md). */
+  body{
+    margin:0; background:var(--void); color:var(--text); font-family:var(--body);
+    background-image:
+      radial-gradient(120% 80% at 20% 0%, rgba(18,179,255,.10), transparent 60%),
+      radial-gradient(90% 70% at 90% 20%, rgba(255,46,136,.07), transparent 60%),
+      linear-gradient(var(--soft) 1px, transparent 1px),
+      linear-gradient(90deg, var(--soft) 1px, transparent 1px);
+    background-size:auto,auto,44px 44px,44px 44px;
+    background-position:0 0,0 0,-1px -1px,-1px -1px;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:40px 20px 72px}
+  header.page{border-bottom:1px solid var(--hairline);padding-bottom:24px;margin-bottom:8px}
+  h1{font-family:var(--display);font-weight:900;letter-spacing:.06em;text-transform:uppercase;
+     font-size:clamp(22px,3.4vw,34px);margin:0 0 8px;color:var(--text);
+     text-shadow:0 0 18px rgba(53,224,255,.35)}
+  .kicker{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--glow);margin:0 0 14px}
+  .lede{color:var(--text-2);max-width:66ch;line-height:1.6;margin:0;font-size:14.5px}
+  .lede b{color:var(--text);font-weight:600}
+
+  .opt{margin-top:56px}
+  .opt-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:12px;border-left:3px solid var(--electric);padding-left:14px}
+  .opt-head.b{border-left-color:var(--amber)}
+  .opt-head.c{border-left-color:var(--magenta)}
+  h2{font-family:var(--display);font-weight:700;text-transform:uppercase;letter-spacing:.05em;font-size:17px;margin:0}
+  .tag{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+       border:1px solid var(--hairline);border-radius:999px;padding:4px 10px;color:var(--muted)}
+  .tag.rec{color:#04212e;background:var(--glow);border-color:var(--glow);font-weight:700}
+  .opt p.note{color:var(--text-2);max-width:70ch;line-height:1.6;font-size:14px;margin:12px 0 0;padding-left:17px}
+
+  .frames{display:grid;grid-template-columns:1fr;gap:26px;margin-top:24px}
+  @media(min-width:900px){.frames{grid-template-columns:1fr 300px}}
+  .frame{background:var(--surface);border:1px solid var(--hairline);border-radius:12px;overflow:hidden;
+         box-shadow:0 0 34px rgba(18,179,255,.06)}
+  .frame-cap{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+             color:var(--muted);padding:8px 12px;border-bottom:1px solid var(--soft);background:var(--raised)}
+
+  /* --- app chrome inside the frames --- */
+  .app{padding:12px}
+  .apphead{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .mark{font-family:var(--display);font-weight:900;letter-spacing:.08em;font-size:13px;
+        text-shadow:0 0 12px rgba(53,224,255,.5)}
+  .readout{font-family:var(--mono);font-size:9.5px;color:var(--muted);margin-left:auto;letter-spacing:.06em}
+  .search{flex:1;min-width:120px;border:1px solid var(--electric);border-radius:999px;padding:5px 12px;
+          font-family:var(--ui);font-size:11px;color:var(--muted);background:rgba(18,179,255,.05);
+          box-shadow:0 0 12px rgba(18,179,255,.18)}
+
+  .tabs{display:inline-flex;border:1px solid var(--hairline);border-radius:999px;padding:2px;background:var(--raised)}
+  .tab{font-family:var(--display);font-weight:600;text-transform:uppercase;letter-spacing:.08em;font-size:9.5px;
+       padding:5px 13px;border-radius:999px;color:var(--muted);white-space:nowrap}
+  .tab.on{background:var(--electric);color:#03151f;box-shadow:0 0 14px rgba(18,179,255,.55)}
+
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
+  .grid.two{grid-template-columns:repeat(2,1fr)}
+  .grid.three{grid-template-columns:repeat(3,1fr)}
+  .cov{aspect-ratio:3/4;border-radius:8px;border:1px solid var(--soft);
+       background:linear-gradient(150deg,#123047,#0a1a29 60%,#0d2135);position:relative;overflow:hidden}
+  .cov::after{content:'';position:absolute;inset:0;
+       background:radial-gradient(70% 50% at 30% 15%, rgba(53,224,255,.14), transparent 70%)}
+  .cov.play{border-color:var(--magenta);box-shadow:0 0 16px rgba(255,46,136,.35)}
+  .cov .badge{position:absolute;top:4px;left:4px;z-index:2;font-family:var(--mono);font-size:7.5px;
+       padding:2px 5px;border-radius:999px;background:rgba(5,9,15,.82);border:1px solid var(--hairline);color:var(--glow)}
+  .cov .lib{position:absolute;bottom:4px;left:4px;right:4px;z-index:2;font-family:var(--display);font-weight:600;
+       font-size:7.5px;letter-spacing:.06em;text-transform:uppercase;text-align:center;padding:3px;
+       border-radius:999px;background:rgba(5,9,15,.86);border:1px solid var(--silver);color:var(--silver)}
+  .cov .add{position:absolute;bottom:4px;left:4px;right:4px;z-index:2;font-family:var(--display);font-weight:600;
+       font-size:7.5px;letter-spacing:.06em;text-transform:uppercase;text-align:center;padding:3px;
+       border-radius:999px;background:var(--electric);color:#03151f}
+  .cap{font-family:var(--display);font-size:8px;font-weight:600;letter-spacing:.03em;color:var(--text-2);
+       margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  .pills{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+  .pill{font-family:var(--display);font-weight:600;text-transform:uppercase;letter-spacing:.07em;font-size:8px;
+        padding:4px 9px;border-radius:999px;border:1px solid var(--hairline);color:var(--text-2)}
+  .pill.on{border-color:var(--electric);color:var(--glow);box-shadow:0 0 10px rgba(18,179,255,.35);background:rgba(18,179,255,.08)}
+  .pill.ghost{border-style:dashed;color:var(--muted)}
+
+  .fab{position:absolute;right:12px;bottom:12px;width:34px;height:34px;border-radius:11px;background:var(--blue);
+       display:grid;place-items:center;font-size:15px;color:#eafaff;box-shadow:0 0 18px rgba(0,112,204,.6)}
+  .drawer{position:absolute;right:12px;bottom:54px;width:150px;background:var(--raised);border:1px solid var(--hairline);
+       border-radius:14px;padding:6px;box-shadow:0 0 26px rgba(53,224,255,.18)}
+  .drawer div{font-family:var(--ui);font-size:10.5px;color:var(--text-2);padding:5px 8px;border-radius:8px;display:flex;gap:7px}
+  .drawer div.hi{background:rgba(255,178,84,.12);color:var(--amber);border:1px solid rgba(255,178,84,.4)}
+
+  .bottomnav{display:flex;border-top:1px solid var(--hairline);background:var(--raised);margin:10px -12px -12px}
+  .bn{flex:1;text-align:center;padding:9px 0 10px;font-family:var(--display);font-weight:600;font-size:8px;
+      letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .bn.on{color:var(--glow);box-shadow:inset 0 2px 0 var(--electric);background:rgba(18,179,255,.07)}
+  .bn span{display:block;font-size:13px;margin-bottom:2px;color:inherit}
+
+  .phone{position:relative;border:1px solid var(--hairline);border-radius:20px;background:var(--surface);
+         padding:12px;overflow:hidden;min-height:430px}
+  .desk{position:relative;min-height:300px}
+
+  .verdict{margin-top:16px;padding:13px 15px;border-radius:12px;background:var(--raised);
+           border:1px solid var(--soft);border-left:3px solid var(--glow);font-size:13.5px;color:var(--text-2);line-height:1.6}
+  .verdict b{color:var(--text)}
+  .verdict .cost{color:var(--amber)}
+
+  table{width:100%;border-collapse:collapse;margin-top:22px;font-size:13px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--soft);vertical-align:top}
+  th{font-family:var(--display);font-size:9.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600}
+  td b{color:var(--text)}
+  td{color:var(--text-2);line-height:1.5}
+  .yes{color:var(--green)} .no{color:var(--magenta-ink)} .meh{color:var(--amber)}
+  footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--hairline);
+         font-family:var(--mono);font-size:11px;color:var(--muted);line-height:1.7}
+  @media(prefers-reduced-motion:no-preference){
+    .frame{transition:box-shadow .25s ease}
+    .frame:hover{box-shadow:0 0 40px rgba(18,179,255,.14)}
+  }
+</style>
+
+<div class="wrap">
+  <header class="page">
+    <p class="kicker">Story 7.0 · design gate · pick one</p>
+    <h1>Where does the Catalog live?</h1>
+    <p class="lede">The shelf has been the whole app — <b>“one screen, the user never navigates away.”</b> Epic 7 adds a second destination for the ~490-game PS+ catalog, so that rule breaks either way. The only question is <b>how you get there</b>. Same content in all three; only the chrome differs.</p>
+  </header>
+
+  <!-- ============ A ============ -->
+  <section class="opt">
+    <div class="opt-head">
+      <h2>A · Header toggle</h2>
+      <span class="tag rec">Recommended</span>
+      <span class="tag">no new chrome zone</span>
+    </div>
+    <p class="note">Two tabs in the header you already have. Both destinations always visible, one tap, nothing hidden. The FAB stays what it is — chores only.</p>
+    <div class="frames">
+      <div class="frame">
+        <div class="frame-cap">Desktop — catalog active</div>
+        <div class="app desk">
+          <div class="apphead">
+            <span class="mark">PRESS START</span>
+            <div class="tabs"><span class="tab">Shelf</span><span class="tab on">Catalog</span></div>
+            <div class="search">Search the catalog…</div>
+            <span class="readout">490 GAMES · AS OF 14 JUL</span>
+          </div>
+          <div class="pills">
+            <span class="pill on">Action</span><span class="pill">Adventure</span><span class="pill">RPG</span>
+            <span class="pill">Horror</span><span class="pill">Racing</span><span class="pill ghost">+14 more</span>
+          </div>
+          <div class="grid">
+            <div><div class="cov"><span class="badge">◈ PS+</span><span class="add">＋ Add</span></div><div class="cap">Stellar Blade</div></div>
+            <div><div class="cov"><span class="badge">◈ PS+</span><span class="lib">In library</span></div><div class="cap">Crow Country</div></div>
+            <div><div class="cov"><span class="badge">◈ PS+</span><span class="add">＋ Add</span></div><div class="cap">Hello Neighbor</div></div>
+            <div><div class="cov"><span class="badge">◈ PS+</span><span class="add">＋ Add</span></div><div class="cap">Black Desert</div></div>
+          </div>
+          <div class="fab">▲</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div class="frame-cap">Phone</div>
+        <div class="app phone">
+          <div class="apphead">
+            <span class="mark">PRESS START</span>
+            <span class="readout">490</span>
+          </div>
+          <div class="tabs" style="margin-top:10px;width:100%;display:flex">
+            <span class="tab" style="flex:1;text-align:center">Shelf</span>
+            <span class="tab on" style="flex:1;text-align:center">Catalog</span>
+          </div>
+          <div class="pills"><span class="pill on">Genre · 1</span><span class="pill">Filters</span></div>
+          <div class="grid two">
+            <div><div class="cov"><span class="badge">◈ PS+</span><span class="add">＋ Add</span></div><div class="cap">Stellar Blade</div></div>
+            <div><div class="cov"><span class="badge">◈ PS+</span><span class="lib">In library</span></div><div class="cap">Crow Country</div></div>
+            <div><div class="cov"><span class="badge">◈ PS+</span><span class="add">＋ Add</span></div><div class="cap">Hello Neighbor</div></div>
+            <div><div class="cov"><span class="badge">◈ PS+</span><span class="add">＋ Add</span></div><div class="cap">Black Desert</div></div>
+          </div>
+          <div class="search" style="margin-top:10px">Search the catalog…</div>
+          <div class="fab">▲</div>
+        </div>
+      </div>
+    </div>
+    <p class="verdict"><b>Buys:</b> the destination is discoverable without being taught; the search bar visibly belongs to the tab under it, which is exactly the rule the architecture enforces (<b>?q= clears when you switch</b>). <span class="cost"><b>Costs:</b></span> the header gets busier on a 360px phone — the toggle and the wordmark have to share a row.</p>
+  </section>
+
+  <!-- ============ B ============ -->
+  <section class="opt">
+    <div class="opt-head b">
+      <h2>B · FAB drawer item</h2>
+      <span class="tag">zero new chrome</span>
+    </div>
+    <p class="note">“Browse PS+ Catalog” joins Sync, Check PS+, Export. Cheapest to build — but every other drawer item opens a <em>modal and returns you to the shelf</em>. This one would navigate away and stay there.</p>
+    <div class="frames">
+      <div class="frame">
+        <div class="frame-cap">Desktop — drawer open</div>
+        <div class="app desk">
+          <div class="apphead">
+            <span class="mark">PRESS START</span>
+            <div class="search" style="max-width:200px">Search your library…</div>
+            <span class="readout">175 · 52 OWNED</span>
+          </div>
+          <div class="pills">
+            <span class="pill on">Owned</span><span class="pill">Playing</span><span class="pill ghost">Completed</span>
+          </div>
+          <div class="grid">
+            <div><div class="cov play"></div><div class="cap">Elden Ring</div></div>
+            <div><div class="cov"><span class="badge">◈ PS+</span></div><div class="cap">Crow Country</div></div>
+            <div><div class="cov"></div><div class="cap">Astro Bot</div></div>
+            <div><div class="cov"></div><div class="cap">Returnal</div></div>
+          </div>
+          <div class="drawer">
+            <div>⟳ Sync library</div>
+            <div>◈ Check PS+ Extra</div>
+            <div class="hi">▦ Browse PS+ Catalog</div>
+            <div>🏆 Sync trophies</div>
+            <div>⇩ Export CSV</div>
+            <div>⚙ Settings</div>
+          </div>
+          <div class="fab">▲</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div class="frame-cap">Phone — drawer open</div>
+        <div class="app phone">
+          <div class="apphead"><span class="mark">PRESS START</span><span class="readout">175</span></div>
+          <div class="grid two" style="margin-top:12px">
+            <div><div class="cov play"></div><div class="cap">Elden Ring</div></div>
+            <div><div class="cov"></div><div class="cap">Astro Bot</div></div>
+          </div>
+          <div class="drawer" style="bottom:56px">
+            <div>⟳ Sync library</div>
+            <div>◈ Check PS+ Extra</div>
+            <div class="hi">▦ Browse PS+ Catalog</div>
+            <div>🏆 Sync trophies</div>
+            <div>⚙ Settings</div>
+          </div>
+          <div class="fab">▲</div>
+        </div>
+      </div>
+    </div>
+    <p class="verdict"><b>Buys:</b> nothing new to build or lay out. <span class="cost"><b>Costs:</b></span> the catalog becomes a place you have to <em>remember exists</em> — two taps, behind a menu, with no way back except the FAB again. It also breaks the drawer's one honest promise (“a chore, then you're back”), and the “chores only, no Add here” rule now sits next to a screen whose whole job is Add.</p>
+  </section>
+
+  <!-- ============ C ============ -->
+  <section class="opt">
+    <div class="opt-head c">
+      <h2>C · Bottom nav on phone, tabs on desktop</h2>
+      <span class="tag">most conventional</span>
+    </div>
+    <p class="note">The standard app shell. Best thumb reach on the phone — and a permanent bar across the bottom of the surface where covers are supposed to carry the screen.</p>
+    <div class="frames">
+      <div class="frame">
+        <div class="frame-cap">Desktop — identical to option A</div>
+        <div class="app desk">
+          <div class="apphead">
+            <span class="mark">PRESS START</span>
+            <div class="tabs"><span class="tab">Shelf</span><span class="tab on">Catalog</span></div>
+            <div class="search">Search the catalog…</div>
+            <span class="readout">490 GAMES</span>
+          </div>
+          <div class="pills"><span class="pill on">Horror</span><span class="pill">Puzzle</span><span class="pill">Shooter</span></div>
+          <div class="grid">
+            <div><div class="cov"><span class="badge">◈ PS+</span><span class="add">＋ Add</span></div><div class="cap">Crow Country</div></div>
+            <div><div class="cov"><span class="badge">◈ PS+</span><span class="lib">In library</span></div><div class="cap">A Quiet Place</div></div>
+            <div><div class="cov"><span class="badge">◈ PS+</span><span class="add">＋ Add</span></div><div class="cap">Alan Wake II</div></div>
+            <div><div class="cov"><span class="badge">◈ PS+</span><span class="add">＋ Add</span></div><div class="cap">Until Dawn</div></div>
+          </div>
+          <div class="fab">▲</div>
+        </div>
+      </div>
+      <div class="frame">
+        <div class="frame-cap">Phone — persistent bottom bar</div>
+        <div class="app phone">
+          <div class="apphead"><span class="mark">PRESS START</span><span class="readout">490</span></div>
+          <div class="pills" style="margin-top:10px"><span class="pill on">Horror</span><span class="pill">Filters</span></div>
+          <div class="grid two">
+            <div><div class="cov"><span class="badge">◈ PS+</span><span class="add">＋ Add</span></div><div class="cap">Crow Country</div></div>
+            <div><div class="cov"><span class="badge">◈ PS+</span><span class="lib">In library</span></div><div class="cap">A Quiet Place</div></div>
+            <div><div class="cov"><span class="badge">◈ PS+</span><span class="add">＋ Add</span></div><div class="cap">Alan Wake II</div></div>
+            <div><div class="cov"><span class="badge">◈ PS+</span><span class="add">＋ Add</span></div><div class="cap">Until Dawn</div></div>
+          </div>
+          <div class="search" style="margin-top:10px">Search the catalog…</div>
+          <div class="bottomnav">
+            <div class="bn"><span>▤</span>Shelf</div>
+            <div class="bn on"><span>▦</span>Catalog</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="verdict"><b>Buys:</b> the most familiar pattern, and the tap target sits under the thumb. <span class="cost"><b>Costs:</b></span> a permanent bar eats a row of covers on the phone, and it collides with the FAB and the bottom-pinned search bar — three things competing for the bottom of a 360px screen. A two-item bottom nav is also a lot of furniture for two destinations.</p>
+  </section>
+
+  <table>
+    <tr><th>&nbsp;</th><th>A · Header toggle</th><th>B · FAB item</th><th>C · Bottom nav</th></tr>
+    <tr><td><b>Discoverable</b></td><td class="yes">Always visible</td><td class="no">Hidden in a menu</td><td class="yes">Always visible</td></tr>
+    <tr><td><b>Taps to catalog</b></td><td class="yes">1</td><td class="meh">2</td><td class="yes">1</td></tr>
+    <tr><td><b>Phone bottom zone</b></td><td class="yes">Untouched (FAB + search keep it)</td><td class="yes">Untouched</td><td class="no">3-way collision</td></tr>
+    <tr><td><b>Covers per phone screen</b></td><td class="yes">Unchanged</td><td class="yes">Unchanged</td><td class="meh">One row fewer</td></tr>
+    <tr><td><b>Keeps “FAB = chores only”</b></td><td class="yes">Yes</td><td class="no">No — breaks it</td><td class="yes">Yes</td></tr>
+    <tr><td><b>New components</b></td><td class="yes">1 (the toggle)</td><td class="yes">0</td><td class="meh">2 (bar + tabs)</td></tr>
+  </table>
+
+  <footer>
+    Mockups are chrome studies, not final visuals — real covers, real spacing, and the flip/detail behaviour all come from the shelf as built.<br>
+    Fonts fall back to system faces here (the page can’t load Orbitron/Rajdhani); the app itself keeps the real ones.<br>
+    Card states shown: <span style="color:var(--glow)">◈ PS+</span> membership · <span style="color:var(--silver)">In library</span> (already tracked) · <span style="color:var(--electric)">＋ Add</span>. No status pill, no owned toggle — catalog games aren’t tracked games.
+  </footer>
+</div>

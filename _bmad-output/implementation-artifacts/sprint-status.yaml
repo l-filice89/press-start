@@ -111,8 +111,8 @@ development_status:
   epic-6-retrospective: done # 2026-07-12 — epic-6-retro-2026-07-12.md; epic marker stays in-progress until the main merge + v1.0.0 tag (Luca's release gate)
 
   # Epic 7: Browse the PS+ Catalog & Add — POST-v1.0.0 (not in the v1 milestone)
-  epic-7: backlog # post-v1; scheduled after Epic 6
-  7-0-foundation-architecture-ux-design-gate: backlog # gate: signed-off arch + UX before any 7.x code
+  epic-7: in-progress # 2026-07-14: v1.4.0, branch feat/epic-7-catalog-browse
+  7-0-foundation-architecture-ux-design-gate: done # 2026-07-14: arch spine +AD-24..28 (ps_plus_catalog snapshot, react-router replaces the CustomEvent bus, 2 genre vocabularies, one-fetch ingest, chunked genre sweep) + AD-8/19/20/27 amended after an adversarial gate found 6 divergence pairs; UX spines +catalog destination (header toggle, no catalog detail, card Add/Claim, 3-cause empty state). Live-probed the store payload: NO release_date, genres are facet-only.
   7-1-persist-the-ps-plus-catalog-as-browsable-data: backlog
   7-2-browse-the-catalog-a-genre-filterable-destination: backlog
   7-3-add-or-claim-a-game-from-the-catalog: backlog
@@ -129,7 +129,7 @@ development_status:
   epic-8-retrospective: optional
 
   # Epic 9: The PSN Record — Trophies (and maybe Wishlist) — v1.x
-  epic-9: in-progress
+  epic-9: done # 2026-07-14 — 9.1/9.1b/9.1c/9.2/9.3/9.5 done, retro done, merged to main (PR #20). 9.4 stays `future` (dropped per 9.1c, not a blocker).
   9-1-spike-s-1-what-does-pdccws-p-authorize-vr-1: done # DW-10: trophies need NPSSO; wishlist = persisted query storeRetrieveWishlist
   9-1b-swap-psnprovider-cookie-to-npsso-bearer-vr-1: done # NPSSO bearer swap; cookie path deleted, migration 0006 drops the stale row
   9-1c-final-wishlist-spike-capture-storeretrievewishlist-hash-vr-1: done # wishlist read is SSR; hash not client-observable, PersistedQueryNotFound under bearer
