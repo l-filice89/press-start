@@ -140,7 +140,12 @@ Covers follow their container corners. Two filter-pill *shapes* encode behavior:
 - **Search bar** — persistent, pill-shaped, cyan-edged with a focus glow; bottom-pinned on mobile, header-left on desktop. The hero find-or-add surface; results dropdown lists library matches + the `＋ Add` row.
 - **Popover** — `surface-raised` with glow-ring, anchored to the tapped status pill (flips above/below to stay on-screen); holds the status radio list + the two milestone rows.
 - **Destination toggle** — header segmented control, `SHELF | CATALOG` (Orbitron 600, uppercase, tracked). Active segment is a **solid electric fill with dark ink** and a cyan halo; inactive is muted text on `surface-raised`. Pill-shaped (`999px`), matching the filter/status pill family. Desktop: inline beside the wordmark. Phone: full-width on its own row under the wordmark. → `mockups/catalog-nav-options.html`
-- **Catalog card** — the shelf card's chrome, minus everything that implies ownership. Cover art, `◈ PS+` flag top-left, title below (Orbitron, ellipsis). **No status pill, no owned toggle, no magenta bloom, no flip.** Bottom overlay carries the action: **`＋ Add`** (solid electric, dark ink) beside **`Claim now`** (hairline outline, cyan ink) — or, when the game is already tracked, a single **`In library`** marker in `milestone-silver` and *no* action. Silver here means "already yours", consistent with its milestone meaning: earned, not available.
+- **Catalog card** — the shelf card's chrome, minus everything that implies ownership. Cover art, `◈ PS+` flag top-left, title below (Orbitron, ellipsis). **No status pill, no owned toggle, no magenta bloom, no flip.** The bottom overlay carries one of three states:
+  - **Not tracked** — **`＋ Add`** (solid electric fill, dark ink) beside **`Claim now`** (hairline outline, cyan ink).
+  - **Tracked, not owned** — an **`In library`** marker in `{colors.accent-electric}` (cyan = interactive family, "it's on your shelf") **with `Claim now` still live**, because a game added from the catalog isn't claimed to the PlayStation account yet.
+  - **Owned** — an **`Owned`** marker in `{colors.milestone-silver}` and **no actions**. Silver keeps its established meaning — earned/yours — and its absence of a CTA *is* the message.
+
+  Never a magenta accent here: magenta is reserved for Playing, which is a shelf state.
 - **Skeleton** — cover-shaped shimmer (`surface` → lighter sweep) on first load.
 
 ## Do's and Don'ts

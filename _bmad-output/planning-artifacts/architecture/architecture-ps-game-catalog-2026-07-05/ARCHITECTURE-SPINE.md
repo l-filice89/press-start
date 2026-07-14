@@ -232,7 +232,8 @@ flowchart LR
 
 - **Binds:** the catalog genre filter (7.2) vs. the shelf genre filter (FR-23); the 7.3 add path.
 - **Prevents:** PS facet keys being written into `GENRE`/`GAME_GENRE` (IGDB vocabulary, AD-19), so the shelf's genre pills silently grow a `ROLE_PLAYING_GAMES` next to `Role-playing (RPG)`.
-- **Rule:** PS-store genres are the **19 locale-independent `productGenres` facet keys** (`ACTION`, `ADVENTURE`, `ROLE_PLAYING_GAMES`, …), stored in **`PS_PLUS_CATALOG_GENRE`** — catalog-local, region+tier-scoped. `GENRE`/`GAME_GENRE` stays **IGDB-only**. Localized display names are rendered, never stored. On add (7.3), the new `GAME`'s genres come from **IGDB enrichment**, not from the catalog facet.
+- **Rule:** PS-store genres are the `productGenres` **facet keys** (`ACTION`, `ADVENTURE`, `ROLE_PLAYING_GAMES`, …), stored in **`PS_PLUS_CATALOG_GENRE`** — catalog-local, region+tier-scoped.
+- **The key list is DISCOVERED per region at ingest, never hardcoded.** Probed 2026-07-14: `de-de` returns **19** keys, `en-us` returns **20** (it adds `MUSIC/RHYTHM`). A pinned 19-key enum would silently drop an entire genre for any region that has one we didn't see — the Story 9.3 `npServiceName` failure exactly (a constant asserted from one sample, wrong across the population). Read the facet list from the unfiltered response each run and sweep whatever it names. Keys are **not** identifier-safe: `MUSIC/RHYTHM` contains a slash and filters correctly only as a URL-encoded `filterBy: ["productGenres:MUSIC/RHYTHM"]` variable — never interpolate a key into a path or an unencoded query. `GENRE`/`GAME_GENRE` stays **IGDB-only**. Localized display names are rendered, never stored. On add (7.3), the new `GAME`'s genres come from **IGDB enrichment**, not from the catalog facet.
 
 ### AD-27 — One catalog fetch feeds both the snapshot and the flag check [Epic 7]
 

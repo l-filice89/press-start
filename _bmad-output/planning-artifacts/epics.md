@@ -1395,7 +1395,9 @@ So that I can explore what's playable through the subscription.
 
 **Given** a catalog game I already track
 **When** it renders in the grid
-**Then** it is marked as already in my library (so I don't re-add it) [FR-42 dedup parity]
+**Then** it carries the state that says what I can still do — **`In library`** (cyan) if tracked but **not owned**, with **`Claim now` still offered** (it's on my shelf but not yet claimed to my PlayStation account), or **`Owned`** (silver) with **no actions** if I own it (purchased or already claimed). Never the shelf's status pill — that shows play state, a tracked-game concept the catalog must not carry [FR-42 dedup parity; AD-24]
+
+> The whole catalog renders, tracked games included — hiding what I already have would just read as a missing game. The three states are keyed on the remaining action, not on tracking alone: dropping `Claim now` the moment a game is tracked would strand exactly the games the catalog itself just added (`owned:false, ownership_type:'ps_plus'`).
 
 **Given** the catalog is empty or its region unset
 **When** I open the destination
@@ -1421,7 +1423,11 @@ So that discovery in the catalog turns into a tracked game (or a claimed one) in
 
 **Given** the catalog grid
 **When** a game is already tracked
-**Then** it shows an **In library** marker and offers **no Add action** — there is no second add, and no read-only catalog detail page stands between browsing and the add preview [AD-24; EXPERIENCE.md IA]
+**Then** it offers **no Add action** (there is no second add) — but **`Claim now` stays live while the game is not owned**, since a catalog-added game sits on the shelf unclaimed until I claim it on PlayStation. Once owned, the card shows **`Owned`** and offers nothing. No read-only catalog detail page stands between browsing and the add preview [AD-24; EXPERIENCE.md IA]
+
+**Given** I claim a tracked-but-unowned game on the PlayStation Store
+**When** the next library sync runs
+**Then** the existing claim/purchase ownership path (Story 6.4) takes over — the catalog does not try to guess that the claim succeeded, because it cannot observe the PS Store tab [AD-10]
 
 **Given** a catalog game
 **When** I tap "Claim now"
