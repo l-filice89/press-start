@@ -1351,17 +1351,19 @@ So that the whole subscription catalog is queryable without a live fetch.
 
 **Given** the PS+ check (button or cron, Story 5.1/5.2)
 **When** it fetches the region's catalog
-**Then** each product's browsable fields (product id, title, `title_normalized`, cover URL, PS-store genres, release date, `tier='extra'`) are upserted into a new region-scoped `ps_plus_catalog` table [AR-5; new]
+**Then** each product's browsable fields (product id, `np_title_id`, title, `title_normalized`, cover URL, platforms, store URL, `tier='extra'`) are upserted into a new region+tier-scoped `ps_plus_catalog` table [AR-5; AD-24]
+
+> **Amended 2026-07-14 (Story 7.0 gate, from a live probe of `categoryGridRetrieve`):** the store product payload exposes **no release date** and **no genres**. Release date is dropped from this story (AD-24 — the architecture will not carry a field the source can't fill). Genres are obtainable **only** as a category facet, so they are a **separate chunked, generation-stamped sweep** (`filterBy: ["productGenres:<KEY>"]` once per facet key) writing `ps_plus_catalog_genre` — additive, and never blocking the membership snapshot [AD-26, AD-28].
+
+**Given** the catalog snapshot is written
+**When** the tracked-game `ps_plus_extra` flag pass runs
+**Then** it reads **the stored table**, not a second fetch, and maintains the flag for **every** tracked game with a match — **owned games included** — so the shelf pill and the catalog grid can never give opposite answers for the same game [AD-27]
 
 **Given** a catalog that changed since the last run (games left)
 **When** the refresh completes
 **Then** rows for products no longer in the region's catalog are pruned, so the table is a faithful current snapshot (same both-directions discipline as the flag check) [new]
 
-**Given** the stored catalog now exists
-**When** the Story 5.1 flag check runs
-**Then** it MAY read tracked-game matches from the stored table instead of a second fetch (consolidation opportunity — not required if it complicates the ingest) [AR-10]
-
-> The fetch is extended from `string[]` (names) to full product records; the empty-catalog wipe guard (Story 5.1) still applies before any prune.
+> The fetch is extended from `string[]` (names) to full product records; the empty-catalog wipe guard (Story 5.1) still applies before any prune — it now guards **two** datasets, so it stays a hard abort. *(The "MAY consolidate the flag check" option is now mandatory, not optional — see AD-27 above: two fetch paths were found to be a divergence hazard, not a nicety.)*
 
 ### Story 7.2: Browse the catalog (a genre-filterable destination)
 
@@ -1371,13 +1373,21 @@ So that I can explore what's playable through the subscription.
 
 **Acceptance Criteria:**
 
+**Given** the app has only ever had one screen
+**When** the Catalog destination is introduced
+**Then** **react-router** is adopted (library mode) with routes `/` (shelf), `/catalog`, `/game/:id`, and the three `window` CustomEvents (`OPEN_DETAIL`, `SEED_SEARCH`, `SHELF_SEARCH`) are **deleted** and replaced by `navigate()` / `useSearchParams` — closing the Epic 6 mount-race bug class instead of extending it to a second destination [AD-25; Epic 6 retro item 2]
+
+**Given** both destinations
+**When** I switch between them
+**Then** a **header segmented toggle** (`SHELF | CATALOG`) moves me in one tap, and the search term (`?q=`) is **scoped to the active destination and cleared on switch** — a shelf search never silently filters the catalog. The `＋ Add "<name>"` row stays **shelf-only** [AD-25; EXPERIENCE.md IA]
+
 **Given** a stored catalog for my region (Story 7.1)
 **When** I open the Catalog destination
-**Then** its games render in a shelf-style grid (cover, title), paged/virtualized for the full ~473-item set, reusing the shelf card chrome where practical [new; UX-DR reuse]
+**Then** its games render in a shelf-style grid (cover, title), paged/virtualized for the full ~490-item set, reusing the shelf card chrome — but with **no status pill, no owned toggle and no flip**, because catalog games are not tracked games [AD-24; UX-DR reuse]
 
 **Given** the catalog grid
 **When** I filter by genre
-**Then** only catalog games in the selected genre(s) show (genre-only filter, PS-store taxonomy) — no state/ownership filters, since these aren't tracked games [new]
+**Then** only catalog games in the selected genre(s) show — the **PS-store facet vocabulary** (~19 locale-independent keys, from `ps_plus_catalog_genre`), **never** the shelf's IGDB genre list; the two vocabularies must not mix. Genre-only — no state/ownership filters, since these aren't tracked games [AD-26]
 
 **Given** the catalog grid
 **When** I type in the catalog search bar
@@ -1401,7 +1411,17 @@ So that discovery in the catalog turns into a tracked game (or a claimed one) in
 
 **Given** a catalog game not yet in my library
 **When** I add it
-**Then** Epic 6's add preview opens pre-filled (IGDB enrichment on demand), saving as wishlisted; catalog membership immediately lights its PS+ flag → it shows Playable-now on the shelf [FR-41, FR-42, FR-43; AR-5]
+**Then** Epic 6's add preview opens pre-filled (IGDB enrichment on demand) and saves a tracking row of exactly `{owned: false, ownership_type: 'ps_plus', wishlisted_on: null}` — **not owned** (availability is not ownership) but **not wishlisted either**; catalog membership lights its PS+ flag → it shows Playable-now on the shelf [FR-41/42/43; AD-24, AD-8 as amended]
+
+> **Amended 2026-07-14 (7.0 gate):** the original AC said "saving as wishlisted". That was wrong in two ways — `Wishlisted` is *derived* (`not owned AND not in the PS+ catalog`, AD-8 as amended), so a catalog add can't "save as" it, and a game the subscription already gives you is not one you still want to buy. AD-8 was tightened so the derivation can't produce that state.
+
+**Given** the newly added game
+**When** the app returns from the add preview
+**Then** it navigates to `/game/:id` — the real, **editable** detail — resolved through a **by-id read route**, never an id lookup in the shelf list cache (or the add-then-navigate races the refetch and 404s) [AD-25]
+
+**Given** the catalog grid
+**When** a game is already tracked
+**Then** it shows an **In library** marker and offers **no Add action** — there is no second add, and no read-only catalog detail page stands between browsing and the add preview [AD-24; EXPERIENCE.md IA]
 
 **Given** a catalog game
 **When** I tap "Claim now"
