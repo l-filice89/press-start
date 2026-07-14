@@ -136,16 +136,28 @@ export async function browseCatalog(
 	// title alone, the two diverge and the card a user just added still reads
 	// `＋ Add`, forever (every re-add 409s and bounces to the detail). The link is
 	// the one key that cannot drift.
+	//
+	// …and the SYNC's key (Epic 7 cross-story review, H1): a game the library sync
+	// created carries `EXTERNAL_LINK('PSN', np_title_id)` and PSN's own title,
+	// which routinely does not normalize like the store's name ("…Valhalla
+	// Ragnarök Edition" vs "…Valhalla"). Without this join the card offered ＋Add
+	// for a game the user OWNS. The catalog row carries the same np_title_id, so
+	// it is a third exact key.
 	const byId = new Map(library.map((row) => [row.id, row]));
-	const linked = new Map<string, { gameId: string; owned: boolean }>();
-	for (const link of await listExternalLinksBySource(db, 'PSN_PRODUCT')) {
-		const row = byId.get(link.gameId);
-		if (!row) continue; // linked, but not in THIS user's library
-		const existing = linked.get(link.externalId);
-		if (!existing || (row.owned && !existing.owned)) {
-			linked.set(link.externalId, { gameId: row.id, owned: row.owned });
+	const byLink = async (source: 'PSN_PRODUCT' | 'PSN') => {
+		const map = new Map<string, { gameId: string; owned: boolean }>();
+		for (const link of await listExternalLinksBySource(db, source)) {
+			const row = byId.get(link.gameId);
+			if (!row) continue; // linked, but not in THIS user's library
+			const existing = map.get(link.externalId);
+			if (!existing || (row.owned && !existing.owned)) {
+				map.set(link.externalId, { gameId: row.id, owned: row.owned });
+			}
 		}
-	}
+		return map;
+	};
+	const linked = await byLink('PSN_PRODUCT');
+	const byNpTitleId = await byLink('PSN');
 
 	// A TOTAL order (review, M1): `compareTitle` is `sensitivity: 'base'`, so NieR
 	// and NIER compare EQUAL — not an order at all. Each page is a separate query
@@ -167,9 +179,15 @@ export async function browseCatalog(
 		nextCursor: next < sorted.length ? next : null,
 		generation,
 		games: page.map((row) => {
-			const match =
-				linked.get(row.productId) ??
-				(row.titleNormalized ? tracked.get(row.titleNormalized) : undefined);
+			// OWNED WINS across all three keys, not "first key that hits" (review, H1):
+			// a stub row matched by one key must never beat the OWNED row matched by
+			// another — that is what made an owned game read `In library` forever.
+			const matches = [
+				linked.get(row.productId),
+				row.npTitleId ? byNpTitleId.get(row.npTitleId) : undefined,
+				row.titleNormalized ? tracked.get(row.titleNormalized) : undefined,
+			].filter((match) => match !== undefined);
+			const match = matches.find((m) => m.owned) ?? matches[0];
 			return {
 				productId: row.productId,
 				name: row.name,

@@ -232,6 +232,10 @@ export async function listCatalogProducts(
 /** One catalog row as the browse destination renders it (Story 7.2). */
 export type CatalogBrowseRow = {
 	productId: string;
+	/** The sync's identity for the game (`EXTERNAL_LINK('PSN', …)`) — the marker
+	 * joins on it, so a SYNCED game whose PSN title differs from the store's name
+	 * still reads Owned (Epic 7 cross-story review, H1). */
+	npTitleId: string | null;
 	name: string;
 	titleNormalized: string;
 	coverUrl: string | null;
@@ -299,6 +303,7 @@ export async function listCatalogForBrowse(
 	return db
 		.select({
 			productId: psPlusCatalog.productId,
+			npTitleId: psPlusCatalog.npTitleId,
 			name: psPlusCatalog.name,
 			titleNormalized: psPlusCatalog.titleNormalized,
 			coverUrl: psPlusCatalog.coverUrl,

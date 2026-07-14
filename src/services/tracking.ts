@@ -22,7 +22,6 @@ import {
 	getTracking,
 	listTrackingForUser,
 	setDiscarded,
-	setPsPlusExtraFlags,
 	updateTrackingDates,
 	updateTrackingMilestone,
 	updateTrackingOwnership,
@@ -175,15 +174,15 @@ export async function countMembershipClaims(
  * dates/discarded are never written. Discarded claims are excluded so the count
  * the confirm named matches the visible shelf.
  *
- * A membership claim reaches the shelf two ways: sync ingests it already owned
- * (so `runPsPlusCheck` — which only flags NON-owned rows — never set its
- * `psPlusExtra`), or the user claimed a pilled catalog game (flag already set).
- * Re-flagging `psPlusExtra=true` covers the first case and is a no-op for the
- * second, so the PS+ pill (shown when `psPlusExtra && !owned`) re-appears either
- * way. Flags are set BEFORE the un-own loop: if a per-row write throws mid-way
- * (D1 has no app-side multi-row txn), the not-yet-un-owned rows stay owned — the
- * pill stays hidden by `!owned` — and a retry finishes the un-own, so no row is
- * ever stranded un-owned-without-pill.
+ * IT DOES NOT TOUCH `ps_plus_extra` (Epic 7 cross-story review, H2). It used to
+ * re-flag every claim `true` from "last-known membership" — on the premise that
+ * `runPsPlusCheck` only flagged NON-owned rows. Story 7.1 deleted that premise:
+ * the flag is now maintained for EVERY tracked game, owned included, so it is a
+ * faithful cache of `ps_plus_catalog` and is already correct at cancel time.
+ * Re-flagging forced it TRUE for rows the snapshot says are NOT in the catalog —
+ * a PS+ ESSENTIAL monthly game, or an Extra title that has since left — which
+ * then wore the ◈ PS+ pill, counted in the filter and exported as `yes` until the
+ * next monthly refresh, up to 30 days later.
  */
 export async function cancelMembership(
 	db: Db,
@@ -192,13 +191,6 @@ export async function cancelMembership(
 	const rows = await listTrackingForUser(db, userId);
 	const claims = rows.filter(
 		(r) => r.owned && r.ownedVia === 'membership' && !r.discarded,
-	);
-	// ponytail: re-flag from last-known catalog membership; next runPsPlusCheck
-	// clears any that have since left the catalog. Set first — see docblock.
-	await setPsPlusExtraFlags(
-		db,
-		claims.map((r) => r.gameId),
-		true,
 	);
 	for (const r of claims) {
 		await updateTrackingOwnership(db, userId, r.gameId, {

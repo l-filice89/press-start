@@ -55,7 +55,7 @@ function renderDialog(prefill?: {
 			</MemoryRouter>
 		</QueryClientProvider>,
 	);
-	return { onClose };
+	return { onClose, client };
 }
 
 const rematchButton = () =>
@@ -213,5 +213,32 @@ describe('AddGameDialog — a CATALOG add is never an owned add (Story 7.3)', ()
 	it('still offers it on the SHELF add (no product id) — that one IS a purchase', async () => {
 		renderDialog();
 		expect(await screen.findByLabelText('I own this game')).toBeInTheDocument();
+	});
+
+	/**
+	 * Epic 7 cross-story review (M3). The server anchors the PSN_PRODUCT link on
+	 * BOTH outcomes — a catalog game that turns out to be already tracked under a
+	 * different title comes back `duplicate`, and it IS now marked — but only the
+	 * `created` branch invalidated ['catalog']. So the grid kept its stale page and
+	 * the card still read ＋ Add after navigating back.
+	 */
+	it('a DUPLICATE add from the catalog invalidates the CATALOG grid too', async () => {
+		vi.mocked(api.addGame).mockResolvedValue({
+			kind: 'duplicate',
+			gameId: 'g9',
+		});
+		const user = userEvent.setup();
+		const { client } = renderDialog({ psnProductId: 'EP-DUP-1' });
+		const invalidate = vi.spyOn(client, 'invalidateQueries');
+
+		await waitFor(() =>
+			expect(screen.getByLabelText('Title')).toHaveValue('Spider-Man 2'),
+		);
+		await user.click(screen.getByRole('button', { name: 'Add to wishlist' }));
+
+		await waitFor(() =>
+			expect(invalidate).toHaveBeenCalledWith({ queryKey: ['catalog'] }),
+		);
+		expect(invalidate).toHaveBeenCalledWith({ queryKey: ['shelf'] });
 	});
 });

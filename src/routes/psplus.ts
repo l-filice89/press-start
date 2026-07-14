@@ -190,6 +190,8 @@ psPlusRoute.post('/ps-plus-catalog/genres', requireAuth, async (c) => {
 	const outcome = await runGenreSweep(db, userId, c.env, {
 		cursor,
 		generation,
+		// The fence (review, M2): the TTL can hand this lock to the cron mid-chunk.
+		lockToken: token,
 	}).catch((error: unknown) => {
 		console.error('ps+ genre sweep failed', error);
 		return { ok: false as const, reason: 'provider' as const };

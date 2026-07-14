@@ -69,16 +69,34 @@ export type PsPlusCheckOutcome =
 	| { ok: false; reason: 'no-region' | 'provider' | 'conflict' };
 
 /**
+ * How far the accumulated walk may fall short of the store's own `totalCount`
+ * before the catalog is refused (review, M1). It absorbs a product ARRIVING
+ * mid-walk (page 5's totalCount is 491, the walk carried 490) — not a truncated
+ * walk, which is short by hundreds.
+ */
+const CATALOG_DRIFT_TOLERANCE = 2;
+
+/**
  * Subrequest ledger for one membership pass (AD-15: 50 external + D1 binding
- * calls count too). Counted honestly, every binding call:
+ * calls count too). Counted honestly, every binding call, EACH COST PAID ONCE
+ * (the pre-fix ledger subtracted the auth middleware and the lock twice and was
+ * off by 5 — Epic 7 cross-story review, H3):
  *   external: 5 catalog pages (490 / 100), 0 auth legs (this endpoint is public)
- *   D1:       auth middleware 3 · region read 1 · lock claim + fence + release 3 ·
- *             timezone read (todayForUser) 1 · snapshot upsert ceil(490/50) = 10 ·
- *             prune 1 · stale-region delete 1 · title keys 1 · library read 1 ·
- *             flag set + clear 2 · sweep-state write 1 · bookkeeping (failed-flag
- *             clear 1 + stamp, which re-reads the timezone, 2) 3
- *   total  = 5 external + 28 D1 = 33 of 50.
- * The cron path adds one genre-sweep chunk on top — see `runScheduledPsPlusCheck`.
+ *   D1, on the CRON path:
+ *             findUserByEmail 1 · lock claim 1 · region read 1 · fence
+ *             (holdsPsnLock) 1 · timezone read (todayForUser) 1 · pre-run product
+ *             ids 1 · snapshot upsert ceil(490/50) = 10 · prune 1 · stale-region
+ *             delete 1 · sweep-state read 1 + write 1 · title keys 1 · library
+ *             read 1 · flag set + clear 2 · bookkeeping (failed-flag clear 1 +
+ *             stamp, which re-reads the timezone, 2) 3 · post-pass sweep-state
+ *             read 1 · lock release 1
+ *           = 29
+ *   total (cron) = 5 external + 29 D1 = 34 of 50.
+ *   The HTTP button pays the auth middleware (3) on top instead of
+ *   findUserByEmail (1): 36 of 50.
+ * A GENRE-SWEEP CHUNK NO LONGER RIDES ALONG (H3): 34 + a chunk (~25) busts the
+ * budget, and the resulting mid-sweep "Too many subrequests" throw was
+ * self-perpetuating — see `runScheduledPsPlusCheck`.
  */
 export async function runPsPlusCheck(
 	db: Db,
@@ -117,12 +135,25 @@ export async function runPsPlusCheck(
 	// AND IT RECONCILES (Story 7.1 review, H1). "Not empty" is not "complete": a
 	// walk that got page 0 and then a truncated/empty page yields 100 of 490
 	// products, and the prune would delete the other 390 rows and clear their
-	// flags. EXACT match or fail closed — the store's own `totalCount` rides every
-	// page, so there is no tolerance to justify: a short walk NEVER prunes.
+	// flags. A short walk NEVER prunes.
+	//
+	// It reconciles what the walk ACCOUNTED FOR, not what it kept (Epic 7
+	// cross-story review, M1). EXACT equality bricked the whole feature on two
+	// ordinary events: ONE store product with no `id` (the provider drops it, the
+	// store still counts it → 489 !== 490 → every refresh and every button click
+	// fails identically until a deploy), and a product added or removed BETWEEN
+	// page 1 and page 5 of the walk (the last page's totalCount wins). So: skipped
+	// products are added back, and a couple of rows of mid-walk drift are tolerated
+	// — while a TRUNCATED walk (100 of 490) still fails closed, which is the whole
+	// point of the guard.
 	const products = fetched.products;
-	if (products.length === 0 || products.length !== fetched.totalCount) {
+	const accounted = products.length + fetched.skipped;
+	if (
+		products.length === 0 ||
+		accounted + CATALOG_DRIFT_TOLERANCE < fetched.totalCount
+	) {
 		console.error(
-			`ps+ check: refusing a suspect catalog — ${products.length} products against a reported totalCount of ${fetched.totalCount}`,
+			`ps+ check: refusing a suspect catalog — ${products.length} products (+${fetched.skipped} skipped) against a reported totalCount of ${fetched.totalCount}`,
 		);
 		return { ok: false, reason: 'provider' };
 	}
@@ -257,16 +288,21 @@ export async function runPsPlusCheck(
  * THE CRON ALSO DRIVES THE GENRE SWEEP (Story 7.1 review, M1). Nothing else
  * would: the chunk endpoint exists for 7.2's client loop, and with no caller
  * `ps_plus_catalog_genre` would simply stay EMPTY in production and 7.2 would
- * filter against nothing. One chunk per cron run, INSIDE the same lock (the
- * refresh's fan-out is over by then, so the budgets do not overlap): the cron
- * fires 7× a month (`0 21 15-21 * *`), so a ~5-chunk sweep converges within days
- * of the refresh and self-heals a chunk that failed. A sweep failure is NOT a
- * refresh failure — the membership snapshot is valid and complete either way
- * (AD-28), so it never lights the banner.
+ * filter against nothing.
  *
- * Subrequest ledger, cron run: the membership pass (33, above) + one sweep chunk
- * (its own ledger in `psplus-genres.ts`) share ONE invocation. The sweep chunk is
- * sized for the SHARED budget: see CHUNK_SIZE there.
+ * ONE OR THE OTHER PER INVOCATION, NEVER BOTH (Epic 7 cross-story review, H3).
+ * The membership pass alone is 34 of the 50 subrequests a Worker invocation gets
+ * (AD-15), and a sweep chunk is ~25 more: run together they THROW "Too many
+ * subrequests" mid-sweep, which never persists the cursor — so every cron run for
+ * the rest of the month re-swept the same first keys, died in the same place, and
+ * left most genre chips at 0 permanently. So a cron run with a sweep still
+ * pending drives ONLY the sweep chunk; the membership pass runs when the sweep is
+ * done (or when it cannot run at all). The cron fires 7× a month
+ * (`0 21 15-21 * *`) and a 20-key region is 5 chunks, so a refresh + a full sweep
+ * still converge inside one monthly window.
+ *
+ * A sweep failure is NOT a refresh failure — the membership snapshot is valid and
+ * complete either way (AD-28), so it never lights the banner.
  */
 export async function runScheduledPsPlusCheck(
 	db: Db,
@@ -286,24 +322,25 @@ export async function runScheduledPsPlusCheck(
 			db,
 			user.id,
 			'catalog-refresh',
-			async (token) => {
-				const outcome = await runPsPlusCheck(db, user.id, env, token);
-				if (!outcome.ok) return outcome;
-				// One sweep chunk, resumed from the persisted cursor — unless the sweep
-				// already finished this snapshot (then there is nothing to advance).
-				// Genre tags are a 7.2 nicety on top of a valid snapshot: a failing
-				// sweep must never turn a good refresh into a failed one.
+			async (token): Promise<PsPlusCheckOutcome | null> => {
+				// A pending sweep OWNS this invocation (H3). `null` = no membership pass
+				// ran, so there is nothing to light (or clear) the banner with.
 				const state = await getPsPlusSweepState(db, user.id);
-				if (state?.done) return outcome;
-				const sweep = await runGenreSweep(db, user.id, env).catch(
-					(error: unknown) => {
+				if (state && !state.done) {
+					const sweep = await runGenreSweep(db, user.id, env, {
+						lockToken: token,
+					}).catch((error: unknown) => {
 						console.error('ps+ scheduled genre sweep threw', error);
 						return null;
-					},
-				);
-				if (!sweep?.ok)
+					});
+					if (sweep?.ok) return null;
+					// A sweep that cannot run AT ALL (no catalog, a stale/steamrolled
+					// state, a dead facet probe) must not starve the membership pass
+					// forever — it fails within a handful of calls, so the pass still
+					// fits. A per-KEY failure is not this: that is an `ok` chunk.
 					console.warn('ps+ scheduled genre sweep did not complete a chunk');
-				return outcome;
+				}
+				return await runPsPlusCheck(db, user.id, env, token);
 			},
 		);
 		if (held.busy) {
@@ -311,6 +348,7 @@ export async function runScheduledPsPlusCheck(
 			return;
 		}
 		const outcome = held.result;
+		if (!outcome) return; // a sweep invocation — no membership verdict to act on
 		// Only a genuine provider failure (a retry may fix) lights the banner.
 		// `no-region` is a deploy/config gap, not a transient refresh failure:
 		// the banner tells the user to run the button, but the button hits the

@@ -48,6 +48,15 @@ const CATALOG_PAGE_SIZE = 100;
 // ~500-catalog fits in 5-6 pages even if the server caps pages at 24; the cap
 // keeps a totalCount regression inside the 50-subrequest budget (AD-15).
 const CATALOG_MAX_PAGES = 30;
+/**
+ * How far short of the store's own `totalCount` a walk may end before it is
+ * treated as TRUNCATED (Epic 7 cross-story review, M1). It absorbs a product
+ * added or removed BETWEEN the first page and the last — the last page's
+ * `totalCount` is the one that sticks — and nothing more: a truncated walk is
+ * short by hundreds. The service reconciles the accumulated count against the
+ * same slack (`psplus.ts`).
+ */
+const CATALOG_DRIFT_TOLERANCE = 2;
 
 // Trophy list (Story 9.2): a DIFFERENT host from the library GraphQL surface,
 // and it behaves differently — a rejected bearer answers a real HTTP 401
@@ -230,6 +239,13 @@ export interface PsnCatalogProduct {
 export interface PsnCatalog {
 	products: PsnCatalogProduct[];
 	totalCount: number;
+	/**
+	 * Products the walk SAW but could not use — no `id` at all (Epic 7 cross-story
+	 * review, M1). They count towards the store's `totalCount`, so the caller must
+	 * add them back before reconciling, or ONE id-less entry in Sony's grid fails
+	 * every refresh identically until a deploy.
+	 */
+	skipped: number;
 }
 
 interface RawPsnGame {
@@ -727,6 +743,7 @@ export function createPsnProvider({
 		genreKey?: string,
 	): Promise<PsnCatalog> {
 		const products: PsnCatalogProduct[] = [];
+		let skipped = 0;
 		let offset = 0;
 		let totalCount: number | undefined;
 		for (let pageCount = 0; ; pageCount++) {
@@ -740,9 +757,19 @@ export function createPsnProvider({
 				totalCount = page.pageInfo.totalCount;
 			for (const product of page.products) {
 				if (product.id) products.push(toCatalogProduct(product, region));
+				else skipped++; // it still counts towards totalCount (review, M1)
 			}
 			if (page.products.length === 0) {
-				if (totalCount !== undefined && offset < totalCount) {
+				// A walk that ends SHORT is truncation and it throws (Story 7.1, H1) —
+				// but "short by one or two" is a product arriving or leaving BETWEEN
+				// page 1 and page 5, and the last page's totalCount is the one that
+				// sticks (Epic 7 cross-story review, M1). Throwing on that failed a
+				// healthy catalog on an ordinary store mutation; a truncated walk is
+				// short by hundreds and still fails closed.
+				if (
+					totalCount !== undefined &&
+					offset + CATALOG_DRIFT_TOLERANCE < totalCount
+				) {
 					throw new Error(
 						`PS+ catalog returned an empty page at offset ${offset} while totalCount is ${totalCount} — refusing a truncated walk`,
 					);
@@ -756,7 +783,11 @@ export function createPsnProvider({
 		}
 		// A response that names no count at all cannot be reconciled — the walk's
 		// own tally is all there is.
-		return { products, totalCount: totalCount ?? products.length };
+		return {
+			products,
+			totalCount: totalCount ?? products.length + skipped,
+			skipped,
+		};
 	}
 
 	return {

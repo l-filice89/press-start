@@ -292,6 +292,61 @@ describe('POST /api/ps-plus-check (integration, real workerd + local D1)', () =>
 		expect(await flagOf(departed.id)).toBe(true);
 	});
 
+	/**
+	 * ONE ID-LESS PRODUCT MUST NOT BRICK THE REFRESH (Epic 7 cross-story review,
+	 * M1). The provider drops a product with no `id` (it has no primary key), but
+	 * the store still COUNTS it — and the reconcile demanded EXACT equality, so
+	 * 489 !== 490 failed every refresh and every button click identically, with no
+	 * self-heal short of a deploy. The walk is accounted for, not just kept.
+	 */
+	it('an ID-LESS store product does NOT fail the refresh — it is accounted for, not demanded', async () => {
+		stubStore(({ offset }) => {
+			const payload = catalogPagePayload(['Has Id', 'Also Has Id', 'No Id'], {
+				totalCount: 3,
+				offset,
+			});
+			if (offset === 0) {
+				const products = payload.data.categoryGridRetrieve.products as {
+					id?: string;
+				}[];
+				// Sony's grid does this: a row with no id at all, still counted.
+				products[2].id = undefined;
+			} else {
+				payload.data.categoryGridRetrieve.products = [];
+			}
+			return { body: payload };
+		});
+
+		const res = await postCheck(cookie);
+		expect(res.status).toBe(200);
+		expect((await res.json()) as { products: number }).toMatchObject({
+			products: 2,
+		});
+		expect(await snapshotNames()).toEqual(['Also Has Id', 'Has Id']);
+	});
+
+	// …and a product ARRIVING between page 1 and page 5 (the last page's totalCount
+	// wins) is drift, not truncation: a healthy catalog must not fail on it.
+	it('tolerates a one-row store mutation mid-walk (totalCount moved under the walk)', async () => {
+		// Page 0: two of a claimed three. Page 1: the third — but the store now says
+		// FOUR (a product arrived while the walk was in flight). Page 2 is empty:
+		// there is no fourth row to serve, and the walk ends one short of a count
+		// that only ever existed after it started.
+		stubStore(({ offset }) => {
+			if (offset === 0)
+				return {
+					body: catalogPagePayload(['Alpha', 'Beta'], { totalCount: 3 }),
+				};
+			if (offset === 2)
+				return {
+					body: catalogPagePayload(['Gamma'], { totalCount: 4, offset }),
+				};
+			return { body: catalogPagePayload([], { totalCount: 4, offset }) };
+		});
+		expect((await postCheck(cookie)).status).toBe(200);
+		expect(await snapshotNames()).toEqual(['Alpha', 'Beta', 'Gamma']);
+	});
+
 	// The genuine terminator: the accumulated count RECONCILES with the store's
 	// own `totalCount` across a capped, multi-page walk — that run is complete and
 	// prunes normally.

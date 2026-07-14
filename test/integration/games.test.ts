@@ -19,6 +19,7 @@ import { createDb } from '../../src/repositories/db';
 import { psPlusCatalog, user } from '../../src/schema';
 import { game, gameTracking, genre } from '../../src/schema/catalog';
 import { addGame, previewAddGame } from '../../src/services';
+import { browseCatalog } from '../../src/services/psplus-browse';
 import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
 
 /**
@@ -857,6 +858,88 @@ describe('add a game FROM THE CATALOG (Story 7.3, AD-20)', () => {
 			source: 'PSN_PRODUCT',
 			externalId: 'EP-RACE-1',
 		});
+	});
+
+	/**
+	 * HAZARD (Epic 7 cross-story review, H1) — the seam no per-story review could
+	 * see. SYNC creates the game from PSN's title ("…Ragnarök Edition"); the
+	 * CATALOG carries the same np_title_id under the store's ("…Valhalla"). The two
+	 * do NOT normalize alike, so the add missed on the product link AND on the
+	 * title, minted a second, un-owned row — and the grid then read that stub as
+	 * `In library` for a game the user OWNS, forever.
+	 */
+	it('HAZARD H1: a SYNCED owned game whose PSN title diverges is not duplicated by a catalog add — and its card reads Owned', async () => {
+		const PSN_TITLE = 'Assassin’s Creed Valhalla Ragnarök Edition';
+		const STORE_NAME = 'Assassin’s Creed Valhalla';
+		const NP_TITLE_ID = 'PPSA01667_00';
+
+		// The REAL sync planner, on a PS+ claim PSN reports under its own title.
+		const plan = planSync(
+			[
+				{
+					name: PSN_TITLE,
+					platform: 'PS5',
+					membership: 'PS_PLUS',
+					titleId: NP_TITLE_ID,
+					productId: null,
+					entitlementId: null,
+					imageUrl: null,
+					storeUrl: null,
+				},
+			],
+			{ linkedGameIdByExternalId: {}, gamesByNormalizedTitle: {} },
+		);
+		expect(plan.creates).toHaveLength(1);
+		const create = plan.creates[0];
+		expect(create.viaMembership).toBe(true);
+		const synced = await insertGame(db(), {
+			title: create.title,
+			titleNormalized: create.titleNormalized,
+			unenriched: true,
+		});
+		for (const externalId of create.externalIds) {
+			await addExternalLink(db(), {
+				gameId: synced.id,
+				source: 'PSN',
+				externalId,
+			});
+		}
+		// A sync OBSERVED the entitlement: owned via membership (Story 6.4).
+		await insertTrackingIfAbsent(db(), sessionUser, synced.id, {
+			owned: true,
+			ownershipType: 'digital',
+			ownedVia: 'membership',
+			playStatus: 'Not started',
+		});
+		// The REAL normalizer: the two titles are NOT the same key — that is the whole
+		// premise of the defect, so it is asserted, not assumed.
+		expect(normalizeTitle(create.title)).not.toBe(normalizeTitle(STORE_NAME));
+
+		await seedProduct('EP-H1-VALHALLA', STORE_NAME, NP_TITLE_ID);
+		const res = await postGame(
+			{ title: STORE_NAME, psnProductId: 'EP-H1-VALHALLA' },
+			sessionCookie,
+		);
+
+		// It IS the synced game — no second row, ever.
+		expect(res.status).toBe(409);
+		expect(await res.json()).toEqual({ error: 'duplicate', gameId: synced.id });
+		expect(await gameRowsByNormalizedTitle(STORE_NAME)).toHaveLength(0);
+		expect(await linksOf(synced.id)).toContainEqual({
+			source: 'PSN_PRODUCT',
+			externalId: 'EP-H1-VALHALLA',
+		});
+
+		// …and the card reads OWNED (not `In library`, not `＋ Add`).
+		const page = await browseCatalog(
+			db(),
+			sessionUser,
+			{ PSN_REGION: REGION },
+			{ search: 'Valhalla' },
+		);
+		expect(
+			page.games.find((row) => row.productId === 'EP-H1-VALHALLA'),
+		).toMatchObject({ inLibrary: true, owned: true, gameId: synced.id });
 	});
 
 	it('re-adding the same product resolves to the same game (the PSN_PRODUCT link is the identity)', async () => {

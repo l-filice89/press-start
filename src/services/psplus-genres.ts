@@ -43,6 +43,7 @@ import {
 	setCatalogGenres,
 } from '../repositories';
 import type { Db } from '../repositories/db';
+import { holdsPsnLock } from './psn-lock';
 import {
 	getPsnNpsso,
 	getPsnRegion,
@@ -52,27 +53,25 @@ import {
 
 /**
  * Genre keys per invocation. The Workers free tier allows 50 subrequests and D1
- * binding calls count too — and on the CRON path this chunk SHARES its
- * invocation with the membership pass (33 of 50, see `psplus.ts`). Honest worst
- * case for one chunk:
- *   external: 1 facet probe (only on the first chunk of a sweep) +
- *             3 keys × ceil(count/100) pages (ACTION is the biggest at 240 → 3;
- *             most keys → 1) ≈ 10
- *   D1:       state read 1 · region read 1 · snapshot product ids 1 ·
- *             state write 1 · genre writes, `setCatalogGenres` runs its OWN
- *             batch per key at 50 statements a call: ceil((1 delete + 240
- *             inserts)/50) = 5 worst-case per key = 15 across the chunk
- *             (+ auth 3 + lock 2 on the HTTP path, which the cron does not pay
- *             twice)
- *   total  ≈ 29 alone, and 33 + 29 = 62 would BUST the shared cron budget — so
- *   the chunk is sized for the shared case: 3 keys ≈ 29 - (auth 3 + lock 2) = 24
- *   on the cron path, i.e. the cron run peaks around 33 + 24 - (auth 3, paid
- *   once, and the lock, already claimed) ≈ 49. That is the real margin, and it is
- *   thin — hence 3, not the 4 the first draft claimed on arithmetic that missed
- *   `setCatalogGenres`'s per-key batching entirely. A 20-key region is then 7
- *   chunks: 7 cron runs a month, so it converges in one cycle.
+ * binding calls count too (AD-15). A sweep chunk now has the invocation to ITSELF
+ * — the cron never runs it beside the membership pass (Epic 7 cross-story review,
+ * H3) — so this is the whole ledger, each cost paid ONCE:
+ *   external: 1 facet probe (first chunk of a sweep only) +
+ *             per key ceil(count/100) pages. The chunk's keys can name at most
+ *             the whole catalog (~490), so ≤ 4 + 5 = 9 → ≤ 10 with the probe.
+ *   D1, CRON: findUserByEmail 1 · lock claim 1 · cron sweep-state read 1 ·
+ *             region read 1 · state read 1 · fence (holdsPsnLock) 1 · snapshot
+ *             product ids 1 · state re-read 1 + write 1 · lock release 1 = 10,
+ *             plus the genre writes: `setCatalogGenres` runs its OWN batch per
+ *             key at 50 statements a call, ceil((1 delete + n inserts)/50), and
+ *             the chunk's n's sum to ≤ 490 → ≤ 4 + 10 = 14.
+ *   total (cron) ≈ 10 external + 24 D1 = 34 of 50, worst case; a typical chunk of
+ *   small keys is ~20. The HTTP path swaps findUserByEmail for the auth
+ *   middleware (3) and pays one more lock call: ~37.
+ * A 20-key region is 5 chunks; the cron fires 7× a month, so a refresh + a full
+ * sweep converge inside one monthly window.
  */
-const CHUNK_SIZE = 3;
+const CHUNK_SIZE = 4;
 
 export interface GenreSweepResult {
 	/** The snapshot generation these tags belong to — the continuation presents it back. */
@@ -102,7 +101,11 @@ export async function runGenreSweep(
 	db: Db,
 	userId: string,
 	env: { PSN_REGION?: string; PSN_NPSSO?: string },
-	{ cursor, generation }: { cursor?: string; generation?: string } = {},
+	{
+		cursor,
+		generation,
+		lockToken,
+	}: { cursor?: string; generation?: string; lockToken?: string } = {},
 ): Promise<GenreSweepOutcome> {
 	const region = await getPsnRegion(db, userId, env);
 	if (!region) return { ok: false, reason: 'no-region' };
@@ -113,10 +116,25 @@ export async function runGenreSweep(
 	// Nothing to tag: the membership pass has never run for this region.
 	if (!state || state.region !== region)
 		return { ok: false, reason: 'no-catalog' };
-	// A refresh landed mid-sweep: the products moved, so a client cursor from the
-	// old generation is meaningless.
-	if (cursor && generation !== state.generation)
+	// A refresh landed mid-sweep: the products moved, so a caller's generation from
+	// the old one is meaningless. Checked on EVERY chunk, the FIRST included (Epic 7
+	// cross-story review, M2) — gating it on `cursor` let a client that had been
+	// through a refresh restart the sweep against a generation that no longer
+	// exists and never hear about it.
+	if (generation && generation !== state.generation)
 		return { ok: false, reason: 'stale-generation' };
+
+	// THE FENCE (review, M2), the same one `runPsPlusCheck` was given: the 2-minute
+	// lock TTL is PREEMPTION. A chunk that stalls past it can have the lock taken
+	// over by the cron, which prunes and mints a new generation — and the stalled
+	// chunk, waking up, would overwrite the state with its own stale generation +
+	// cursor, naming a snapshot that no longer exists.
+	if (lockToken && !(await holdsPsnLock(db, userId, lockToken))) {
+		console.error(
+			'ps+ genre sweep: lock lost — refusing to tag or write state',
+		);
+		return { ok: false, reason: 'stale-generation' };
+	}
 
 	const scope = { region, tier: PS_PLUS_TIER };
 	const provider = createPsnProvider({
@@ -162,41 +180,90 @@ export async function runGenreSweep(
 	// so a tag for a product the snapshot does not hold kills the whole key (M4).
 	const known = new Set(await listCatalogProductIds(db, scope));
 
-	for (const key of chunk) {
-		try {
-			const products = await provider.fetchPsPlusExtraCatalogByGenre(
-				region,
-				key,
-			);
-			const ids = products
-				.map((product) => product.productId)
-				.filter((id) => known.has(id));
-			result.notInSnapshot += products.length - ids.length;
-			await setCatalogGenres(db, scope, key, ids);
-			result.tagged += ids.length;
-		} catch (error) {
-			// One key the store will not answer for is a SKIP. Aborting would strand
-			// every key behind it on every re-run — and the key keeps its previous
-			// tags, because `setCatalogGenres` never ran for it.
-			console.error('ps+ genre sweep skipped a key', key, error);
-			result.skipped.push({
-				key,
-				reason: `PlayStation did not answer as expected: ${(error instanceof Error ? error.message : String(error)).slice(0, 200)}`,
-			});
+	// The last key this chunk actually FINISHED (tagged or deliberately skipped).
+	// The cursor is persisted from THIS, not from the chunk's plan (review, M2/H3):
+	// a chunk that dies unexpectedly mid-key (a blown subrequest budget, a D1
+	// hiccup) used to write no state at all, so the cursor never advanced and every
+	// later run re-walked the same keys and died in the same place, forever.
+	let done: string | undefined;
+
+	try {
+		for (const key of chunk) {
+			try {
+				const products = await provider.fetchPsPlusExtraCatalogByGenre(
+					region,
+					key,
+				);
+				const ids = products
+					.map((product) => product.productId)
+					.filter((id) => known.has(id));
+				result.notInSnapshot += products.length - ids.length;
+				await setCatalogGenres(db, scope, key, ids);
+				result.tagged += ids.length;
+			} catch (error) {
+				// One key the store will not answer for is a SKIP. Aborting would strand
+				// every key behind it on every re-run — and the key keeps its previous
+				// tags, because `setCatalogGenres` never ran for it.
+				console.error('ps+ genre sweep skipped a key', key, error);
+				result.skipped.push({
+					key,
+					reason: `PlayStation did not answer as expected: ${(error instanceof Error ? error.message : String(error)).slice(0, 200)}`,
+				});
+			}
+			done = key;
 		}
+	} finally {
+		await persistProgress(db, userId, state.generation, {
+			keys,
+			cursor: done ?? from ?? null,
+			// `done` only when the chunk walked its whole plan to the end of the list.
+			complete: done === keys[keys.length - 1],
+			skipped: result.skipped.map((s) => s.key),
+		}).catch((error: unknown) =>
+			console.error('ps+ genre sweep: could not persist progress', error),
+		);
 	}
 
-	// Persist the cursor + the frozen list so the CRON can drive the next chunk
-	// with no client at all (M1/M2).
-	await setPsPlusSweepState(db, userId, {
-		...state,
-		keys,
-		cursor: result.nextCursor,
-		skipped: [
-			...new Set([...state.skipped, ...result.skipped.map((s) => s.key)]),
-		],
-		done: result.nextCursor === null,
-	});
-
 	return { ok: true, result };
+}
+
+/**
+ * Write the sweep's progress, re-reading the state IMMEDIATELY BEFORE the write
+ * (review, M2). The state read at the top of the chunk is minutes old by now: a
+ * refresh may have landed, pruned, and minted a new generation, and spreading the
+ * stale row back would stamp the state with a generation that no longer exists —
+ * the next continuation is then refused against a generation that is itself dead,
+ * and the facet list freezes on a discarded snapshot. A moved generation means
+ * this chunk's cursor belongs to nothing: drop it, write nothing.
+ */
+async function persistProgress(
+	db: Db,
+	userId: string,
+	generation: string,
+	{
+		keys,
+		cursor,
+		complete,
+		skipped,
+	}: {
+		keys: string[];
+		cursor: string | null;
+		complete: boolean;
+		skipped: string[];
+	},
+): Promise<void> {
+	const fresh = await getPsPlusSweepState(db, userId);
+	if (!fresh || fresh.generation !== generation) {
+		console.warn(
+			'ps+ genre sweep: the snapshot moved under this chunk — discarding its cursor',
+		);
+		return;
+	}
+	await setPsPlusSweepState(db, userId, {
+		...fresh,
+		keys,
+		cursor: complete ? null : cursor,
+		skipped: [...new Set([...fresh.skipped, ...skipped])],
+		done: complete,
+	});
 }

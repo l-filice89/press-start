@@ -113,6 +113,11 @@ export function AddGameDialog({
 				// the window event that needed it.
 				toast({ message: 'Already in your library.' });
 				queryClient.invalidateQueries({ queryKey: ['shelf'] });
+				// …and the CATALOG (Epic 7 cross-story review, M3): the server anchors the
+				// PSN_PRODUCT link on the duplicate path too — a catalog game that turned
+				// out to be already tracked under a different title is now marked, and the
+				// stale grid would keep reading ＋Add after you navigate back.
+				queryClient.invalidateQueries({ queryKey: ['catalog'] });
 				onClose();
 				void navigate(`/game/${encodeURIComponent(result.gameId)}`, {
 					state: { fromApp: true },

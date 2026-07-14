@@ -226,24 +226,34 @@ async function applyCatalogOrigin(
 	// store URL, no dangling reference. Only the LOOKUP that resolves identity runs
 	// on a pruned id (review, H2) — this is the write side.
 	if (!product) return gameId;
+	// The np_title_id is the SYNC's identity for this game, and it is checked
+	// BEFORE anything is written (Epic 7 cross-story review, H1): the sync may
+	// already own this np_title_id under a title that does NOT normalize like the
+	// store's name ("…Valhalla Ragnarök Edition" vs "…Valhalla"), so the add's
+	// title scan misses and it was about to mint a permanent duplicate. Whoever
+	// holds the np_title_id IS the game — converge on it and put every catalog
+	// write (product link included) there, not on the row we were handed.
+	const psnOwner = product.npTitleId
+		? await findGameByExternalLink(db, 'PSN', product.npTitleId)
+		: undefined;
+	const target = psnOwner?.id ?? gameId;
 	const anchored = await anchorLink(
 		db,
-		gameId,
+		target,
 		'PSN_PRODUCT',
 		product.productId,
 	);
-	if (anchored !== gameId) return anchored;
-	// The np_title_id is the sync's join key, so it must live on the same game.
-	await anchorLink(db, gameId, 'PSN', product.npTitleId);
+	if (anchored !== target) return anchored;
+	await anchorLink(db, target, 'PSN', product.npTitleId);
 	// NULL-only (review, M2): an EXISTING game (seed import, name-only add, a sync
 	// with no store URL) added from the catalog kept the link and no store URL —
 	// and `Claim now` keys off the store URL, so the claim path stayed dead for
 	// exactly those games. Never overwrites a fact that stands.
-	await backfillGameFacts(db, gameId, {
+	await backfillGameFacts(db, target, {
 		coverUrl: product.coverUrl,
 		storeUrl: product.storeUrl,
 	});
-	return gameId;
+	return target;
 }
 
 /**
@@ -295,6 +305,15 @@ export async function addGame(
 		: undefined;
 	if (!existing && productId) {
 		existing = await findGameByExternalLink(db, 'PSN_PRODUCT', productId);
+	}
+	// …and the catalog row's np_title_id, which is the SYNC's identity (Epic 7
+	// cross-story review, H1). A synced game whose PSN title ("Assassin's Creed
+	// Valhalla Ragnarök Edition") does not normalize like the store's name
+	// ("Assassin's Creed Valhalla") misses BOTH the product link and the title
+	// scan — and the add would then create a second, un-owned row for a game the
+	// user already OWNS, forever.
+	if (!existing && product?.npTitleId) {
+		existing = await findGameByExternalLink(db, 'PSN', product.npTitleId);
 	}
 	if (!existing) {
 		const candidates = await findGamesByNormalizedTitle(db, titleNormalized);

@@ -360,11 +360,18 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 
 	// The AC4 named-invariant hazard: cancel un-owns membership rows ONLY —
 	// purchases untouched, tracking/milestones/dates/status intact, the count is
-	// named first, and the PS+ pill re-shows (psPlusExtra re-set true).
-	it('cancel PS+ un-owns claims only: purchases + milestones/dates/status intact, pill re-shows, count named (hazard)', async () => {
+	// named first.
+	//
+	// AND IT NEVER TOUCHES `ps_plus_extra` (Epic 7 cross-story review, H2). It used
+	// to force the flag TRUE on every claim, on a premise Story 7.1 deleted: the
+	// flag is now a faithful cache of `ps_plus_catalog` for EVERY tracked row,
+	// owned included. Re-flagging lit the ◈ PS+ pill (and the filter, and the CSV)
+	// for a PS+ ESSENTIAL monthly game that is not in the Extra catalog at all —
+	// for up to a month, until the next refresh.
+	it('cancel PS+ un-owns claims only: purchases + milestones/dates/status intact, count named, and ps_plus_extra is LEFT ALONE (hazard)', async () => {
 		// A sync-ingested claim carrying a live status, a milestone, and lifecycle
-		// dates — owned from the start, so runPsPlusCheck (non-owned rows only)
-		// never set psPlusExtra; cancel must re-flag it for the pill to return.
+		// dates. It is an ESSENTIAL monthly game: NOT in the Extra snapshot, so 7.1
+		// left its flag false — and cancelling must not invent a membership for it.
 		const claimA = await insertGame(db(), {
 			title: 'Claim With History',
 			titleNormalized: 'claim with history',
@@ -379,10 +386,12 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 			completedOn: '2024-06-01',
 			wishlistedOn: '2024-01-01',
 		});
+		// …and a claim that IS in the Extra catalog: 7.1 flagged it (owned rows
+		// included), so its pill returns on cancel with no write at all.
 		const claimB = await insertGame(db(), {
 			title: 'Plain Claim',
 			titleNormalized: 'plain claim',
-			psPlusExtra: false,
+			psPlusExtra: true,
 		});
 		await upsertTracking(db(), userId, claimB.id, {
 			owned: true,
@@ -443,12 +452,14 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 		expect(p?.boughtOn).toBe('2023-12-01');
 		expect(p?.playStatus).toBe('Paused');
 
-		// Pill re-show: the un-owned claims are re-flagged psPlusExtra=true (their
-		// last-known catalog membership); the purchase keeps its false flag.
+		// THE FLAG IS THE CATALOG'S CACHE, and cancel writes NOTHING to it (H2). The
+		// Essential-only claim stays false — un-owning it must not hand it a ◈ PS+
+		// pill, a place in the PS+ filter and a `yes` in the export for a month. The
+		// Extra claim keeps the true 7.1 gave it, so its pill returns on its own.
 		const [ga] = await findGamesByNormalizedTitle(db(), 'claim with history');
 		const [gb] = await findGamesByNormalizedTitle(db(), 'plain claim');
 		const [gp] = await findGamesByNormalizedTitle(db(), 'real purchase');
-		expect(ga.psPlusExtra).toBe(true);
+		expect(ga.psPlusExtra).toBe(false);
 		expect(gb.psPlusExtra).toBe(true);
 		expect(gp.psPlusExtra).toBe(false);
 

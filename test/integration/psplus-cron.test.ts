@@ -22,12 +22,14 @@ import {
 } from '../../src/services/psn-lock';
 import { runScheduledPsPlusCheck } from '../../src/services/psplus';
 import {
+	getPsPlusSweepState,
 	isPsPlusRefreshFailed,
 	markPsPlusRefreshFailed,
 	PSN_REGION_SETTING_KEY,
+	PSPLUS_SWEEP_STATE_SETTING_KEY,
 } from '../../src/services/settings';
 import worker from '../../worker/index';
-import { catalogPagePayload, productId } from '../fixtures/psn';
+import { catalogPagePayload } from '../fixtures/psn';
 import { stubStore } from './psn-stub';
 import { ALLOWED_EMAIL, establishSession } from './session';
 
@@ -40,6 +42,44 @@ import { ALLOWED_EMAIL, establishSession } from './session';
  */
 
 const db = () => createDb(env.DB);
+
+/**
+ * A D1 binding that COUNTS its subrequests (Epic 7 cross-story review, H3). A
+ * Worker invocation gets 50, and D1 binding calls count against them just like
+ * fetches (AD-15) — so the budget is only guarded if it is measured. One
+ * `db.batch()` is ONE call whatever it carries (that is the whole reason the
+ * catalog writes batch); a prepared statement counts when it EXECUTES.
+ */
+function countingDb() {
+	const counter = { calls: 0 };
+	const runs = new Set(['all', 'run', 'first', 'raw']);
+	const wrap = <T extends object>(target: T, executes: Set<string>): T =>
+		new Proxy(target, {
+			get(obj, prop, receiver) {
+				const value = Reflect.get(obj, prop, receiver);
+				if (typeof value !== 'function') return value;
+				const method = value as (...args: unknown[]) => unknown;
+				if (prop === 'prepare' || prop === 'bind') {
+					return (...args: unknown[]) =>
+						wrap(method.apply(obj, args) as object, runs);
+				}
+				if (executes.has(String(prop))) {
+					return (...args: unknown[]) => {
+						counter.calls++;
+						return method.apply(obj, args);
+					};
+				}
+				return method.bind(obj);
+			},
+		});
+	const binding = wrap(env.DB, new Set(['batch', 'exec']));
+	return {
+		db: createDb(binding),
+		get calls() {
+			return counter.calls;
+		},
+	};
+}
 
 /** Stub the store-catalog call (CAPTURED shape); records the region header. */
 const stubCatalog = (names: string[], status = 200) =>
@@ -148,13 +188,18 @@ describe('scheduled PS+ Extra refresh (Story 5.2)', () => {
 	 * THE SWEEP HAS A CALLER (review, M1). Nothing drove the genre sweep: the HTTP
 	 * chunk endpoint exists for 7.2's client loop, and with no caller
 	 * `ps_plus_catalog_genre` would simply stay EMPTY in production while 7.2
-	 * filtered against nothing. The cron drives ONE chunk per run after a
-	 * successful membership pass — 7 runs a month, so a multi-chunk sweep
-	 * converges within days and self-heals — and it RESUMES from the persisted
-	 * cursor, which is the only reason it converges at all.
+	 * filtered against nothing.
+	 *
+	 * BUT NOT IN THE SAME INVOCATION AS THE MEMBERSHIP PASS (Epic 7 cross-story
+	 * review, H3): the pass alone is ~34 of the 50 subrequests a Worker invocation
+	 * gets, so the two together threw "Too many subrequests" mid-sweep — and that
+	 * throw skipped the cursor write, so every later cron run re-swept the same
+	 * keys and died in the same place, forever. One or the other per run: the
+	 * pending sweep first, the membership pass when it is done.
 	 */
-	it('drives a genre-sweep chunk after the membership pass, and the NEXT cron resumes the cursor', async () => {
+	it('drives the membership pass and the genre sweep in SEPARATE invocations (never both)', async () => {
 		await setSetting(db(), userId, PSN_REGION_SETTING_KEY, 'fr-fr');
+		await deleteSetting(db(), userId, PSPLUS_SWEEP_STATE_SETTING_KEY);
 		const scope = { region: 'fr-fr' };
 		const KEYS = ['ACTION', 'ADVENTURE', 'ARCADE', 'HORROR'];
 		const CATALOG: Record<string, string[]> = {
@@ -177,23 +222,83 @@ describe('scheduled PS+ Extra refresh (Story 5.2)', () => {
 				};
 			});
 
+		// Invocation 1: the membership pass ALONE — no sweep rides along.
 		stub();
 		await runScheduledPsPlusCheck(db(), env);
-		// Chunk 1 = the first 3 of the 4 discovered keys: ACTION landed, HORROR has
-		// not been reached yet.
-		expect(await listCatalogGenres(db(), scope)).toEqual([
-			{ productId: productId('Cron Sifu'), genreKey: 'ACTION' },
-		]);
+		expect((await listCatalogProducts(db(), scope)).length).toBe(2);
+		expect(await listCatalogGenres(db(), scope)).toEqual([]);
 
-		// The catalog has not moved, so the cursor SURVIVES the next refresh and the
-		// sweep advances instead of re-walking chunk 1 forever.
+		// Invocation 2: the pending sweep OWNS the run and walks its chunk.
 		stub();
 		await runScheduledPsPlusCheck(db(), env);
 		expect(
 			(await listCatalogGenres(db(), scope)).map((row) => row.genreKey).sort(),
 		).toEqual(['ACTION', 'HORROR']);
+		expect((await getPsPlusSweepState(db(), userId))?.done).toBe(true);
+
+		// Invocation 3: the sweep is done, so the membership pass runs again.
+		const seen = stub();
+		await runScheduledPsPlusCheck(db(), env);
+		expect(seen.some((call) => call.genreKey === null)).toBe(true);
 		await setSetting(db(), userId, PSN_REGION_SETTING_KEY, 'it-it');
 	});
+
+	/**
+	 * THE BUDGET IS OBSERVABLE (Epic 7 cross-story review, H3). The suite drove 2
+	 * products and 4 keys and was structurally blind to the ceiling it was meant to
+	 * guard: a Worker invocation gets 50 subrequests and D1 BINDING CALLS COUNT
+	 * (AD-15). This counts both — every D1 call the invocation makes plus every
+	 * store fetch — against a REALISTIC catalog (490 products, one 240-product
+	 * genre key, whose tag write alone is 5 batched D1 calls).
+	 */
+	it('one CRON invocation stays inside the 50-subrequest budget (490 products, a large genre key)', async () => {
+		await setSetting(db(), userId, PSN_REGION_SETTING_KEY, 'de-de');
+		await deleteSetting(db(), userId, PSPLUS_SWEEP_STATE_SETTING_KEY);
+		const scope = { region: 'de-de' };
+		const ALL = Array.from({ length: 490 }, (_, i) => `Budget Game ${i}`);
+		// A product carries several genres, so the keys are big and they overlap —
+		// ACTION alone is ~240 in the real de-de catalog. Each of these costs its own
+		// paged walk AND its own batched tag write (ceil((1 + n) / 50) D1 calls).
+		const BY_KEY: Record<string, string[]> = {
+			ACTION: ALL.slice(0, 240),
+			ADVENTURE: ALL.slice(100, 300),
+			ARCADE: ALL.slice(0, 120),
+			HORROR: ALL.slice(300, 390),
+			PUZZLE: ALL.slice(400, 450),
+		};
+		const KEYS = Object.keys(BY_KEY);
+		const stub = () =>
+			stubStore(({ offset, genreKey }) => {
+				const names = genreKey ? (BY_KEY[genreKey] ?? []) : ALL;
+				return {
+					body: catalogPagePayload(names.slice(offset, offset + 100), {
+						totalCount: names.length,
+						offset,
+						genreKeys: KEYS,
+					}),
+				};
+			});
+
+		// Invocation 1 — the membership pass: 5 catalog pages + 10 upsert batches + …
+		const pass = countingDb();
+		const passFetches = stub();
+		await runScheduledPsPlusCheck(pass.db, env);
+		expect(pass.calls + passFetches.length).toBeLessThan(50);
+		expect((await listCatalogProducts(db(), scope)).length).toBe(490);
+
+		// Invocation 2 — the genre sweep chunk: the 240-product key's tag write is 5
+		// D1 batches on its own, and it is 1 of CHUNK_SIZE keys in this run.
+		const sweep = countingDb();
+		const sweepFetches = stub();
+		await runScheduledPsPlusCheck(sweep.db, env);
+		expect(sweep.calls + sweepFetches.length).toBeLessThan(50);
+		// …and it is not vacuously cheap: the chunk's four keys actually landed.
+		expect((await listCatalogGenres(db(), scope)).length).toBe(
+			240 + 200 + 120 + 90,
+		);
+
+		await setSetting(db(), userId, PSN_REGION_SETTING_KEY, 'it-it');
+	}, 30_000);
 
 	it('sets the failed flag and writes no flags when the catalog fetch fails', async () => {
 		const flagged = await seedGame('Cron Celeste', { psPlusExtra: true });

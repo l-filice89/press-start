@@ -14,10 +14,12 @@ import {
 	acquirePsnLock,
 	PSN_LOCK_SETTING_KEY,
 } from '../../src/services/psn-lock';
+import { runGenreSweep } from '../../src/services/psplus-genres';
 import {
 	getPsPlusSweepState,
 	PSN_REGION_SETTING_KEY,
 	PSPLUS_SWEEP_STATE_SETTING_KEY,
+	setPsPlusSweepState,
 } from '../../src/services/settings';
 import {
 	catalogPagePayload,
@@ -43,8 +45,8 @@ const REGION = 'it-it';
 const scope = { region: REGION };
 
 /** Which products each genre key answers with — the sweep's whole world. */
-// Six keys against a chunk of three: the sweep must take two chunks, which is
-// what makes the cursor (and its resumption) observable at all.
+// Six keys against a CHUNK_SIZE of four: the sweep must take two chunks, which
+// is what makes the cursor (and its resumption) observable at all.
 const CATALOG: Record<string, string[]> = {
 	ACTION: ['Crow Country', 'Sifu'],
 	ADVENTURE: ['Crow Country'],
@@ -217,7 +219,7 @@ describe('POST /api/ps-plus-catalog/genres (integration, real workerd + local D1
 		expect(expected).toHaveLength(19);
 		// en-us names MUSIC/RHYTHM; de-de does not — the whole point of discovering.
 		expect(expected).not.toContain('MUSIC/RHYTHM');
-		expect(chunk.keys).toEqual(expected.slice(0, 3));
+		expect(chunk.keys).toEqual(expected.slice(0, 4)); // CHUNK_SIZE
 		const state = await getPsPlusSweepState(db(), userId);
 		expect(state?.keys).toEqual(expected);
 	});
@@ -278,7 +280,7 @@ describe('POST /api/ps-plus-catalog/genres (integration, real workerd + local D1
 		await refresh();
 		stubCatalogStore();
 		const first = (await (await post()).json()) as SweepBody;
-		expect(first.keys).toEqual(['ACTION', 'ADVENTURE', 'ARCADE']);
+		expect(first.keys).toEqual(['ACTION', 'ADVENTURE', 'ARCADE', 'HORROR']);
 
 		// The store starts naming AAA — which sorts BEFORE the cursor. The
 		// continuation must walk the list it FROZE, not this new one.
@@ -292,7 +294,7 @@ describe('POST /api/ps-plus-catalog/genres (integration, real workerd + local D1
 		);
 		const second = (await res.json()) as SweepBody;
 
-		expect(second.keys).toEqual(['HORROR', 'MUSIC/RHYTHM', 'SPORTS']);
+		expect(second.keys).toEqual(['MUSIC/RHYTHM', 'SPORTS']);
 		expect(second.nextCursor).toBeNull();
 		expect(seen.some((call) => call.genreKey === 'AAA')).toBe(false);
 		const state = await getPsPlusSweepState(db(), userId);
@@ -331,9 +333,9 @@ describe('POST /api/ps-plus-catalog/genres (integration, real workerd + local D1
 		expect(first.status).toBe(200);
 		const chunk = (await first.json()) as SweepBody;
 		expect(chunk.skipped.map((s) => s.key)).toEqual(['ADVENTURE']);
-		// Its siblings in the same chunk still landed (HORROR is in the NEXT chunk).
+		// Its siblings in the same chunk still landed.
 		expect(await tagsFor('Sifu')).toEqual(['ACTION']);
-		expect(await tagsFor('Crow Country')).toEqual(['ACTION']);
+		expect(await tagsFor('Crow Country')).toEqual(['ACTION', 'HORROR']);
 
 		// Resume from the cursor: the completed keys are NOT re-walked.
 		const seen = stubCatalogStore();
@@ -350,6 +352,84 @@ describe('POST /api/ps-plus-catalog/genres (integration, real workerd + local D1
 		expect((await listCatalogProducts(db(), scope)).map((r) => r.name)).toEqual(
 			before,
 		);
+	});
+
+	/**
+	 * PREEMPTION (Epic 7 cross-story review, M2). The lock TTL hands a stalled
+	 * chunk's lock to the cron, which prunes and mints a new generation. The chunk,
+	 * waking up, used to tag against a snapshot that is gone and stamp the state
+	 * with its DEAD generation + cursor — after which every continuation is refused
+	 * against a generation that is itself stale, and the facet list freezes on a
+	 * discarded snapshot. `runPsPlusCheck` was given exactly this fence; the sweep
+	 * never had one.
+	 */
+	it('a chunk that LOST the lock writes nothing — no tags, no state', async () => {
+		await refresh();
+		const before = await getPsPlusSweepState(db(), userId);
+		const stalled = await acquirePsnLock(db(), userId, 'catalog-refresh');
+		// The TTL fires: the cron takes the lock over while the chunk is in flight.
+		await deleteSetting(db(), userId, PSN_LOCK_SETTING_KEY);
+		expect(await acquirePsnLock(db(), userId, 'catalog-refresh')).toBeTruthy();
+
+		stubCatalogStore();
+		const outcome = await runGenreSweep(db(), userId, env, {
+			lockToken: stalled as string,
+		});
+
+		expect(outcome).toEqual({ ok: false, reason: 'stale-generation' });
+		expect(await listCatalogGenres(db(), scope)).toEqual([]);
+		expect(await getPsPlusSweepState(db(), userId)).toEqual(before);
+	});
+
+	// …and the same hazard from the other side: the state is re-read IMMEDIATELY
+	// before the write, so a refresh that lands MID-CHUNK cannot have the chunk's
+	// stale generation + cursor spread back over it.
+	it('a refresh landing MID-CHUNK cannot be overwritten by the chunk it preempted', async () => {
+		await refresh();
+		const before = await getPsPlusSweepState(db(), userId);
+		expect(before).toBeTruthy();
+
+		// The store call is where a chunk spends its time — the cron lands right here.
+		let landed = false;
+		stubStore(async ({ offset, genreKey }) => {
+			if (genreKey && !landed) {
+				landed = true;
+				await setPsPlusSweepState(db(), userId, {
+					...(before as NonNullable<typeof before>),
+					generation: 'gen-from-the-cron',
+					keys: [],
+					cursor: null,
+					done: false,
+				});
+			}
+			const names = genreKey ? (CATALOG[genreKey] ?? []) : ALL_NAMES;
+			return {
+				body: catalogPagePayload(offset === 0 ? names : [], {
+					totalCount: names.length,
+					offset,
+					genreKeys: KEYS,
+				}),
+			};
+		});
+
+		expect((await runGenreSweep(db(), userId, env)).ok).toBe(true);
+
+		// The cron's state stands: no dead generation, no cursor from a snapshot that
+		// no longer exists, no key list frozen off a discarded one.
+		const state = await getPsPlusSweepState(db(), userId);
+		expect(state?.generation).toBe('gen-from-the-cron');
+		expect(state?.cursor).toBeNull();
+		expect(state?.keys).toEqual([]);
+	});
+
+	// M2: the generation was only checked when a CURSOR rode along, so the FIRST
+	// chunk of a restarted sweep never checked it at all.
+	it('refuses a FIRST chunk (no cursor) whose generation is already stale', async () => {
+		await refresh();
+		stubCatalogStore();
+		const res = await post('?generation=gen-that-is-long-gone');
+		expect(res.status).toBe(409);
+		expect(await listCatalogGenres(db(), scope)).toEqual([]);
 	});
 
 	// AD-28: a refresh landing mid-sweep mints a new generation and prunes, so the
