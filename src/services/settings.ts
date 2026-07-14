@@ -12,8 +12,20 @@ export const TIMEZONE_SETTING_KEY = 'timezone';
 
 /** Today's date (YYYY-MM-DD) in this user's timezone; UTC when unset. */
 export async function todayForUser(db: Db, userId: string): Promise<string> {
-	const timeZone = await getSetting(db, userId, TIMEZONE_SETTING_KEY);
-	return todayInZone(timeZone, new Date());
+	return todayInZone(await getUserTimeZone(db, userId), new Date());
+}
+
+/**
+ * The user's captured IANA zone (null when unset). Read once per run by a
+ * caller that stamps MANY dates — the Story 9.3 backfill converts each
+ * platinum's UTC instant with `todayInZone(zone, instant)`, the same zone
+ * `todayForUser` stamps "today" with.
+ */
+export async function getUserTimeZone(
+	db: Db,
+	userId: string,
+): Promise<string | null> {
+	return (await getSetting(db, userId, TIMEZONE_SETTING_KEY)) ?? null;
 }
 
 /** FAB placement (Story 6.3, UX-DR10): `'left'`|`'right'`, absent = `'right'`. */
@@ -30,25 +42,25 @@ export async function readFabHandedness(
 		: 'right';
 }
 
-/** Live PlayStation session cookie (Story 4.1, FR-36) — read fresh per call. */
-export const PSN_COOKIE_SETTING_KEY = 'psn_cookie';
+/** Live PlayStation NPSSO token (Story 9.1b, FR-36) — read fresh per call. */
+export const PSN_NPSSO_SETTING_KEY = 'psn_npsso';
 
-/** `'expired'` while PSN last rejected the cookie; absent otherwise (AD-14). */
+/** `'expired'` while PSN last rejected the token; absent otherwise (AD-14). */
 export const PSN_AUTH_SETTING_KEY = 'psn_auth';
 export const PSN_AUTH_EXPIRED = 'expired';
 
 /**
- * The cookie the `PsnProvider` sends: the user-saved setting, else the
- * `PSN_SESSION_COOKIE` Wrangler secret as unset-seed (FR-36 — the secret only
+ * The NPSSO the `PsnProvider` exchanges for a bearer: the user-saved setting,
+ * else the `PSN_NPSSO` Wrangler secret as unset-seed (FR-36 — the secret only
  * seeds; a saved setting always wins and takes effect without redeploy).
  */
-export async function getPsnCookie(
+export async function getPsnNpsso(
 	db: Db,
 	userId: string,
-	env: { PSN_SESSION_COOKIE?: string },
+	env: { PSN_NPSSO?: string },
 ): Promise<string | undefined> {
-	const stored = await getSetting(db, userId, PSN_COOKIE_SETTING_KEY);
-	return stored || env.PSN_SESSION_COOKIE?.trim() || undefined;
+	const stored = await getSetting(db, userId, PSN_NPSSO_SETTING_KEY);
+	return stored || env.PSN_NPSSO?.trim() || undefined;
 }
 
 /**
@@ -136,12 +148,12 @@ export async function markPsnAuthExpired(db: Db, userId: string) {
 	await setSetting(db, userId, PSN_AUTH_SETTING_KEY, PSN_AUTH_EXPIRED);
 }
 
-/** A fresh cookie clears the expired flag (the banner's only exit). */
+/** A fresh token clears the expired flag (the banner's only exit). */
 export async function clearPsnAuthExpired(db: Db, userId: string) {
 	await deleteSetting(db, userId, PSN_AUTH_SETTING_KEY);
 }
 
-/** True while the last PSN call was rejected and no new cookie was saved. */
+/** True while the last PSN call was rejected and no new token was saved. */
 export async function isPsnAuthExpired(
 	db: Db,
 	userId: string,

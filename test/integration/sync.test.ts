@@ -15,9 +15,10 @@ import { game, user } from '../../src/schema';
 import {
 	PSN_AUTH_EXPIRED,
 	PSN_AUTH_SETTING_KEY,
-	PSN_COOKIE_SETTING_KEY,
+	PSN_NPSSO_SETTING_KEY,
 	readSyncAttention,
 } from '../../src/services/settings';
+import { PSN_LIBRARY_HOST, stubPsnFetch } from './psn-stub';
 import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
 
 /**
@@ -42,30 +43,28 @@ const psn = (over: Record<string, unknown> = {}) => ({
 });
 
 /**
- * Stub the outbound PSN call only. These tests run in the same isolate as
- * the Worker under vitest-pool-workers, so the provider's global `fetch` is
- * this one; every non-PSN URL passes through to the real fetch.
+ * Stub the outbound GraphQL library call; the NPSSO→bearer exchange comes from
+ * the shared double (`psn-stub.ts`). These tests run in the same isolate as the
+ * Worker under vitest-pool-workers, so the provider's global `fetch` is this
+ * one; every other URL passes through to the real fetch.
  */
-const realFetch = globalThis.fetch;
 function stubPsn(games: Record<string, unknown>[], status = 200) {
-	vi.stubGlobal(
-		'fetch',
-		async (input: RequestInfo | URL, init?: RequestInit) => {
-			const url = String(input instanceof Request ? input.url : input);
-			if (!url.startsWith('https://web.np.playstation.com/')) {
-				return realFetch(input, init);
-			}
-			return new Response(
-				status === 200
-					? JSON.stringify({
-							data: {
-								purchasedTitlesRetrieve: { games, pageInfo: { isLast: true } },
-							},
-						})
-					: '{}',
-				{ status, headers: { 'content-type': 'application/json' } },
-			);
-		},
+	stubPsnFetch((url) =>
+		url.startsWith(PSN_LIBRARY_HOST)
+			? new Response(
+					status === 200
+						? JSON.stringify({
+								data: {
+									purchasedTitlesRetrieve: {
+										games,
+										pageInfo: { isLast: true },
+									},
+								},
+							})
+						: '{}',
+					{ status, headers: { 'content-type': 'application/json' } },
+				)
+			: undefined,
 	);
 }
 
@@ -83,7 +82,7 @@ beforeAll(async () => {
 		.from(user)
 		.where(eq(user.email, ALLOWED_EMAIL));
 	userId = row.id;
-	await setSetting(db(), userId, PSN_COOKIE_SETTING_KEY, 'test-psn-cookie');
+	await setSetting(db(), userId, PSN_NPSSO_SETTING_KEY, 'test-psn-npsso');
 });
 
 afterEach(() => vi.unstubAllGlobals());

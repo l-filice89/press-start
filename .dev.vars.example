@@ -14,10 +14,11 @@ BETTER_AUTH_SECRET=""
 # Resend API key; leave empty to use the console email fallback in dev.
 RESEND_API_KEY=""
 
-# Optional seed for the PlayStation session cookie (Story 4.1, FR-36). Only
-# used while no cookie has been saved in Settings; the in-app value always
-# wins. Production equivalent: bunx wrangler secret put PSN_SESSION_COOKIE
-PSN_SESSION_COOKIE=""
+# Optional seed for the PlayStation NPSSO token (Story 9.1b, FR-36). Grab it
+# from https://ca.account.sony.com/api/v1/ssocookie while signed in. Only used
+# while no token has been saved in Settings; the in-app value always wins.
+# Production equivalent: bunx wrangler secret put PSN_NPSSO
+PSN_NPSSO=""
 
 # IGDB (Twitch app) credentials for the add-by-name preview + straggler
 # resolution (Stories 6.1/6.2). Same id/secret as the seed script's .env pair.

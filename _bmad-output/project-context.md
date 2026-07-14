@@ -51,7 +51,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - Endpoint: `web.np.playstation.com/api/graphql/v1/op`, persisted GraphQL query `getPurchasedGameList` (sha256 hash pinned in `export_ps_catalog.py` — copy it verbatim). **Do not hand-write GraphQL queries** — only persisted-query calls work.
 - Required headers: mimic `library.playstation.com` origin/referer + `apollographql-client-name: my-playstation` (see `HEADERS` in the Python script).
 - Pagination: page size 100, loop until `pageInfo.isLast`.
-- **Auth = `pdccws_p` session cookie, expires regularly. It lives in a SQLite settings table, editable from the UI** (paste from DevTools per the instructions in `COOKIE_HELP`); the sync function reads it fresh per call — no restart needed. `.env` may seed an initial value only. On 401/403, surface the refresh instructions in the UI, don't retry.
+- **Auth = the NPSSO token (Story 9.1b, 2026-07-13 — the `pdccws_p` cookie path is deleted).** The token lives in the D1 `setting` table (`psn_npsso`), editable from the UI (the user copies it from `ca.account.sony.com/api/v1/ssocookie`); the provider reads it fresh per call and exchanges it — authorize → `?code=` → bearer — inside `src/providers/psn.ts` and nowhere else (AR-5). A Wrangler secret (`PSN_NPSSO`) may seed an initial value only. On a denial (401/403, or the HTTP-200 + "Access denied" GraphQL shape PSN really answers), surface the refresh instructions in the UI and don't retry; a Sony 5xx/429 is an outage, not an expired token. The legacy Python script still uses the cookie — it is frozen, not a pattern to copy.
 
 ### Cover Art Rules
 
@@ -67,13 +67,13 @@ _This file contains critical rules and patterns that AI agents must follow when 
 ### Development Workflow Rules
 
 - **Git repo is initialized but has zero commits and no remote yet.** Before the first commit: (1) scrub the hardcoded `SESSION_COOKIE` value from `export_ps_catalog.py`, (2) extend `.gitignore` with the SQLite DB file, `node_modules/`, and `.env`. Nothing has leaked yet — keep it that way.
-- The SQLite database file is **never committed** (contains the session cookie + personal library data).
+- The SQLite database file is **never committed** (contains the PSN credential + personal library data).
 - React/Cloudflare-Worker conventions (paradigm, boundaries, state model invariants, testing, SSR-or-not) are now **set by `ARCHITECTURE-SPINE.md`** (2026-07-05) — follow its ADs; do not invent conventions ad hoc.
 
 ### Critical Don't-Miss Rules
 
 - Never join the two datasets on raw title strings without normalization.
-- Never commit the PlayStation session cookie or the SQLite DB.
+- Never commit the PlayStation credential (the NPSSO token) or the SQLite DB.
 - Never let a PS-library sync overwrite user-entered tracking data (status, dates).
 - Don't add features to the Python scripts — all new code is Bun TypeScript.
 

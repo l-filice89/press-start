@@ -64,12 +64,12 @@ A **vision to realize**: Luca wants a personal web app that replaces his Notion 
 
 - **Free-tier hosting is a hard constraint.** The app is stateless, data lives in an externally managed database, and the PS+ scheduled job must also fit the free tier. Free hosting outranks the original SQLite preference. *(Resolved in the architecture companion: Cloudflare D1 + one Cloudflare Worker + Cron Triggers.)*
 - **Nothing external on render.** Covers and store links serve only from persisted data; third-party APIs are hit exclusively at import, sync, refresh, or add time.
-- **Failures surface, never silently retry.** An expired PlayStation session cookie shows the refresh instructions (no retry on 401/403); a failed external lookup lands the game in the stragglers list.
+- **Failures surface, never silently retry.** An expired PlayStation credential shows the refresh instructions (no retry on a denial); a failed external lookup lands the game in the stragglers list.
 - **`Owned` means purchased.** Membership-sourced (PS+ claim) entries never create games and never set `Owned`, in either import or sync; when the entitlement source is ambiguous, sync prefers skipping over flipping `Owned` (a missed flip is one manual toggle; a wrong `Owned` silently poisons the wishlist). In the real export ~123 of 175 entries are claims, not purchases.
 - **Append-only to user data.** No sync, import, or refresh ever modifies or deletes user-entered status, milestones, dates, or genres. Lifecycle dates and completion milestones are write-once through automatic flows (the first value stands), changeable only by deliberate edit in the detail view.
 - **Anything computable is computed.** Derived states (effective, released, wishlisted, playable-now) are never stored or user-set — a manual state can drift, a derived one is always right. UI surfaces operate on effective state, never raw play status.
 - **Genres come exclusively from the third-party games DB.** Notion's `Category` column is dropped at import and every game is re-tagged via external lookup so the vocabulary is consistent from day one.
-- **PS auth is the `pdccws_p` session cookie**, stored in a settings table, editable from the UI, read fresh per call, never retried on failure.
+- **PS auth is the NPSSO token** (swapped in Story 9.1b, 2026-07-13 — the `pdccws_p` cookie path is deleted), stored in a settings table, editable from the UI, read fresh per call, exchanged for a short-lived bearer inside `PsnProvider`, never retried on failure.
 
 ## Non-goals
 
@@ -89,4 +89,4 @@ The one metric that matters: **the Notion database gets archived and never reope
 
 ## Assumptions
 
-- The PRD's §7 open questions were architecture-time decisions and are **resolved in the adopted companions** (`ARCHITECTURE-SPINE.md`, `project-context.md`): database = Cloudflare D1, games DB = IGDB, scheduled job = Cloudflare Cron Triggers, stack = a React SPA served by a single Cloudflare Worker (Hono + Drizzle + Zod). The PS-auth open question (NPSSO vs. cookie) is resolved by **keeping the `pdccws_p` cookie** for v1; NPSSO was not adopted. Downstream reads those companions for the HOW; this spec does not restate it.
+- The PRD's §7 open questions were architecture-time decisions and are **resolved in the adopted companions** (`ARCHITECTURE-SPINE.md`, `project-context.md`): database = Cloudflare D1, games DB = IGDB, scheduled job = Cloudflare Cron Triggers, stack = a React SPA served by a single Cloudflare Worker (Hono + Drizzle + Zod). The PS-auth open question (NPSSO vs. cookie) is resolved by **adopting the NPSSO token** (spike S-1 → story 9.1b, 2026-07-13): the bearer serves the purchased list AND the trophy endpoints the cookie cannot, so it replaced the cookie rather than complementing it. Downstream reads those companions for the HOW; this spec does not restate it.

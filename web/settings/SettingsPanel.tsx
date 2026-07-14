@@ -4,26 +4,102 @@ import { createPortal } from 'react-dom';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useToast } from '../components/Toast';
 import { useModalTrap } from '../components/useModalTrap';
+import { serverMessage } from '../shelf/api';
 import {
+	backfillPartial,
 	cancelPsPlus,
 	fetchSettings,
+	type PlatinumBackfillResult,
+	releaseBackfillLock,
+	runPlatinumBackfill,
 	saveFabHandedness,
-	savePsnCookie,
+	savePsnNpsso,
 } from './api';
 import './settings-panel.css';
 
 /**
- * The Settings surface (Story 4.1, FR-36): a focus-trapped modal editing the
- * PlayStation session cookie. The stored value is never shown — the field is
- * always empty and saving replaces the cookie wholesale. Epic 6 moves the
- * entry point into the FAB drawer's gear; until then the header gear opens it.
+ * Client-side brake on the backfill's chunk loop (Story 9.3). The server's
+ * cursor strictly advances past every row it saw, so the loop terminates on its
+ * own; this only stops a cursor regression from spinning the browser forever.
+ * 40 chunks × 15 candidates = 600 platinum titles. Tripping it means the run is
+ * INCOMPLETE — the summary says so rather than reading as a finished backfill.
+ */
+const MAX_BACKFILL_CHUNKS = 40;
+
+type BackfillRows = Pick<PlatinumBackfillResult, 'filled' | 'skipped'>;
+
+type BackfillState =
+	| { phase: 'idle' }
+	| { phase: 'running'; filled: number; skipped: number }
+	| ({
+			phase: 'done';
+			hasTrophyData: boolean;
+			/** The chunk brake tripped: more candidates remain. */
+			stoppedEarly: boolean;
+	  } & BackfillRows)
+	// A failed run still WROTE the rows it got through (platinum_on is write-once
+	// — nothing rolls back), so the failure carries them instead of erasing them.
+	| ({ phase: 'error'; message: string } & BackfillRows);
+
+/**
+ * The backfill summary (Story 9.3, FR-37). Every ending is DISTINCT: a run that
+ * filled nothing because PSN had no trophy record for a single candidate is not
+ * a completed backfill of a hopeless library, and "no candidates" means one of
+ * two different things depending on whether the trophy sync has ever run.
+ */
+function doneSummary(state: Extract<BackfillState, { phase: 'done' }>): string {
+	const { filled, skipped, hasTrophyData, stoppedEarly } = state;
+	const early = stoppedEarly
+		? ' Stopped early — run it again to continue.'
+		: '';
+	if (filled.length === 0 && skipped.length === 0) {
+		return hasTrophyData
+			? 'Nothing to recover — every platinum you have already carries its date.'
+			: 'No trophy data yet — run the trophy sync first, then come back and recover the dates.';
+	}
+	if (
+		filled.length === 0 &&
+		skipped.every((item) => item.code === 'not-found')
+	) {
+		return `PlayStation returned no trophy record for any of these ${skipped.length} — the trophy sync may need re-running.${early}`;
+	}
+	// Each skip carries its OWN reason (no date on record, no trophy record, a
+	// PSN failure on that one title) — collapsing them into "no date" would tell
+	// the user a title is undateable when PSN merely fell over on it.
+	return `Recovered ${filled.length} platinum date${
+		filled.length === 1 ? '' : 's'
+	}${
+		skipped.length > 0
+			? `; skipped ${skipped.length} (${skipped
+					.map((item) => `${item.title} — ${item.reason}`)
+					.join('; ')})`
+			: ''
+	}.${early}`;
+}
+
+/** What a FAILED run still recovered — written, permanent, and not lost here. */
+function partialSummary(
+	state: Extract<BackfillState, { phase: 'error' }>,
+): string {
+	if (state.filled.length === 0 && state.skipped.length === 0) return '';
+	return ` It had already recovered ${state.filled.length} platinum date${
+		state.filled.length === 1 ? '' : 's'
+	} (kept), and skipped ${state.skipped.length}.`;
+}
+
+/**
+ * The Settings surface (Story 4.1, re-credentialed in 9.1b, FR-36): a
+ * focus-trapped modal editing the PlayStation NPSSO token. The stored value is
+ * never shown — the field is always empty and saving replaces the token
+ * wholesale. The token cannot be read from Sony cross-origin (CORS), so the
+ * "Get / refresh token" control is a plain deep link the user copies from.
  */
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
 	const dialogRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 	const titleId = useId();
 	const instructionsId = useId();
-	const [cookie, setCookie] = useState('');
+	const [npsso, setNpsso] = useState('');
 	const queryClient = useQueryClient();
 	const { toast } = useToast();
 
@@ -33,10 +109,10 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 	});
 
 	const save = useMutation({
-		mutationFn: savePsnCookie,
-		// A failed cookie save already says so inline, below the button.
+		mutationFn: savePsnNpsso,
+		// A failed token save already says so inline, below the button.
 		onSuccess: () => {
-			setCookie('');
+			setNpsso('');
 			queryClient.invalidateQueries({ queryKey: ['settings'] });
 		},
 	});
@@ -69,13 +145,102 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 		},
 	});
 
+	// The one-off platinum-date backfill (Story 9.3). It LOOPS the chunked
+	// endpoint on its cursor — one PSN call per platinum title is more fan-out
+	// than a single Worker invocation may issue — and always ends in a summary
+	// naming what was filled and what PSN could not date (FR-37).
+	const [backfill, setBackfill] = useState<BackfillState>({ phase: 'idle' });
+	const runBackfill = async () => {
+		setBackfill({ phase: 'running', filled: 0, skipped: 0 });
+		const filled: PlatinumBackfillResult['filled'] = [];
+		const skipped: PlatinumBackfillResult['skipped'] = [];
+		let cursor: string | null = null;
+		// The single-flight lock this loop holds (Story 9.5) — handed back on every
+		// continuation to renew it. Without it the next chunk reads as a fresh run.
+		let lockToken: string | null = null;
+		let hasTrophyData = true;
+		let stoppedEarly = false;
+		try {
+			for (let chunk = 0; ; chunk++) {
+				if (chunk >= MAX_BACKFILL_CHUNKS) {
+					stoppedEarly = true;
+					// Deliberate stop, not a crash: give the lock back, or the "run it
+					// again to continue" the summary offers would be refused for the
+					// next two minutes with "a sync is already running" (Story 9.5).
+					if (lockToken) await releaseBackfillLock(lockToken);
+					break;
+				}
+				const result: PlatinumBackfillResult = await runPlatinumBackfill(
+					cursor,
+					lockToken,
+				);
+				lockToken = result.lockToken ?? null;
+				filled.push(...result.filled);
+				skipped.push(...result.skipped);
+				hasTrophyData = result.hasTrophyData;
+				setBackfill({
+					phase: 'running',
+					filled: filled.length,
+					skipped: skipped.length,
+				});
+				cursor = result.nextCursor;
+				if (!cursor) break;
+			}
+		} catch (error) {
+			// The rows EARLIER chunks recovered are already written and permanent —
+			// and so are the ones the FAILED chunk got through before it died (the
+			// server reports those in the error body). Report all of them: a run that
+			// recovered 40 dates and then hit an expired token did not recover none.
+			const partial = backfillPartial(error);
+			if (partial) {
+				filled.push(...partial.filled);
+				skipped.push(...partial.skipped);
+			}
+			const status = (error as { status?: number }).status;
+			setBackfill({
+				phase: 'error',
+				filled,
+				skipped,
+				message:
+					status === 401
+						? 'PlayStation rejected the token — save a fresh one above, then try again.'
+						: // Both 409s carry a message worth reading verbatim: no timezone
+							// (the run would misdate permanently) and another PSN op already
+							// running (the 9.5 single-flight lock).
+							status === 409
+							? (serverMessage(error) ??
+								'Set your timezone first, then try again.')
+							: 'Couldn’t reach PlayStation. Try again later.',
+			});
+			// The server persisted the expired flag — refetch settings so the banner
+			// lights without a reload (same as both sync handlers, AD-14).
+			if (status === 401)
+				queryClient.invalidateQueries({ queryKey: ['settings'] });
+			// Whatever was written before the failure still changes the cards.
+			if (filled.length > 0)
+				queryClient.invalidateQueries({ queryKey: ['shelf'] });
+			return;
+		}
+		setBackfill({
+			phase: 'done',
+			filled,
+			skipped,
+			hasTrophyData,
+			stoppedEarly,
+		});
+		// The recovered dates land on the cards (the platinum date the shelf shows,
+		// and the completed_on the heuristic fills). play_status is NOT touched by
+		// the backfill — a game you are replaying keeps saying "Playing".
+		queryClient.invalidateQueries({ queryKey: ['shelf'] });
+	};
+
 	const onKeyDown = useModalTrap(dialogRef, onClose, {
 		// The count-confirm stacks on top: hand Escape to it (Story 3.5 rule).
 		enabled: !confirmingCancel,
 		initialFocusRef: inputRef,
 	});
 
-	const trimmed = cookie.trim();
+	const trimmed = npsso.trim();
 
 	return createPortal(
 		// biome-ignore lint/a11y/noStaticElementInteractions: the backdrop is a dismiss surface, not a control — Escape and the Close button are the accessible paths; this only mirrors them for pointer users.
@@ -101,45 +266,40 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 				</h2>
 
 				<section className="settings-panel__section">
-					<h3 className="settings-panel__heading">
-						PlayStation session cookie
-					</h3>
-					<p className="settings-panel__status" data-testid="psn-cookie-status">
-						{settings?.psnCookieSet
-							? 'A cookie is saved. Pasting a new one replaces it.'
-							: 'No cookie saved yet.'}
+					<h3 className="settings-panel__heading">PlayStation NPSSO token</h3>
+					<p className="settings-panel__status" data-testid="psn-npsso-status">
+						{settings?.psnNpssoSet
+							? 'A token is saved. Pasting a new one replaces it.'
+							: 'No token saved yet.'}
 					</p>
 					<ol className="settings-panel__instructions" id={instructionsId}>
 						<li>
-							Log in at{' '}
+							Sign in to PlayStation, then open{' '}
 							<a
-								href="https://library.playstation.com"
+								href="https://ca.account.sony.com/api/v1/ssocookie"
 								target="_blank"
 								rel="noreferrer"
+								data-testid="psn-npsso-link"
 							>
-								library.playstation.com
+								Get / refresh token
 							</a>
 						</li>
 						<li>
-							Open DevTools (F12) → Application → Cookies →
-							https://library.playstation.com
+							Copy the <code>npsso</code> value from the page
 						</li>
-						<li>
-							Copy the value of the <code>pdccws_p</code> cookie
-						</li>
-						<li>Paste it below and save</li>
+						<li>Paste it below and save — it lasts about 60 days</li>
 					</ol>
 					<textarea
 						ref={inputRef}
-						className="settings-panel__cookie-input"
-						aria-label="PlayStation session cookie"
+						className="settings-panel__token-input"
+						aria-label="PlayStation NPSSO token"
 						aria-describedby={instructionsId}
-						placeholder="Paste the pdccws_p cookie value"
+						placeholder="Paste the npsso token value"
 						rows={3}
 						maxLength={4096}
-						value={cookie}
+						value={npsso}
 						onChange={(e) => {
-							setCookie(e.target.value);
+							setNpsso(e.target.value);
 							save.reset();
 						}}
 					/>
@@ -149,14 +309,14 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 						disabled={!trimmed || save.isPending}
 						onClick={() => save.mutate(trimmed)}
 					>
-						{save.isPending ? 'Saving…' : 'Save cookie'}
+						{save.isPending ? 'Saving…' : 'Save token'}
 					</button>
 					<div
 						className="settings-panel__feedback"
 						role="status"
 						aria-live="polite"
 					>
-						{save.isSuccess && 'Cookie saved.'}
+						{save.isSuccess && 'Token saved.'}
 						{save.isError && 'Saving failed — try again.'}
 					</div>
 				</section>
@@ -204,6 +364,55 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 					>
 						{claimCount === 0 ? 'No PS+ claims' : 'I cancelled PS+'}
 					</button>
+				</section>
+
+				<section className="settings-panel__section">
+					<h3 className="settings-panel__heading">Platinum dates</h3>
+					<p className="settings-panel__status">
+						PlayStation knows when you earned each platinum. Recover those dates
+						for games that have none — it never changes a date you already have.
+					</p>
+					<button
+						type="button"
+						className="settings-panel__save tap-target"
+						data-testid="backfill-platinum-dates"
+						disabled={backfill.phase === 'running'}
+						onClick={runBackfill}
+					>
+						{backfill.phase === 'running'
+							? 'Recovering…'
+							: 'Recover platinum dates'}
+					</button>
+					{/* aria-live WITHOUT role=status: the token-save feedback above already
+					    owns that role in this dialog, and a second one is ambiguous to a
+					    screen reader (and to `getByRole('status')`). */}
+					<div
+						className="settings-panel__feedback"
+						aria-live="polite"
+						data-testid="backfill-summary"
+					>
+						{backfill.phase === 'running' &&
+							`Recovering… ${backfill.filled} filled, ${backfill.skipped} skipped so far.`}
+						{backfill.phase === 'error' &&
+							`${backfill.message}${partialSummary(backfill)}`}
+						{backfill.phase === 'done' && doneSummary(backfill)}
+					</div>
+					{backfill.phase !== 'idle' &&
+						backfill.phase !== 'running' &&
+						backfill.filled.length > 0 && (
+							<ul
+								className="settings-panel__instructions"
+								data-testid="backfill-filled"
+							>
+								{/* Titles COLLIDE in this app (the whole trophy-matching design
+								    exists because they do) — the game id is the only stable key. */}
+								{backfill.filled.map((item) => (
+									<li key={item.gameId}>
+										{item.title} — {item.date}
+									</li>
+								))}
+							</ul>
+						)}
 				</section>
 
 				<section className="settings-panel__section">

@@ -104,6 +104,35 @@ export const gameTracking = sqliteTable(
 		discarded: integer('discarded', { mode: 'boolean' })
 			.notNull()
 			.default(false),
+		/**
+		 * Trophy counts, captured by the trophy sync (Story 9.2). Per-user facts,
+		 * so they live on the tracking side (AD-19). ALL nullable: NULL means "no
+		 * trophy data for this game", which is what suppresses the card/detail
+		 * readout — a game with no trophy title must show NOTHING, never `0%`.
+		 * The completion % and letter grade are NOT stored: they are derived in
+		 * `core/trophy.ts` from these counts (AD-8, no derived columns). PSN's own
+		 * weighted `progress` is deliberately absent for the same reason.
+		 * `trophy_np_comm_id` is the NPWR id — the join key Story 9.3 needs.
+		 */
+		trophyNpCommId: text('trophy_np_comm_id'),
+		/**
+		 * PSN's per-title trophy service (`trophy` for PS3/PS4/Vita, `trophy2` for
+		 * PS5) — the trophy-detail endpoint 404s on the WRONG one, and a real
+		 * account is mostly `trophy` (probed live: 94 `trophy` / 43 `trophy2` of
+		 * 137 titles). Story 9.3's backfill passes it straight back to PSN. NULL on
+		 * rows written before this column existed: re-run the trophy sync.
+		 */
+		trophyNpServiceName: text('trophy_np_service_name'),
+		trophyEarnedBronze: integer('trophy_earned_bronze'),
+		trophyEarnedSilver: integer('trophy_earned_silver'),
+		trophyEarnedGold: integer('trophy_earned_gold'),
+		trophyEarnedPlatinum: integer('trophy_earned_platinum'),
+		trophyDefinedBronze: integer('trophy_defined_bronze'),
+		trophyDefinedSilver: integer('trophy_defined_silver'),
+		trophyDefinedGold: integer('trophy_defined_gold'),
+		trophyDefinedPlatinum: integer('trophy_defined_platinum'),
+		/** ISO date (user zone) of the run that last wrote these counts. */
+		trophySyncedAt: text('trophy_synced_at'),
 	},
 	(table) => [
 		primaryKey({ columns: [table.userId, table.gameId] }),

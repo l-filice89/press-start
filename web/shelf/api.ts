@@ -41,6 +41,25 @@ export type DateEdits = Partial<
 	>
 >;
 
+export const TROPHY_GRADES = ['S', 'A', 'B', 'C', 'D'] as const;
+export type TrophyGrade = (typeof TROPHY_GRADES)[number];
+
+const trophyTiersSchema = z.object({
+	bronze: z.number(),
+	silver: z.number(),
+	gold: z.number(),
+	platinum: z.number(),
+});
+
+const trophySchema = z.object({
+	percent: z.number(),
+	grade: z.enum(TROPHY_GRADES),
+	earned: trophyTiersSchema,
+	defined: trophyTiersSchema,
+});
+
+export type Trophy = z.infer<typeof trophySchema>;
+
 export const shelfGameSchema = z.object({
 	id: z.string(),
 	title: z.string(),
@@ -65,6 +84,11 @@ export const shelfGameSchema = z.object({
 	ownedVia: z.enum(['purchase', 'membership']).nullable(),
 	releaseDate: z.string().nullable(),
 	genres: z.array(z.string()),
+	// Trophy progress (Story 9.2), derived server-side from the counts the
+	// trophy sync persisted. `null` = no trophy data → the UI renders NOTHING
+	// (never a fake 0%). Defaulted so a deploy-skewed response can't reject the
+	// whole shelf payload.
+	trophy: trophySchema.nullable().default(null),
 });
 
 export type ShelfGame = z.infer<typeof shelfGameSchema>;
@@ -91,9 +115,28 @@ export async function callApi(
 	if (!response.ok) {
 		const error = new Error(`Request failed (${response.status})`);
 		(error as Error & { status?: number }).status = response.status;
+		// Carry the error BODY too: a failed platinum-backfill chunk (9.3) has
+		// already written rows, and its partial report rides in that body — a bare
+		// status would throw it away.
+		// (Wrapped in a promise: a body-less/mocked response may not even have a
+		// usable `json()` — a missing body is never a reason to lose the status.)
+		(error as Error & { body?: unknown }).body = await Promise.resolve()
+			.then(() => response.json())
+			.catch(() => undefined);
 		throw error;
 	}
 	return response.json();
+}
+
+/**
+ * The server's own message out of a failed `callApi` (Story 9.5). A 409 from a
+ * PSN op says something the user can ACT on — "a sync is already running" —
+ * which a generic "try again later" throws away.
+ */
+export function serverMessage(error: unknown): string | null {
+	const message = (error as { body?: { error?: unknown } } | undefined)?.body
+		?.error;
+	return typeof message === 'string' && message ? message : null;
 }
 
 async function fetchGames(

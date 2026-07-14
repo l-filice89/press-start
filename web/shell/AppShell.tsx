@@ -7,6 +7,7 @@ import {
 	type PsPlusCheckResult,
 	type SyncAttentionItem,
 	type SyncResult,
+	type TrophySyncResult,
 } from '../settings/api';
 import { SettingsPanel } from '../settings/SettingsPanel';
 import { SearchBox } from '../shelf/SearchBox';
@@ -17,6 +18,7 @@ import { Fab } from './Fab';
 import { Header } from './Header';
 import { PsPlusCheckModal } from './PsPlusCheckModal';
 import { SyncSummaryModal } from './SyncSummaryModal';
+import { TrophySyncModal } from './TrophySyncModal';
 import './app-shell.css';
 
 /**
@@ -28,7 +30,7 @@ import './app-shell.css';
  *
  * Providers wrap the tree so surfaces can `useToast()` / `useAnnounce()` from
  * anywhere. The attention-banner slot under the header is fed by the settings
- * query: a PSN-rejected cookie surfaces the refresh path (4.1), and persisted
+ * query: a PSN-rejected token surfaces the refresh path (4.1), and persisted
  * sync needs-attention items surface the amber banner (4.3) — both survive
  * reloads until their condition self-resolves (NFR-4 — never one dismissed
  * modal away).
@@ -56,6 +58,10 @@ export function AppShell({
 	const [psPlusResult, setPsPlusResult] = useState<PsPlusCheckResult | null>(
 		null,
 	);
+	// The trophy-sync readout (Story 9.2) — snapshot semantics match `summary`.
+	const [trophyResult, setTrophyResult] = useState<TrophySyncResult | null>(
+		null,
+	);
 	const { data: settings } = useQuery({
 		queryKey: ['settings'],
 		queryFn: ({ signal }) => fetchSettings(signal),
@@ -79,10 +85,10 @@ export function AppShell({
 				/>
 				{settings?.psnAuthExpired && (
 					<AttentionBanner
-						variant="expired-cookie"
-						message="PlayStation rejected the session cookie — sign in at library.playstation.com, copy the fresh cookie from DevTools, and paste it in Settings."
+						variant="expired-token"
+						message="PlayStation rejected the NPSSO token — open Settings, follow the “Get / refresh token” link, and paste the fresh token."
 						action={{
-							label: 'Update cookie',
+							label: 'Update token',
 							onClick: () => setSettingsOpen(true),
 						}}
 					/>
@@ -124,12 +130,19 @@ export function AppShell({
 					setSummary({ result, attention: result.needsAttention })
 				}
 				onPsPlusCheckComplete={setPsPlusResult}
+				onTrophySyncComplete={setTrophyResult}
 			/>
 			{settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
 			{psPlusResult && (
 				<PsPlusCheckModal
 					result={psPlusResult}
 					onClose={() => setPsPlusResult(null)}
+				/>
+			)}
+			{trophyResult && (
+				<TrophySyncModal
+					result={trophyResult}
+					onClose={() => setTrophyResult(null)}
 				/>
 			)}
 			{stragglersOpen && (

@@ -12,7 +12,7 @@ interface __BaseEnv_Env {
 	RESEND_API_KEY: string;
 	IGDB_CLIENT_ID: string;
 	IGDB_CLIENT_SECRET: string;
-	PSN_SESSION_COOKIE: string;
+	PSN_NPSSO: string;
 	GOOGLE_CLIENT_ID: string;
 	GOOGLE_CLIENT_SECRET: string;
 }
@@ -31,7 +31,7 @@ declare namespace Cloudflare {
 		RESEND_API_KEY: string;
 		IGDB_CLIENT_ID: string;
 		IGDB_CLIENT_SECRET: string;
-		PSN_SESSION_COOKIE: string;
+		PSN_NPSSO: string;
 		GOOGLE_CLIENT_ID: string;
 		GOOGLE_CLIENT_SECRET: string;
 	}
@@ -42,7 +42,7 @@ type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
 };
 declare namespace NodeJS {
-	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "AUTH_ALLOWED_EMAIL" | "AUTH_EMAIL_FROM" | "PSN_REGION" | "E2E_TEST_HOOKS" | "BETTER_AUTH_SECRET" | "RESEND_API_KEY" | "IGDB_CLIENT_ID" | "IGDB_CLIENT_SECRET" | "PSN_SESSION_COOKIE" | "GOOGLE_CLIENT_ID" | "GOOGLE_CLIENT_SECRET">> {}
+	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "AUTH_ALLOWED_EMAIL" | "AUTH_EMAIL_FROM" | "PSN_REGION" | "E2E_TEST_HOOKS" | "BETTER_AUTH_SECRET" | "RESEND_API_KEY" | "IGDB_CLIENT_ID" | "IGDB_CLIENT_SECRET" | "PSN_NPSSO" | "GOOGLE_CLIENT_ID" | "GOOGLE_CLIENT_SECRET">> {}
 }
 
 // Begin runtime types

@@ -4,6 +4,42 @@ All notable changes to PRESS START are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/); this project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] — 2026-07-14
+
+Trophies on the shelf, and a PSN connection that stays connected.
+
+### Added
+- **Trophy progress on every game** — each card and detail panel shows how far
+  you are through that game's trophy list, platinum included. Sync trophies from
+  the ＋ bar; the shelf fills in from your PSN trophy history.
+- **Platinum dates backfilled** — a one-off pass pulls the platinum earn date
+  PSN already knows for games you have already platinumed, instead of leaving
+  them blank until the next sync.
+
+### Changed
+- **PSN now connects with an NPSSO token, not the `pdccws_p` cookie** — the
+  cookie expired within hours and had to be re-pasted constantly. The NPSSO
+  token is longer-lived, so the connection survives. Paste it in Settings.
+- **The ＋ bar shows labels on mobile** and reuses the platinum trophy icon for
+  the trophy sync action.
+
+### Fixed
+- **Two syncs at once no longer collide** — a single-flight guard means a second
+  sync request joins the running one instead of starting a competing pass.
+- **A malformed NPSSO token is rejected on save** rather than failing later
+  mid-sync with an unhelpful error.
+- **Sync failures no longer vanish** — a discarded sync result used to fail
+  silently; it now surfaces.
+
+## [1.2.0] — 2026-07-13
+
+### Added
+- **Sign in with Google** alongside the magic link.
+- **One shared IGDB match picker** for add, rematch, and stragglers.
+
+### Fixed
+- **Settings: the Save cookie button** sits under the cookie input it belongs to.
+
 ## [1.1.1] — 2026-07-13
 
 Mobile layout repair.

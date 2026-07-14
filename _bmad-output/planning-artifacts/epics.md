@@ -190,7 +190,7 @@ _From `DESIGN.md` (visual identity) and `EXPERIENCE.md` (behavior). Both spines 
 - **UX-DR7** — Status pill: shows effective state; tap opens the status popover.
 - **UX-DR8** — Status popover: menu anchored to the pill (flips above/below to stay on-screen) with 5 play statuses (instant, no confirm) + 2 milestone rows (confirm-gated); menu ARIA semantics, arrow traversal, Escape closes and returns focus to the pill.
 - **UX-DR9** — Filter row: State multiselect dropdown, Genre multiselect dropdown, Flags solid toggle pills, State-reveal dashed pills; solid = narrow (AND), dashed = reveal hidden state; a live plain-English summary sentence (OR-connectors in glow-cyan, AND-connectors in heat-magenta); active pills glow.
-- **UX-DR10** — FAB + upward drawer: electric-blue launcher, bottom-right by default (configurable to bottom-left), opening chores (Sync library · Check PS+ Extra · Export CSV · Settings · About/Help); icons-only mobile, icons+text desktop; no Add here.
+- **UX-DR10** — FAB + upward drawer: electric-blue launcher, bottom-right by default (configurable to bottom-left), opening chores (Sync library · Check PS+ Extra · Sync trophies · Export CSV · Settings · About/Help); icons+text on all sizes (revised 2026-07-14 — icons-only on mobile was too unclear); no Add here.
 - **UX-DR11** — Attention banner: full-width under-header notice zone, shown only when action is needed, persistent until cleared; amber (stragglers), magenta (expired cookie), steel (failed refresh); self-clears when the condition resolves.
 - **UX-DR12** — Toast: transient bottom, `surface-raised` cyan-edged, ~3s auto-dismiss; UNDO variant for reversible risky actions (mark Dropped, un-own).
 - **UX-DR13** — Summary modal: post-op readout (sync/import/PS+), `surface-raised` with glow-ring; counts + needs-attention + a button jumping to the problem.
@@ -212,7 +212,7 @@ _From `DESIGN.md` (visual identity) and `EXPERIENCE.md` (behavior). Both spines 
 
 **Responsive & platform**
 
-- **UX-DR26** — Responsive deltas: phone (2-up lean card, genres hidden, single Filters button + count → bottom sheet, icons-only FAB, full-screen detail, compact header "175 · 52 OWNED") vs desktop (auto-fill dense grid, full filter row + inline summary sentence, icons+text FAB, ~760px detail panel, full header with `PS+ CATALOG AS OF …` timestamp).
+- **UX-DR26** — Responsive deltas: phone (2-up lean card, genres hidden, single Filters button + count → bottom sheet, icons+text FAB [revised 2026-07-14 — was icons-only], full-screen detail, compact header "175 · 52 OWNED") vs desktop (auto-fill dense grid, full filter row + inline summary sentence, icons+text FAB, ~760px detail panel, full header with `PS+ CATALOG AS OF …` timestamp).
 - **UX-DR27** — PWA: installable, home-screen icon; no offline requirement; when the games DB is unreachable, add-by-name falls back to a name-only entry landing in stragglers.
 
 ### FR Coverage Map
@@ -1583,7 +1583,7 @@ So that `owned_via` means something on every row instead of being NULL on the ol
 
 **Status: v1.x** — enriches a working app. All PSN I/O stays behind `PsnProvider` (AR-5); nothing here changes the state model.
 
-Epic 4 fills the library from PlayStation. This epic brings across the *record*: trophy progress per game (completion % and a PSNProfiles-style letter grade), plus a one-off backfill that recovers milestone dates PSN knows and the app never captured. It opens with the S-1 spike, which answers one question — what does the `pdccws_p` cookie actually authorize — and that answer decides whether PSN wishlist sync (Story 9.4) ships here or slips to Future.
+Epic 4 fills the library from PlayStation. This epic brings across the *record*: trophy progress per game (completion % and a PSNProfiles-style letter grade), plus a one-off backfill that recovers milestone dates PSN knows and the app never captured. It opened with the S-1 spike (Story 9.1, **done 2026-07-13** — see `implementation-artifacts/deferred-work.md` DW-10), which probed what the `pdccws_p` cookie authorizes. Verdict: **trophies require an NPSSO bearer** (the cookie is rejected 401 by the trophy host), and the bearer is a *superset* — it also serves the existing library sync. So the epic now runs on a **full cookie→NPSSO swap (Story 9.1b)**, which gates trophy sync. The wishlist endpoint was identified (`storeRetrieveWishlist`, an Apollo persisted query) but its hash and auth path still need one capture (Story 9.1c), on which Story 9.4 is conditional.
 
 ### Story 9.1: Spike S-1 — what does `pdccws_p` authorize? (VR-1)
 
@@ -1610,6 +1610,62 @@ So that trophy sync and wishlist sync get sequenced on evidence instead of on a 
 **Then** PRD open-q #2 is closed by it, and the spine's Deferred entry is resolved [sprint-change-proposal-2026-07-13 §3.2]
 
 > Timebox: one afternoon. A spike, not a feature — its "done" is a written table and a sequencing decision. No production code need survive it. Any auth swap it recommends stays a `PsnProvider` internal (AR-5).
+>
+> **Outcome (done 2026-07-13, DW-10):** trophies need NPSSO (cookie → 401); the bearer also serves `getPurchasedGameList`; the wishlist is a persisted query `storeRetrieveWishlist` whose hash is not client-computable. Consequences homed as Stories 9.1b (swap) and 9.1c (wishlist hash capture) below.
+
+### Story 9.1b: Swap `PsnProvider` from the `pdccws_p` cookie to an NPSSO bearer (VR-1) — _gates Story 9.2_
+
+As Luca,
+I want the app to authenticate to PlayStation with an NPSSO token instead of the short-lived session cookie,
+So that trophy sync is possible at all and I stop re-pasting a cookie that expires every few days.
+
+**Acceptance Criteria:**
+
+**Given** the S-1 evidence that the NPSSO bearer serves both `getPurchasedGameList` and the trophy endpoints while the `pdccws_p` cookie serves neither trophies (401) nor is durable,
+**When** `PsnProvider` authenticates,
+**Then** it reads a stored `npsso` token, performs the authorize → code → access-token exchange, and calls PSN with the resulting bearer — the whole mechanism confined to `PsnProvider` (AR-5), no auth detail leaking into services, routes, or core [VR-1, AR-5]
+
+**Given** the access token is short-lived (~1 hour) and the exchange returns an offline refresh token,
+**When** a call finds the cached bearer expired,
+**Then** the adapter refreshes it from the refresh token without user interaction, and only a fully-expired/invalid NPSSO (~60-day life) raises the alarm — by **reusing the existing expired-credential path unchanged**: it sets the same `psn_auth: 'expired'` setting flag the cookie uses today, so the same needs-attention banner and re-paste prompt fire with no new UI surface [FR-36, NFR-4, AR-14]
+
+**Given** the settings table today stores `psn_cookie` with a paste field in the Settings panel,
+**When** the swap ships,
+**Then** the `npsso` field **takes the place of the cookie slot in the same Settings location** (not a new field beside it): the cookie input, its label, and its help text are replaced by the NPSSO equivalents, the setting key moves `psn_cookie` → `psn_npsso`, the `PSN_SESSION_COOKIE` seed secret becomes `PSN_NPSSO`, and the dead cookie read path (`getPsnCookie`) is removed — not left as parallel dead weight [AR-5, FR-36]
+
+**Given** the ~60-day NPSSO re-paste is the only manual step and hunting for the token is the friction,
+**When** the user opens that Settings field,
+**Then** a "Get / refresh token" control **deep-links** to `https://ca.account.sony.com/api/v1/ssocookie` in a new tab — a signed-in Sony session renders `{"npsso":"…"}` to copy straight into the field; a signed-out one lands on Sony login first (try-the-session-first, fall back to manual login). It is a plain link, no cross-origin read — CORS forbids scraping the value silently [FR-36]
+
+**Given** the existing library sync (Epic 4) and PS+ Extra catalog paths currently run on the cookie,
+**When** the swap ships,
+**Then** both are migrated to the bearer and verified green — the swap is a *replacement*, and Epic 4's append-only + degenerate-response guarantees (200-with-errors fails closed, existing data survives) are re-asserted against the bearer with a captured-payload hazard test [AR-5, FR-10, DEGENERATE-RESPONSE GUARD]
+
+**Given** an expired or invalid NPSSO mid-sync,
+**When** the exchange or a call fails,
+**Then** the refresh instructions surface and the run stops — no silent retry, no partial write presented as complete [NFR-4, AR-14, FR-36]
+
+> The one story that touches the working Epic 4 auth path. All risk is contained behind `PsnProvider`; the probe already confirmed the bearer returns byte-identical `data{purchasedTitlesRetrieve}`.
+
+### Story 9.1c: Final wishlist spike — capture the `storeRetrieveWishlist` hash and confirm its auth path (VR-1) — _gates Story 9.4_
+
+As the team,
+I want the real persisted-query hash for the PS Store wishlist and a confirmed answer on which credential it needs,
+So that Story 9.4 is sequenced on evidence instead of the open question S-1 left behind.
+
+**Acceptance Criteria:**
+
+**Given** S-1 identified the wishlist as the Apollo persisted query `storeRetrieveWishlist` (freeform GraphQL is refused; the computed sha256 candidates 404'd because Apollo hashes the printed AST),
+**When** a real client-side navigation to the wishlist is captured,
+**Then** the actual `sha256Hash` is recorded from that request — not computed, not guessed [VR-1]
+
+**Given** the captured hash,
+**When** the wishlist endpoint is probed under the NPSSO bearer (and, if it matters, the cookie),
+**Then** its reachability and required auth path are recorded in `deferred-work.md` (extending DW-10): reachable → **Story 9.4 stays in Epic 9**; not reachable under either → 9.4 drops to Future [VR-1, VR-4]
+
+> A spike, timeboxed. Runs after 9.1b so the probe uses the bearer the app will actually carry. Its deliverable is the recorded hash + auth-path decision; no production code need survive it.
+>
+> **Outcome (done 2026-07-14, DW-10 extension):** the wishlist read is **server-side-rendered** — `__NEXT_DATA__` carries the data, the browser issues no client-side `storeRetrieveWishlist` request, so no hash is client-observable. The bundle's query, hashed with the app's own `parse`/`print` pipeline (validated exact against the client-executed `getCartItemCount` query), returns `PersistedQueryNotFound` under the bearer for every candidate; freeform stays refused. **Reachable under neither credential → Story 9.4 is removed from Epic 9 and filed to Future.**
 
 ### Story 9.2: Trophy progress on every game (VR-2)
 
@@ -1669,17 +1725,19 @@ So that my milestone history isn't blank for everything I platinumed before this
 
 > The only place in the app where a sync writes a milestone. It is a one-time reconciliation with a documented heuristic, not a standing behaviour.
 
-### Story 9.4: Sync the PS Store wishlist (VR-4) — _conditional on Story 9.1_
+### Story 9.4: Sync the PS Store wishlist (VR-4) — **DROPPED TO FUTURE (2026-07-14, DW-10 extension)**
+
+> **Removed from Epic 9.** Story 9.1c found the wishlist read is server-side-rendered on `library.playstation.com` — the browser issues no client-side `storeRetrieveWishlist` request, and the bundle's query returns `PersistedQueryNotFound` under the NPSSO bearer for every hash variant (the hashing recipe validated exact against the client-executed `getCartItemCount` query). Freeform GraphQL stays refused. The endpoint is reachable under neither credential from the app's server-to-server position, so per this story's own first AC it is filed to Future. **Revisit if PSN re-exposes a client-side wishlist fetch or publishes a REST wishlist endpoint.** The acceptance criteria below are preserved for that revisit.
 
 As Luca,
 I want the games I wishlisted on the PS Store to appear in my Press Start wishlist,
 So that the two lists stop drifting apart and the store wishlist stops being a second place I have to check.
 
-**Acceptance Criteria:**
+**Acceptance Criteria (preserved for a Future revisit):**
 
-**Given** Story 9.1 concluded the wishlist endpoint is reachable over `pdccws_p`
+**Given** Story 9.1c captured the `storeRetrieveWishlist` hash and concluded the wishlist endpoint is reachable (under the bearer the app now carries post-9.1b, or the cookie)
 **When** this story is picked up
-**Then** it proceeds in this epic — **if the spike concluded otherwise, this story is removed from Epic 9 and filed to Future** with the NPSSO swap as its prerequisite [VR-1, VR-4]
+**Then** it proceeds in this epic — **if 9.1c concluded the endpoint is reachable under neither credential, this story is removed from Epic 9 and filed to Future** [VR-1, VR-4] — _9.1c concluded NEITHER; this story is Future._
 
 **Given** the PS Store wishlist
 **When** the sync runs
@@ -1696,6 +1754,42 @@ So that the two lists stop drifting apart and the store wishlist stops being a s
 **Given** the sync completes
 **When** the summary shows
 **Then** it names games added, entries already tracked, and anything needing attention — the FR-37 posture [FR-37, NFR-4]
+
+### Story 9.5: Post-retro hardening sweep — the merge gate (Epic 9 retro, 2026-07-14)
+
+As Luca,
+I want the traps Epic 9's review left in the ledger closed before the epic reaches main,
+So that the first live trophy sync on production runs against hardened code, not against known-and-shrugged-at defects.
+
+The Epic 9 retrospective triaged 11 deferred entries. Five are accepted or watch-only; one was a migration-ordering artifact that cannot occur in production. These are the six that ship.
+
+**Acceptance Criteria:**
+
+**Given** the NPSSO→bearer exchange stub is copy-pasted verbatim into `test/integration/sync.test.ts` and `test/integration/discard.test.ts`
+**When** this story ships
+**Then** one shared helper backs both — a stale exchange shape can no longer keep two suites green while production breaks [DW: 9.1b]
+
+**Given** `Db` types a `batch()` method while `scripts/seed-import.ts` builds its sqlite-proxy driver with **no batch callback**
+**When** this story ships
+**Then** the seed driver supplies a batch callback (or the type stops promising one) — a future repository function that batches and is reused by the seed path must fail at COMPILE time, never at runtime [DW: 9.2]
+
+**Given** the library sync, the trophy sync, and the platinum backfill all run unlocked — two tabs double the PSN fan-out and both loops report the same rows as written
+**When** this story ships
+**Then** a single-flight guard covers **all three** long-running PSN operations per user, and a second concurrent run is refused with a human message rather than racing [DW: 9.2, 9.3; deferred since Epic 4]
+
+**Given** the npsso charset guard in `src/routes/settings.ts` admits non-Latin1 codepoints that the outbound `Cookie:` header cannot carry
+**When** this story ships
+**Then** such a value is refused at SAVE time with a 400, not at sync time with a 502 [DW: 9.1b]
+
+**Given** `listLibraryForUser` excludes discarded rows, so a discarded game's trophy title falls through to the trophy sync's "no library match" list as noise on every run
+**When** this story ships
+**Then** trophy titles matching a discarded game are matched and dropped SILENTLY — they are not unmatched, they matched a game the user threw away [DW: 9.2]
+
+**Given** `epic6.spec.ts` 6.4a ("Claimed with PS+" writes `owned_via=membership`) flakes under full-suite load — it asserts the D1 row immediately after the dialog closes, without awaiting the ownership PUT
+**When** this story ships
+**Then** the test awaits the write (a response or a UI settle) before querying D1, and the full suite runs green three times consecutively — the flake is proven PRE-EXISTING (reproduced on baseline `7b2d979` with Epic 9 stashed), so it is fixed here rather than carried [DW: 9.1b]
+
+> **Explicitly NOT in scope** (accepted at the retro, recorded so nobody re-litigates them): trophy counts are never cleared or aged — they are historic data and staleness is fine (Luca's call); no e2e for the FAB → trophy sync → shelf-repaint seam (PSN is unstubbable in Playwright, same limitation `epic5-psplus.spec.ts` records); pre-migration-0008 trophy rows falling back to `trophy2` (unreachable in production — CI applies 0007 and 0008 together before the first deploy, so only a local dev D1 can hold such a row).
 
 ## Epic 10: Know Before You Play — Scores & Expiry Warnings
 

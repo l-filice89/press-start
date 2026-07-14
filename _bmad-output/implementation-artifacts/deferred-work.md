@@ -321,3 +321,110 @@ resolution: discarded (watch closed) 2026-07-13 triage — 1.7c has not flaked a
   summary: The OAuth allowlist gate covers user CREATION only — linking a Google account into an EXISTING user row never runs it.
   evidence: `account.accountLinking` is at better-auth defaults (enabled, google trusted), so `handleOAuthUserInfo` links by matching email without calling `user.create.before`. Safe today by construction (the allowlist is one exact email, so a non-allowlisted address has no row to link into) and noted in the code, but Story 8.2 — which widens the allowlist into real registration — must gate the link path too.
   decision: 2026-07-13 Homed in Story 8.2, epics.md — carried as an AC: the admission rule gates the LINK path, not just user creation. Safe by construction under one allowlisted email; unsafe the moment registration opens, which IS Story 8.2. Ledger closes when 8.2 ships.
+
+### DW-10: Spike S-1 — endpoint x auth-path table: trophies REQUIRE NPSSO (gates Epic 9); wishlist endpoint identified, reachability pending one hash capture
+
+origin: spec-9-1-spike-s-1-what-does-pdccws-p-authorize-vr-1.md, probed live 2026-07-13 via `tmp/probe-psn-auth.ts`
+location: src/providers/psn.ts (auth is a PsnProvider internal, AR-5); tmp/probe-psn-auth.ts (the harness, re-runnable)
+reason: Story 9.1 asked what the `pdccws_p` web session cookie authorizes vs an NPSSO bearer. Probed live against PSN, both auth paths, observed status + response shape. Two probe runs; the second run's cookie column was invalid (an expired/wrong cookie answered `getPurchasedGameList` with the 200+Access-denied shape — the Epic 4 degenerate response), so the cookie facts below are taken from the FIRST run where the cookie was valid:
+
+| Endpoint | `pdccws_p` cookie | NPSSO bearer |
+| --- | --- | --- |
+| `getPurchasedGameList` (GraphQL persisted) | **200 — `data{purchasedTitlesRetrieve}`** | **200 — `data{purchasedTitlesRetrieve}`** |
+| `trophyTitles` (trophy v1 REST, `m.np.playstation.com`) | **401 — `json{error}`** | **200 — `json{trophyTitles,nextOffset,totalItemCount}`** |
+| wishlist `storeRetrieveWishlist` (persisted, real op) | **404 — persisted query id not in list** (our computed hash guess; real hash not yet captured) | same 404 |
+| wishlist — raw freeform GraphQL | **400 — freeform not allowed; must send by persisted id** | same 400 |
+
+Consequences, per the story's stated branches:
+
+1. **Trophies REQUIRE NPSSO.** The session cookie is rejected outright (401) by the trophy host `m.np.playstation.com`; the bearer returns data. Story 9.1's third branch fires: the NPSSO auth swap is **promoted out of Deferred and gates Epic 9** — Story 9.2 cannot fetch trophies under the cookie.
+2. **The bearer also serves `getPurchasedGameList`**, so NPSSO is a superset of the cookie's reach on everything probed. The swap is a replacement, not a second parallel credential — one credential covers library + trophies, and NPSSO lives ~60 days (with an offline refresh token) vs the cookie's hours-to-days.
+3. **Story 9.4 (wishlist sync) — endpoint IDENTIFIED, not dropped.** PSN refuses freeform GraphQL by design; the real client fetches the wishlist as an Apollo persisted query named **`storeRetrieveWishlist`** (found in the wishlist JS bundle `pages/library/wishlist-*.js`; full document captured, returns `storeWishlistSecure` with PS Store product ids — exactly the FR-34 join key). What's missing is only the persisted-query hash: Apollo hashes the printed AST, so the two sha256 candidates computed from the document text both 404'd. The real hash is obtainable by capturing one client-side-nav request to the wishlist (filter Network for `storeRetrieveWishlist`, copy `sha256Hash`, re-run with `PSN_WISHLIST_HASH=`). Its auth path is still unknown — the 404 (unknown query id) resolves before auth, masking whether cookie or bearer is needed. **9.4 stays conditional but is no longer "unreachable"; it does NOT block 9.2/9.3.** Since the epic now runs on NPSSO anyway, 9.4 becomes a cheap follow-on once the hash is captured and tested under the bearer.
+4. PRD open-q #2 (NPSSO swap) and the spine's Deferred NPSSO entry are **closed by this table**: the swap is not optional, it is required for trophies.
+
+status: done 2026-07-13
+resolution: spike complete; the table above IS the deliverable. Firm: NPSSO gates Epic 9 and is a prerequisite of Story 9.2 — it needs a home (new Story 9.0 or a widened 9.2) before trophy work proceeds. Open, non-blocking: Story 9.4's persisted-query hash capture + auth-path confirmation, deferred behind the NPSSO swap it will likely ride on.
+
+- source_spec: `spec-9-1b-swap-psnprovider-cookie-to-npsso-bearer-vr-1.md`
+  summary: Playwright 6.4a ("Claimed with PS+" writes owned_via=membership) flakes under full-suite load — the test asserts the D1 row right after the dialog closes, without waiting on the ownership PUT to land.
+  evidence: PRE-EXISTING, not caused by 9.1b — reproduced on the baseline commit (7b2d979) with the story's changes stashed: 1 of 2 full `bun run test:e2e` runs failed the same test the same way. Passes in isolation and with --repeat-each 3. Fix is to await the write (response or a UI settle) before querying D1.
+  decision: 2026-07-14 (Epic 9 retro) Homed in Story 9.5 — investigate and fix (Luca's call: fixed here, not carried), with the full suite green 3x consecutively as the bar. Gates the main merge.
+  resolution: fixed 2026-07-14 (Story 9.5) — 6.4a now awaits the owned toast (the mutation's onSuccess, i.e. the write's completion signal) before reading D1, as its "Purchased" sibling already did. Holding the WHOLE suite green 3x forced two MORE pre-existing races out of hiding, both fixed at the root: epic6's "I cancelled PS+" bulk-un-owns every membership row of the shared e2e user and was wiping a claim epic4-settings seeded in a parallel worker (serial mode does not cross files — that test moved into epic6's serial group), and `openStatusMenu`'s pill click could land in a mid-commit DOM and be dropped (the helper re-clicks). Local Playwright workers capped at 4: the default put TEN chromium workers on one vite+workerd+D1. Suite: 88/88, three consecutive runs.
+
+- source_spec: `spec-9-1b-swap-psnprovider-cookie-to-npsso-bearer-vr-1.md`
+  summary: The NPSSO→bearer exchange stub is copy-pasted verbatim into `test/integration/sync.test.ts` and `test/integration/discard.test.ts`.
+  evidence: Two places to update when the exchange shape moves; both would keep passing against a stale shape while production breaks. Extract one shared helper next time either is touched.
+  decision: 2026-07-14 (Epic 9 retro) Homed in Story 9.5 — post-retro hardening sweep, carried as an AC. Gates the main merge.
+  resolution: fixed 2026-07-14 (Story 9.5) — `test/integration/psn-stub.ts` is now the ONE exchange double; sync, discard, trophies and backfill (four suites, not two) consume it and their copies are gone.
+
+- source_spec: `spec-9-1b-swap-psnprovider-cookie-to-npsso-bearer-vr-1.md`
+  summary: The npsso charset guard in `src/routes/settings.ts` admits non-Latin1 codepoints, which the outbound Cookie header cannot carry.
+  evidence: Such a value saves fine, then fails at `fetch` with a TypeError → a 502 at sync time instead of a 400 at save time. Fails closed (no injection, no bad write), so it is a diagnosability nit, not a security hole.
+  decision: 2026-07-14 (Epic 9 retro) Homed in Story 9.5 — refuse it at save time with a 400. Gates the main merge.
+  resolution: fixed 2026-07-14 (Story 9.5) — the guard is now RFC 6265's `cookie-octet` ALLOWLIST, refused at SAVE with a 400. Review caught that the first cut (a "nothing above U+00FF" bound) still admitted the C1 control block (U+0080–U+009F), which is Latin1-encodable; the allowlist drops every control, all non-ASCII, and `;` `,` `"` `\` in one expression.
+
+- source_spec: `spec-9-2-trophy-progress-on-every-game-vr-2.md`
+  summary: Trophy counts are never cleared or aged — a game whose trophy title stops matching PSN keeps its last-synced "62% · B" forever, and the UI never shows how old the numbers are (`trophy_synced_at` is stored but never read).
+  evidence: Nothing writes NULL back to the trophy columns, and no view reads `trophy_synced_at`. Needs a product call (clear on vanish? show "synced 3 months ago"?) rather than a silent default, so it was not invented during the run.
+  resolution: discarded (accepted permanently) 2026-07-14 — Epic 9 retro, Luca's product call: "It's historic data. Fine with it never clearing." Trophy counts are a record of what was earned, not a live gauge; staleness is acceptable and no aging UI is wanted. Recorded so it is not re-opened.
+
+- source_spec: `spec-9-2-trophy-progress-on-every-game-vr-2.md`
+  summary: `Db` now types a `batch` method, but the seed script's sqlite-proxy driver is built without a batch callback — any future repository function that batches and is reused by the seed path fails at RUNTIME, not compile time.
+  evidence: `src/repositories/db.ts` widens the type; `scripts/seed-import.ts` calls `drizzle(callback, { schema })` with no batch callback. Harmless today (the seed path never calls `setTrophyCountsBatch`), a trap tomorrow.
+  decision: 2026-07-14 (Epic 9 retro) Homed in Story 9.5 — supply the batch callback (or stop the type promising one) so the failure is at COMPILE time, never runtime. Gates the main merge.
+  resolution: fixed 2026-07-14 (Story 9.5) — `createHttpDb` supplies drizzle's batch callback, and `scripts/` is now a `tsc` project (`tsconfig.scripts.json`, referenced from `tsconfig.json`), so the `Db` promise is checked at COMPILE time. ponytail ceiling recorded in the code: the callback runs the statements sequentially, so it satisfies the TYPE but not atomicity — a repository function that batches for all-or-nothing would half-apply from the seed path.
+
+- source_spec: `spec-9-2-trophy-progress-on-every-game-vr-2.md`
+  summary: No e2e test drives the FAB -> trophy sync -> shelf-repaint seam end to end, because PSN cannot be stubbed in the Playwright environment.
+  evidence: `Fab.test.tsx` mocks fetch, `trophies.test.ts` mocks the provider, and the e2e seeds D1 directly — so query invalidation actually repainting a card with fresh counts is asserted nowhere. Same limitation `epic5-psplus.spec.ts` already records.
+  resolution: discarded (accepted) 2026-07-14 — Epic 9 retro, Luca's call: "Fine not having e2e with external dependencies." PSN is unstubbable in the Playwright environment; the seam stays a COVERAGE.md row, as `epic5-psplus.spec.ts` already established. Standing project posture, not a per-story gap.
+
+- source_spec: `spec-9-2-trophy-progress-on-every-game-vr-2.md`
+  summary: A discarded game's trophy title is reported as "no library match" noise on every trophy sync, and two trophy syncs in flight for the same user are not locked (same posture as the library sync).
+  evidence: `listLibraryForUser` excludes discarded rows, so their trophy titles fall into `unmatched`; the FAB disable is per-component only. Both are cosmetic / pre-existing-pattern, not data hazards.
+  decision: 2026-07-14 (Epic 9 retro) BOTH halves homed in Story 9.5. Discarded-game noise: match discarded rows too and drop them SILENTLY — they are not unmatched, they matched a game the user threw away. Locking: folded into the single-flight guard AC, which covers all three PSN long-ops (library sync, trophy sync, backfill) rather than just this one — Dana's point, that "same as the existing pattern" had been the justification for three epics running.
+  resolution: fixed 2026-07-14 (Story 9.5) — the trophy sync now reads the user's discarded normalized titles (`listDiscardedTitleKeys`) and drops a matching trophy title SILENTLY: neither `updated` nor `unmatched`, no write. Both keyings are covered (the stored title and the trophy-side " Trophies"-stripped key). The locking half is the single-flight guard below.
+
+- source_spec: `spec-9-3-one-off-backfill-recover-the-platinum-dates-psn-knows-vr-3.md`
+  summary: Trophy rows written by story 9.2 before migration 0008 carry no `trophy_np_service_name`, so the backfill falls back to `trophy2` for them — a PS4-era title in that state 404s into a per-title skip until the trophy sync is re-run.
+  evidence: The live probe measured 94 of 137 titles on `trophy` (PS3/PS4/Vita) and 43 on `trophy2` (PS5), and confirmed the wrong service name answers 404. The skip copy tells the user to re-run the trophy sync, so it is self-healing — but a one-line backfill of the column (or a 404-retry with the other name) would remove the step entirely.
+  resolution: discarded (cannot occur in production) 2026-07-14 — Epic 9 retro. The window this describes only exists if a trophy sync ran BETWEEN migration 0007 and 0008. Production has never seen either: Epic 9 is unmerged, and CI applies migrations in order before the deploy, so 0007 and 0008 land together and the first production trophy sync writes `trophy_np_service_name` from the start. The only database that can hold such a row is Luca's local dev D1 (where 9.2 ran before 9.3 existed), and one local trophy-sync re-run clears it. A migration-ordering artifact, not a defect — no code change.
+
+- source_spec: `spec-9-3-one-off-backfill-recover-the-platinum-dates-psn-knows-vr-3.md`
+  summary: Two concurrent backfill runs (two tabs) are not locked, and neither is the trophy sync.
+  evidence: The COALESCE write makes the duplicate write a no-op, so no data is corrupted — but both loops report the same dates as "filled" and the PSN fan-out is doubled. Same posture as the existing library sync; a single-flight guard would cover all three.
+  decision: 2026-07-14 (Epic 9 retro) Homed in Story 9.5 — Luca: "Add guard". One single-flight guard across ALL THREE PSN long-ops (library sync, trophy sync, backfill), not a per-sync patch; a second concurrent run is refused with a human message. Deferred since Epic 4; gates the main merge.
+  resolution: fixed 2026-07-14 (Story 9.5) — one per-user lock (a `setting` row, value `<expiry>:<op>:<uuid>`) covers all three PSN long-ops; a second run is refused with a 409 and a human message and makes NO PSN call. The claim is ONE SQL statement (an upsert whose DO UPDATE branch fires only on an expired lock — or on the exact held token, the backfill's cross-request renewal path — with RETURNING naming the winner), because a read-then-write acquire is the very race being closed. Review found the first cut treated the backfill's CURSOR as proof of ownership, which made the refusal bypassable with `?cursor=anything` (it would overwrite a running sync's lock); the capability is now a rotating token the server hands back, and both the forgery and the renewal paths are pinned in `psn-lock.test.ts`. Known ceiling, recorded in the code: the 2-minute TTL is preemption without a fence — a run still alive after it can be taken over (worst case is the pre-9.5 doubled fan-out, not corruption, since every write is idempotent/COALESCE).
+
+### DW-10 extension (Story 9.1c, 2026-07-14): wishlist reachable under NEITHER credential — Story 9.4 dropped to Future
+
+origin: spec-9-1c-final-wishlist-spike-capture-storeretrievewishlist-hash-vr-1.md; investigated live 2026-07-14 via a signed-in browser session (Claude-in-Chrome)
+
+reason: S-1 (DW-10) left the wishlist's persisted-query hash and auth path open; Story 9.1c was to capture the hash and decide Story 9.4's fate. Finding, from observation:
+
+1. **The wishlist read is server-side-rendered.** `__NEXT_DATA__` on `library.playstation.com/wishlist` already carries `storeWishlistSecure` and the real wishlist titles. The browser issues NO client-side `storeRetrieveWishlist` request on load or scroll — Sony's Next.js server runs the persisted query against its own manifest and ships the data pre-rendered. There is no client request to capture (so DW-10's planned DevTools capture cannot exist on the current site).
+
+2. **The bundle's query is not in the client-reachable persisted allowlist.** The gql document was extracted from `wishlist-819ebbe0…js` and hashed with the app's own `parse`/`print` (from its webpack modules) as `sha256(print(addTypename(parse(doc))))`. That recipe was validated EXACT against `getCartItemCount` — a query the app DOES run client-side — reproducing its registered hash `98136bcbc72e0fefccd8ecd6d3b3309225a6889c19df6e54581d86ff1c15d88a` byte-for-byte. Applied to the wishlist doc, every candidate (raw / trimmed / collapsed / print ± __typename ± root) returns HTTP 404 `PersistedQueryNotFound`. Freeform GraphQL stays refused (400).
+
+| Endpoint | NPSSO bearer (client-observable) |
+| --- | --- |
+| `getCartItemCount` (control, client-executed) | 200 — hash reproduced exactly, registered |
+| `storeRetrieveWishlist` (bundle doc, all hash variants) | **404 — PersistedQueryNotFound** |
+| `storeRetrieveWishlist` (freeform) | **400 — persisted-only / CSRF** |
+| wishlist page data | served via SSR `__NEXT_DATA__`, no client GraphQL call |
+
+status: done 2026-07-14
+resolution: Wishlist reachable under NEITHER credential from the app's server-to-server position — the only working path is Sony's server-side persisted manifest, not client-observable and not obtainable by the Worker. Per Story 9.1c's contract and Story 9.4's first AC, **Story 9.4 is removed from Epic 9 and filed to Future.** Epic 9 ships with 9.1b + 9.2 + 9.3. Future revisit: if PSN re-exposes a client-side wishlist fetch, or publishes a REST wishlist endpoint, capture the hash then and restore 9.4.
+
+- source_spec: `spec-fab-menu-trophy-icon-mobile-labels.md`
+  summary: The card's platinum badge uses a fixed `data-testid="platinum-trophy"`, so a test doing `getByTestId('platinum-trophy')` in a render with 2+ platinum cards would throw on multiple matches.
+  evidence: PRE-EXISTING (the card carried this id before the icon was extracted; behaviour unchanged). No code or test currently does a singular `getByTestId` in a multi-card context — `Card.test.tsx` renders one card — so it is latent, not a live failure. If a future full-app test needs it, key by game id or use `getAllByTestId`.
+
+- source_spec: `spec-9-5-post-retro-hardening-sweep.md`
+  summary: An abandoned platinum-backfill loop (tab closed, or the client's 40-chunk brake trips) leaves the single-flight lock held until its 2-minute TTL, so the user's next sync is refused with the busy message.
+  evidence: `src/routes/sync.ts` releases the lock only when the loop ENDS (last chunk or a failure); a client that simply stops looping has no release call and no `beforeunload` best-effort. Self-healing within the TTL, and the busy message says so — but a stopped-early run (600+ candidates) makes it deterministic. A `DELETE /api/backfill/platinum-dates/lock` presenting the token, called from the brake and on unmount, would close it.
+
+- source_spec: `spec-9-5-post-retro-hardening-sweep.md`
+  summary: `listDiscardedTitleKeys` is a second full user-scoped join per trophy sync, one row-set away from the `listLibraryForUser` scan that just ran.
+  evidence: `src/repositories/games.ts` — both select the same user's `game_tracking ⋈ game`, differing only on the `discarded` flag. One query selecting `discarded` and partitioned in JS would be one D1 binding call instead of two, and binding calls count against the 50-subrequest budget the backfill's chunk size is busy defending. Not a hazard today (the trophy sync's budget has headroom); a cleanup when that file is next touched.
+

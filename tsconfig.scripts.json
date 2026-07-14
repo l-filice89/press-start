@@ -1,0 +1,16 @@
+{
+	/* The out-of-band scripts (Story 1.6's seed import, the icon generator). They
+	 * import `src/` — so they need the Worker program's bundler resolution and
+	 * Cloudflare types, not tsconfig.node's `nodenext` — but they are NOT part of
+	 * the Worker bundle, which is why they live in their own project.
+	 *
+	 * Story 9.5 brought them under `tsc` at all: the seed script builds a Drizzle
+	 * driver that must satisfy `Db` (which promises `batch()`), and an unchecked
+	 * file turns that promise into a runtime crash for whoever reuses a batching
+	 * repository function from the seed path. */
+	"extends": "./tsconfig.worker.json",
+	"compilerOptions": {
+		"tsBuildInfoFile": "./node_modules/.tmp/tsconfig.scripts.tsbuildinfo"
+	},
+	"include": ["scripts", "src"]
+}

@@ -1,0 +1,1 @@
+ALTER TABLE `game_tracking` ADD `trophy_np_service_name` text;

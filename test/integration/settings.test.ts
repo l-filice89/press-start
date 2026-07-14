@@ -12,9 +12,9 @@ import {
 import { createDb } from '../../src/repositories/db';
 import { user } from '../../src/schema';
 import {
-	getPsnCookie,
+	getPsnNpsso,
 	markPsnAuthExpired,
-	PSN_COOKIE_SETTING_KEY,
+	PSN_NPSSO_SETTING_KEY,
 } from '../../src/services/settings';
 import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
 
@@ -56,10 +56,10 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 		expect((await putTimezone({ timezone: 'Europe/Rome' })).status).toBe(401);
 		expect(
 			(
-				await appFetch('/api/settings/psn-cookie', {
+				await appFetch('/api/settings/psn-npsso', {
 					method: 'PUT',
 					headers: { 'content-type': 'application/json' },
-					body: JSON.stringify({ cookie: 'x' }),
+					body: JSON.stringify({ npsso: 'x' }),
 				})
 			).status,
 		).toBe(401);
@@ -93,7 +93,7 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 			await (await appFetch('/api/settings', { headers: { cookie } })).json(),
 		).toEqual({
 			timezone: 'Europe/Berlin',
-			psnCookieSet: false,
+			psnNpssoSet: false,
 			psnAuthExpired: false,
 			syncAttention: [],
 			psPlusRefreshFailed: false,
@@ -104,60 +104,89 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 		});
 	});
 
-	it('PSN cookie: PUT saves per-user, GET reports presence only and never echoes the value (hazard)', async () => {
-		// The value lands in an outbound Cookie header — whitespace-only,
-		// pair-smuggling and control characters are refused at the boundary.
-		for (const bad of ['   ', 'a;b', 'a b', 'a,b', 'a\nb', 'pdccws_p=']) {
-			const rejected = await appFetch('/api/settings/psn-cookie', {
+	it('PSN NPSSO: PUT saves per-user, GET reports presence only and never echoes the value (hazard)', async () => {
+		// The value lands in an outbound Cookie header (`npsso=<value>`) —
+		// whitespace-only, pair-smuggling and control characters are refused at
+		// the boundary. So is anything ABOVE Latin1 (Story 9.5): HTTP headers are
+		// Latin1-encoded, so an emoji or a smart quote pasted along with the token
+		// cannot be carried at all — it must fail HERE with a 400, not later as a
+		// 502 when the sync's fetch throws. (An emoji is a surrogate PAIR: a
+		// BMP-only guard would wave it through.)
+		for (const bad of [
+			'   ',
+			'a;b',
+			'a b',
+			'a,b',
+			'a\nb',
+			'npsso=',
+			'token✓',
+			'token😀',
+			'token’s',
+			// C1 control (NEL): Latin1-ENCODABLE, so a "nothing above U+00FF" bound
+			// waved it into the Cookie header. The cookie-octet allowlist does not.
+			'token\u0085x',
+			'token"x',
+			'token\\x',
+		]) {
+			const rejected = await appFetch('/api/settings/psn-npsso', {
 				method: 'PUT',
 				headers: { 'content-type': 'application/json', cookie },
-				body: JSON.stringify({ cookie: bad }),
+				body: JSON.stringify({ npsso: bad }),
 			});
 			expect(rejected.status, `expected 400 for ${JSON.stringify(bad)}`).toBe(
 				400,
 			);
 		}
 
-		// The classic paste mistake — copying the whole `name=value` pair —
-		// is corrected, not stored verbatim.
-		const pasted = await appFetch('/api/settings/psn-cookie', {
-			method: 'PUT',
-			headers: { 'content-type': 'application/json', cookie },
-			body: JSON.stringify({ cookie: 'pdccws_p=pair-pasted-value' }),
-		});
-		expect(pasted.status).toBe(200);
-		expect(await getSetting(db(), userId, PSN_COOKIE_SETTING_KEY)).toBe(
-			'pair-pasted-value',
-		);
+		// The paste shapes the deep link actually produces — the whole JSON blob
+		// rendered by `/api/v1/ssocookie`, a quoted value, the `name=value` pair —
+		// are unwrapped, not stored verbatim (they all pass the charset guard, so
+		// nothing else would catch them).
+		for (const [pasted, stored] of [
+			['{"npsso":"blob-pasted-value"}', 'blob-pasted-value'],
+			['  {"npsso": "spaced-blob-value"}  ', 'spaced-blob-value'],
+			['"quoted-pasted-value"', 'quoted-pasted-value'],
+			['npsso=pair-pasted-value', 'pair-pasted-value'],
+		]) {
+			const response = await appFetch('/api/settings/psn-npsso', {
+				method: 'PUT',
+				headers: { 'content-type': 'application/json', cookie },
+				body: JSON.stringify({ npsso: pasted }),
+			});
+			expect(response.status, `expected 200 for ${pasted}`).toBe(200);
+			expect(await getSetting(db(), userId, PSN_NPSSO_SETTING_KEY)).toBe(
+				stored,
+			);
+		}
 
-		const saved = await appFetch('/api/settings/psn-cookie', {
+		const saved = await appFetch('/api/settings/psn-npsso', {
 			method: 'PUT',
 			headers: { 'content-type': 'application/json', cookie },
-			body: JSON.stringify({ cookie: '  psn-secret-value  ' }),
+			body: JSON.stringify({ npsso: '  psn-secret-value  ' }),
 		});
 		expect(saved.status).toBe(200);
 		expect(await saved.json()).toEqual({
-			psnCookieSet: true,
+			psnNpssoSet: true,
 			psnAuthExpired: false,
 		});
 
 		// Stored trimmed; readable through the provider-facing service read.
-		expect(await getSetting(db(), userId, PSN_COOKIE_SETTING_KEY)).toBe(
+		expect(await getSetting(db(), userId, PSN_NPSSO_SETTING_KEY)).toBe(
 			'psn-secret-value',
 		);
-		expect(await getPsnCookie(db(), userId, {})).toBe('psn-secret-value');
+		expect(await getPsnNpsso(db(), userId, {})).toBe('psn-secret-value');
 
 		// The hazard: the secret must never ride back to the client.
 		const res = await appFetch('/api/settings', { headers: { cookie } });
 		const body = await res.text();
 		expect(body).not.toContain('psn-secret-value');
 		expect(JSON.parse(body)).toMatchObject({
-			psnCookieSet: true,
+			psnNpssoSet: true,
 			psnAuthExpired: false,
 		});
 	});
 
-	it('PSN auth-expired flag: persists across requests, cleared only by a fresh cookie (hazard)', async () => {
+	it('PSN auth-expired flag: persists across requests, cleared only by a fresh token (hazard)', async () => {
 		await markPsnAuthExpired(db(), userId);
 
 		// Survives reloads — it is persisted state, not a dismissible toast.
@@ -166,11 +195,11 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 		).json();
 		expect(flagged).toMatchObject({ psnAuthExpired: true });
 
-		// Saving a fresh cookie is the one exit.
-		await appFetch('/api/settings/psn-cookie', {
+		// Saving a fresh token is the one exit.
+		await appFetch('/api/settings/psn-npsso', {
 			method: 'PUT',
 			headers: { 'content-type': 'application/json', cookie },
-			body: JSON.stringify({ cookie: 'fresh-cookie' }),
+			body: JSON.stringify({ npsso: 'fresh-npsso' }),
 		});
 		const cleared = await (
 			await appFetch('/api/settings', { headers: { cookie } })
@@ -178,21 +207,21 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 		expect(cleared).toMatchObject({ psnAuthExpired: false });
 	});
 
-	it('PSN cookie seed: the env secret is used only while no setting is saved', async () => {
+	it('PSN NPSSO seed: the env secret is used only while no setting is saved', async () => {
 		// A saved setting always wins over the seed.
-		expect(
-			await getPsnCookie(db(), userId, { PSN_SESSION_COOKIE: 'env-seed' }),
-		).toBe('fresh-cookie');
+		expect(await getPsnNpsso(db(), userId, { PSN_NPSSO: 'env-seed' })).toBe(
+			'fresh-npsso',
+		);
 
-		// A user with no saved cookie falls back to the env seed, then to none.
-		const other = 'user-with-no-cookie';
-		expect(
-			await getPsnCookie(db(), other, { PSN_SESSION_COOKIE: 'env-seed' }),
-		).toBe('env-seed');
-		expect(await getPsnCookie(db(), other, {})).toBeUndefined();
+		// A user with no saved token falls back to the env seed, then to none.
+		const other = 'user-with-no-npsso';
+		expect(await getPsnNpsso(db(), other, { PSN_NPSSO: 'env-seed' })).toBe(
+			'env-seed',
+		);
+		expect(await getPsnNpsso(db(), other, {})).toBeUndefined();
 		// A whitespace-only secret (trailing-newline paste) is no seed at all.
 		expect(
-			await getPsnCookie(db(), other, { PSN_SESSION_COOKIE: ' \n' }),
+			await getPsnNpsso(db(), other, { PSN_NPSSO: ' \n' }),
 		).toBeUndefined();
 	});
 

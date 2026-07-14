@@ -14,6 +14,15 @@ export default defineConfig({
 	fullyParallel: true,
 	forbidOnly: !!process.env.CI,
 	retries: process.env.CI ? 2 : 0,
+	// Playwright's default (half the cores) put TEN chromium workers against one
+	// vite + workerd + local D1 on a dev laptop, and the suite wobbled: a random
+	// unrelated test timed out on roughly every other full run, each passing on
+	// its own (DW-9's "machine contention" wobble, measured again in Story 9.5 —
+	// 12 full runs). That is over-subscription, not flaky assertions. Four keeps
+	// the parallelism that catches real cross-test races (Story 9.5 found one:
+	// epic6's PS+ cancel wiping epic4's claim) without starving the one server
+	// they all share. CI has its own runner and keeps `retries: 2`.
+	workers: process.env.CI ? undefined : 4,
 	timeout: 60_000,
 	// Mutations are refetch-driven (no optimistic updates): under parallel
 	// load a PATCH + shelf refetch can outlive the 5s default expect window.

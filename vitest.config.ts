@@ -45,6 +45,10 @@ export default defineConfig({
 								// reach the live API — the preview route degrades instead.
 								IGDB_CLIENT_ID: '',
 								IGDB_ACCESS_TOKEN: '',
+								// And for PSN (Story 9.1b): a developer's real NPSSO seed in
+								// `.dev.vars` must not leak in — the settings suite asserts
+								// the no-credential baseline, and no test may reach PSN.
+								PSN_NPSSO: '',
 							},
 						},
 					}),

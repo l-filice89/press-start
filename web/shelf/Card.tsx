@@ -1,44 +1,10 @@
 import { type KeyboardEvent, useRef, useState } from 'react';
+import { PlatinumTrophy } from '../components/PlatinumTrophy';
 import type { ShelfGame } from './api';
 import { OwnershipSourceDialog } from './OwnershipSourceDialog';
 import { StatusPopover } from './StatusPopover';
 import { useTrackingMutations } from './useTrackingMutations';
 import './card.css';
-
-/**
- * The platinum badge: a stroke-only trophy in the app's neon outline style
- * (the emoji renders full-color gold and a grayscale filter reads flat against
- * the glow language). `currentColor` strokes so the flag's milestone-silver +
- * glow apply; the small diamond in the cup echoes the owned ◆.
- */
-function PlatinumTrophy() {
-	return (
-		<svg
-			viewBox="0 0 24 24"
-			width="1.2em"
-			height="1.2em"
-			fill="none"
-			stroke="currentColor"
-			strokeWidth="1.8"
-			strokeLinecap="round"
-			strokeLinejoin="round"
-			aria-hidden="true"
-			data-testid="platinum-trophy"
-		>
-			{/* cup */}
-			<path d="M7 4h10v4.5a5 5 0 0 1-10 0V4Z" />
-			{/* handles */}
-			<path d="M7 5.5H4.75V7a3 3 0 0 0 3 3" />
-			<path d="M17 5.5h2.25V7a3 3 0 0 1-3 3" />
-			{/* stem + base */}
-			<path d="M12 13.5V17" />
-			<path d="M8.5 20h7" />
-			<path d="M10 17h4" />
-			{/* the ◆, platinum-sized */}
-			<path d="m12 6 1.2 1.75L12 9.5l-1.2-1.75L12 6Z" />
-		</svg>
-	);
-}
 
 /**
  * A single shelf card. The cover is the open-detail trigger (Story 2.3): a
@@ -97,7 +63,11 @@ export function Card({
 	const showCover = !!game.coverUrl && !coverFailed;
 	const isPlaying = game.effectiveState === 'Playing';
 	const milestone = game.hasPlatinum
-		? { glyph: <PlatinumTrophy />, label: 'Platinum achieved', platinum: true }
+		? {
+				glyph: <PlatinumTrophy data-testid="platinum-trophy" />,
+				label: 'Platinum achieved',
+				platinum: true,
+			}
 		: game.hasCompleted
 			? { glyph: '✓', label: 'Story completed', platinum: false }
 			: null;
@@ -225,6 +195,19 @@ export function Card({
 							open={statusMenuOpen}
 							onOpenChange={onStatusMenuOpenChange}
 						/>
+						{/* Story 9.2: trophy progress, from counts persisted at sync time
+						    (nothing is fetched on render). A game with NO trophy data
+						    renders nothing at all here — never a fake 0%. */}
+						{game.trophy && (
+							<span className="card__trophy" data-testid="card-trophy">
+								<span aria-hidden="true">
+									{game.trophy.percent}% · {game.trophy.grade}
+								</span>
+								<span className="sr-only">
+									{`Trophy progress ${game.trophy.percent} percent, grade ${game.trophy.grade}`}
+								</span>
+							</span>
+						)}
 					</div>
 					<p className="card__owned-line">
 						{/* visibility-hidden (CSS, via data-owned) when un-owned — keeps

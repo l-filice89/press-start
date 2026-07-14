@@ -11,7 +11,8 @@ import {
 } from '../../src/repositories';
 import { createDb } from '../../src/repositories/db';
 import { user } from '../../src/schema';
-import { PSN_COOKIE_SETTING_KEY } from '../../src/services/settings';
+import { PSN_NPSSO_SETTING_KEY } from '../../src/services/settings';
+import { PSN_LIBRARY_HOST, stubPsnFetch } from './psn-stub';
 import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
 
 /**
@@ -43,25 +44,19 @@ async function shelfTitles(cookie: string): Promise<string[]> {
 	return games.map((g) => g.title);
 }
 
-// Stub the outbound PSN call only (same technique as sync.test.ts).
-const realFetch = globalThis.fetch;
+// Stub the outbound PSN library call; the exchange comes from the shared double.
 function stubPsn(games: Record<string, unknown>[]) {
-	vi.stubGlobal(
-		'fetch',
-		async (input: RequestInfo | URL, init?: RequestInit) => {
-			const url = String(input instanceof Request ? input.url : input);
-			if (!url.startsWith('https://web.np.playstation.com/')) {
-				return realFetch(input, init);
-			}
-			return new Response(
-				JSON.stringify({
-					data: {
-						purchasedTitlesRetrieve: { games, pageInfo: { isLast: true } },
-					},
-				}),
-				{ status: 200, headers: { 'content-type': 'application/json' } },
-			);
-		},
+	stubPsnFetch((url) =>
+		url.startsWith(PSN_LIBRARY_HOST)
+			? new Response(
+					JSON.stringify({
+						data: {
+							purchasedTitlesRetrieve: { games, pageInfo: { isLast: true } },
+						},
+					}),
+					{ status: 200, headers: { 'content-type': 'application/json' } },
+				)
+			: undefined,
 	);
 }
 
@@ -162,7 +157,7 @@ describe('discard (soft-delete tombstone, through the route)', () => {
 			externalId: 'PPSA-DISCARD_00',
 		});
 		await discard(g.id, true, cookie);
-		await setSetting(db(), userId, PSN_COOKIE_SETTING_KEY, 'test-psn-cookie');
+		await setSetting(db(), userId, PSN_NPSSO_SETTING_KEY, 'test-psn-npsso');
 
 		// …appears in the PSN purchase list. A normal sync would flip owned→true;
 		// the tombstone must veto that so the game stays hidden.

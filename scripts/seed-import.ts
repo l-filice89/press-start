@@ -58,39 +58,63 @@ function findNotionCsv(): string {
  * SQL and returns rows as positional value arrays (the shape drizzle expects);
  * D1 returns column-keyed objects, so we `Object.values()` each (D1 preserves
  * SELECT column order).
+ *
+ * The BATCH callback is not optional decoration (Story 9.5): `Db` promises
+ * `batch()` because the Worker's D1 driver has it and the trophy sync uses it —
+ * a driver built without one throws at RUNTIME the first time a batching
+ * repository function is reused by the seed path. This file is in
+ * `tsconfig.scripts.json` precisely so that promise is checked at COMPILE time.
  */
 function createHttpDb(accountId: string, databaseId: string, apiToken: string) {
 	const endpoint = `https://api.cloudflare.com/client/v4/accounts/${accountId}/d1/database/${databaseId}/query`;
+
+	async function query(
+		sql: string,
+		params: unknown[],
+		method: 'run' | 'all' | 'values' | 'get',
+	): Promise<{ rows: unknown[] }> {
+		const response = await fetch(endpoint, {
+			method: 'POST',
+			headers: {
+				Authorization: `Bearer ${apiToken}`,
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({ sql, params }),
+		});
+		if (!response.ok) {
+			// Drizzle re-wraps a thrown error as a generic "Failed query", losing
+			// this detail — log it directly so a bad token / wrong account id is
+			// visible (a 403 here means the API token lacks D1 edit permission).
+			const body = await response.text();
+			console.error(`\nD1 HTTP ${response.status} ${response.statusText}: ${body}`);
+			throw new Error(`D1 HTTP query failed: ${response.status}`);
+		}
+		const data = (await response.json()) as {
+			success: boolean;
+			errors: unknown[];
+			result: { results: Record<string, unknown>[] }[];
+		};
+		if (!data.success) {
+			console.error(`\nD1 error: ${JSON.stringify(data.errors)}`);
+			throw new Error(`D1 error: ${JSON.stringify(data.errors)}`);
+		}
+		const rows = (data.result[0]?.results ?? []).map((r) => Object.values(r));
+		// `.get()` expects a single positional row, `.all()`/`.values()` an array of them.
+		return { rows: method === 'get' ? (rows[0] ?? []) : rows };
+	}
+
 	return drizzle(
-		async (sql, params, method) => {
-			const response = await fetch(endpoint, {
-				method: 'POST',
-				headers: {
-					Authorization: `Bearer ${apiToken}`,
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({ sql, params }),
-			});
-			if (!response.ok) {
-				// Drizzle re-wraps a thrown error as a generic "Failed query", losing
-				// this detail — log it directly so a bad token / wrong account id is
-				// visible (a 403 here means the API token lacks D1 edit permission).
-				const body = await response.text();
-				console.error(`\nD1 HTTP ${response.status} ${response.statusText}: ${body}`);
-				throw new Error(`D1 HTTP query failed: ${response.status}`);
+		(sql, params, method) => query(sql, params, method),
+		// ponytail: sequential, not atomic — the D1 HTTP endpoint takes one
+		// statement per POST, and this is a one-off out-of-band seed. If a batching
+		// caller ever needs all-or-nothing here, POST the statements as one
+		// multi-statement `sql` body instead.
+		async (queries) => {
+			const results: { rows: unknown[] }[] = [];
+			for (const q of queries) {
+				results.push(await query(q.sql, q.params, q.method));
 			}
-			const data = (await response.json()) as {
-				success: boolean;
-				errors: unknown[];
-				result: { results: Record<string, unknown>[] }[];
-			};
-			if (!data.success) {
-				console.error(`\nD1 error: ${JSON.stringify(data.errors)}`);
-				throw new Error(`D1 error: ${JSON.stringify(data.errors)}`);
-			}
-			const rows = (data.result[0]?.results ?? []).map((r) => Object.values(r));
-			// `.get()` expects a single positional row, `.all()`/`.values()` an array of them.
-			return { rows: method === 'get' ? (rows[0] ?? []) : rows };
+			return results;
 		},
 		{ schema },
 	);

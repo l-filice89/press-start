@@ -544,6 +544,14 @@ test.describe('Story 6.4 ownership source', () => {
 			await expect(dialog).toBeVisible();
 			await dialog.getByRole('button', { name: 'Claimed with PS+' }).click();
 			await expect(dialog).toBeHidden();
+			// The dialog closes on CLICK, not on the write landing: the ownership PUT
+			// is still in flight. The owned toast fires in the mutation's onSuccess,
+			// so it is the write's completion signal — without it this D1 read races
+			// the PUT and flakes under full-suite load (Story 9.5; its "Purchased"
+			// sibling below was fixed this way already).
+			await expect(
+				page.getByTestId('toast').getByText(`${game.title} — owned`),
+			).toBeVisible();
 
 			const rows = await d1Query<{ owned: number; owned_via: string | null }>(
 				`SELECT owned, owned_via FROM game_tracking WHERE game_id = '${game.id}'`,
@@ -695,6 +703,41 @@ test.describe('Story 6.4 ownership source', () => {
 			expect(rows[0].bought_on).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 		} finally {
 			await deleteGames([claim.id]);
+		}
+	});
+
+	// Moved here from `epic4-settings.spec.ts` (Story 9.5): it seeds a membership
+	// row, and 6.4d's cancel un-owns EVERY membership row of the shared e2e user.
+	// Serial mode is per-FILE, so from another file the cancel raced this claim
+	// and wiped it mid-assert.
+	test('a game owned via PS+ claim carries the PS+ tag on its card (FR-9 amended)', async ({
+		page,
+	}) => {
+		const claimed = createGame({
+			title: `PS+ Tag Claim ${randomUUID().slice(0, 8)}`,
+			tracking: { owned: true, ownedVia: 'membership', playStatus: 'Playing' },
+		});
+		const bought = createGame({
+			title: `PS+ Tag Buy ${randomUUID().slice(0, 8)}`,
+			tracking: { owned: true, ownedVia: 'purchase', playStatus: 'Playing' },
+		});
+		try {
+			await seedGame(claimed);
+			await seedGame(bought);
+			await page.goto('/');
+
+			await expect(cardFor(page, claimed)).toBeVisible();
+			await expect(
+				cardFor(page, claimed).getByTestId('card-owned-via-membership'),
+			).toHaveText(/PS\+/);
+
+			// A purchase shows the plain OWNED chip — no subscription tag.
+			await expect(cardFor(page, bought)).toBeVisible();
+			await expect(
+				cardFor(page, bought).getByTestId('card-owned-via-membership'),
+			).toHaveCount(0);
+		} finally {
+			await deleteGames([claimed.id, bought.id]);
 		}
 	});
 

@@ -64,7 +64,7 @@
 	gap: var(--space-1);
 }
 
-.settings-panel__cookie-input {
+.settings-panel__token-input {
 	width: 100%;
 	padding: var(--space-2);
 	border: 1px solid var(--color-border-hairline);

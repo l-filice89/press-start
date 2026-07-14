@@ -206,6 +206,8 @@ export async function enrichGame(
 export type LibraryRow = {
 	id: string;
 	title: string;
+	/** The stored match key — the ONE key both syncs join a PSN name on. */
+	titleNormalized: string;
 	releaseDate: string | null;
 	coverUrl: string | null;
 	storeUrl: string | null;
@@ -220,6 +222,19 @@ export type LibraryRow = {
 	owned: boolean;
 	ownershipType: (typeof gameTracking.$inferSelect)['ownershipType'];
 	ownedVia: (typeof gameTracking.$inferSelect)['ownedVia'];
+	// Raw trophy counts (Story 9.2). `trophySyncedAt` is the "this row has trophy
+	// data" column — a NULL there means the trophy sync never wrote this game,
+	// which is what makes the card/detail show NOTHING (never a fake 0%). The %
+	// and the grade are derived from the counts in `core/trophy.ts`, never stored.
+	trophySyncedAt: string | null;
+	trophyEarnedBronze: number | null;
+	trophyEarnedSilver: number | null;
+	trophyEarnedGold: number | null;
+	trophyEarnedPlatinum: number | null;
+	trophyDefinedBronze: number | null;
+	trophyDefinedSilver: number | null;
+	trophyDefinedGold: number | null;
+	trophyDefinedPlatinum: number | null;
 };
 
 /**
@@ -241,6 +256,7 @@ export async function listLibraryForUser(
 		.select({
 			id: game.id,
 			title: game.title,
+			titleNormalized: game.titleNormalized,
 			releaseDate: game.releaseDate,
 			coverUrl: game.coverUrl,
 			storeUrl: game.storeUrl,
@@ -255,10 +271,41 @@ export async function listLibraryForUser(
 			owned: gameTracking.owned,
 			ownershipType: gameTracking.ownershipType,
 			ownedVia: gameTracking.ownedVia,
+			trophySyncedAt: gameTracking.trophySyncedAt,
+			trophyEarnedBronze: gameTracking.trophyEarnedBronze,
+			trophyEarnedSilver: gameTracking.trophyEarnedSilver,
+			trophyEarnedGold: gameTracking.trophyEarnedGold,
+			trophyEarnedPlatinum: gameTracking.trophyEarnedPlatinum,
+			trophyDefinedBronze: gameTracking.trophyDefinedBronze,
+			trophyDefinedSilver: gameTracking.trophyDefinedSilver,
+			trophyDefinedGold: gameTracking.trophyDefinedGold,
+			trophyDefinedPlatinum: gameTracking.trophyDefinedPlatinum,
 		})
 		.from(gameTracking)
 		.innerJoin(game, eq(gameTracking.gameId, game.id))
 		.where(
 			and(eq(gameTracking.userId, userId), eq(gameTracking.discarded, false)),
 		);
+}
+
+/**
+ * The normalized titles of this user's DISCARDED games (Story 9.5). The mirror
+ * image of `listLibraryForUser`'s filter: the trophy sync matches PSN titles
+ * against the visible library, so a discarded game's trophy title matched
+ * nothing and was reported as "unmatched" — noise, on every single run, for a
+ * game the user deliberately threw away. It did not fail to match; it matched
+ * something hidden. The trophy sync uses this to drop those titles SILENTLY.
+ */
+export async function listDiscardedTitleKeys(
+	db: Db,
+	userId: string,
+): Promise<string[]> {
+	const rows = await db
+		.select({ titleNormalized: game.titleNormalized })
+		.from(gameTracking)
+		.innerJoin(game, eq(gameTracking.gameId, game.id))
+		.where(
+			and(eq(gameTracking.userId, userId), eq(gameTracking.discarded, true)),
+		);
+	return rows.map((r) => r.titleNormalized).filter((t): t is string => !!t);
 }

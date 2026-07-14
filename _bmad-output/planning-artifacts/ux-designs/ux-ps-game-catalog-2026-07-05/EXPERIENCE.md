@@ -36,7 +36,7 @@ Everything hangs off The Shelf. Two homes for actions: the **persistent search b
 | **Login** | Cold, unauthenticated | Magic-link sign-in (first run only) |
 
 - **Search-as-add (the hero path).** The always-visible search bar (FR-19) is the *sole* Add entry point. Type a name → existing library games jump to their detail (FR-42, never duplicate); no match → the top row is `＋ Add "<name>"` → preview → save. Zero FAB hops. Search matches the **entire** library, ignoring active filters and hidden states — "did I ever finish that?" always answers.
-- **FAB drawer (chores only).** Sync library · Check PS+ Extra · Export CSV · Settings · About/Help. Icons-only on mobile, icons+text on desktop. Bottom-right by default, position configurable (Settings). **No Add here** — Add belongs under the thumb in search.
+- **FAB drawer (chores only).** Sync library · Check PS+ Extra · Sync trophies · Export CSV · Settings · About/Help. Icons + text on all sizes (revised 2026-07-14: icons-only on mobile was too unclear). Bottom-right by default, position configurable (Settings). **No Add here** — Add belongs under the thumb in search.
 - **Attention banner.** A single under-header zone, shown only when action is needed, persistent until cleared: stragglers, expired session cookie (routes to Settings), failed PS+ refresh.
 - **No seed-import UI.** The one-time Notion+PS seed is run out-of-band; zero UI surface.
 
@@ -122,7 +122,7 @@ One responsive app; deltas by surface:
 |---|---|---|
 | Card | **Lean** — 2-up grid, genres hidden, name + status pill below cover | **Dense** — auto-fill grid, name + pill + genres below cover |
 | Filters | Single **Filters** button + count badge → bottom sheet (grouped, logic-labeled, "Show N games") | Full filter row always visible; summary sentence inline |
-| FAB drawer | Icons only | Icons + text |
+| FAB drawer | Icons + text | Icons + text |
 | Detail | True full-screen | Centered ~760px panel |
 | Header readout | Compact ("175 · 52 OWNED") | Full (`PS+ CATALOG AS OF …` timestamp) |
 

@@ -10,6 +10,7 @@
  * satisfy the repository functions — the same schema + repository code writes
  * D1 from either driver.
  */
+import type { BatchItem, BatchResponse } from 'drizzle-orm/batch';
 import { drizzle } from 'drizzle-orm/d1';
 import type { BaseSQLiteDatabase } from 'drizzle-orm/sqlite-core';
 import * as schema from '../schema';
@@ -18,5 +19,14 @@ export function createDb(d1: D1Database) {
 	return drizzle(d1, { schema });
 }
 
-/** Common async-SQLite surface shared by the D1 and D1-HTTP-proxy drivers. */
-export type Db = BaseSQLiteDatabase<'async', unknown, typeof schema>;
+/**
+ * Common async-SQLite surface shared by the D1 and D1-HTTP-proxy drivers.
+ * `batch` is declared here because BOTH drivers ship it while the shared base
+ * type does not: a bulk write (the trophy sync) is one binding call for many
+ * statements, and binding calls count against the Workers subrequest limit.
+ */
+export type Db = BaseSQLiteDatabase<'async', unknown, typeof schema> & {
+	batch<U extends BatchItem<'sqlite'>, T extends Readonly<[U, ...U[]]>>(
+		batch: T,
+	): Promise<BatchResponse<T>>;
+};

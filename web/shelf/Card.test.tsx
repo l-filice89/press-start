@@ -33,6 +33,7 @@ function game(overrides: Partial<ShelfGame> = {}): ShelfGame {
 		ownedVia: null,
 		releaseDate: '2015-03-24',
 		genres: ['Action', 'RPG'],
+		trophy: null,
 		...overrides,
 	};
 }
@@ -59,6 +60,44 @@ function renderCard(g: ShelfGame) {
 }
 
 describe('Card', () => {
+	it('shows the trophy % and grade from the persisted counts (Story 9.2)', () => {
+		renderCard(
+			game({
+				trophy: {
+					percent: 62,
+					grade: 'B',
+					earned: { bronze: 20, silver: 6, gold: 2, platinum: 0 },
+					defined: { bronze: 30, silver: 10, gold: 4, platinum: 1 },
+				},
+			}),
+		);
+		expect(screen.getByTestId('card-trophy')).toHaveTextContent('62% · B');
+		// The glyph is decorative; the label is what a screen reader reads.
+		expect(
+			screen.getByText('Trophy progress 62 percent, grade B'),
+		).toBeInTheDocument();
+	});
+
+	it('renders NOTHING for a game with no trophy data (hazard: never a fake 0%)', () => {
+		renderCard(game({ trophy: null }));
+		expect(screen.queryByTestId('card-trophy')).not.toBeInTheDocument();
+		expect(screen.queryByText(/0%/)).not.toBeInTheDocument();
+	});
+
+	it('a played-but-none-earned game shows a REAL 0% · D (distinct from no data)', () => {
+		renderCard(
+			game({
+				trophy: {
+					percent: 0,
+					grade: 'D',
+					earned: { bronze: 0, silver: 0, gold: 0, platinum: 0 },
+					defined: { bronze: 40, silver: 12, gold: 6, platinum: 1 },
+				},
+			}),
+		);
+		expect(screen.getByTestId('card-trophy')).toHaveTextContent('0% · D');
+	});
+
 	it('renders cover art, title, state pill, owned indicator, and genres', () => {
 		renderCard(game());
 		expect(screen.getByTestId('card-cover')).toHaveAttribute(

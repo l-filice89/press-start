@@ -6,7 +6,7 @@ import './attention-banner.css';
  * (that lifecycle is owned by later stories that feed it). This is NFR-4 made
  * visible. Reusable seam; rendered with no live data in this shell.
  *
- * Variants map to a tone (DESIGN.md): stragglers = amber, expired-cookie =
+ * Variants map to a tone (DESIGN.md): stragglers = amber, expired-token =
  * magenta, failed-refresh = steel. `enrich` (Story 6.2) is a second amber
  * source — games needing a games-DB match — kept distinct from `stragglers`
  * (sync conflicts) so the two attention sources address unambiguously.
@@ -14,7 +14,7 @@ import './attention-banner.css';
 export type AttentionVariant =
 	| 'stragglers'
 	| 'enrich'
-	| 'expired-cookie'
+	| 'expired-token'
 	| 'failed-refresh';
 
 export function AttentionBanner({
@@ -31,7 +31,7 @@ export function AttentionBanner({
 			className={`attention-banner attention-banner--${variant}`}
 			role="status"
 			aria-live="polite"
-			// Variant-scoped: two banners can coexist (expired cookie + sync
+			// Variant-scoped: two banners can coexist (expired token + sync
 			// needs-attention) and tests must address one unambiguously.
 			data-testid={`attention-banner-${variant}`}
 		>

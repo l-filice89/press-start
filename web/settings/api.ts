@@ -5,8 +5,8 @@ import { callApi } from '../shelf/api';
  * Client contract for `/api/settings` (Story 4.1). Mirrors the server shape
  * rather than importing across the SPA/Worker program boundary (same policy
  * as `web/shelf/api.ts`, whose `callApi` — status-carrying errors for the
- * query client's 401 routing — is reused here). The PSN cookie itself never
- * appears in this contract — the API reports presence only.
+ * query client's 401 routing — is reused here). The PSN NPSSO token itself
+ * never appears in this contract — the API reports presence only.
  */
 
 export const syncAttentionItemSchema = z.object({
@@ -18,7 +18,7 @@ export type SyncAttentionItem = z.infer<typeof syncAttentionItemSchema>;
 
 export const settingsSchema = z.object({
 	timezone: z.string().nullable(),
-	psnCookieSet: z.boolean(),
+	psnNpssoSet: z.boolean(),
 	psnAuthExpired: z.boolean(),
 	// Defaulted: a deploy-skewed/cached response without the field must not
 	// reject the whole settings payload (timezone + PSN banner ride on it).
@@ -67,12 +67,12 @@ export async function cancelPsPlus(): Promise<{ unowned: number }> {
 	return z.object({ unowned: z.number() }).parse(body);
 }
 
-/** Save a fresh PSN session cookie; the server clears the expired flag. */
-export async function savePsnCookie(cookie: string): Promise<void> {
-	await callApi('/api/settings/psn-cookie', {
+/** Save a fresh PSN NPSSO token; the server clears the expired flag. */
+export async function savePsnNpsso(npsso: string): Promise<void> {
+	await callApi('/api/settings/psn-npsso', {
 		method: 'PUT',
 		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify({ cookie }),
+		body: JSON.stringify({ npsso }),
 	});
 }
 
@@ -99,10 +99,107 @@ export const syncResultSchema = z.object({
 
 export type SyncResult = z.infer<typeof syncResultSchema>;
 
-/** Trigger the in-Worker PSN sync. A 401 means the session cookie expired —
+/** Trigger the in-Worker PSN sync. A 401 means the NPSSO token expired —
  * the server already lit the attention-banner flag; never auto-retry. */
 export async function runSync(): Promise<SyncResult> {
 	return syncResultSchema.parse(await callApi('/api/sync', { method: 'POST' }));
+}
+
+/** Result of a PSN trophy sync (Story 9.2). */
+export const trophySyncResultSchema = z.object({
+	/** Games whose trophy counts this run wrote. */
+	updated: z.array(z.string()),
+	/** Trophy titles with no library game (a demo, an unowned game) — not an error. */
+	unmatched: z.array(z.string()),
+	/** Ambiguous names: nothing was written, and they are named. */
+	needsAttention: z.array(syncAttentionItemSchema),
+});
+
+export type TrophySyncResult = z.infer<typeof trophySyncResultSchema>;
+
+/** Trigger the in-Worker trophy sync. A 401 means the NPSSO expired — the
+ * server already lit the banner flag; never auto-retry (AD-14). */
+export async function runTrophySync(): Promise<TrophySyncResult> {
+	return trophySyncResultSchema.parse(
+		await callApi('/api/sync/trophies', { method: 'POST' }),
+	);
+}
+
+/** One chunk of the platinum-date backfill (Story 9.3). */
+export const platinumBackfillResultSchema = z.object({
+	/** Games whose `platinum_on` this chunk recovered, with the date written.
+	 *  `gameId` is the only stable key — titles COLLIDE in this app. */
+	filled: z.array(
+		z.object({ gameId: z.string(), title: z.string(), date: z.string() }),
+	),
+	/** Titles PSN could not date (delisted, no date on record) — named, not lost.
+	 *  `code` is what the summary branches on, never the prose. */
+	skipped: z.array(
+		syncAttentionItemSchema.extend({
+			code: z.enum(['not-found', 'no-date']),
+		}),
+	),
+	/** Non-null = there are more candidates: re-post with it (the chunk loop). */
+	nextCursor: z.string().nullable(),
+	/** False = the trophy sync has never run — there is nothing to recover FROM. */
+	hasTrophyData: z.boolean(),
+	/**
+	 * The single-flight lock this loop holds (Story 9.5). Present while the loop
+	 * continues; hand it back with the next chunk to RENEW it. It is a capability,
+	 * not a cursor — the cursor is a game id the server published, so the lock
+	 * cannot key on it. Absent on a `partial` report (the failure released it).
+	 */
+	lockToken: z.string().nullable().optional(),
+});
+
+export type PlatinumBackfillResult = z.infer<
+	typeof platinumBackfillResultSchema
+>;
+
+/**
+ * One chunk of the one-off backfill. The run is chunked because the fan-out is
+ * one PSN call per platinum title (53 on the probed account) and a Worker
+ * invocation gets 50 subrequests — the caller LOOPS on `nextCursor`. A 401
+ * means the NPSSO expired: stop, never retry (AD-14).
+ */
+export async function runPlatinumBackfill(
+	cursor: string | null,
+	lockToken?: string | null,
+): Promise<PlatinumBackfillResult> {
+	const query = new URLSearchParams();
+	if (cursor) query.set('cursor', cursor);
+	// Proof this loop already holds the lock — without it a continuation is
+	// treated as a fresh run and refused while someone else is syncing.
+	if (cursor && lockToken) query.set('lockToken', lockToken);
+	const suffix = query.size > 0 ? `?${query}` : '';
+	return platinumBackfillResultSchema.parse(
+		await callApi(`/api/backfill/platinum-dates${suffix}`, { method: 'POST' }),
+	);
+}
+
+/**
+ * Hand the single-flight lock back when the loop stops WITHOUT finishing (the
+ * chunk brake): the server releases only on the chunk that ends the loop, so an
+ * abandoned run would keep refusing the user's next sync — with a message that
+ * is no longer true — until its TTL. Best-effort: a failure here is survivable
+ * (the TTL still clears it), so it never surfaces.
+ */
+export async function releaseBackfillLock(lockToken: string): Promise<void> {
+	await callApi(
+		`/api/backfill/platinum-dates?release=1&lockToken=${encodeURIComponent(lockToken)}`,
+		{ method: 'POST' },
+	).catch(() => undefined);
+}
+
+/**
+ * A FAILED chunk still wrote rows — `platinum_on` is write-once, nothing rolls
+ * back — and the server reports them in the error body. Null when the failure
+ * carried no report (a refusal, a 401 before the first title).
+ */
+export function backfillPartial(error: unknown): PlatinumBackfillResult | null {
+	const body = (error as { body?: { partial?: unknown } } | undefined)?.body;
+	const parsed = platinumBackfillResultSchema.safeParse(body?.partial);
+	return parsed.success ? parsed.data : null;
 }
 
 /** Result of a PS+ Extra catalog check (Story 5.1, FR-38). */

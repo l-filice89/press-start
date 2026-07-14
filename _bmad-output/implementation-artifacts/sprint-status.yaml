@@ -1,5 +1,5 @@
 # generated: 2026-07-06
-# last_updated: 2026-07-08
+# last_updated: 2026-07-13
 # project: ps-game-catalog
 # project_key: NOKEY
 # tracking_system: file-system
@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-06
-last_updated: 2026-07-13
+last_updated: 2026-07-14
 project: ps-game-catalog
 project_key: NOKEY
 tracking_system: file-system
@@ -129,12 +129,15 @@ development_status:
   epic-8-retrospective: optional
 
   # Epic 9: The PSN Record — Trophies (and maybe Wishlist) — v1.x
-  epic-9: backlog
-  9-1-spike-s-1-what-does-pdccws-p-authorize-vr-1: backlog # spike; its outcome decides whether 9.4 ships here
-  9-2-trophy-progress-on-every-game-vr-2: backlog
-  9-3-one-off-backfill-recover-the-platinum-dates-psn-knows-vr-3: backlog
-  9-4-sync-the-ps-store-wishlist-vr-4: backlog # conditional on Story 9.1
-  epic-9-retrospective: optional
+  epic-9: in-progress
+  9-1-spike-s-1-what-does-pdccws-p-authorize-vr-1: done # DW-10: trophies need NPSSO; wishlist = persisted query storeRetrieveWishlist
+  9-1b-swap-psnprovider-cookie-to-npsso-bearer-vr-1: done # NPSSO bearer swap; cookie path deleted, migration 0006 drops the stale row
+  9-1c-final-wishlist-spike-capture-storeretrievewishlist-hash-vr-1: done # wishlist read is SSR; hash not client-observable, PersistedQueryNotFound under bearer
+  9-2-trophy-progress-on-every-game-vr-2: done # trophy counts persisted; % + grade derived in core; batched D1 writes
+  9-3-one-off-backfill-recover-the-platinum-dates-psn-knows-vr-3: done # chunked cursor backfill; per-title npServiceName (migration 0008)
+  9-4-sync-the-ps-store-wishlist-vr-4: future # DROPPED per 9.1c (DW-10 ext): wishlist unreachable under either credential; revisit if PSN exposes a client fetch/REST endpoint
+  9-5-post-retro-hardening-sweep: done # 2026-07-14 epic-9 retro: 6 ledger fixes, gates the main merge (single-flight guard across all 3 PSN long-ops, shared exchange stub, seed batch callback, npsso Latin1 guard, discarded-trophy noise, 6.4a flake)
+  epic-9-retrospective: done # 2026-07-14 — epic-9-retro-2026-07-14.md; epic marker stays in-progress until Story 9.5 + the main merge (Luca's gate)
 
   # Epic 10: Know Before You Play — Scores & Expiry Warnings — v1.x, after Epic 7
   epic-10: backlog
@@ -284,3 +287,19 @@ action_items:
     action: "Critical path — resolve retro follow-ups (the 6.6 decision), then merge feat/epic-6/add-at-discovery to main through the CI gate and tag v1.0.0"
     owner: "Luca"
     status: done # 2026-07-13: 6.6 shipped as pickTitleCandidate; PR #10 merged (935af38), v1.0.0 tagged (5ad0ef6), prod deployed + seeded
+  - epic: 9
+    action: "SAMPLE-OF-ONE rule: a spec may not assert a constant/enum/distribution over a population from a single observed instance — probe the population or carry it as a per-item field. Wire into bmad-dev-auto.toml beside PROBE-BEFORE-YOU-MAP"
+    owner: "Winston + Murat"
+    status: done # 2026-07-14: SAMPLE-OF-ONE RULE persistent fact added to _bmad/custom/bmad-dev-auto.toml. Written from story 9.3's HIGH — npServiceName pinned to 'trophy2' from ONE PS5 sample; the live probe measured 94 of 137 titles on 'trophy', and the wrong name 404s into a permanent silent skip on a write-once column.
+  - epic: 9
+    action: "BUDGET-COUNTS-EVERY-SUBREQUEST rule: any spec claiming a resource budget must enumerate every consumer (external fetches AND D1 binding calls AND middleware reads) with the arithmetic written out. Wire into bmad-dev-auto.toml"
+    owner: "Winston + Murat"
+    status: done # 2026-07-14: BUDGET-COUNTS-EVERY-SUBREQUEST RULE persistent fact added. Written from the same bug shipped twice — 9.2 counted 4 fetches and ignored ~137 sequential D1 UPDATEs (the mock cannot charge for them, so every test passed); 9.3's chunk size ignored the auth middleware's own D1 reads.
+  - epic: 9
+    action: "Story 9.5 — post-retro hardening sweep (6 ledger fixes): shared NPSSO exchange-stub helper; seed-driver batch callback; single-flight guard across library sync + trophy sync + backfill; npsso Latin1 guard at save; discarded-game trophy noise; the pre-existing epic6 6.4a e2e flake"
+    owner: "Amelia"
+    status: open
+  - epic: 9
+    action: "Merge feat/epic-9-psn-record to main through the CI gate and deploy a new version — gated on Story 9.5"
+    owner: "Luca"
+    status: open
