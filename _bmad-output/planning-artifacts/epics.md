@@ -1387,7 +1387,7 @@ So that I can explore what's playable through the subscription.
 
 **Given** the catalog is a discovery surface, not a "what can I play today" surface (that's the shelf)
 **When** the grid orders its games
-**Then** it orders **newest first** (the store's own release-date sort) with **no ownership tier** — games I already track are neither hoisted nor hidden, they sit where they fall carrying their `In library` / `Owned` marker. **The shelf comparator (`core/shelf.ts`, which sorts owned-before-wishlisted) must NOT be reused here** — reusing the card chrome does not mean reusing the sort, or the catalog would open on the games I've already found [EXPERIENCE.md]
+**Then** it orders **alphabetically by title** — case-insensitive, locale-aware (`localeCompare` with `sensitivity: 'base'`), the same tiebreaker the shelf already ends on — with **no state tier and no ownership tier**. Games I already track are neither hoisted nor hidden; they sit in A–Z order carrying their `In library` / `Owned` marker. **Do not reuse `compareShelf` (`core/shelf.ts`)** — it leads with state and ownership, which would open the catalog on the games I've already found. Reuse its *title comparison*, not the comparator [EXPERIENCE.md]
 
 **Given** the catalog grid
 **When** I filter by genre
