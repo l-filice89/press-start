@@ -1385,6 +1385,10 @@ So that I can explore what's playable through the subscription.
 **When** I open the Catalog destination
 **Then** its games render in a shelf-style grid (cover, title), paged/virtualized for the full ~490-item set, reusing the shelf card chrome — but with **no status pill, no owned toggle and no flip**, because catalog games are not tracked games [AD-24; UX-DR reuse]
 
+**Given** the catalog is a discovery surface, not a "what can I play today" surface (that's the shelf)
+**When** the grid orders its games
+**Then** it orders **newest first** (the store's own release-date sort) with **no ownership tier** — games I already track are neither hoisted nor hidden, they sit where they fall carrying their `In library` / `Owned` marker. **The shelf comparator (`core/shelf.ts`, which sorts owned-before-wishlisted) must NOT be reused here** — reusing the card chrome does not mean reusing the sort, or the catalog would open on the games I've already found [EXPERIENCE.md]
+
 **Given** the catalog grid
 **When** I filter by genre
 **Then** only catalog games in the selected genre(s) show — the **PS-store facet vocabulary** (~19 locale-independent keys, from `ps_plus_catalog_genre`), **never** the shelf's IGDB genre list; the two vocabularies must not mix. Genre-only — no state/ownership filters, since these aren't tracked games [AD-26]
