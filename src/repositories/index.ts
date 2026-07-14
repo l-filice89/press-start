@@ -6,6 +6,7 @@
 export * from './db';
 export * from './games';
 export * from './genres';
+export * from './psplus-catalog';
 export * from './settings';
 export * from './stragglers';
 export * from './tracking';

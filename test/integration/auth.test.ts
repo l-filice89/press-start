@@ -154,8 +154,9 @@ describe('magic-link auth & user scoping (integration, real workerd + local D1)'
 			 ORDER BY name`,
 		).all<{ name: string }>();
 		// auth's four tables, plus Story 1.4's six domain tables, the
-		// Story 1.1 `meta` placeholder, and `setting` (Epic 2 retro timezone
-		// policy) — and nothing else (no roles/sharing tables).
+		// Story 1.1 `meta` placeholder, `setting` (Epic 2 retro timezone policy)
+		// and Story 7.1's two catalog-snapshot tables (AD-24/26 — a THIRD owner
+		// class: no `user_id`, no tracking) — and nothing else (no roles/sharing).
 		expect(results.map((row) => row.name)).toEqual([
 			'account',
 			'external_link',
@@ -165,6 +166,8 @@ describe('magic-link auth & user scoping (integration, real workerd + local D1)'
 			'genre',
 			'import_straggler',
 			'meta',
+			'ps_plus_catalog',
+			'ps_plus_catalog_genre',
 			'session',
 			'setting',
 			'user',

@@ -2,9 +2,10 @@
 title: 'Story 7.1 — Persist the PS+ catalog as browsable data'
 type: 'feature'
 created: '2026-07-14'
-status: 'ready-for-dev'
+status: 'done'
+baseline_revision: '67cae44'
 review_loop_iteration: 0
-followup_review_recommended: false
+followup_review_recommended: true
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-7-context.md'
   - '{project-root}/_bmad-output/planning-artifacts/architecture/architecture-ps-game-catalog-2026-07-05/ARCHITECTURE-SPINE.md'
@@ -77,16 +78,16 @@ warnings: []
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `test/fixtures/psn/` -- **new.** Land the captured payloads probed 2026-07-14 (dated, verbatim, from the live endpoint): a real catalog page (products carry `id`, `name`, `npTitleId`, `platforms`, `media[]`, `price`, `storeDisplayClassification` — and **no** genres, **no** release date), a genre-facet response (`de-de` 19 keys / `en-us` 20 incl. `MUSIC/RHYTHM`), a genre-filtered page, and the three degenerate 200s (empty catalog, null grid on a bad region, null grid + error on a bad category). -- No fixture convention exists yet; hazard tests must assert against reality, not a stub built from the assumption (PROBE-BEFORE-YOU-MAP, DEGENERATE-RESPONSE GUARD).
-- [ ] `src/providers/psn.ts` -- Widen `CatalogPage.products` to the real record and change `fetchPsPlusExtraCatalog(region)` to return `PsnCatalogProduct[]` (`productId` = `id`, `npTitleId`, `name`, `platforms`, `coverUrl` picked from `media[]`, `storeClassification`). Add `fetchPsPlusCatalogGenreKeys(region)` (reads `facetOptions[name='productGenres'].values[].key` off the unfiltered page) and `fetchPsPlusExtraCatalogByGenre(region, genreKey)` (adds `filterBy: ["productGenres:<KEY>"]` to the existing variables). -- The adapter is the only place external I/O may live (AD-5); genres are only reachable as a facet re-query (AD-28).
-- [ ] `src/schema/catalog.ts` + `migrations/0009_*.sql` -- Add `ps_plus_catalog` (PK `(region, tier, product_id)`, `tier` default `'extra'`, cols `np_title_id`, `name`, `title_normalized`, `cover_url`, `platforms`, `store_classification`, `store_url`, `generation`, `first_seen_at`, `last_seen_at`; index on `title_normalized`) and `ps_plus_catalog_genre` (PK `(region, tier, product_id, genre_key)`, FK to the snapshot **`onDelete: 'cascade'`**). **No `release_date` column.** -- AD-24/AD-26/AD-28.
-- [ ] `src/repositories/psplus-catalog.ts` -- **new.** `upsertCatalogProducts(db, region, tier, generation, products)` (batched in 50s), `pruneCatalogGeneration(db, region, tier, generation)` (deletes rows not of this generation → genre rows cascade), `listCatalogTitleKeys(db, region, tier)` (normalized titles, for the flag pass), `setCatalogGenres(db, region, tier, generation, tags)` (batched, additive), `listGenreSweepCandidates(…, {after, limit})` (keyset cursor over genre keys). -- Copy `setTrophyCountsBatch`'s batch idiom; a per-row loop over ~490 products would blow the subrequest budget (BUDGET-COUNTS-EVERY-SUBREQUEST).
-- [ ] `src/services/psplus.ts` -- Rewrite `runPsPlusCheck` to: fetch once → **guard** (see below) → upsert + prune the snapshot under a new generation → derive the flag pass **from the stored table**, over **all** tracked games (drop the `!row.owned` filter) → stamp freshness. Keep fetch-completes-before-any-write. -- AD-27; the owned-game flag gap is the divergence the gate found.
-- [ ] `src/services/psplus-genres.ts` -- **new.** The chunked sweep: discover the facet keys, walk them by keyset cursor, `filterBy` each, write tags additively under the current generation, return `nextCursor` (null on a short page). A per-key failure is a skip, not an abort. -- AD-28, mirroring `backfill.ts`.
-- [ ] `src/services/psn-lock.ts` + `src/routes/psplus.ts` -- Add `'catalog-refresh'` to `PsnOp`; wrap the refresh route in the lock; add the sweep's chunk endpoint using the `acquirePsnLock(…, cursor ? heldToken : undefined)` / release-on-terminating-chunk / `?release=1` shape. Decide and state whether the **cron** path takes the lock (it should — the cron and the button fan out to the same host). -- The PS+ path is unguarded today; this story multiplies its fan-out by ~6×.
-- [ ] `test/integration/psplus.test.ts` (+ new `psplus-genres.test.ts`) -- Hazard tests, each from a **captured** payload: empty catalog leaves snapshot **and** every flag intact; a null grid (bad region) is a provider failure, not an empty catalog; an empty page at `offset>0` with `totalCount: 490` terminates normally and **does not** trip the wipe guard; an **owned** catalog game gets `ps_plus_extra: true`; a departed product is pruned and its genre rows cascade; a genre key containing a slash round-trips; the sweep resumes from its cursor after a mid-key failure with the membership snapshot intact. -- HAZARD-TEST RULE: every named hazard gets a red-then-green test.
-- [ ] `test/integration/psn-lock.test.ts` -- The **bypass** tests for the new op: a second refresh while one holds the lock → 409, PSN sees zero extra calls; a sweep continuation presenting a **forged/stale token** → 409; a continuation presenting its own token renews (and **rotates**) it and proceeds; the terminating chunk leaves no lock row. -- TEST-THE-BYPASS-NOT-JUST-THE-REFUSAL + CAPABILITY-IS-NOT-AN-IDENTIFIER: the sweep's cursor (a genre key) is server-published data and authorizes nothing.
-- [ ] `playwright/COVERAGE.md` -- Add rows for 7.1's ACs with the reason `no UI flow — ingest only; the catalog destination lands in 7.2`. -- PLAYWRIGHT-COVERAGE RULE: no UI-facing AC in this story, so every AC gets a coverage row instead of a test.
+- [x] `test/fixtures/psn/` -- **new.** Land the captured payloads probed 2026-07-14 (dated, verbatim, from the live endpoint): a real catalog page (products carry `id`, `name`, `npTitleId`, `platforms`, `media[]`, `price`, `storeDisplayClassification` — and **no** genres, **no** release date), a genre-facet response (`de-de` 19 keys / `en-us` 20 incl. `MUSIC/RHYTHM`), a genre-filtered page, and the three degenerate 200s (empty catalog, null grid on a bad region, null grid + error on a bad category). -- No fixture convention exists yet; hazard tests must assert against reality, not a stub built from the assumption (PROBE-BEFORE-YOU-MAP, DEGENERATE-RESPONSE GUARD).
+- [x] `src/providers/psn.ts` -- Widen `CatalogPage.products` to the real record and change `fetchPsPlusExtraCatalog(region)` to return `PsnCatalogProduct[]` (`productId` = `id`, `npTitleId`, `name`, `platforms`, `coverUrl` picked from `media[]`, `storeClassification`). Add `fetchPsPlusCatalogGenreKeys(region)` (reads `facetOptions[name='productGenres'].values[].key` off the unfiltered page) and `fetchPsPlusExtraCatalogByGenre(region, genreKey)` (adds `filterBy: ["productGenres:<KEY>"]` to the existing variables). -- The adapter is the only place external I/O may live (AD-5); genres are only reachable as a facet re-query (AD-28).
+- [x] `src/schema/catalog.ts` + `migrations/0009_*.sql` -- Add `ps_plus_catalog` (PK `(region, tier, product_id)`, `tier` default `'extra'`, cols `np_title_id`, `name`, `title_normalized`, `cover_url`, `platforms`, `store_classification`, `store_url`, `generation`, `first_seen_at`, `last_seen_at`; index on `title_normalized`) and `ps_plus_catalog_genre` (PK `(region, tier, product_id, genre_key)`, FK to the snapshot **`onDelete: 'cascade'`**). **No `release_date` column.** -- AD-24/AD-26/AD-28.
+- [x] `src/repositories/psplus-catalog.ts` -- **new.** `upsertCatalogProducts(db, region, tier, generation, products)` (batched in 50s), `pruneCatalogGeneration(db, region, tier, generation)` (deletes rows not of this generation → genre rows cascade), `listCatalogTitleKeys(db, region, tier)` (normalized titles, for the flag pass), `setCatalogGenres(db, region, tier, generation, tags)` (batched, additive), `listGenreSweepCandidates(…, {after, limit})` (keyset cursor over genre keys). -- Copy `setTrophyCountsBatch`'s batch idiom; a per-row loop over ~490 products would blow the subrequest budget (BUDGET-COUNTS-EVERY-SUBREQUEST).
+- [x] `src/services/psplus.ts` -- Rewrite `runPsPlusCheck` to: fetch once → **guard** (see below) → upsert + prune the snapshot under a new generation → derive the flag pass **from the stored table**, over **all** tracked games (drop the `!row.owned` filter) → stamp freshness. Keep fetch-completes-before-any-write. -- AD-27; the owned-game flag gap is the divergence the gate found.
+- [x] `src/services/psplus-genres.ts` -- **new.** The chunked sweep: discover the facet keys, walk them by keyset cursor, `filterBy` each, write tags additively under the current generation, return `nextCursor` (null on a short page). A per-key failure is a skip, not an abort. -- AD-28, mirroring `backfill.ts`.
+- [x] `src/services/psn-lock.ts` + `src/routes/psplus.ts` -- Add `'catalog-refresh'` to `PsnOp`; wrap the refresh route in the lock; add the sweep's chunk endpoint using the `acquirePsnLock(…, cursor ? heldToken : undefined)` / release-on-terminating-chunk / `?release=1` shape. Decide and state whether the **cron** path takes the lock (it should — the cron and the button fan out to the same host). -- The PS+ path is unguarded today; this story multiplies its fan-out by ~6×.
+- [x] `test/integration/psplus.test.ts` (+ new `psplus-genres.test.ts`) -- Hazard tests, each from a **captured** payload: empty catalog leaves snapshot **and** every flag intact; a null grid (bad region) is a provider failure, not an empty catalog; an empty page at `offset>0` with `totalCount: 490` terminates normally and **does not** trip the wipe guard; an **owned** catalog game gets `ps_plus_extra: true`; a departed product is pruned and its genre rows cascade; a genre key containing a slash round-trips; the sweep resumes from its cursor after a mid-key failure with the membership snapshot intact. -- HAZARD-TEST RULE: every named hazard gets a red-then-green test.
+- [x] `test/integration/psn-lock.test.ts` -- The **bypass** tests for the new op: a second refresh while one holds the lock → 409, PSN sees zero extra calls; a sweep continuation presenting a **forged/stale token** → 409; a continuation presenting its own token renews (and **rotates**) it and proceeds; the terminating chunk leaves no lock row. -- TEST-THE-BYPASS-NOT-JUST-THE-REFUSAL + CAPABILITY-IS-NOT-AN-IDENTIFIER: the sweep's cursor (a genre key) is server-published data and authorizes nothing.
+- [x] `playwright/COVERAGE.md` -- Add rows for 7.1's ACs with the reason `no UI flow — ingest only; the catalog destination lands in 7.2`. -- PLAYWRIGHT-COVERAGE RULE: no UI-facing AC in this story, so every AC gets a coverage row instead of a test.
 
 **Acceptance Criteria:**
 - Given a region and a healthy catalog, when the refresh runs, then every product is stored with its cover and store URL, products that left are pruned, and no `game` or `game_tracking` row is created for any of them.
@@ -120,3 +121,52 @@ warnings: []
 
 **Manual checks:**
 - After a local refresh against the real endpoint, `ps_plus_catalog` holds ~490 rows for the region with covers populated, `ps_plus_catalog_genre` holds tags across every key the facet response named, and no row appeared in `game` or `game_tracking`.
+
+## Spec Change Log
+
+### 2026-07-14 — after review pass 1
+- **Triggering finding:** the genre sweep shipped with **no caller** (H/M1). The spec said "the loop driver belongs with the destination in 7.2" and never said who populates genres in the meantime — so `ps_plus_catalog_genre` would have shipped empty and 7.2 would filter against an empty table.
+- **Amended:** the sweep's state (generation + frozen key list + cursor + skips) persists in a `setting` row, and the **cron** drives one chunk after each successful membership pass. The HTTP chunk endpoint stays for 7.2's client loop.
+- **Known-bad state avoided:** an entire table, endpoint, cursor and capability-token protocol built and wired to nothing.
+- **KEEP:** the captured-payload fixtures, the accumulated-count wipe guard, the rotating-token capability, and the honest subrequest ledgers must survive any re-derivation.
+
+## Review Triage Log
+
+### 2026-07-14 — Review pass 1 (Blind Hunter + Edge Case Hunter, parallel, no shared context)
+- intent_gap: 0
+- bad_spec: 0
+- patch: 19: (high 5, medium 7, low 7)
+- defer: 2: (medium 1, low 1)
+- reject: 3
+- addressed_findings:
+  - `[high]` `[patch]` **H1 TRUNCATED-WALK WIPE** — the walk broke on ANY empty page and the guard only tested `products.length === 0`, so a store serving page 0 then an empty page at offset 100 yielded 100 of 490 products, passed the guard, and the prune deleted the other 390 rows and cleared their flags. `totalCount` was on every page and unused. Now the walk throws on an empty page while `offset < totalCount`, and the service reconciles `accumulated == totalCount` or fails closed. **The shipped test encoded the bug** (walked 1 of 490 and asserted a complete, prunable catalog) — deleted, replaced by "a TRUNCATED walk fails closed — no prune, no flag clear".
+  - `[high]` `[patch]` **H2 CROSS-OP LOCK STEAL** — `acquirePsnLock` compared tokens by raw string equality; the `op` segment was decorative. The sync/backfill routes hand their LIVE token to the browser, so a `platinum-backfill` token presented to the catalog endpoint stole the lock and 409'd the backfill to death mid-run. The op segment is now authorization, checked before D1. Test: a VALID token for a DIFFERENT op is refused (the pre-existing test only proved *garbage* fails).
+  - `[high]` `[patch]` **H3 CONCURRENT-PRUNE WIPE** — with a 2-minute lock TTL, a stalled run A could be preempted by cron run B; B upserts 490 rows under generation B, then A prunes "everything != generation A", empties the table, and the flag pass clears every flag. The write phase now re-verifies it still holds its own lock token before upsert/prune/flag, else aborts with no writes.
+  - `[high]` `[patch]` **H4 STALE GENRE TAGS FOREVER** — tags were insert-only with no generation, so a product the store re-classifies keeps its old genre permanently and 7.2's filter would return it under a genre it left. Now delete-then-insert per key, in one batch.
+  - `[high]` `[patch]` **H5 THE CSV EXPORT LEAKED THE FLAG** — `routes/export.ts` rendered raw `psPlusExtra` with no `&& !owned`, so flagging owned games would silently flip the export's PS+ column to `yes` for every owned catalog game. The spec's claim that "every surface renders `psPlusExtra && !owned`" was **false** — the shelf was checked, the export was never grepped.
+  - `[medium]` `[patch]` **M1 the sweep had no caller** — see Spec Change Log.
+  - `[medium]` `[patch]` **M2** the facet key list was re-discovered on every chunk, so a key appearing mid-sweep that sorted before the cursor was silently never swept. Discovered once, frozen into the state row.
+  - `[medium]` `[patch]` **M3** an empty/missing `productGenres` facet reported a total failure as a completed sweep. Now a provider failure.
+  - `[medium]` `[patch]` **M4** a genre query can return a product added to the store since the last membership pass; its tag insert violated the composite FK and killed the whole key. Writes are now filtered to product ids in the snapshot.
+  - `[medium]` `[patch]` **M5** `getCatalogGeneration` did `.limit(1)` with no `ORDER BY` — it sniffed an arbitrary row, making the stale-generation guard nondeterministic on a half-written table. Deleted; the generation lives in the state row.
+  - `[medium]` `[patch]` **M6** changing the PSN region orphaned the old region's rows forever (the prune is region-scoped). Dropped on a successful refresh.
+  - `[medium]` `[patch]` **M7** both subrequest ledgers were wrong — `setCatalogGenres` batches per key, so a 4-key chunk is ~41 of 50, not ~30. Membership corrected to 33/50; `CHUNK_SIZE` lowered 4 → 3 because the cron shares one invocation with the membership pass (~49/50 peak).
+  - `[low]` `[patch]` **L1–L3** route hygiene: any truthy `?release` value released the lock (now `=== '1'`); `?release=1` with no token answered `{released:true}` while the lock stood (now 400); a throwing release 500'd a chunk whose tags had landed (now swallowed + logged).
+  - `[low]` `[patch]` **L4** a store-side rename of media roles would have silently nulled every cover; now falls back to the first IMAGE with a url.
+  - `[low]` `[patch]` **L5** the fixture's `productId()` sliced to 10 chars — two titles sharing a prefix would silently merge onto one primary key.
+  - `[low]` `[patch]` **L6** two **fixture-only tests** asserted that a JSON file contained what its author typed, invoking no production code — one was COVERAGE.md's evidence for an AC. Both rewritten to drive the provider/sweep against the captured payload and assert what the code returns.
+  - `[low]` `[patch]` **L7** stale `checked` comment in the client schema.
+
+**Deferred** (pre-existing, not caused by this story): a discarded (soft-deleted) game keeps a stale `ps_plus_extra` until the next refresh; `first_seen_at` resets if a row is ever pruned and re-added, so it means "first seen since the last prune".
+
+## Auto Run Result
+
+Status: done
+
+**Implemented:** the `ps_plus_catalog` + `ps_plus_catalog_genre` snapshot tables (migration `0009`), a provider widened from names to full product records (covers picked from `media[]`, never a second fetch), a batched snapshot repository, a rewritten one-fetch check service whose flag pass reads the table and covers owned games, a chunked generation-stamped genre sweep driven by the cron, and `'catalog-refresh'` added to the single-flight lock the PS+ path never had.
+
+**Review:** 19 findings patched (5 high — two data-loss paths, a cross-op lock steal, permanent genre corruption, and a CSV leak), 2 deferred, 3 rejected. One test was found to *encode* a data-loss bug and was replaced.
+
+**Verification:** `bun run lint` clean · `bun run typecheck` clean · `bun run test` → 68 files, 2119 tests, all passing · `bunx drizzle-kit generate` → no pending schema changes; `0009` inspected by hand (composite PKs, genre cascade, no `release_date`).
+
+**Residual risks:** the sweep converges over several cron runs rather than in one pass (by design, to stay inside the 50-subrequest cap); `ps_plus_catalog_genre` is therefore briefly incomplete after a catalog change. No client drives the sweep yet — 7.2 owns that loop.

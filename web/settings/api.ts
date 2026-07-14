@@ -208,9 +208,11 @@ export const psPlusCheckResultSchema = z.object({
 	flagged: z.array(z.string()),
 	/** Titles whose flag was cleared (left the catalog). */
 	cleared: z.array(z.string()),
-	/** Tracked non-owned games examined. */
+	/** Tracked games examined — ALL of them since 7.1, owned included (AD-27). */
 	checked: z.number(),
 	region: z.string(),
+	/** The snapshot generation this refresh stamped — 7.2's genre-sweep loop presents it back. */
+	generation: z.string().optional(),
 });
 
 export type PsPlusCheckResult = z.infer<typeof psPlusCheckResultSchema>;

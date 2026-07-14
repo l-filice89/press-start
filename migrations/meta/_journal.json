@@ -64,6 +64,13 @@
       "when": 1783980951187,
       "tag": "0008_classy_skin",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1784037011917,
+      "tag": "0009_tiny_kabuki",
+      "breakpoints": true
     }
   ]
 }

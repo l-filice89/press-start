@@ -13,6 +13,7 @@
 
 import { sql } from 'drizzle-orm';
 import {
+	foreignKey,
 	index,
 	integer,
 	primaryKey,
@@ -225,6 +226,77 @@ export const setting = sqliteTable(
  * `IMPORT_STRAGGLER` unconnected to `USER`, and a staging row is not tracking
  * data (AD-13 binds tracking rows only).
  */
+/**
+ * PS_PLUS_CATALOG — the region+tier store snapshot (Story 7.1, AD-24). A THIRD
+ * owner class: neither a shared `game` fact nor per-user tracking state. NO
+ * `user_id`, NO FK to `game` — a catalog row becomes a game only through 7.3's
+ * explicit add. `tier` defaults to `'extra'` so Premium's Classics catalog
+ * layers on without a migration rewrite.
+ *
+ * There is NO `release_date` column: the store payload has none (probed live
+ * 2026-07-14 — `productReleaseDate` is a sort key and a facet, never a product
+ * field). Do not add one; a catalog card's date comes from IGDB after the add.
+ *
+ * `generation` is what keeps a cron prune from corrupting an in-flight genre
+ * sweep (AD-28): each membership pass stamps the rows it writes, the prune
+ * deletes rows NOT of that generation, and the sweep refuses to write tags for
+ * a generation that has moved on.
+ */
+export const psPlusCatalog = sqliteTable(
+	'ps_plus_catalog',
+	{
+		region: text('region').notNull(),
+		tier: text('tier').notNull().default('extra'),
+		/** The store product id (a `'PSN_PRODUCT'` external id, never an npTitleId — AD-20). */
+		productId: text('product_id').notNull(),
+		npTitleId: text('np_title_id'),
+		name: text('name').notNull(),
+		/** The AD-9 normalizer's key — non-unique, the first-pass match (AD-18). */
+		titleNormalized: text('title_normalized').notNull(),
+		coverUrl: text('cover_url'),
+		/** JSON array text, e.g. `["PS4","PS5"]` — the store's own values. */
+		platforms: text('platforms'),
+		storeClassification: text('store_classification'),
+		storeUrl: text('store_url'),
+		generation: text('generation').notNull(),
+		firstSeenAt: text('first_seen_at').notNull(),
+		lastSeenAt: text('last_seen_at').notNull(),
+	},
+	(table) => [
+		primaryKey({ columns: [table.region, table.tier, table.productId] }),
+		index('ps_plus_catalog_title_normalized_idx').on(table.titleNormalized),
+	],
+);
+
+/**
+ * PS_PLUS_CATALOG_GENRE — the PS-store `productGenres` facet keys (AD-26). A
+ * SEPARATE vocabulary from `genre`/`game_genre` (IGDB); the two never merge.
+ * Keys are stored VERBATIM, slash and all (`MUSIC/RHYTHM`). Rows CASCADE with
+ * their product, so a prune can never leave orphan tags (AD-28).
+ */
+export const psPlusCatalogGenre = sqliteTable(
+	'ps_plus_catalog_genre',
+	{
+		region: text('region').notNull(),
+		tier: text('tier').notNull().default('extra'),
+		productId: text('product_id').notNull(),
+		genreKey: text('genre_key').notNull(),
+	},
+	(table) => [
+		primaryKey({
+			columns: [table.region, table.tier, table.productId, table.genreKey],
+		}),
+		foreignKey({
+			columns: [table.region, table.tier, table.productId],
+			foreignColumns: [
+				psPlusCatalog.region,
+				psPlusCatalog.tier,
+				psPlusCatalog.productId,
+			],
+		}).onDelete('cascade'),
+	],
+);
+
 export const importStraggler = sqliteTable('import_straggler', {
 	id: text('id')
 		.primaryKey()

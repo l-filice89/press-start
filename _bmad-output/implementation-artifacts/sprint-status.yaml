@@ -113,7 +113,7 @@ development_status:
   # Epic 7: Browse the PS+ Catalog & Add — POST-v1.0.0 (not in the v1 milestone)
   epic-7: in-progress # 2026-07-14: v1.4.0, branch feat/epic-7-catalog-browse
   7-0-foundation-architecture-ux-design-gate: done # 2026-07-14: arch spine +AD-24..28 (ps_plus_catalog snapshot, react-router replaces the CustomEvent bus, 2 genre vocabularies, one-fetch ingest, chunked genre sweep) + AD-8/19/20/27 amended after an adversarial gate found 6 divergence pairs; UX spines +catalog destination (header toggle, no catalog detail, card Add/Claim, 3-cause empty state). Live-probed the store payload: NO release_date, genres are facet-only.
-  7-1-persist-the-ps-plus-catalog-as-browsable-data: backlog
+  7-1-persist-the-ps-plus-catalog-as-browsable-data: done # 2026-07-14 (dev-auto): ps_plus_catalog + ps_plus_catalog_genre (0009), provider widened to full product records, one-fetch ingest, cron-driven chunked genre sweep, PS+ path put under the single-flight lock. Review: 19 patches incl. 5 HIGH — truncated-walk wipe (a shipped test ENCODED it), cross-op lock steal, concurrent-prune wipe, permanent stale genre tags, CSV export leaking the flag. followup_review_recommended:true (FORCED by the HIGHs)
   7-2-browse-the-catalog-a-genre-filterable-destination: backlog
   7-3-add-or-claim-a-game-from-the-catalog: backlog
   epic-7-retrospective: optional

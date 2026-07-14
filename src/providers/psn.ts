@@ -176,11 +176,60 @@ export interface PsnProvider {
 	 */
 	fetchTrophyTitles(): Promise<PsnTrophyTitle[]>;
 	/**
-	 * Product names currently in the region's PS+ Game Catalog (Story 5.1,
-	 * FR-38). Public store-browse endpoint — no credential involved, so
-	 * `PsnAuthError` semantics don't apply; any failure is a plain error.
+	 * Every product currently in the region's PS+ Game Catalog (Story 5.1,
+	 * widened to full records in 7.1). Public store-browse endpoint — no
+	 * credential involved, so `PsnAuthError` semantics don't apply; any failure
+	 * is a plain error.
 	 */
-	fetchPsPlusExtraCatalog(region: string): Promise<string[]>;
+	fetchPsPlusExtraCatalog(region: string): Promise<PsnCatalog>;
+	/**
+	 * The `productGenres` facet keys this REGION names (Story 7.1, AD-26).
+	 * DISCOVERED, never hardcoded: de-de returns 19 keys, en-us 20 (it adds
+	 * `MUSIC/RHYTHM`) — probed live 2026-07-14. One page, size 1: the facet list
+	 * rides every response, so the products are dead weight here.
+	 */
+	fetchPsPlusCatalogGenreKeys(region: string): Promise<string[]>;
+	/**
+	 * The catalog filtered to ONE genre facet key (Story 7.1, AD-28) — the only
+	 * way per-game genre is obtainable, since the product record carries none.
+	 * The key travels inside the URL-encoded `filterBy` variable, so a key with a
+	 * slash (`MUSIC/RHYTHM`) round-trips untouched.
+	 */
+	fetchPsPlusExtraCatalogByGenre(
+		region: string,
+		genreKey: string,
+	): Promise<PsnCatalogProduct[]>;
+}
+
+/**
+ * One PS+ catalog product, exactly as the store grid gives it (probed live
+ * 2026-07-14, `tmp/probe-catalog.ts` → `test/fixtures/psn/`). There is NO genre
+ * and NO release date on this payload — do not synthesize either (AD-24/26).
+ */
+export interface PsnCatalogProduct {
+	/** The store product id — a `'PSN_PRODUCT'` external id, NOT an npTitleId (AD-20). */
+	productId: string;
+	npTitleId: string | null;
+	name: string;
+	/** `['PS4','PS5']`, passed through unmangled. */
+	platforms: string[];
+	/** Picked off `media[]` by role preference; null rather than a second fetch. */
+	coverUrl: string | null;
+	/** `FULL_GAME` / `GAME_BUNDLE` / … — the store's own classification. */
+	storeClassification: string | null;
+	/** The REGIONAL store deep link ("Claim now", 7.3). */
+	storeUrl: string;
+}
+
+/**
+ * One completed catalog walk. `totalCount` is the store's OWN count for the
+ * (optionally filtered) category — it rides every page and it is the only thing
+ * that can tell a finished walk from a truncated one. The caller reconciles
+ * against it before it is allowed to prune anything (Story 7.1 review, H1).
+ */
+export interface PsnCatalog {
+	products: PsnCatalogProduct[];
+	totalCount: number;
 }
 
 interface RawPsnGame {
@@ -221,9 +270,66 @@ function toPsnGame(game: RawPsnGame): PsnGame {
 	};
 }
 
+interface RawCatalogProduct {
+	id?: string;
+	name?: string;
+	npTitleId?: string;
+	platforms?: string[];
+	media?: { role?: string; type?: string; url?: string }[];
+	storeDisplayClassification?: string;
+}
+
+interface CatalogFacet {
+	name?: string;
+	values?: { key?: string }[];
+}
+
 interface CatalogPage {
-	products: { name?: string }[];
+	products: RawCatalogProduct[];
 	pageInfo: { totalCount?: number };
+	facetOptions?: CatalogFacet[];
+}
+
+/**
+ * Cover art rides the `media[]` already in the grid payload — a per-product
+ * fetch would cost ~490 extra subrequests (AD-15) for a picture. Portrait roles
+ * first (the shelf card is portrait), then the wider art; a product with none
+ * usable stores `null` rather than costing a second call.
+ */
+const COVER_ROLES = [
+	'PORTRAIT_BANNER',
+	'GAMEHUB_COVER_ART',
+	'MASTER',
+	'EDITION_KEY_ART',
+	'FOUR_BY_THREE_BANNER',
+];
+
+function coverUrl(product: RawCatalogProduct): string | null {
+	const images = (product.media ?? []).filter(
+		(item) => item.type === 'IMAGE' && typeof item.url === 'string',
+	);
+	for (const role of COVER_ROLES) {
+		const hit = images.find((item) => item.role === role);
+		if (hit?.url) return hit.url;
+	}
+	// The store renaming its media roles must not silently blank every cover in
+	// the catalog: ANY image beats none (Story 7.1 review, L4).
+	return images[0]?.url ?? null;
+}
+
+function toCatalogProduct(
+	product: RawCatalogProduct,
+	region: string,
+): PsnCatalogProduct {
+	return {
+		productId: product.id ?? '',
+		npTitleId: product.npTitleId ?? null,
+		name: product.name ?? '',
+		platforms: Array.isArray(product.platforms) ? product.platforms : [],
+		coverUrl: coverUrl(product),
+		storeClassification: product.storeDisplayClassification ?? null,
+		storeUrl: `https://store.playstation.com/${region}/product/${product.id ?? ''}`,
+	};
 }
 
 interface RawTrophyTitle {
@@ -261,12 +367,21 @@ function toTrophyTitle(raw: RawTrophyTitle): PsnTrophyTitle {
 	};
 }
 
-function catalogPageUrl(offset: number): string {
+function catalogPageUrl(
+	offset: number,
+	{
+		size = CATALOG_PAGE_SIZE,
+		genreKey,
+	}: { size?: number; genreKey?: string } = {},
+): string {
 	const variables = {
 		id: PS_PLUS_CATALOG_CATEGORY,
-		pageArgs: { size: CATALOG_PAGE_SIZE, offset },
+		pageArgs: { size, offset },
 		sortBy: { name: 'productReleaseDate', isAscending: false },
-		filterBy: [],
+		// The facet key is NOT identifier-safe (`MUSIC/RHYTHM` carries a slash), so
+		// it may only ever travel inside this variable — `URLSearchParams` encodes
+		// the whole JSON blob, so the slash round-trips (AD-26).
+		filterBy: genreKey ? [`productGenres:${genreKey}`] : [],
 		facetOptions: [],
 	};
 	const extensions = {
@@ -482,8 +597,9 @@ export function createPsnProvider({
 	async function fetchCatalogPage(
 		region: string,
 		offset: number,
+		options: { size?: number; genreKey?: string } = {},
 	): Promise<CatalogPage> {
-		const response = await fetch(catalogPageUrl(offset), {
+		const response = await fetch(catalogPageUrl(offset, options), {
 			headers: {
 				accept: 'application/json',
 				'content-type': 'application/json',
@@ -591,6 +707,56 @@ export function createPsnProvider({
 			);
 		}
 		return payload;
+	}
+
+	/**
+	 * One paginated walk of the category grid, optionally filtered to one genre
+	 * facet key.
+	 *
+	 * AN EMPTY PAGE IS ONLY A TERMINATOR WHERE THE COUNT SAYS IT IS (Story 7.1
+	 * review, H1). An offset past the end answers 200 + `products: []` +
+	 * `totalCount: 490` (captured: `catalog-page-past-end.json`) — that is the
+	 * legitimate end. An empty page while `offset < totalCount` is the store
+	 * TRUNCATING the walk, and breaking on it would hand the caller a partial
+	 * catalog that looks complete — which prunes (and un-flags) every product the
+	 * walk never reached. So it THROWS: a provider failure, never a short answer.
+	 * `totalCount` rides back out with the products so the caller reconciles too.
+	 */
+	async function walkCatalog(
+		region: string,
+		genreKey?: string,
+	): Promise<PsnCatalog> {
+		const products: PsnCatalogProduct[] = [];
+		let offset = 0;
+		let totalCount: number | undefined;
+		for (let pageCount = 0; ; pageCount++) {
+			if (pageCount >= CATALOG_MAX_PAGES) {
+				throw new Error(
+					`PS+ catalog pagination exceeded ${CATALOG_MAX_PAGES} pages — aborting instead of looping.`,
+				);
+			}
+			const page = await fetchCatalogPage(region, offset, { genreKey });
+			if (typeof page.pageInfo.totalCount === 'number')
+				totalCount = page.pageInfo.totalCount;
+			for (const product of page.products) {
+				if (product.id) products.push(toCatalogProduct(product, region));
+			}
+			if (page.products.length === 0) {
+				if (totalCount !== undefined && offset < totalCount) {
+					throw new Error(
+						`PS+ catalog returned an empty page at offset ${offset} while totalCount is ${totalCount} — refusing a truncated walk`,
+					);
+				}
+				break;
+			}
+			// The server may cap the page below the requested size — advance by
+			// what actually arrived, or a capped page would skip catalog rows.
+			offset += page.products.length;
+			if (totalCount !== undefined && offset >= totalCount) break;
+		}
+		// A response that names no count at all cannot be reconciled — the walk's
+		// own tally is all there is.
+		return { products, totalCount: totalCount ?? products.length };
 	}
 
 	return {
@@ -738,27 +904,20 @@ export function createPsnProvider({
 			};
 		},
 
-		async fetchPsPlusExtraCatalog(region: string) {
-			const names: string[] = [];
-			let offset = 0;
-			for (let pageCount = 0; ; pageCount++) {
-				if (pageCount >= CATALOG_MAX_PAGES) {
-					throw new Error(
-						`PS+ catalog pagination exceeded ${CATALOG_MAX_PAGES} pages — aborting instead of looping.`,
-					);
-				}
-				const page = await fetchCatalogPage(region, offset);
-				for (const product of page.products) {
-					if (typeof product.name === 'string') names.push(product.name);
-				}
-				// The server may cap the page below the requested size — advance by
-				// what actually arrived, or a capped page would skip catalog rows.
-				if (page.products.length === 0) break;
-				offset += page.products.length;
-				const total = page.pageInfo.totalCount;
-				if (typeof total === 'number' && offset >= total) break;
-			}
-			return names;
+		fetchPsPlusExtraCatalog: (region) => walkCatalog(region),
+
+		fetchPsPlusExtraCatalogByGenre: async (region, genreKey) =>
+			(await walkCatalog(region, genreKey)).products,
+
+		async fetchPsPlusCatalogGenreKeys(region: string) {
+			// The facet list rides EVERY response, so one product is enough payload.
+			const page = await fetchCatalogPage(region, 0, { size: 1 });
+			const facet = page.facetOptions?.find(
+				(option) => option.name === 'productGenres',
+			);
+			return (facet?.values ?? [])
+				.map((value) => value.key)
+				.filter((key): key is string => typeof key === 'string' && key !== '');
 		},
 	};
 }

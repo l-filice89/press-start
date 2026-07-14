@@ -1,0 +1,12 @@
+{
+	"errors": [
+		{
+			"message": "Invalid args",
+			"path": ["categoryGridRetrieve"],
+			"extensions": {}
+		}
+	],
+	"data": {
+		"categoryGridRetrieve": null
+	}
+}

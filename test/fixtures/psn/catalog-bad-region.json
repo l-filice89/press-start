@@ -1,0 +1,33 @@
+{
+	"errors": [
+		{
+			"message": "",
+			"path": ["categoryGridRetrieve"],
+			"extensions": {
+				"type": "NimbusNormalizedError",
+				"error": {
+					"referenceId": "109f2413-5032-496e-8d6a-c923b04d055f",
+					"code": 3165954,
+					"reason": "internal_error",
+					"source": "api"
+				},
+				"statusCode": 500,
+				"errorCode": 3165954,
+				"apiName": "getCategory"
+			},
+			"type": "NimbusNormalizedError",
+			"error": {
+				"referenceId": "109f2413-5032-496e-8d6a-c923b04d055f",
+				"code": 3165954,
+				"reason": "internal_error",
+				"source": "api"
+			},
+			"statusCode": 500,
+			"errorCode": 3165954,
+			"apiName": "getCategory"
+		}
+	],
+	"data": {
+		"categoryGridRetrieve": null
+	}
+}

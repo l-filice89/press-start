@@ -143,6 +143,64 @@ export async function getPsPlusRefreshedAt(
 	);
 }
 
+/**
+ * PS+ CATALOG SWEEP STATE (Story 7.1 review, M1/M2/M5) — one `setting` row, the
+ * whole state machine of the catalog ingest:
+ *
+ * - `generation` is the AUTHORITATIVE snapshot generation. It is NOT re-derived
+ *   by sniffing an arbitrary catalog row (an unordered `limit(1)` over 490 rows
+ *   answers a different generation depending on the query plan).
+ * - `keys` is the facet key list FROZEN at sweep start. Re-discovering it on
+ *   every chunk walks a SHIFTING list: a key that appears mid-sweep and sorts
+ *   before the cursor would never be swept at all.
+ * - `cursor` is the sweep's resume point, kept SERVER-side so the CRON can drive
+ *   the next chunk without a client. The cron fires 7× a month (`0 21 15-21 * *`),
+ *   so a ~5-chunk sweep converges within days and self-heals after a failure.
+ *   The HTTP endpoint still accepts a cursor for 7.2's client-driven loop.
+ */
+export const PSPLUS_SWEEP_STATE_SETTING_KEY = 'psplus_sweep_state';
+
+export interface PsPlusSweepState {
+	region: string;
+	generation: string;
+	/** Frozen at discovery; empty = not discovered yet. */
+	keys: string[];
+	/** Last key finished; null = start from the beginning. */
+	cursor: string | null;
+	/** Keys the store would not answer for — they wait for the next sweep. */
+	skipped: string[];
+	/** The frozen key list is exhausted. */
+	done: boolean;
+}
+
+export async function getPsPlusSweepState(
+	db: Db,
+	userId: string,
+): Promise<PsPlusSweepState | null> {
+	const raw = await getSetting(db, userId, PSPLUS_SWEEP_STATE_SETTING_KEY);
+	if (!raw) return null;
+	try {
+		return JSON.parse(raw) as PsPlusSweepState;
+	} catch {
+		// A corrupt row is not a reason to refuse forever — the next refresh
+		// rewrites it.
+		return null;
+	}
+}
+
+export async function setPsPlusSweepState(
+	db: Db,
+	userId: string,
+	state: PsPlusSweepState,
+) {
+	await setSetting(
+		db,
+		userId,
+		PSPLUS_SWEEP_STATE_SETTING_KEY,
+		JSON.stringify(state),
+	);
+}
+
 /** Persist the PSN-rejected state so the banner survives reloads (NFR-4). */
 export async function markPsnAuthExpired(db: Db, userId: string) {
 	await setSetting(db, userId, PSN_AUTH_SETTING_KEY, PSN_AUTH_EXPIRED);

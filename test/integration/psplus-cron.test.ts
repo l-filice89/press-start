@@ -6,9 +6,20 @@ import {
 } from 'cloudflare:test';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeAll, describe, expect, inject, it, vi } from 'vitest';
-import { insertGame, setSetting, upsertTracking } from '../../src/repositories';
+import {
+	deleteSetting,
+	insertGame,
+	listCatalogGenres,
+	listCatalogProducts,
+	setSetting,
+	upsertTracking,
+} from '../../src/repositories';
 import { createDb } from '../../src/repositories/db';
 import { game, user } from '../../src/schema';
+import {
+	acquirePsnLock,
+	PSN_LOCK_SETTING_KEY,
+} from '../../src/services/psn-lock';
 import { runScheduledPsPlusCheck } from '../../src/services/psplus';
 import {
 	isPsPlusRefreshFailed,
@@ -16,6 +27,8 @@ import {
 	PSN_REGION_SETTING_KEY,
 } from '../../src/services/settings';
 import worker from '../../worker/index';
+import { catalogPagePayload, productId } from '../fixtures/psn';
+import { stubStore } from './psn-stub';
 import { ALLOWED_EMAIL, establishSession } from './session';
 
 /**
@@ -28,38 +41,18 @@ import { ALLOWED_EMAIL, establishSession } from './session';
 
 const db = () => createDb(env.DB);
 
-const realFetch = globalThis.fetch;
-/** Stub the store-catalog call; capture the region header for parity checks. */
-function stubCatalog(names: string[], status = 200) {
-	const locales: string[] = [];
-	vi.stubGlobal(
-		'fetch',
-		async (input: RequestInfo | URL, init?: RequestInit) => {
-			const url = String(input instanceof Request ? input.url : input);
-			if (!url.startsWith('https://web.np.playstation.com/')) {
-				return realFetch(input, init);
-			}
-			const headers = new Headers(
-				input instanceof Request ? input.headers : init?.headers,
-			);
-			locales.push(headers.get('x-psn-store-locale-override') ?? '');
-			return new Response(
-				status === 200
-					? JSON.stringify({
-							data: {
-								categoryGridRetrieve: {
-									products: names.map((name) => ({ name })),
-									pageInfo: { totalCount: names.length },
-								},
-							},
-						})
-					: '{}',
-				{ status, headers: { 'content-type': 'application/json' } },
-			);
-		},
+/** Stub the store-catalog call (CAPTURED shape); records the region header. */
+const stubCatalog = (names: string[], status = 200) =>
+	stubStore(({ offset }) =>
+		status !== 200
+			? { status, body: '{}' }
+			: {
+					body: catalogPagePayload(offset === 0 ? names : [], {
+						totalCount: names.length,
+						offset,
+					}),
+				},
 	);
-	return locales;
-}
 
 let userId: string;
 
@@ -121,12 +114,85 @@ describe('scheduled PS+ Extra refresh (Story 5.2)', () => {
 
 	it('sends the stored region as the store locale (button/cron parity, AR-23)', async () => {
 		await setSetting(db(), userId, PSN_REGION_SETTING_KEY, 'pt-pt');
-		const locales = stubCatalog(['Anything']);
+		const seen = stubCatalog(['Anything']);
 
 		await runScheduledPsPlusCheck(db(), env);
 
-		expect(locales.length).toBeGreaterThan(0);
-		expect(locales[0]).toBe('pt-pt');
+		expect(seen.length).toBeGreaterThan(0);
+		expect(seen[0].locale).toBe('pt-pt');
+		// The cron persists the SAME snapshot the button does (AD-27, one ingest).
+		expect(
+			(await listCatalogProducts(db(), { region: 'pt-pt' })).map((r) => r.name),
+		).toEqual(['Anything']);
+	});
+
+	// Story 7.1: the cron and the button fan out to the same store host for the
+	// same account and write the same snapshot — so the cron takes the lock too.
+	// Busy is NOT a failure (a refresh IS running): it must not light the banner.
+	it('SKIPS (without lighting the banner) when another PSN op holds the lock', async () => {
+		await setSetting(db(), userId, PSN_REGION_SETTING_KEY, 'it-it');
+		const seen = stubCatalog(['Anything']);
+		const token = await acquirePsnLock(db(), userId, 'library-sync');
+		expect(token).toBeTruthy();
+
+		try {
+			await runScheduledPsPlusCheck(db(), env);
+			expect(seen).toHaveLength(0); // the store was never called
+			expect(await isPsPlusRefreshFailed(db(), userId)).toBe(false);
+		} finally {
+			await deleteSetting(db(), userId, PSN_LOCK_SETTING_KEY);
+		}
+	});
+
+	/**
+	 * THE SWEEP HAS A CALLER (review, M1). Nothing drove the genre sweep: the HTTP
+	 * chunk endpoint exists for 7.2's client loop, and with no caller
+	 * `ps_plus_catalog_genre` would simply stay EMPTY in production while 7.2
+	 * filtered against nothing. The cron drives ONE chunk per run after a
+	 * successful membership pass — 7 runs a month, so a multi-chunk sweep
+	 * converges within days and self-heals — and it RESUMES from the persisted
+	 * cursor, which is the only reason it converges at all.
+	 */
+	it('drives a genre-sweep chunk after the membership pass, and the NEXT cron resumes the cursor', async () => {
+		await setSetting(db(), userId, PSN_REGION_SETTING_KEY, 'fr-fr');
+		const scope = { region: 'fr-fr' };
+		const KEYS = ['ACTION', 'ADVENTURE', 'ARCADE', 'HORROR'];
+		const CATALOG: Record<string, string[]> = {
+			ACTION: ['Cron Sifu'],
+			ADVENTURE: [],
+			ARCADE: [],
+			HORROR: ['Cron Crow'],
+		};
+		const stub = () =>
+			stubStore(({ offset, genreKey }) => {
+				const names = genreKey
+					? (CATALOG[genreKey] ?? [])
+					: ['Cron Sifu', 'Cron Crow'];
+				return {
+					body: catalogPagePayload(offset === 0 ? names : [], {
+						totalCount: names.length,
+						offset,
+						genreKeys: KEYS,
+					}),
+				};
+			});
+
+		stub();
+		await runScheduledPsPlusCheck(db(), env);
+		// Chunk 1 = the first 3 of the 4 discovered keys: ACTION landed, HORROR has
+		// not been reached yet.
+		expect(await listCatalogGenres(db(), scope)).toEqual([
+			{ productId: productId('Cron Sifu'), genreKey: 'ACTION' },
+		]);
+
+		// The catalog has not moved, so the cursor SURVIVES the next refresh and the
+		// sweep advances instead of re-walking chunk 1 forever.
+		stub();
+		await runScheduledPsPlusCheck(db(), env);
+		expect(
+			(await listCatalogGenres(db(), scope)).map((row) => row.genreKey).sort(),
+		).toEqual(['ACTION', 'HORROR']);
+		await setSetting(db(), userId, PSN_REGION_SETTING_KEY, 'it-it');
 	});
 
 	it('sets the failed flag and writes no flags when the catalog fetch fails', async () => {

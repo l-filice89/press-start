@@ -1,0 +1,384 @@
+{
+	"data": {
+		"categoryGridRetrieve": {
+			"__typename": "CategoryGrid",
+			"concepts": null,
+			"facetOptions": [
+				{
+					"__typename": "CategoryFacet",
+					"displayName": "Typ",
+					"name": "storeDisplayClassification",
+					"values": [
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 459,
+							"displayName": "Vollversion",
+							"key": "FULL_GAME"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 25,
+							"displayName": "Spielpaket",
+							"key": "GAME_BUNDLE"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 5,
+							"displayName": "Premium-Edition",
+							"key": "PREMIUM_EDITION"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 1,
+							"displayName": "Add-on-Paket",
+							"key": "ADD-ON_PACK"
+						}
+					]
+				},
+				{
+					"__typename": "CategoryFacet",
+					"displayName": "Preis",
+					"name": "webBasePrice",
+					"values": [
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 2,
+							"displayName": "Unter €1",
+							"key": "0-99"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 2,
+							"displayName": "€1,00 - €2,49",
+							"key": "100-249"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 30,
+							"displayName": "€2,50 - €4,99",
+							"key": "250-499"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 57,
+							"displayName": "€5,00 - €9,99",
+							"key": "500-999"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 131,
+							"displayName": "€10,00 - €19,99",
+							"key": "1000-1999"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 109,
+							"displayName": "€20,00 - €29,99",
+							"key": "2000-2999"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 68,
+							"displayName": "€30,00 - €39,99",
+							"key": "3000-3999"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 32,
+							"displayName": "€40,00 - €49,99",
+							"key": "4000-4999"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 22,
+							"displayName": "€50,00 - €59,99",
+							"key": "5000-5999"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 14,
+							"displayName": "€60,00 - €74,99",
+							"key": "6000-7499"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 9,
+							"displayName": "€75,00 - €99,99",
+							"key": "7500-9999"
+						}
+					]
+				},
+				{
+					"__typename": "CategoryFacet",
+					"displayName": "Genre",
+					"name": "productGenres",
+					"values": [
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 240,
+							"displayName": "Action",
+							"key": "ACTION"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 171,
+							"displayName": "Adventure",
+							"key": "ADVENTURE"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 82,
+							"displayName": "Rollenspiele",
+							"key": "ROLE_PLAYING_GAMES"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 57,
+							"displayName": "Simulation",
+							"key": "SIMULATION"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 43,
+							"displayName": "Shooter",
+							"key": "SHOOTER"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 37,
+							"displayName": "Strategie",
+							"key": "STRATEGY"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 33,
+							"displayName": "Familie",
+							"key": "FAMILY"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 30,
+							"displayName": "Einmaliges",
+							"key": "UNIQUE"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 26,
+							"displayName": "Horror",
+							"key": "HORROR"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 24,
+							"displayName": "Rätsel",
+							"key": "PUZZLE"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 24,
+							"displayName": "Rennspiele",
+							"key": "RACING"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 23,
+							"displayName": "Sport",
+							"key": "SPORTS"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 15,
+							"displayName": "Casual Game",
+							"key": "CASUAL"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 13,
+							"displayName": "Arcade",
+							"key": "ARCADE"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 13,
+							"displayName": "Kampfspiele",
+							"key": "FIGHTING"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 9,
+							"displayName": "Party",
+							"key": "PARTY"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 5,
+							"displayName": "Simulator",
+							"key": "SIMULATOR"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 1,
+							"displayName": "Gehirntraining",
+							"key": "BRAIN_TRAINING"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 1,
+							"displayName": "Lernspiele",
+							"key": "EDUCATIONAL"
+						}
+					]
+				},
+				{
+					"__typename": "CategoryFacet",
+					"displayName": "Plattform",
+					"name": "targetPlatforms",
+					"values": [
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 410,
+							"displayName": "PS4",
+							"key": "PS4"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 236,
+							"displayName": "PS5",
+							"key": "PS5"
+						}
+					]
+				},
+				{
+					"__typename": "CategoryFacet",
+					"displayName": "Unterstützte Funktionen",
+					"name": "productCompatibilityNotices",
+					"values": [
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 35,
+							"displayName": "Für PS5 Pro optimiert",
+							"key": "GRAPHICS_ENHANCED"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 208,
+							"displayName": "Remote Play",
+							"key": "REMOTE_PLAY_SUPPORTED"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 27,
+							"displayName": "Spielhilfe",
+							"key": "GAME_HELP_SUPPORTED"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 99,
+							"displayName": "Lokaler Multiplayer",
+							"key": "LOCAL_MULTI_PLAYER_SUPPORTED"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 181,
+							"displayName": "Online-Multiplayer",
+							"key": "ONLINE_MULTI_PLAYER_SUPPORTED"
+						}
+					]
+				},
+				{
+					"__typename": "CategoryFacet",
+					"displayName": "Veröffentlichung",
+					"name": "productReleaseDate",
+					"values": [
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 1,
+							"displayName": "Soeben erschienen",
+							"key": "last_thirty_days"
+						}
+					]
+				},
+				{
+					"__typename": "CategoryFacet",
+					"displayName": "VR",
+					"name": "productVrCompatibility",
+					"values": [
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 5,
+							"displayName": "PS VR2",
+							"key": "PSVR2"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 14,
+							"displayName": "PS VR",
+							"key": "PSVR"
+						}
+					]
+				}
+			],
+			"id": "3a7006fe-e26f-49fe-87e5-4473d7ed0fb2",
+			"localizedName": "cat.gma.c.PS_Plus_Game_Catalog_-_All",
+			"pageInfo": {
+				"__typename": "PageInfo",
+				"isLast": true,
+				"offset": 900,
+				"size": 100,
+				"totalCount": 490
+			},
+			"products": [],
+			"reportingName": "SPAR_GMA_PSGC_ALL_GAMES_(D)",
+			"sortedBy": {
+				"__typename": "CategorySortingOption",
+				"displayName": "productReleaseDate",
+				"isAscending": false,
+				"name": "productReleaseDate"
+			},
+			"sortingOptions": [
+				{
+					"__typename": "CategorySortingOption",
+					"displayName": "Meistverkauft",
+					"isAscending": false,
+					"name": "sales30"
+				},
+				{
+					"__typename": "CategorySortingOption",
+					"displayName": "Am häufigsten heruntergeladen",
+					"isAscending": false,
+					"name": "downloads30"
+				},
+				{
+					"__typename": "CategorySortingOption",
+					"displayName": "Name (A–Z)",
+					"isAscending": true,
+					"name": "productName"
+				},
+				{
+					"__typename": "CategorySortingOption",
+					"displayName": "Name (Z–A)",
+					"isAscending": false,
+					"name": "productName"
+				},
+				{
+					"__typename": "CategorySortingOption",
+					"displayName": "Veröffentlichungsdatum (alt–neu)",
+					"isAscending": true,
+					"name": "productReleaseDate"
+				},
+				{
+					"__typename": "CategorySortingOption",
+					"displayName": "Veröffentlichungsdatum (neu–alt)",
+					"isAscending": false,
+					"name": "productReleaseDate"
+				},
+				{
+					"__typename": "CategorySortingOption",
+					"displayName": "Kürzlich zu PS Plus hinzugefügt",
+					"isAscending": false,
+					"name": "contentCollections.contentCollectionStartDate"
+				}
+			]
+		}
+	}
+}

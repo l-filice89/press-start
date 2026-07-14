@@ -1,0 +1,397 @@
+{
+	"data": {
+		"categoryGridRetrieve": {
+			"__typename": "CategoryGrid",
+			"concepts": null,
+			"facetOptions": [
+				{
+					"__typename": "CategoryFacet",
+					"displayName": "Type",
+					"name": "storeDisplayClassification",
+					"values": [
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 462,
+							"displayName": "Full Game",
+							"key": "FULL_GAME"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 26,
+							"displayName": "Game Bundle",
+							"key": "GAME_BUNDLE"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 5,
+							"displayName": "Premium Edition",
+							"key": "PREMIUM_EDITION"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 1,
+							"displayName": "Add-On Pack",
+							"key": "ADD-ON_PACK"
+						}
+					]
+				},
+				{
+					"__typename": "CategoryFacet",
+					"displayName": "Price",
+					"name": "webBasePrice",
+					"values": [
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 3,
+							"displayName": "Under $1.99",
+							"key": "0-199"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 27,
+							"displayName": "$2.00 - $4.99",
+							"key": "200-499"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 60,
+							"displayName": "$5.00 - $9.99",
+							"key": "500-999"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 136,
+							"displayName": "$10.00 - $19.99",
+							"key": "1000-1999"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 179,
+							"displayName": "$20.00 - $39.99",
+							"key": "2000-3999"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 61,
+							"displayName": "$40.00 - $59.99",
+							"key": "4000-5999"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 12,
+							"displayName": "$60.00 - $79.99",
+							"key": "6000-7999"
+						}
+					]
+				},
+				{
+					"__typename": "CategoryFacet",
+					"displayName": "Genre",
+					"name": "productGenres",
+					"values": [
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 242,
+							"displayName": "Action",
+							"key": "ACTION"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 162,
+							"displayName": "Adventure",
+							"key": "ADVENTURE"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 85,
+							"displayName": "Role Playing Games",
+							"key": "ROLE_PLAYING_GAMES"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 62,
+							"displayName": "Simulation",
+							"key": "SIMULATION"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 44,
+							"displayName": "Shooter",
+							"key": "SHOOTER"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 37,
+							"displayName": "Strategy",
+							"key": "STRATEGY"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 32,
+							"displayName": "Family",
+							"key": "FAMILY"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 31,
+							"displayName": "Unique",
+							"key": "UNIQUE"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 27,
+							"displayName": "Horror",
+							"key": "HORROR"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 24,
+							"displayName": "Puzzle",
+							"key": "PUZZLE"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 23,
+							"displayName": "Driving/Racing",
+							"key": "RACING"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 21,
+							"displayName": "Sport",
+							"key": "SPORTS"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 14,
+							"displayName": "Casual",
+							"key": "CASUAL"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 13,
+							"displayName": "Arcade",
+							"key": "ARCADE"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 13,
+							"displayName": "Fighting",
+							"key": "FIGHTING"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 9,
+							"displayName": "Party",
+							"key": "PARTY"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 5,
+							"displayName": "Simulator",
+							"key": "SIMULATOR"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 1,
+							"displayName": "Brain Training",
+							"key": "BRAIN_TRAINING"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 1,
+							"displayName": "Educational",
+							"key": "EDUCATIONAL"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 1,
+							"displayName": "Music/Rhythm",
+							"key": "MUSIC/RHYTHM"
+						}
+					]
+				},
+				{
+					"__typename": "CategoryFacet",
+					"displayName": "Platform",
+					"name": "targetPlatforms",
+					"values": [
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 415,
+							"displayName": "PS4",
+							"key": "PS4"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 234,
+							"displayName": "PS5",
+							"key": "PS5"
+						}
+					]
+				},
+				{
+					"__typename": "CategoryFacet",
+					"displayName": "Supported Features",
+					"name": "productCompatibilityNotices",
+					"values": [
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 35,
+							"displayName": "PS5 Pro Enhanced",
+							"key": "GRAPHICS_ENHANCED"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 205,
+							"displayName": "Remote Play",
+							"key": "REMOTE_PLAY_SUPPORTED"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 28,
+							"displayName": "Game Help",
+							"key": "GAME_HELP_SUPPORTED"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 93,
+							"displayName": "Local Multiplayer",
+							"key": "LOCAL_MULTI_PLAYER_SUPPORTED"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 181,
+							"displayName": "Online Multiplayer",
+							"key": "ONLINE_MULTI_PLAYER_SUPPORTED"
+						}
+					]
+				},
+				{
+					"__typename": "CategoryFacet",
+					"displayName": "Release Date",
+					"name": "productReleaseDate",
+					"values": [
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 1,
+							"displayName": "Just Released",
+							"key": "last_thirty_days"
+						}
+					]
+				},
+				{
+					"__typename": "CategoryFacet",
+					"displayName": "VR",
+					"name": "productVrCompatibility",
+					"values": [
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 6,
+							"displayName": "PS VR2",
+							"key": "PSVR2"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 16,
+							"displayName": "PS VR",
+							"key": "PSVR"
+						}
+					]
+				},
+				{
+					"__typename": "CategoryFacet",
+					"displayName": "Age Rating",
+					"name": "ageRating",
+					"values": [
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 81,
+							"displayName": "Everyone",
+							"key": "ESRB_EVERYONE"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 88,
+							"displayName": "Everyone 10+",
+							"key": "ESRB_EVERYONE_10"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 148,
+							"displayName": "Teen",
+							"key": "ESRB_TEEN"
+						},
+						{
+							"__typename": "CategoryFacetValue",
+							"count": 61,
+							"displayName": "Mature",
+							"key": "ESRB_MATURE_17"
+						}
+					]
+				}
+			],
+			"id": "3a7006fe-e26f-49fe-87e5-4473d7ed0fb2",
+			"localizedName": "cat.gma.c.PS_Plus_Game_Catalog_-_All",
+			"pageInfo": {
+				"__typename": "PageInfo",
+				"isLast": false,
+				"offset": 0,
+				"size": 100,
+				"totalCount": 494
+			},
+			"products": [],
+			"reportingName": "SPAR_GMA_PSGC_ALL_GAMES_(D)",
+			"sortedBy": {
+				"__typename": "CategorySortingOption",
+				"displayName": "productReleaseDate",
+				"isAscending": false,
+				"name": "productReleaseDate"
+			},
+			"sortingOptions": [
+				{
+					"__typename": "CategorySortingOption",
+					"displayName": "Best Selling",
+					"isAscending": false,
+					"name": "sales30"
+				},
+				{
+					"__typename": "CategorySortingOption",
+					"displayName": "Most Downloaded",
+					"isAscending": false,
+					"name": "downloads30"
+				},
+				{
+					"__typename": "CategorySortingOption",
+					"displayName": "Name (A - Z)",
+					"isAscending": true,
+					"name": "productName"
+				},
+				{
+					"__typename": "CategorySortingOption",
+					"displayName": "Name (Z - A)",
+					"isAscending": false,
+					"name": "productName"
+				},
+				{
+					"__typename": "CategorySortingOption",
+					"displayName": "Release Date (Old - New)",
+					"isAscending": true,
+					"name": "productReleaseDate"
+				},
+				{
+					"__typename": "CategorySortingOption",
+					"displayName": "Release Date (New - Old)",
+					"isAscending": false,
+					"name": "productReleaseDate"
+				},
+				{
+					"__typename": "CategorySortingOption",
+					"displayName": "Recently Added to PS Plus",
+					"isAscending": false,
+					"name": "contentCollections.contentCollectionStartDate"
+				}
+			]
+		}
+	}
+}
