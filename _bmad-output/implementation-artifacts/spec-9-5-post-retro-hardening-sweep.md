@@ -4,6 +4,7 @@ type: 'chore'
 created: '2026-07-14'
 status: 'done'
 baseline_revision: '2e16f73106b9339706a6bef2fab505320c816fc9'
+final_revision: 'a886498'
 review_loop_iteration: 0
 followup_review_recommended: true # HIGH findings auto-forced it; the independent pass RAN in this story
 context: []
