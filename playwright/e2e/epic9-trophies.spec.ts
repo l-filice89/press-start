@@ -114,6 +114,25 @@ test('the detail panel carries a Trophies section with the tier breakdown, and o
 	}
 });
 
+test('Settings carries the platinum-date backfill, and a run with no trophy data says to sync trophies first (9.3)', async ({
+	page,
+}) => {
+	// The e2e user has no trophy-synced title at all, so the run has ZERO
+	// candidates: it never calls PSN (unstubbable here) and still has to end in a
+	// readable summary — and "nothing to recover, every platinum is dated" would
+	// be a LIE here: there is nothing to recover FROM until the trophy sync runs.
+	await page.goto('/');
+	await page.getByRole('button', { name: 'Settings' }).click();
+
+	const button = page.getByTestId('backfill-platinum-dates');
+	await expect(button).toBeVisible();
+	await button.click();
+
+	await expect(page.getByTestId('backfill-summary')).toHaveText(
+		/No trophy data yet — run the trophy sync first/,
+	);
+});
+
 /*
  * The no-credential trophy sync → expired-token banner flow lives in
  * `epic4-settings.spec.ts`, NOT here: it mutates the same per-user PSN setting

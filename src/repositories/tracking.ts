@@ -5,7 +5,7 @@
  * primitives only; the completion-invariant and append-only-date guards
  * (AD-10/11/12/21) are wired at their edit/ingest boundaries in later epics.
  */
-import { and, eq, isNotNull, or, type SQL, sql } from 'drizzle-orm';
+import { and, eq, gt, isNotNull, isNull, or, type SQL, sql } from 'drizzle-orm';
 import type { SQLiteUpdateSetSource } from 'drizzle-orm/sqlite-core';
 import type {
 	DateEdits,
@@ -13,7 +13,7 @@ import type {
 	PlayStatus,
 	TrophyTierCounts,
 } from '../core';
-import { gameTracking } from '../schema/catalog';
+import { game, gameTracking } from '../schema/catalog';
 import type { Db } from './db';
 
 /** Columns a caller may set on a tracking row (never `user_id`/`game_id` — those are the key). */
@@ -246,6 +246,9 @@ export async function setDiscarded(
 export type TrophyCountsWrite = {
 	gameId: string;
 	npCommId: string;
+	/** PSN's per-title trophy service (`trophy`/`trophy2`) — 9.3's detail call
+	 * 404s on the wrong one, so it is stored, not guessed. */
+	npServiceName: string;
 	earned: TrophyTierCounts;
 	defined: TrophyTierCounts;
 	syncedAt: string;
@@ -283,6 +286,7 @@ export async function setTrophyCountsBatch(
 				.update(gameTracking)
 				.set({
 					trophyNpCommId: counts.npCommId,
+					trophyNpServiceName: counts.npServiceName,
 					trophyEarnedBronze: counts.earned.bronze,
 					trophyEarnedSilver: counts.earned.silver,
 					trophyEarnedGold: counts.earned.gold,
@@ -309,6 +313,80 @@ export async function setTrophyCountsBatch(
 		});
 	}
 	return written;
+}
+
+/** One game the platinum-date backfill (Story 9.3) may still fill. */
+export interface PlatinumBackfillCandidate {
+	gameId: string;
+	title: string;
+	npCommId: string;
+	/** NULL on rows the trophy sync wrote before this column existed — the
+	 * detail call then defaults, and a wrong default 404s (a reported skip). */
+	npServiceName: string | null;
+}
+
+/**
+ * The backfill's candidate page (Story 9.3): games PSN says carry an earned
+ * platinum (9.2 wrote the counts) whose `platinum_on` is still NULL — the ONLY
+ * rows the backfill may write, which is what makes it idempotent and write-once
+ * by construction. Ordered by `game_id` and paged on a `after` cursor: a title
+ * that can never be filled (a 404, no date on record) stays a candidate
+ * forever, so a "next unfilled chunk" loop would spin on it — the cursor steps
+ * past it instead.
+ *
+ * DISCARDED rows are excluded DELIBERATELY: a discarded game is one the user
+ * has thrown out of the library, and spending a PSN call (and a permanent,
+ * write-once date) on it is exactly the work this run should not do. Un-discard
+ * it and re-run to fill it.
+ */
+export async function listPlatinumBackfillCandidates(
+	db: Db,
+	userId: string,
+	{ after, limit }: { after?: string; limit: number },
+): Promise<PlatinumBackfillCandidate[]> {
+	return db
+		.select({
+			gameId: gameTracking.gameId,
+			title: game.title,
+			npCommId: gameTracking.trophyNpCommId,
+			npServiceName: gameTracking.trophyNpServiceName,
+		})
+		.from(gameTracking)
+		.innerJoin(game, eq(gameTracking.gameId, game.id))
+		.where(
+			and(
+				eq(gameTracking.userId, userId),
+				eq(gameTracking.discarded, false),
+				gt(gameTracking.trophyEarnedPlatinum, 0),
+				isNull(gameTracking.platinumOn),
+				isNotNull(gameTracking.trophyNpCommId),
+				after ? gt(gameTracking.gameId, after) : undefined,
+			),
+		)
+		.orderBy(gameTracking.gameId)
+		.limit(limit) as Promise<PlatinumBackfillCandidate[]>;
+}
+
+/**
+ * Has the trophy sync (9.2) ever written a row for this user? Only asked when
+ * the backfill finds NO candidates, to tell "nothing left to recover" apart
+ * from "no trophy data exists yet" (Story 9.3).
+ */
+export async function hasAnyTrophyData(
+	db: Db,
+	userId: string,
+): Promise<boolean> {
+	const rows = await db
+		.select({ gameId: gameTracking.gameId })
+		.from(gameTracking)
+		.where(
+			and(
+				eq(gameTracking.userId, userId),
+				isNotNull(gameTracking.trophyNpCommId),
+			),
+		)
+		.limit(1);
+	return rows.length > 0;
 }
 
 /** Every tracking row for a user (AD-13 scope). */

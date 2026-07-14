@@ -372,3 +372,11 @@ resolution: spike complete; the table above IS the deliverable. Firm: NPSSO gate
 - source_spec: `spec-9-2-trophy-progress-on-every-game-vr-2.md`
   summary: A discarded game's trophy title is reported as "no library match" noise on every trophy sync, and two trophy syncs in flight for the same user are not locked (same posture as the library sync).
   evidence: `listLibraryForUser` excludes discarded rows, so their trophy titles fall into `unmatched`; the FAB disable is per-component only. Both are cosmetic / pre-existing-pattern, not data hazards.
+
+- source_spec: `spec-9-3-one-off-backfill-recover-the-platinum-dates-psn-knows-vr-3.md`
+  summary: Trophy rows written by story 9.2 before migration 0008 carry no `trophy_np_service_name`, so the backfill falls back to `trophy2` for them — a PS4-era title in that state 404s into a per-title skip until the trophy sync is re-run.
+  evidence: The live probe measured 94 of 137 titles on `trophy` (PS3/PS4/Vita) and 43 on `trophy2` (PS5), and confirmed the wrong service name answers 404. The skip copy tells the user to re-run the trophy sync, so it is self-healing — but a one-line backfill of the column (or a 404-retry with the other name) would remove the step entirely.
+
+- source_spec: `spec-9-3-one-off-backfill-recover-the-platinum-dates-psn-knows-vr-3.md`
+  summary: Two concurrent backfill runs (two tabs) are not locked, and neither is the trophy sync.
+  evidence: The COALESCE write makes the duplicate write a no-op, so no data is corrupted — but both loops report the same dates as "filled" and the PSN fan-out is doubled. Same posture as the existing library sync; a single-flight guard would cover all three.

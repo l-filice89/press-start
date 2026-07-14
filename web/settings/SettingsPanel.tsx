@@ -5,12 +5,85 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useToast } from '../components/Toast';
 import { useModalTrap } from '../components/useModalTrap';
 import {
+	backfillPartial,
 	cancelPsPlus,
 	fetchSettings,
+	type PlatinumBackfillResult,
+	runPlatinumBackfill,
 	saveFabHandedness,
 	savePsnNpsso,
 } from './api';
 import './settings-panel.css';
+
+/**
+ * Client-side brake on the backfill's chunk loop (Story 9.3). The server's
+ * cursor strictly advances past every row it saw, so the loop terminates on its
+ * own; this only stops a cursor regression from spinning the browser forever.
+ * 40 chunks × 15 candidates = 600 platinum titles. Tripping it means the run is
+ * INCOMPLETE — the summary says so rather than reading as a finished backfill.
+ */
+const MAX_BACKFILL_CHUNKS = 40;
+
+type BackfillRows = Pick<PlatinumBackfillResult, 'filled' | 'skipped'>;
+
+type BackfillState =
+	| { phase: 'idle' }
+	| { phase: 'running'; filled: number; skipped: number }
+	| ({
+			phase: 'done';
+			hasTrophyData: boolean;
+			/** The chunk brake tripped: more candidates remain. */
+			stoppedEarly: boolean;
+	  } & BackfillRows)
+	// A failed run still WROTE the rows it got through (platinum_on is write-once
+	// — nothing rolls back), so the failure carries them instead of erasing them.
+	| ({ phase: 'error'; message: string } & BackfillRows);
+
+/**
+ * The backfill summary (Story 9.3, FR-37). Every ending is DISTINCT: a run that
+ * filled nothing because PSN had no trophy record for a single candidate is not
+ * a completed backfill of a hopeless library, and "no candidates" means one of
+ * two different things depending on whether the trophy sync has ever run.
+ */
+function doneSummary(state: Extract<BackfillState, { phase: 'done' }>): string {
+	const { filled, skipped, hasTrophyData, stoppedEarly } = state;
+	const early = stoppedEarly
+		? ' Stopped early — run it again to continue.'
+		: '';
+	if (filled.length === 0 && skipped.length === 0) {
+		return hasTrophyData
+			? 'Nothing to recover — every platinum you have already carries its date.'
+			: 'No trophy data yet — run the trophy sync first, then come back and recover the dates.';
+	}
+	if (
+		filled.length === 0 &&
+		skipped.every((item) => item.code === 'not-found')
+	) {
+		return `PlayStation returned no trophy record for any of these ${skipped.length} — the trophy sync may need re-running.${early}`;
+	}
+	// Each skip carries its OWN reason (no date on record, no trophy record, a
+	// PSN failure on that one title) — collapsing them into "no date" would tell
+	// the user a title is undateable when PSN merely fell over on it.
+	return `Recovered ${filled.length} platinum date${
+		filled.length === 1 ? '' : 's'
+	}${
+		skipped.length > 0
+			? `; skipped ${skipped.length} (${skipped
+					.map((item) => `${item.title} — ${item.reason}`)
+					.join('; ')})`
+			: ''
+	}.${early}`;
+}
+
+/** What a FAILED run still recovered — written, permanent, and not lost here. */
+function partialSummary(
+	state: Extract<BackfillState, { phase: 'error' }>,
+): string {
+	if (state.filled.length === 0 && state.skipped.length === 0) return '';
+	return ` It had already recovered ${state.filled.length} platinum date${
+		state.filled.length === 1 ? '' : 's'
+	} (kept), and skipped ${state.skipped.length}.`;
+}
 
 /**
  * The Settings surface (Story 4.1, re-credentialed in 9.1b, FR-36): a
@@ -69,6 +142,81 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 			toast({ message: 'Couldn’t un-claim your PS+ games. Try again.' });
 		},
 	});
+
+	// The one-off platinum-date backfill (Story 9.3). It LOOPS the chunked
+	// endpoint on its cursor — one PSN call per platinum title is more fan-out
+	// than a single Worker invocation may issue — and always ends in a summary
+	// naming what was filled and what PSN could not date (FR-37).
+	const [backfill, setBackfill] = useState<BackfillState>({ phase: 'idle' });
+	const runBackfill = async () => {
+		setBackfill({ phase: 'running', filled: 0, skipped: 0 });
+		const filled: PlatinumBackfillResult['filled'] = [];
+		const skipped: PlatinumBackfillResult['skipped'] = [];
+		let cursor: string | null = null;
+		let hasTrophyData = true;
+		let stoppedEarly = false;
+		try {
+			for (let chunk = 0; ; chunk++) {
+				if (chunk >= MAX_BACKFILL_CHUNKS) {
+					stoppedEarly = true;
+					break;
+				}
+				const result: PlatinumBackfillResult =
+					await runPlatinumBackfill(cursor);
+				filled.push(...result.filled);
+				skipped.push(...result.skipped);
+				hasTrophyData = result.hasTrophyData;
+				setBackfill({
+					phase: 'running',
+					filled: filled.length,
+					skipped: skipped.length,
+				});
+				cursor = result.nextCursor;
+				if (!cursor) break;
+			}
+		} catch (error) {
+			// The rows EARLIER chunks recovered are already written and permanent —
+			// and so are the ones the FAILED chunk got through before it died (the
+			// server reports those in the error body). Report all of them: a run that
+			// recovered 40 dates and then hit an expired token did not recover none.
+			const partial = backfillPartial(error);
+			if (partial) {
+				filled.push(...partial.filled);
+				skipped.push(...partial.skipped);
+			}
+			const status = (error as { status?: number }).status;
+			setBackfill({
+				phase: 'error',
+				filled,
+				skipped,
+				message:
+					status === 401
+						? 'PlayStation rejected the token — save a fresh one above, then try again.'
+						: status === 409
+							? 'Set your timezone first — a recovered date is permanent, and without your zone an evening platinum would be dated a day off. Reload Press Start to capture it, then try again.'
+							: 'Couldn’t reach PlayStation. Try again later.',
+			});
+			// The server persisted the expired flag — refetch settings so the banner
+			// lights without a reload (same as both sync handlers, AD-14).
+			if (status === 401)
+				queryClient.invalidateQueries({ queryKey: ['settings'] });
+			// Whatever was written before the failure still changes the cards.
+			if (filled.length > 0)
+				queryClient.invalidateQueries({ queryKey: ['shelf'] });
+			return;
+		}
+		setBackfill({
+			phase: 'done',
+			filled,
+			skipped,
+			hasTrophyData,
+			stoppedEarly,
+		});
+		// The recovered dates land on the cards (the platinum date the shelf shows,
+		// and the completed_on the heuristic fills). play_status is NOT touched by
+		// the backfill — a game you are replaying keeps saying "Playing".
+		queryClient.invalidateQueries({ queryKey: ['shelf'] });
+	};
 
 	const onKeyDown = useModalTrap(dialogRef, onClose, {
 		// The count-confirm stacks on top: hand Escape to it (Story 3.5 rule).
@@ -200,6 +348,55 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 					>
 						{claimCount === 0 ? 'No PS+ claims' : 'I cancelled PS+'}
 					</button>
+				</section>
+
+				<section className="settings-panel__section">
+					<h3 className="settings-panel__heading">Platinum dates</h3>
+					<p className="settings-panel__status">
+						PlayStation knows when you earned each platinum. Recover those dates
+						for games that have none — it never changes a date you already have.
+					</p>
+					<button
+						type="button"
+						className="settings-panel__save tap-target"
+						data-testid="backfill-platinum-dates"
+						disabled={backfill.phase === 'running'}
+						onClick={runBackfill}
+					>
+						{backfill.phase === 'running'
+							? 'Recovering…'
+							: 'Recover platinum dates'}
+					</button>
+					{/* aria-live WITHOUT role=status: the token-save feedback above already
+					    owns that role in this dialog, and a second one is ambiguous to a
+					    screen reader (and to `getByRole('status')`). */}
+					<div
+						className="settings-panel__feedback"
+						aria-live="polite"
+						data-testid="backfill-summary"
+					>
+						{backfill.phase === 'running' &&
+							`Recovering… ${backfill.filled} filled, ${backfill.skipped} skipped so far.`}
+						{backfill.phase === 'error' &&
+							`${backfill.message}${partialSummary(backfill)}`}
+						{backfill.phase === 'done' && doneSummary(backfill)}
+					</div>
+					{backfill.phase !== 'idle' &&
+						backfill.phase !== 'running' &&
+						backfill.filled.length > 0 && (
+							<ul
+								className="settings-panel__instructions"
+								data-testid="backfill-filled"
+							>
+								{/* Titles COLLIDE in this app (the whole trophy-matching design
+								    exists because they do) — the game id is the only stable key. */}
+								{backfill.filled.map((item) => (
+									<li key={item.gameId}>
+										{item.title} — {item.date}
+									</li>
+								))}
+							</ul>
+						)}
 				</section>
 
 				<section className="settings-panel__section">

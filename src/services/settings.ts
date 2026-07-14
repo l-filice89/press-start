@@ -12,8 +12,20 @@ export const TIMEZONE_SETTING_KEY = 'timezone';
 
 /** Today's date (YYYY-MM-DD) in this user's timezone; UTC when unset. */
 export async function todayForUser(db: Db, userId: string): Promise<string> {
-	const timeZone = await getSetting(db, userId, TIMEZONE_SETTING_KEY);
-	return todayInZone(timeZone, new Date());
+	return todayInZone(await getUserTimeZone(db, userId), new Date());
+}
+
+/**
+ * The user's captured IANA zone (null when unset). Read once per run by a
+ * caller that stamps MANY dates — the Story 9.3 backfill converts each
+ * platinum's UTC instant with `todayInZone(zone, instant)`, the same zone
+ * `todayForUser` stamps "today" with.
+ */
+export async function getUserTimeZone(
+	db: Db,
+	userId: string,
+): Promise<string | null> {
+	return (await getSetting(db, userId, TIMEZONE_SETTING_KEY)) ?? null;
 }
 
 /** FAB placement (Story 6.3, UX-DR10): `'left'`|`'right'`, absent = `'right'`. */

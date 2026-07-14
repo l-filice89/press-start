@@ -206,6 +206,25 @@ drives what the persisted counts do to the UI.
 | 9.2e the whole run is a BOUNDED number of subrequests (no per-game fan-out): 4 `fetch` (2 exchange legs + 2 trophy pages) plus ceil(matched/50) batched D1 calls — D1 binding calls count against the Workers limit too, so the writes are chunk-batched, never one UPDATE per title | the fetch half pinned in `psn.test.ts` › paginates on nextOffset and exchanges the NPSSO ONCE; the write half in `trophies.test.ts` (unit) › batches the writes: the D1 call count is bounded, not linear in matched titles; no UI flow |
 | 9.2 FAB trigger + summary readout | jsdom `Fab.test.tsx` › runs the trophy sync with a spinner, hands the result over, and repaints the shelf + › a trophy sync rejected for an expired token toasts…; the readout content in `TrophySyncModal.test.tsx` (unmatched reported, ambiguous named as needs-attention) |
 
+Story 9.3 (one-off platinum-date backfill). The FETCH half is unstubbable in e2e
+for the same reason, and a run WITH candidates would call PSN — so e2e drives
+the one deterministic browser path (zero candidates: the e2e user has no
+`trophy_np_comm_id`, so no PSN call is ever made) and everything else is pinned
+at the integration/unit tier against the CAPTURED wire shape.
+
+| AC | Coverage |
+|----|----------|
+| 9.3a `platinum_on` filled from the platinum's `earnedDateTime`, converted to the USER'S timezone (an ISO slice misdates an evening platinum) | skipped e2e — unstubbable PSN; pinned in `backfill.test.ts` › fills platinum_on from PSN's UTC instant in the USER'S ZONE… (18:30Z → the next day in +12) + the payload read in `psn.test.ts` › fetchPlatinumEarnedAt reads the platinum's earnedDateTime out of the CAPTURED detail payload |
+| 9.3b `completed_on` takes the same date when NULL — a BACKFILL-ONLY heuristic, labelled as such in `services/backfill.ts` | `backfill.test.ts` › fills platinum_on … and completed_on with it |
+| 9.3c write-once: a game that already carries `platinum_on` (or `completed_on`) is untouched, even when PSN disagrees | `backfill.test.ts` › leaves a game that ALREADY carries platinum_on untouched, even when PSN disagrees (incl. the half-filled row: `completed_on` is not back-written) |
+| 9.3d idempotent: a second run finds no candidates and fills 0 | `backfill.test.ts` › is IDEMPOTENT: the second run finds no candidates and fills nothing (a re-fetch throws) |
+| 9.3e chunked fan-out (53 platinum titles vs a 50-subrequest ceiling); a 404'd title is skipped and the cursor still advances | `backfill.test.ts` › CHUNKS the fan-out and PARTITIONS the candidates exactly (16 candidates → 15 + 1, the exact game ids per chunk, no row fetched twice) + › SKIPS a title PSN 404s and keeps going + › skips a title with no earned platinum date on record; the 404-is-not-an-auth-failure mapping in `psn.test.ts` › maps the CAPTURED 404 to a per-title skip |
+| 9.3f expired NPSSO → 401, `psn_auth: 'expired'`, no retry — and NO ROLLBACK: `platinum_on` is write-once, so a failure reports the rows it already wrote | `backfill.test.ts` › an expired NPSSO on the FIRST title … writes nothing + › a MID-CHUNK failure reports the rows it ALREADY WROTE and a cursor at the title that failed; the one-attempt provider row in `psn.test.ts` › throws PsnAuthError on a 401, after exactly one attempt |
+| 9.3g the trophy sync (9.2) still writes trophy columns ONLY — the milestone write lives exclusively in the backfill | `trophies.test.ts` › persists the counts by NAME … and touches NOTHING else (unchanged, still green) |
+| 9.3h no timezone → the run is REFUSED (409), never a UTC-guessed date on a write-once column | `backfill.test.ts` › REFUSES the run with 409 when the user has no timezone; the UI half in `SettingsPanel.test.tsx` › refuses the run without a timezone and says to set one |
+| 9.3i a TRUNCATED trophy set with no platinum in it fails closed instead of reporting "no earned date" | `psn.test.ts` › fails closed on a TRUNCATED trophy set with no platinum in it |
+| 9.3 Settings trigger, cursor loop, and the end-of-run summary — every ending DISTINCT | `epic9-trophies.spec.ts` › Settings carries the platinum-date backfill, and a run with no trophy data says to sync trophies first (the zero-candidate path, the only PSN-free one); jsdom `SettingsPanel.test.tsx` › LOOPS the backfill on its cursor… + › says so when there is nothing to recover + › with NO trophy data at all, points at the trophy sync + › an ALL-SKIP run says PlayStation had no record for any of them + › a rejected token stops the loop (and refetches settings so the banner lights) + › a token that expires MID-RUN still reports what was already recovered + › says the run STOPPED EARLY when the chunk brake trips |
+
 ## Epic 8
 
 Only Story 8.1 (B1a, Google sign-in) is implemented — it sits outside the rest of

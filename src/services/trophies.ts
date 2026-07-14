@@ -155,6 +155,10 @@ export async function runTrophySync(
 			write: {
 				gameId: matches[0].id,
 				npCommId: title.npCommunicationId,
+				// PSN's own per-title service name, passed through unmangled: 9.3's
+				// detail call 404s on the wrong one, and PS4/PS3 titles (`trophy`)
+				// outnumber PS5 (`trophy2`) on a real account.
+				npServiceName: title.npServiceName,
 				earned: title.earnedTrophies,
 				defined: title.definedTrophies,
 				syncedAt: today,

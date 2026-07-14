@@ -16,6 +16,7 @@ const writes = (n: number) =>
 	Array.from({ length: n }, (_, i) => ({
 		gameId: `g${i}`,
 		npCommId: `NPWR${i}`,
+		npServiceName: 'trophy',
 		earned: counts,
 		defined: counts,
 		syncedAt: '2026-07-13',

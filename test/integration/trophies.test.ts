@@ -31,6 +31,9 @@ const db = () => createDb(env.DB);
 
 const trophyTitle = (over: Record<string, unknown> = {}) => ({
 	npCommunicationId: 'NPWR22372_00',
+	// A PS4 title's service name — `trophy`, NOT `trophy2` (9.3's detail call
+	// 404s on the wrong one; 94 of the probed account's 137 titles are `trophy`).
+	npServiceName: 'trophy',
 	trophyTitleName: 'Ultimate Chicken Horse Trophies',
 	trophyTitlePlatform: 'PS4',
 	definedTrophies: { bronze: 40, silver: 12, gold: 6, platinum: 1 },
@@ -154,6 +157,8 @@ describe('POST /api/sync/trophies (integration, real workerd + local D1)', () =>
 		// The counts landed, raw and untransformed (the % is derived on read).
 		expect(after).toMatchObject({
 			trophyNpCommId: 'NPWR22372_00',
+			// The join key 9.3 needs BOTH halves of: the detail call 404s without it.
+			trophyNpServiceName: 'trophy',
 			trophyEarnedBronze: 6,
 			trophyEarnedSilver: 0,
 			trophyEarnedGold: 0,

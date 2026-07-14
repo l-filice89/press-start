@@ -125,6 +125,56 @@ export async function runTrophySync(): Promise<TrophySyncResult> {
 	);
 }
 
+/** One chunk of the platinum-date backfill (Story 9.3). */
+export const platinumBackfillResultSchema = z.object({
+	/** Games whose `platinum_on` this chunk recovered, with the date written.
+	 *  `gameId` is the only stable key — titles COLLIDE in this app. */
+	filled: z.array(
+		z.object({ gameId: z.string(), title: z.string(), date: z.string() }),
+	),
+	/** Titles PSN could not date (delisted, no date on record) — named, not lost.
+	 *  `code` is what the summary branches on, never the prose. */
+	skipped: z.array(
+		syncAttentionItemSchema.extend({
+			code: z.enum(['not-found', 'no-date']),
+		}),
+	),
+	/** Non-null = there are more candidates: re-post with it (the chunk loop). */
+	nextCursor: z.string().nullable(),
+	/** False = the trophy sync has never run — there is nothing to recover FROM. */
+	hasTrophyData: z.boolean(),
+});
+
+export type PlatinumBackfillResult = z.infer<
+	typeof platinumBackfillResultSchema
+>;
+
+/**
+ * One chunk of the one-off backfill. The run is chunked because the fan-out is
+ * one PSN call per platinum title (53 on the probed account) and a Worker
+ * invocation gets 50 subrequests — the caller LOOPS on `nextCursor`. A 401
+ * means the NPSSO expired: stop, never retry (AD-14).
+ */
+export async function runPlatinumBackfill(
+	cursor: string | null,
+): Promise<PlatinumBackfillResult> {
+	const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+	return platinumBackfillResultSchema.parse(
+		await callApi(`/api/backfill/platinum-dates${query}`, { method: 'POST' }),
+	);
+}
+
+/**
+ * A FAILED chunk still wrote rows — `platinum_on` is write-once, nothing rolls
+ * back — and the server reports them in the error body. Null when the failure
+ * carried no report (a refusal, a 401 before the first title).
+ */
+export function backfillPartial(error: unknown): PlatinumBackfillResult | null {
+	const body = (error as { body?: { partial?: unknown } } | undefined)?.body;
+	const parsed = platinumBackfillResultSchema.safeParse(body?.partial);
+	return parsed.success ? parsed.data : null;
+}
+
 /** Result of a PS+ Extra catalog check (Story 5.1, FR-38). */
 export const psPlusCheckResultSchema = z.object({
 	/** Titles newly flagged as in the catalog this run. */

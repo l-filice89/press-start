@@ -57,6 +57,24 @@ const CATALOG_MAX_PAGES = 30;
 const TROPHY_URL =
 	'https://m.np.playstation.com/api/trophy/v1/users/me/trophyTitles';
 const TROPHY_PAGE_SIZE = 100;
+
+// Per-title trophy detail (Story 9.3): where the EARNED DATE lives. The title
+// list carries none — captured live 2026-07-13 (`tmp/probe-trophy-dates.ts`):
+// `{trophies:[{trophyId, trophyType, earned, earnedDateTime, …}], totalItemCount}`,
+// and a bogus npCommunicationId answers a real HTTP 404
+// `{"error":{"message":"Resource not found"}}` — a per-title skip, not a denial.
+const TROPHY_DETAIL_HOST =
+	'https://m.np.playstation.com/api/trophy/v1/users/me/npCommunicationIds';
+// npServiceName is PER TITLE and load-bearing: the detail call 404s on the
+// wrong one (probed live 2026-07-13, `tmp/probe-service-name.ts` — the account's
+// 137 titles split 94 `trophy` / 43 `trophy2`, and ENDER LILIES answers 404 to
+// `trophy2` and 200 to `trophy`). The trophy list carries it per entry and 9.2
+// persists it; this default only covers rows synced BEFORE that column existed.
+const TROPHY_SERVICE_NAME_FALLBACK = 'trophy2';
+// One title's whole trophy set in one call (the probed max set is well under
+// 200) — the fan-out is already one call per platinum title, and paging it
+// would multiply that by the page count.
+const TROPHY_DETAIL_LIMIT = 200;
 // One paginated collection for the WHOLE account (137 titles → 2 pages), not a
 // per-game lookup. 20 pages = 2,000 titles; the brake keeps a nextOffset
 // regression inside the 50-subrequest budget (AD-15).
@@ -116,15 +134,41 @@ export interface PsnTrophyTierCounts {
  */
 export interface PsnTrophyTitle {
 	npCommunicationId: string;
+	/** `trophy` (PS3/PS4/Vita) or `trophy2` (PS5) — the detail call 404s on the
+	 * wrong one, so it is persisted per title and handed back to PSN as-is. */
+	npServiceName: string;
 	trophyTitleName: string;
 	trophyTitlePlatform: string;
 	definedTrophies: PsnTrophyTierCounts;
 	earnedTrophies: PsnTrophyTierCounts;
 }
 
+/**
+ * One title's platinum date (Story 9.3), from the LIVE capture. `earnedAt` is
+ * PSN's UTC instant (`"2026-07-06T18:30:27Z"`) — NOT a local date: the caller
+ * converts it in the user's zone. `found: false` = PSN did not resolve this
+ * `npCommunicationId` + `npServiceName` pair (HTTP 404: a delisted title, or a
+ * pre-9.3 row whose service name was never stored and defaulted wrong): a
+ * per-title SKIP the caller reports and steps past, never an auth failure and
+ * never a reason to abort.
+ */
+export interface PsnPlatinumDate {
+	earnedAt: string | null;
+	found: boolean;
+}
+
 export interface PsnProvider {
 	/** The full purchased list, paginated until `pageInfo.isLast`. */
 	fetchPurchasedGames(): Promise<PsnGame[]>;
+	/**
+	 * The platinum's earned instant for ONE title (Story 9.3). Rides the same
+	 * bearer and the same one-attempt `PsnAuthError` discipline; a 404 resolves
+	 * to `{ found: false }` instead of throwing.
+	 */
+	fetchPlatinumEarnedAt(
+		npCommunicationId: string,
+		npServiceName?: string,
+	): Promise<PsnPlatinumDate>;
 	/**
 	 * Every trophy title on the account (Story 9.2), paginated on `nextOffset`.
 	 * Rides the same bearer as the library call, with the same one-attempt
@@ -184,6 +228,7 @@ interface CatalogPage {
 
 interface RawTrophyTitle {
 	npCommunicationId?: string;
+	npServiceName?: string;
 	trophyTitleName?: string;
 	trophyTitlePlatform?: string;
 	definedTrophies?: Partial<PsnTrophyTierCounts>;
@@ -208,6 +253,7 @@ const tierCounts = (
 function toTrophyTitle(raw: RawTrophyTitle): PsnTrophyTitle {
 	return {
 		npCommunicationId: raw.npCommunicationId ?? '',
+		npServiceName: raw.npServiceName ?? '',
 		trophyTitleName: raw.trophyTitleName ?? '',
 		trophyTitlePlatform: raw.trophyTitlePlatform ?? '',
 		definedTrophies: tierCounts(raw.definedTrophies),
@@ -607,6 +653,89 @@ export function createPsnProvider({
 				);
 			}
 			return titles;
+		},
+
+		async fetchPlatinumEarnedAt(npCommunicationId: string, npServiceName) {
+			const token = await getBearer();
+			const service = npServiceName || TROPHY_SERVICE_NAME_FALLBACK;
+			const response = await fetch(
+				`${TROPHY_DETAIL_HOST}/${encodeURIComponent(npCommunicationId)}/trophyGroups/all/trophies?npServiceName=${encodeURIComponent(service)}&limit=${TROPHY_DETAIL_LIMIT}`,
+				{
+					headers: {
+						accept: 'application/json',
+						authorization: `Bearer ${token}`,
+					},
+					signal: AbortSignal.timeout(PSN_TIMEOUT_MS),
+				},
+			);
+
+			if (response.status === 401 || response.status === 403) {
+				// One attempt, then surface — never retry an expired credential.
+				throw new PsnAuthError(response.status);
+			}
+			// The CAPTURED not-resolved answer (a delisted title — or the wrong
+			// npServiceName). Resolving it instead of throwing is what keeps one dead
+			// title from aborting a 53-title backfill.
+			if (response.status === 404) return { earnedAt: null, found: false };
+			if (!response.ok) {
+				throw new Error(
+					`PSN trophy detail request failed: ${response.status} ${(await response.text()).slice(0, 500)}`,
+				);
+			}
+
+			const text = await response.text();
+			let payload: {
+				trophies?: {
+					trophyType?: string;
+					earned?: boolean;
+					earnedDateTime?: string;
+				}[];
+				totalItemCount?: number;
+				error?: { message?: string };
+			};
+			try {
+				payload = JSON.parse(text);
+			} catch {
+				throw new Error(
+					`PSN trophy detail returned non-JSON (${response.status}): ${text.slice(0, 200)}`,
+				);
+			}
+			// Same fail-closed posture as the trophy list: a 200 carrying an error
+			// body, or no `trophies` array, is a broken response — not "no platinum".
+			if (payload.error) {
+				throw new Error(
+					`PSN trophy detail error body on HTTP ${response.status}: ${JSON.stringify(payload.error)}`,
+				);
+			}
+			if (!Array.isArray(payload.trophies)) {
+				throw new Error('PSN trophy detail response missing a trophies array');
+			}
+			const platinum = payload.trophies.find(
+				(trophy) => trophy.trophyType === 'platinum' && trophy.earned === true,
+			);
+			// FAIL CLOSED on a TRUNCATED set, exactly as the title list reconciles its
+			// count: this call never pages (limit=200 covers the probed sets), so a
+			// trophy set longer than the limit could hide the platinum — and reporting
+			// "PlayStation has no earned date on record" for it would be a lie the
+			// user cannot see through. A truncated set that DID carry the platinum is
+			// fine: the rest of the trophies are nothing this run reads.
+			const total = payload.totalItemCount;
+			if (
+				!platinum &&
+				typeof total === 'number' &&
+				payload.trophies.length < total
+			) {
+				throw new Error(
+					`PSN trophy detail returned ${payload.trophies.length} of ${total} trophies for ${npCommunicationId} and no earned platinum among them — refusing a truncated result`,
+				);
+			}
+			return {
+				earnedAt:
+					typeof platinum?.earnedDateTime === 'string'
+						? platinum.earnedDateTime
+						: null,
+				found: true,
+			};
 		},
 
 		async fetchPsPlusExtraCatalog(region: string) {

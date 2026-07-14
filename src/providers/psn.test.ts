@@ -62,12 +62,15 @@ const provider = (npssos: (string | undefined)[]) => {
 // biome-ignore lint/suspicious/noExplicitAny: the mock inspects arbitrary fetch inits (headers, body, redirect) — typing them as RequestInit would fight every assertion below.
 type FetchInit = any;
 
-function mockPsn(api: () => Response, code: string | null = 'auth-code') {
+function mockPsn(
+	api: (url: string) => Response,
+	code: string | null = 'auth-code',
+) {
 	return vi.fn(async (input: unknown, _init?: FetchInit) => {
 		const url = String(input);
 		if (url.startsWith(AUTHORIZE)) return authorizeRedirect(code);
 		if (url.startsWith(TOKEN)) return tokenResponse('jwt-bearer');
-		return api();
+		return api(url);
 	});
 }
 
@@ -504,6 +507,9 @@ const TROPHY_HOST =
 
 const trophyEntry = (over: Record<string, unknown> = {}) => ({
 	npCommunicationId: 'NPWR22372_00',
+	// PS4-era titles carry `trophy`, PS5 `trophy2` — 94/43 of the probed
+	// account's 137 titles (`tmp/probe-service-name.ts`, 2026-07-13).
+	npServiceName: 'trophy',
 	trophyTitleName: 'Ultimate Chicken Horse Trophies',
 	trophyTitlePlatform: 'PS4',
 	hasTrophyGroups: false,
@@ -538,6 +544,8 @@ describe('fetchTrophyTitles', () => {
 		expect(titles).toEqual([
 			{
 				npCommunicationId: 'NPWR22372_00',
+				// Carried through: 9.3's detail call 404s on the wrong service name.
+				npServiceName: 'trophy',
 				trophyTitleName: 'Ultimate Chicken Horse Trophies',
 				trophyTitlePlatform: 'PS4',
 				definedTrophies: { bronze: 40, silver: 12, gold: 6, platinum: 1 },
@@ -863,5 +871,188 @@ describe('fetchPsPlusExtraCatalog', () => {
 		await expect(
 			provider(['x']).provider.fetchPsPlusExtraCatalog('en-us'),
 		).rejects.toThrow(/well-formed/);
+	});
+});
+
+/**
+ * Per-title trophy DETAIL (Story 9.3), built from the LIVE capture
+ * (`tmp/probe-trophy-dates.ts`, run 2026-07-13): `{trophies:[{trophyId,
+ * trophyType, earned, earnedDateTime, …}], totalItemCount}`, the platinum's
+ * `earnedDateTime` a UTC instant, and a bogus npCommunicationId answering a
+ * real HTTP 404 `{"error":{"message":"Resource not found"}}` — the per-title
+ * skip that must NOT read as an auth failure.
+ */
+const DETAIL_HOST =
+	'https://m.np.playstation.com/api/trophy/v1/users/me/npCommunicationIds';
+
+const detailCalls = (fetchMock: ReturnType<typeof vi.fn>) =>
+	fetchMock.mock.calls.filter(([url]) => String(url).startsWith(DETAIL_HOST));
+
+const detailTrophy = (over: Record<string, unknown> = {}) => ({
+	trophyId: 0,
+	trophyHidden: false,
+	earned: true,
+	earnedDateTime: '2026-07-06T18:30:27Z',
+	trophyType: 'platinum',
+	trophyRare: 1,
+	trophyEarnedRate: '12.3',
+	...over,
+});
+
+describe('fetchPlatinumEarnedAt', () => {
+	it("reads the platinum's earnedDateTime out of the CAPTURED detail payload, on the same bearer", async () => {
+		const fetchMock = mockPsn(() =>
+			jsonResponse({
+				trophies: [
+					detailTrophy({
+						trophyId: 12,
+						trophyType: 'bronze',
+						earnedDateTime: '2026-06-01T09:00:00Z',
+					}),
+					detailTrophy(),
+					detailTrophy({
+						trophyId: 30,
+						trophyType: 'gold',
+						earned: false,
+						earnedDateTime: undefined,
+					}),
+				],
+				totalItemCount: 3,
+			}),
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		expect(
+			await provider(['npsso']).provider.fetchPlatinumEarnedAt(
+				'NPWR22372_00',
+				'trophy2',
+			),
+		).toEqual({ earnedAt: '2026-07-06T18:30:27Z', found: true });
+
+		const [url, init] = detailCalls(fetchMock)[0];
+		// The probed path + the title's OWN npServiceName.
+		expect(String(url)).toContain(
+			'/NPWR22372_00/trophyGroups/all/trophies?npServiceName=trophy2',
+		);
+		expect(init.headers.authorization).toBe('Bearer jwt-bearer');
+	});
+
+	it("sends the TITLE'S npServiceName, not a pinned one (hazard: `trophy2` 404s every PS3/PS4/Vita title — 94 of the probed account's 137)", async () => {
+		const fetchMock = mockPsn((url) =>
+			// The live behaviour: ENDER LILIES (PS4) 404s on `trophy2` and answers
+			// 200 on `trophy` (`tmp/probe-service-name.ts`, 2026-07-13).
+			String(url).includes('npServiceName=trophy2')
+				? jsonResponse({ error: { message: 'Resource not found' } }, 404)
+				: jsonResponse({ trophies: [detailTrophy()], totalItemCount: 1 }),
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		expect(
+			await provider(['npsso']).provider.fetchPlatinumEarnedAt(
+				'NPWR12112_00',
+				'trophy',
+			),
+		).toEqual({ earnedAt: '2026-07-06T18:30:27Z', found: true });
+		expect(String(detailCalls(fetchMock)[0][0])).toContain(
+			'npServiceName=trophy&',
+		);
+	});
+
+	it('falls back to trophy2 when no service name is stored (pre-9.3 rows; a wrong guess 404s into the per-title skip, and the copy says to re-sync)', async () => {
+		const fetchMock = mockPsn(() =>
+			jsonResponse({ trophies: [detailTrophy()], totalItemCount: 1 }),
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		await provider(['npsso']).provider.fetchPlatinumEarnedAt('NPWR22372_00');
+		expect(String(detailCalls(fetchMock)[0][0])).toContain(
+			'npServiceName=trophy2',
+		);
+	});
+
+	it('maps the CAPTURED 404 to a per-title skip, NOT a PsnAuthError (hazard: one delisted title must not kill a 53-title run)', async () => {
+		const fetchMock = mockPsn(() =>
+			jsonResponse({ error: { message: 'Resource not found' } }, 404),
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		expect(
+			await provider(['npsso']).provider.fetchPlatinumEarnedAt('NPWR00000_00'),
+		).toEqual({ earnedAt: null, found: false });
+	});
+
+	it('a title with no EARNED platinum has no date (never a fabricated one)', async () => {
+		const fetchMock = mockPsn(() =>
+			jsonResponse({
+				trophies: [
+					detailTrophy({ earned: false, earnedDateTime: undefined }),
+					detailTrophy({ trophyType: 'bronze' }),
+				],
+				totalItemCount: 2,
+			}),
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		expect(
+			await provider(['npsso']).provider.fetchPlatinumEarnedAt('NPWR22372_00'),
+		).toEqual({ earnedAt: null, found: true });
+	});
+
+	it('throws PsnAuthError on a 401, after exactly one attempt (hazard: no retry)', async () => {
+		const fetchMock = mockPsn(() =>
+			jsonResponse({ error: { message: 'Invalid token' } }, 401),
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(
+			provider(['expired']).provider.fetchPlatinumEarnedAt('NPWR22372_00'),
+		).rejects.toBeInstanceOf(PsnAuthError);
+		expect(detailCalls(fetchMock)).toHaveLength(1);
+	});
+
+	it('fails closed on a TRUNCATED trophy set with no platinum in it (hazard: "PlayStation has no earned date" would be a lie, and the date it suppresses is write-once)', async () => {
+		// The call never pages: a set longer than the limit can hide the platinum.
+		vi.stubGlobal(
+			'fetch',
+			mockPsn(() =>
+				jsonResponse({
+					trophies: [detailTrophy({ trophyType: 'bronze' })],
+					totalItemCount: 240,
+				}),
+			),
+		);
+		await expect(
+			provider(['npsso']).provider.fetchPlatinumEarnedAt('NPWR22372_00'),
+		).rejects.toThrow(/truncated/);
+
+		// A truncated page that DID carry the earned platinum is fine — the rest of
+		// the trophies are nothing this call reads.
+		vi.stubGlobal(
+			'fetch',
+			mockPsn(() =>
+				jsonResponse({ trophies: [detailTrophy()], totalItemCount: 240 }),
+			),
+		);
+		expect(
+			await provider(['npsso']).provider.fetchPlatinumEarnedAt('NPWR22372_00'),
+		).toEqual({ earnedAt: '2026-07-06T18:30:27Z', found: true });
+	});
+
+	it('fails closed on a DEGENERATE 200 (error body / no trophies array)', async () => {
+		vi.stubGlobal(
+			'fetch',
+			mockPsn(() => jsonResponse({ error: { message: 'Invalid token' } })),
+		);
+		await expect(
+			provider(['npsso']).provider.fetchPlatinumEarnedAt('NPWR22372_00'),
+		).rejects.toThrow(/error body/);
+
+		vi.stubGlobal(
+			'fetch',
+			mockPsn(() => jsonResponse({ totalItemCount: 0 })),
+		);
+		await expect(
+			provider(['npsso']).provider.fetchPlatinumEarnedAt('NPWR22372_00'),
+		).rejects.toThrow(/trophies array/);
 	});
 });

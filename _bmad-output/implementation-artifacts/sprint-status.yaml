@@ -134,7 +134,7 @@ development_status:
   9-1b-swap-psnprovider-cookie-to-npsso-bearer-vr-1: done # NPSSO bearer swap; cookie path deleted, migration 0006 drops the stale row
   9-1c-final-wishlist-spike-capture-storeretrievewishlist-hash-vr-1: backlog # gates 9.4; sequenced after 9-3 (runs on the bearer 9-1b lands)
   9-2-trophy-progress-on-every-game-vr-2: done # trophy counts persisted; % + grade derived in core; batched D1 writes
-  9-3-one-off-backfill-recover-the-platinum-dates-psn-knows-vr-3: backlog
+  9-3-one-off-backfill-recover-the-platinum-dates-psn-knows-vr-3: done # chunked cursor backfill; per-title npServiceName (migration 0008)
   9-4-sync-the-ps-store-wishlist-vr-4: backlog # conditional on Story 9.1c
   epic-9-retrospective: optional
 

@@ -115,6 +115,14 @@ export async function callApi(
 	if (!response.ok) {
 		const error = new Error(`Request failed (${response.status})`);
 		(error as Error & { status?: number }).status = response.status;
+		// Carry the error BODY too: a failed platinum-backfill chunk (9.3) has
+		// already written rows, and its partial report rides in that body — a bare
+		// status would throw it away.
+		// (Wrapped in a promise: a body-less/mocked response may not even have a
+		// usable `json()` — a missing body is never a reason to lose the status.)
+		(error as Error & { body?: unknown }).body = await Promise.resolve()
+			.then(() => response.json())
+			.catch(() => undefined);
 		throw error;
 	}
 	return response.json();

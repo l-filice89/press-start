@@ -45,6 +45,7 @@ const title = (
 	npCommId = 'NPWR00001_00',
 ): PsnTrophyTitle => ({
 	npCommunicationId: npCommId,
+	npServiceName: 'trophy2',
 	trophyTitleName: name,
 	trophyTitlePlatform: 'PS5',
 	earnedTrophies: { bronze: earned, silver: 0, gold: 0, platinum: 0 },
@@ -91,6 +92,8 @@ describe('runTrophySync', () => {
 			{
 				gameId: 'g1',
 				npCommId: 'NPWR20718_00',
+				// Persisted per title — 9.3's detail call 404s on the wrong one.
+				npServiceName: 'trophy2',
 				earned: { bronze: 49, silver: 0, gold: 0, platinum: 0 },
 				defined: { bronze: 49, silver: 0, gold: 0, platinum: 0 },
 				syncedAt: '2026-07-13',

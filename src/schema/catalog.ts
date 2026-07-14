@@ -115,6 +115,14 @@ export const gameTracking = sqliteTable(
 		 * `trophy_np_comm_id` is the NPWR id — the join key Story 9.3 needs.
 		 */
 		trophyNpCommId: text('trophy_np_comm_id'),
+		/**
+		 * PSN's per-title trophy service (`trophy` for PS3/PS4/Vita, `trophy2` for
+		 * PS5) — the trophy-detail endpoint 404s on the WRONG one, and a real
+		 * account is mostly `trophy` (probed live: 94 `trophy` / 43 `trophy2` of
+		 * 137 titles). Story 9.3's backfill passes it straight back to PSN. NULL on
+		 * rows written before this column existed: re-run the trophy sync.
+		 */
+		trophyNpServiceName: text('trophy_np_service_name'),
 		trophyEarnedBronze: integer('trophy_earned_bronze'),
 		trophyEarnedSilver: integer('trophy_earned_silver'),
 		trophyEarnedGold: integer('trophy_earned_gold'),
