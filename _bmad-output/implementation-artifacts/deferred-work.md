@@ -348,38 +348,47 @@ resolution: spike complete; the table above IS the deliverable. Firm: NPSSO gate
 - source_spec: `spec-9-1b-swap-psnprovider-cookie-to-npsso-bearer-vr-1.md`
   summary: Playwright 6.4a ("Claimed with PS+" writes owned_via=membership) flakes under full-suite load — the test asserts the D1 row right after the dialog closes, without waiting on the ownership PUT to land.
   evidence: PRE-EXISTING, not caused by 9.1b — reproduced on the baseline commit (7b2d979) with the story's changes stashed: 1 of 2 full `bun run test:e2e` runs failed the same test the same way. Passes in isolation and with --repeat-each 3. Fix is to await the write (response or a UI settle) before querying D1.
+  decision: 2026-07-14 (Epic 9 retro) Homed in Story 9.5 — investigate and fix (Luca's call: fixed here, not carried), with the full suite green 3x consecutively as the bar. Gates the main merge.
 
 - source_spec: `spec-9-1b-swap-psnprovider-cookie-to-npsso-bearer-vr-1.md`
   summary: The NPSSO→bearer exchange stub is copy-pasted verbatim into `test/integration/sync.test.ts` and `test/integration/discard.test.ts`.
   evidence: Two places to update when the exchange shape moves; both would keep passing against a stale shape while production breaks. Extract one shared helper next time either is touched.
+  decision: 2026-07-14 (Epic 9 retro) Homed in Story 9.5 — post-retro hardening sweep, carried as an AC. Gates the main merge.
 
 - source_spec: `spec-9-1b-swap-psnprovider-cookie-to-npsso-bearer-vr-1.md`
   summary: The npsso charset guard in `src/routes/settings.ts` admits non-Latin1 codepoints, which the outbound Cookie header cannot carry.
   evidence: Such a value saves fine, then fails at `fetch` with a TypeError → a 502 at sync time instead of a 400 at save time. Fails closed (no injection, no bad write), so it is a diagnosability nit, not a security hole.
+  decision: 2026-07-14 (Epic 9 retro) Homed in Story 9.5 — refuse it at save time with a 400. Gates the main merge.
 
 - source_spec: `spec-9-2-trophy-progress-on-every-game-vr-2.md`
   summary: Trophy counts are never cleared or aged — a game whose trophy title stops matching PSN keeps its last-synced "62% · B" forever, and the UI never shows how old the numbers are (`trophy_synced_at` is stored but never read).
   evidence: Nothing writes NULL back to the trophy columns, and no view reads `trophy_synced_at`. Needs a product call (clear on vanish? show "synced 3 months ago"?) rather than a silent default, so it was not invented during the run.
+  resolution: discarded (accepted permanently) 2026-07-14 — Epic 9 retro, Luca's product call: "It's historic data. Fine with it never clearing." Trophy counts are a record of what was earned, not a live gauge; staleness is acceptable and no aging UI is wanted. Recorded so it is not re-opened.
 
 - source_spec: `spec-9-2-trophy-progress-on-every-game-vr-2.md`
   summary: `Db` now types a `batch` method, but the seed script's sqlite-proxy driver is built without a batch callback — any future repository function that batches and is reused by the seed path fails at RUNTIME, not compile time.
   evidence: `src/repositories/db.ts` widens the type; `scripts/seed-import.ts` calls `drizzle(callback, { schema })` with no batch callback. Harmless today (the seed path never calls `setTrophyCountsBatch`), a trap tomorrow.
+  decision: 2026-07-14 (Epic 9 retro) Homed in Story 9.5 — supply the batch callback (or stop the type promising one) so the failure is at COMPILE time, never runtime. Gates the main merge.
 
 - source_spec: `spec-9-2-trophy-progress-on-every-game-vr-2.md`
   summary: No e2e test drives the FAB -> trophy sync -> shelf-repaint seam end to end, because PSN cannot be stubbed in the Playwright environment.
   evidence: `Fab.test.tsx` mocks fetch, `trophies.test.ts` mocks the provider, and the e2e seeds D1 directly — so query invalidation actually repainting a card with fresh counts is asserted nowhere. Same limitation `epic5-psplus.spec.ts` already records.
+  resolution: discarded (accepted) 2026-07-14 — Epic 9 retro, Luca's call: "Fine not having e2e with external dependencies." PSN is unstubbable in the Playwright environment; the seam stays a COVERAGE.md row, as `epic5-psplus.spec.ts` already established. Standing project posture, not a per-story gap.
 
 - source_spec: `spec-9-2-trophy-progress-on-every-game-vr-2.md`
   summary: A discarded game's trophy title is reported as "no library match" noise on every trophy sync, and two trophy syncs in flight for the same user are not locked (same posture as the library sync).
   evidence: `listLibraryForUser` excludes discarded rows, so their trophy titles fall into `unmatched`; the FAB disable is per-component only. Both are cosmetic / pre-existing-pattern, not data hazards.
+  decision: 2026-07-14 (Epic 9 retro) BOTH halves homed in Story 9.5. Discarded-game noise: match discarded rows too and drop them SILENTLY — they are not unmatched, they matched a game the user threw away. Locking: folded into the single-flight guard AC, which covers all three PSN long-ops (library sync, trophy sync, backfill) rather than just this one — Dana's point, that "same as the existing pattern" had been the justification for three epics running.
 
 - source_spec: `spec-9-3-one-off-backfill-recover-the-platinum-dates-psn-knows-vr-3.md`
   summary: Trophy rows written by story 9.2 before migration 0008 carry no `trophy_np_service_name`, so the backfill falls back to `trophy2` for them — a PS4-era title in that state 404s into a per-title skip until the trophy sync is re-run.
   evidence: The live probe measured 94 of 137 titles on `trophy` (PS3/PS4/Vita) and 43 on `trophy2` (PS5), and confirmed the wrong service name answers 404. The skip copy tells the user to re-run the trophy sync, so it is self-healing — but a one-line backfill of the column (or a 404-retry with the other name) would remove the step entirely.
+  resolution: discarded (cannot occur in production) 2026-07-14 — Epic 9 retro. The window this describes only exists if a trophy sync ran BETWEEN migration 0007 and 0008. Production has never seen either: Epic 9 is unmerged, and CI applies migrations in order before the deploy, so 0007 and 0008 land together and the first production trophy sync writes `trophy_np_service_name` from the start. The only database that can hold such a row is Luca's local dev D1 (where 9.2 ran before 9.3 existed), and one local trophy-sync re-run clears it. A migration-ordering artifact, not a defect — no code change.
 
 - source_spec: `spec-9-3-one-off-backfill-recover-the-platinum-dates-psn-knows-vr-3.md`
   summary: Two concurrent backfill runs (two tabs) are not locked, and neither is the trophy sync.
   evidence: The COALESCE write makes the duplicate write a no-op, so no data is corrupted — but both loops report the same dates as "filled" and the PSN fan-out is doubled. Same posture as the existing library sync; a single-flight guard would cover all three.
+  decision: 2026-07-14 (Epic 9 retro) Homed in Story 9.5 — Luca: "Add guard". One single-flight guard across ALL THREE PSN long-ops (library sync, trophy sync, backfill), not a per-sync patch; a second concurrent run is refused with a human message. Deferred since Epic 4; gates the main merge.
 
 ### DW-10 extension (Story 9.1c, 2026-07-14): wishlist reachable under NEITHER credential — Story 9.4 dropped to Future
 

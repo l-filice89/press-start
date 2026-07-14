@@ -1755,6 +1755,42 @@ So that the two lists stop drifting apart and the store wishlist stops being a s
 **When** the summary shows
 **Then** it names games added, entries already tracked, and anything needing attention — the FR-37 posture [FR-37, NFR-4]
 
+### Story 9.5: Post-retro hardening sweep — the merge gate (Epic 9 retro, 2026-07-14)
+
+As Luca,
+I want the traps Epic 9's review left in the ledger closed before the epic reaches main,
+So that the first live trophy sync on production runs against hardened code, not against known-and-shrugged-at defects.
+
+The Epic 9 retrospective triaged 11 deferred entries. Five are accepted or watch-only; one was a migration-ordering artifact that cannot occur in production. These are the six that ship.
+
+**Acceptance Criteria:**
+
+**Given** the NPSSO→bearer exchange stub is copy-pasted verbatim into `test/integration/sync.test.ts` and `test/integration/discard.test.ts`
+**When** this story ships
+**Then** one shared helper backs both — a stale exchange shape can no longer keep two suites green while production breaks [DW: 9.1b]
+
+**Given** `Db` types a `batch()` method while `scripts/seed-import.ts` builds its sqlite-proxy driver with **no batch callback**
+**When** this story ships
+**Then** the seed driver supplies a batch callback (or the type stops promising one) — a future repository function that batches and is reused by the seed path must fail at COMPILE time, never at runtime [DW: 9.2]
+
+**Given** the library sync, the trophy sync, and the platinum backfill all run unlocked — two tabs double the PSN fan-out and both loops report the same rows as written
+**When** this story ships
+**Then** a single-flight guard covers **all three** long-running PSN operations per user, and a second concurrent run is refused with a human message rather than racing [DW: 9.2, 9.3; deferred since Epic 4]
+
+**Given** the npsso charset guard in `src/routes/settings.ts` admits non-Latin1 codepoints that the outbound `Cookie:` header cannot carry
+**When** this story ships
+**Then** such a value is refused at SAVE time with a 400, not at sync time with a 502 [DW: 9.1b]
+
+**Given** `listLibraryForUser` excludes discarded rows, so a discarded game's trophy title falls through to the trophy sync's "no library match" list as noise on every run
+**When** this story ships
+**Then** trophy titles matching a discarded game are matched and dropped SILENTLY — they are not unmatched, they matched a game the user threw away [DW: 9.2]
+
+**Given** `epic6.spec.ts` 6.4a ("Claimed with PS+" writes `owned_via=membership`) flakes under full-suite load — it asserts the D1 row immediately after the dialog closes, without awaiting the ownership PUT
+**When** this story ships
+**Then** the test awaits the write (a response or a UI settle) before querying D1, and the full suite runs green three times consecutively — the flake is proven PRE-EXISTING (reproduced on baseline `7b2d979` with Epic 9 stashed), so it is fixed here rather than carried [DW: 9.1b]
+
+> **Explicitly NOT in scope** (accepted at the retro, recorded so nobody re-litigates them): trophy counts are never cleared or aged — they are historic data and staleness is fine (Luca's call); no e2e for the FAB → trophy sync → shelf-repaint seam (PSN is unstubbable in Playwright, same limitation `epic5-psplus.spec.ts` records); pre-migration-0008 trophy rows falling back to `trophy2` (unreachable in production — CI applies 0007 and 0008 together before the first deploy, so only a local dev D1 can hold such a row).
+
 ## Epic 10: Know Before You Play — Scores & Expiry Warnings
 
 **Status: v1.x, after Epic 7** — Story 10.2 diffs the `ps_plus_catalog` snapshot Story 7.1 builds, so this epic follows Epic 7. **Stories 10.1 and 10.3 carry no such dependency and are pullable ahead alone** (10.3 extends 10.1's refresh job, so it follows 10.1).
