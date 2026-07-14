@@ -1,0 +1,202 @@
+/**
+ * The catalog destination (Story 7.2, DESIGN.md). Same grid geometry as the
+ * shelf — the two destinations must read as one product — with the shelf card's
+ * chrome minus everything that implies ownership. NEVER magenta here: magenta is
+ * reserved for Playing, which is a shelf state.
+ */
+
+.catalog {
+	width: 100%;
+}
+
+.catalog__grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+	gap: var(--space-4);
+}
+
+/* Phone: 2-up, tighter gaps (the shelf's own phone delta). */
+@media (max-width: 600px) {
+	.catalog__grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: var(--space-3);
+	}
+}
+
+/* A <fieldset> for the grouping semantics (its legend names the group for a
+   screen reader) — its default chrome is reset away. */
+.catalog__filters {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+	margin: 0 0 var(--space-3);
+	padding: 0;
+	border: 0;
+}
+
+.catalog__genre,
+.catalog__clear {
+	padding: var(--space-2) var(--space-3);
+	font-family: var(--font-ui);
+	font-size: 12px;
+	color: var(--color-text-secondary);
+	background: var(--color-surface);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-pill);
+	cursor: pointer;
+}
+
+.catalog__genre[aria-pressed="true"] {
+	color: var(--color-void);
+	background: var(--color-accent-electric);
+	border-color: var(--color-accent-electric);
+}
+
+.catalog__genre-count {
+	font-family: var(--font-mono);
+	opacity: 0.7;
+}
+
+/* The genre vocabulary failed to load — say so, rather than letting an empty
+   filter row read as "this region has no genres" (review, M9). */
+.catalog__genres-error {
+	flex: 1 0 100%;
+	margin: 0;
+	font-family: var(--font-ui);
+	font-size: 12px;
+	color: var(--color-accent-warn, var(--color-text-secondary));
+}
+
+.catalog__count {
+	margin: 0 0 var(--space-3);
+	font-family: var(--font-mono);
+	font-size: 11px;
+	letter-spacing: 0.06em;
+	color: var(--text-meta);
+}
+
+.catalog-card {
+	display: flex;
+	flex-direction: column;
+	background: var(--color-surface);
+	border: 1px solid var(--color-border-soft);
+	border-radius: var(--radius-md);
+}
+
+.catalog-card__cover {
+	position: relative;
+	aspect-ratio: 3 / 4;
+	background: var(--color-surface-raised);
+	border-radius: calc(var(--radius-md) - 1px) calc(var(--radius-md) - 1px) 0 0;
+	overflow: hidden;
+}
+
+.catalog-card__cover-img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.catalog-card__cover-fallback {
+	display: grid;
+	place-items: center;
+	width: 100%;
+	height: 100%;
+	color: var(--text-meta);
+}
+
+.catalog-card__flag {
+	position: absolute;
+	top: var(--space-2);
+	left: var(--space-2);
+	padding: 2px 6px;
+	font-family: var(--font-mono);
+	font-size: 10px;
+	color: var(--color-accent-electric);
+	background: color-mix(in srgb, var(--color-void) 70%, transparent);
+	border: 1px solid var(--color-accent-electric);
+	border-radius: var(--radius-pill);
+}
+
+.catalog-card__info {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+	padding: var(--space-3);
+}
+
+.catalog-card__title {
+	margin: 0;
+	font-family: var(--font-ui);
+	font-size: 13px;
+	color: var(--text-body);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.catalog-card__actions {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	/* The row is always present, so all cards are the same height whichever of
+	   the three states they are in (the owned state has no actions at all). */
+	min-height: 32px;
+}
+
+/* Not tracked: the primary action, solid electric fill with dark ink. */
+.catalog-card__add {
+	padding: var(--space-2) var(--space-3);
+	font-family: var(--font-ui);
+	font-weight: 600;
+	font-size: 12px;
+	color: var(--color-void);
+	background: var(--color-accent-electric);
+	border: none;
+	border-radius: var(--radius-pill);
+	cursor: pointer;
+}
+
+/* Claim: hairline outline, cyan ink — a deep link to the store, never a write. */
+.catalog-card__claim {
+	padding: var(--space-2) var(--space-3);
+	font-family: var(--font-ui);
+	font-size: 12px;
+	color: var(--color-accent-electric);
+	text-decoration: none;
+	background: transparent;
+	border: 1px solid var(--color-accent-electric);
+	border-radius: var(--radius-pill);
+}
+
+/* The markers are TEXT, not a colour state (accessibility floor). */
+.catalog-card__marker {
+	font-family: var(--font-ui);
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.catalog-card__marker--library {
+	color: var(--color-accent-electric);
+}
+
+.catalog-card__marker--owned {
+	color: var(--color-milestone-silver, var(--color-text-secondary));
+}
+
+.catalog__sentinel {
+	display: flex;
+	justify-content: center;
+	padding: var(--space-5) 0;
+}
+
+.catalog__more {
+	padding: var(--space-2) var(--space-4);
+	font-family: var(--font-ui);
+	font-size: 13px;
+	color: var(--color-accent-electric);
+	background: transparent;
+	border: 1px solid var(--color-accent-electric);
+	border-radius: var(--radius-pill);
+	cursor: pointer;
+}

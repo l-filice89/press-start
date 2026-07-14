@@ -10,7 +10,7 @@
  * (50 on the free tier, AD-15) — the same reason `setTrophyCountsBatch` exists.
  */
 
-import { and, eq, ne } from 'drizzle-orm';
+import { and, count, eq, inArray, ne, sql } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import { psPlusCatalog, psPlusCatalogGenre } from '../schema/catalog';
 import type { Db } from './db';
@@ -227,4 +227,154 @@ export async function listCatalogProducts(
 		.select()
 		.from(psPlusCatalog)
 		.where(and(eq(psPlusCatalog.region, region), eq(psPlusCatalog.tier, tier)));
+}
+
+/** One catalog row as the browse destination renders it (Story 7.2). */
+export type CatalogBrowseRow = {
+	productId: string;
+	name: string;
+	titleNormalized: string;
+	coverUrl: string | null;
+	storeUrl: string | null;
+};
+
+/** LIKE wildcards in a user-typed term are literal characters, not syntax. */
+const escapeLike = (term: string) =>
+	term.replace(/[\\%_]/g, (char) => `\\${char}`);
+
+/**
+ * The catalog browse read (Story 7.2, AD-6 — repositories only, nothing
+ * external on render). Narrows the region+tier snapshot by genre facet keys (OR
+ * within the group, AD-26) and a case/diacritic-insensitive title substring.
+ *
+ * SEARCH matches `title_normalized`, never `lower(name)` (review, M2): SQLite's
+ * `lower()` is ASCII-ONLY, so "Pokémon", "Ōkami" and "YŌTEI" were unfindable in
+ * the catalog while the shelf's client-side search folded them correctly — one
+ * input, two destinations, two different rules. The column already holds the
+ * AD-9 `normalizeTitle` key, so the caller folds the TERM with the same
+ * function and the two surfaces answer alike.
+ *
+ * ORDER BY is deterministic (review, M1): the service still materializes the
+ * A–Z order with `core/compareTitle` (AD-7), but that comparator is `sensitivity:
+ * 'base'` — NieR and NIER compare EQUAL — and paging is an offset over a
+ * per-request sort. With no SQL order at all, D1's tie order is unspecified, so
+ * two base-equal titles straddling a page boundary could swap between requests:
+ * one row served twice, one never shown. The SQL order feeds the sort a stable
+ * input; the sort's own tiebreak on `productId` closes it.
+ */
+export async function listCatalogForBrowse(
+	db: Db,
+	{ region, tier = PS_PLUS_TIER }: Scope,
+	{
+		genreKeys,
+		searchNormalized,
+	}: { genreKeys?: string[]; searchNormalized?: string } = {},
+): Promise<CatalogBrowseRow[]> {
+	const scoped = [
+		eq(psPlusCatalog.region, region),
+		eq(psPlusCatalog.tier, tier),
+	];
+	if (searchNormalized) {
+		scoped.push(
+			sql`${psPlusCatalog.titleNormalized} LIKE ${`%${escapeLike(searchNormalized)}%`} ESCAPE '\\'`,
+		);
+	}
+	if (genreKeys && genreKeys.length > 0) {
+		scoped.push(
+			inArray(
+				psPlusCatalog.productId,
+				db
+					.select({ productId: psPlusCatalogGenre.productId })
+					.from(psPlusCatalogGenre)
+					.where(
+						and(
+							eq(psPlusCatalogGenre.region, region),
+							eq(psPlusCatalogGenre.tier, tier),
+							inArray(psPlusCatalogGenre.genreKey, genreKeys),
+						),
+					),
+			),
+		);
+	}
+	return db
+		.select({
+			productId: psPlusCatalog.productId,
+			name: psPlusCatalog.name,
+			titleNormalized: psPlusCatalog.titleNormalized,
+			coverUrl: psPlusCatalog.coverUrl,
+			storeUrl: psPlusCatalog.storeUrl,
+		})
+		.from(psPlusCatalog)
+		.where(and(...scoped))
+		.orderBy(psPlusCatalog.titleNormalized, psPlusCatalog.productId);
+}
+
+/**
+ * How many products the snapshot holds — the EMPTY CATALOG vs NO MATCH question
+ * (review, M5). It used to be `(await listCatalogForBrowse(db, scope)).length`:
+ * a FULL table read of ~490 rows on every filtered page, thrown away except for
+ * its length. That is a count.
+ */
+export async function countCatalogProducts(
+	db: Db,
+	{ region, tier = PS_PLUS_TIER }: Scope,
+): Promise<number> {
+	const rows = await db
+		.select({ total: count() })
+		.from(psPlusCatalog)
+		.where(and(eq(psPlusCatalog.region, region), eq(psPlusCatalog.tier, tier)));
+	return rows[0]?.total ?? 0;
+}
+
+/**
+ * The snapshot's current generation (Story 7.2 review, M3) — the browse page
+ * carries it so the client can tell a torn offset-paged read (a refresh landing
+ * between page 1 and page 2) from an intact one. null = the snapshot is empty.
+ */
+export async function getCatalogGeneration(
+	db: Db,
+	{ region, tier = PS_PLUS_TIER }: Scope,
+): Promise<string | null> {
+	const rows = await db
+		.select({ generation: psPlusCatalog.generation })
+		.from(psPlusCatalog)
+		.where(and(eq(psPlusCatalog.region, region), eq(psPlusCatalog.tier, tier)))
+		.limit(1);
+	return rows[0]?.generation ?? null;
+}
+
+/**
+ * Facet key → number of catalog games carrying it (the filter's counts).
+ *
+ * JOINED to the snapshot (review, M6): counting the tag table alone counts tags
+ * whose product is GONE — a pruned game leaves its rows behind only until the
+ * FK cascade runs, and any tag written for a product outside the snapshot has no
+ * product at all. The chip said 26 while the filtered grid rendered 24.
+ */
+export async function countCatalogGenreKeys(
+	db: Db,
+	{ region, tier = PS_PLUS_TIER }: Scope,
+): Promise<{ key: string; count: number }[]> {
+	const rows = await db
+		.select({
+			key: psPlusCatalogGenre.genreKey,
+			count: count(psPlusCatalogGenre.productId),
+		})
+		.from(psPlusCatalogGenre)
+		.innerJoin(
+			psPlusCatalog,
+			and(
+				eq(psPlusCatalogGenre.region, psPlusCatalog.region),
+				eq(psPlusCatalogGenre.tier, psPlusCatalog.tier),
+				eq(psPlusCatalogGenre.productId, psPlusCatalog.productId),
+			),
+		)
+		.where(
+			and(
+				eq(psPlusCatalogGenre.region, region),
+				eq(psPlusCatalogGenre.tier, tier),
+			),
+		)
+		.groupBy(psPlusCatalogGenre.genreKey);
+	return rows;
 }

@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+// v8 ships one package: `react-router` (declarative/library mode — no Vite
+// plugin, no framework mode). `react-router-dom` does not exist any more.
+import { BrowserRouter } from 'react-router';
 import { authClient } from './auth-client';
 import { Skeleton } from './components/Skeleton';
 import Login from './Login';
@@ -76,12 +79,16 @@ function AuthenticatedApp({ email }: { email: string }) {
 		}
 	}
 
+	// The router wraps the AUTHENTICATED app only (AD-25): the Login screen is a
+	// single un-routed gate, and destinations exist only once you are inside.
 	return (
-		<AppShell
-			email={email}
-			onSignOut={onSignOut}
-			signOutFailed={signOutFailed}
-		/>
+		<BrowserRouter>
+			<AppShell
+				email={email}
+				onSignOut={onSignOut}
+				signOutFailed={signOutFailed}
+			/>
+		</BrowserRouter>
 	);
 }
 

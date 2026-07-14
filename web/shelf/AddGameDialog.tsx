@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router';
 import { useToast } from '../components/Toast';
 import { useModalTrap } from '../components/useModalTrap';
 import { addGame, fetchAddPreview, type IgdbCandidate } from './api';
 import { IgdbMatchPicker } from './IgdbMatchPicker';
-import { openDetail } from './open-detail';
 import './add-game-dialog.css';
 import './stragglers-dialog.css';
 
@@ -21,14 +21,20 @@ import './stragglers-dialog.css';
 export function AddGameDialog({
 	title,
 	onClose,
+	navigateToDetail = false,
 }: {
 	title: string;
 	onClose: () => void;
+	/** Land on the new game's detail after a successful add — the CATALOG add
+	 * path (Story 7.2): there is no catalog detail page, so the real, editable
+	 * one is where the flow ends. The shelf add stays where it is. */
+	navigateToDetail?: boolean;
 }) {
 	const dialogRef = useRef<HTMLDivElement>(null);
 	const titleRef = useRef<HTMLInputElement>(null);
 	const headingId = useId();
 	const queryClient = useQueryClient();
+	const navigate = useNavigate();
 	const { toast } = useToast();
 
 	const {
@@ -84,16 +90,17 @@ export function AddGameDialog({
 		onSuccess: async (result) => {
 			if (result.kind === 'duplicate') {
 				// A duplicate may be a REVIVED discard: re-adding the name clears the
-				// soft-delete tombstone server-side, so the just-revived card isn't in
-				// the shelf cache yet. Kick the refetch FIRST (marks the shelf query
-				// fetching), THEN open detail — the shelf holds a not-yet-present id
-				// while it is refetching and opens the panel once the revived card
-				// lands (Shelf.tsx stale-id guard). Not awaited, so the open is queued
-				// against the in-flight fetch rather than a settled empty payload.
+				// soft-delete tombstone server-side. Story 7.2 (AD-25): the detail is
+				// ROUTED and resolves through `GET /api/games/:id`, so it no longer
+				// depends on the game having landed in the `['shelf']` list cache —
+				// the whole "hold the id while the shelf refetches" dance is gone with
+				// the window event that needed it.
 				toast({ message: 'Already in your library.' });
 				queryClient.invalidateQueries({ queryKey: ['shelf'] });
 				onClose();
-				openDetail(result.gameId);
+				void navigate(`/game/${encodeURIComponent(result.gameId)}`, {
+					state: { fromApp: true },
+				});
 				return;
 			}
 			toast({
@@ -103,8 +110,14 @@ export function AddGameDialog({
 			await Promise.all([
 				queryClient.invalidateQueries({ queryKey: ['shelf'] }),
 				queryClient.invalidateQueries({ queryKey: ['genres'] }),
+				queryClient.invalidateQueries({ queryKey: ['catalog'] }),
 			]);
 			onClose();
+			if (navigateToDetail) {
+				void navigate(`/game/${encodeURIComponent(result.gameId)}`, {
+					state: { fromApp: true },
+				});
+			}
 		},
 		onError: () => toast({ message: `Couldn’t add ${draftTitle}. Try again.` }),
 	});

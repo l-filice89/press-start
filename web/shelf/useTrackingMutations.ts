@@ -126,10 +126,13 @@ export function useTrackingMutations(
 	);
 	// One invalidation seam for every write path: the shelf query is the single
 	// source the grid (and its client-side search/filter) renders from. 409 paths
-	// refresh through here too.
+	// refresh through here too. Story 7.2 adds the ROUTED detail's own by-id query
+	// (`['game', id]`) — the panel no longer reads the shelf list, so a write made
+	// from inside it would otherwise leave the panel showing its own stale DTO.
 	const invalidateShelfQueries = useCallback(() => {
 		queryClient.invalidateQueries({ queryKey: ['shelf'] });
-	}, [queryClient]);
+		queryClient.invalidateQueries({ queryKey: ['game', game.id] });
+	}, [queryClient, game.id]);
 
 	// `onHidden` fires only on a visible→hidden TRANSITION (Story 3.2, FR-4/17):
 	// a write on an already-hidden game (reached via reveal pill or search) that

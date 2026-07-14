@@ -1,6 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
+import { Route, Routes, useNavigate } from 'react-router';
+import { Catalog } from '../catalog/Catalog';
 import { AttentionBanner } from '../components/AttentionBanner';
+import { EmptyState } from '../components/EmptyState';
 import { ToastHost } from '../components/Toast';
 import {
 	fetchSettings,
@@ -10,6 +13,7 @@ import {
 	type TrophySyncResult,
 } from '../settings/api';
 import { SettingsPanel } from '../settings/SettingsPanel';
+import { GameDetailRoute } from '../shelf/GameRoute';
 import { SearchBox } from '../shelf/SearchBox';
 import { Shelf } from '../shelf/Shelf';
 import { StragglersDialog } from '../shelf/StragglersDialog';
@@ -35,6 +39,17 @@ import './app-shell.css';
  * reloads until their condition self-resolves (NFR-4 — never one dismissed
  * modal away).
  */
+/** The explicit not-found destination (review, M10) — never a shelf at /catlog. */
+function NotFound() {
+	const navigate = useNavigate();
+	return (
+		<EmptyState
+			variant="page-not-found"
+			actions={[{ label: 'Back to shelf', onClick: () => void navigate('/') }]}
+		/>
+	);
+}
+
 export function AppShell({
 	email,
 	onSignOut,
@@ -120,8 +135,42 @@ export function AppShell({
 						}}
 					/>
 				)}
-				<main className="app-shell__main" id="shelf">
-					<Shelf />
+				{/* Only <main> swaps between destinations (AD-25): the header, the
+				    banners, the toast host, the FAB, and every modal are SHARED chrome
+				    that surfaces OVER whichever destination is active.
+				    `/game/:id` renders the shelf WITH the detail beside it rather than
+				    instead of it — so opening and closing the detail never remounts the
+				    grid (focus, scroll, roving index all survive), and a cold deep link
+				    still resolves while the shelf is still loading.
+				    The routes are EXPLICIT (review, M10): the shelf used to sit on the
+				    catch-all, so `/catlog`, `/game/` and `/anything` silently rendered
+				    it at whatever address you mistyped. An unknown URL is a NOT FOUND. */}
+				<main className="app-shell__main" id="main-content">
+					<Routes>
+						<Route
+							path="/catalog"
+							element={<Catalog onOpenSettings={() => setSettingsOpen(true)} />}
+						/>
+						<Route
+							path="/"
+							element={
+								<>
+									<Shelf />
+									<GameDetailRoute />
+								</>
+							}
+						/>
+						<Route
+							path="/game/:id"
+							element={
+								<>
+									<Shelf />
+									<GameDetailRoute />
+								</>
+							}
+						/>
+						<Route path="*" element={<NotFound />} />
+					</Routes>
 				</main>
 			</div>
 			<Fab

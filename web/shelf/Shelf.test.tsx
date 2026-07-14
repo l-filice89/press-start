@@ -1,10 +1,12 @@
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter, useLocation } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ShelfGame } from './api';
-import { SHELF_SEARCH_EVENT } from './SearchBox';
+import { GameDetailRoute } from './GameRoute';
+import { SearchBox } from './SearchBox';
 import { chunkIntoRows, countColumns, Shelf } from './Shelf';
 import { resetInFlightWrites } from './useTrackingMutations';
 
@@ -41,26 +43,74 @@ function card(
 	};
 }
 
+/**
+ * The routed detail (Story 7.2) resolves through `GET /api/games/:id` — never
+ * an id lookup in the `['shelf']` list cache — so every stub in this suite must
+ * answer that route as well as the list. A miss is a RESOLVED 404.
+ */
+function gameByIdResponse(url: string, games: ShelfGame[]) {
+	const match = /\/api\/games\/([^/?]+)$/.exec(url);
+	if (!match) return null;
+	const game = games.find((g) => g.id === decodeURIComponent(match[1]));
+	return game
+		? { ok: true, status: 200, json: async () => ({ game }) }
+		: {
+				ok: false,
+				status: 404,
+				json: async () => ({ error: 'game not found' }),
+			};
+}
+
 function mockFetch(games: ShelfGame[]) {
 	vi.stubGlobal(
 		'fetch',
-		vi.fn(async () => ({
-			ok: true,
-			status: 200,
-			json: async () => ({ games }),
-		})),
+		vi.fn(async (url: string) => {
+			return (
+				gameByIdResponse(url, games) ?? {
+					ok: true,
+					status: 200,
+					json: async () => ({ games }),
+				}
+			);
+		}),
 	);
 }
 
-function renderShelf() {
+/** Reads the live URL — the search term and the open detail both live there. */
+function LocationProbe() {
+	const location = useLocation();
+	return (
+		<span data-testid="location">{`${location.pathname}${location.search}`}</span>
+	);
+}
+
+/**
+ * The shelf as the shell mounts it (Story 7.2): the header SearchBox writing
+ * `?q=`, the shelf reading it, and the routed detail beside the grid — so these
+ * tests drive the REAL intent path (`navigate` / `?q=`) instead of the deleted
+ * window events, and the mount-race they existed to catch stays covered.
+ */
+function renderShelf(initialEntry = '/') {
 	const client = new QueryClient({
 		defaultOptions: { queries: { retry: false } },
 	});
 	return render(
 		<QueryClientProvider client={client}>
-			<Shelf />
+			<MemoryRouter initialEntries={[initialEntry]}>
+				<SearchBox />
+				<Shelf />
+				<GameDetailRoute />
+				<LocationProbe />
+			</MemoryRouter>
 		</QueryClientProvider>,
 	);
+}
+
+/** Type into the ONE header box — the shelf reads the settled term off `?q=`. */
+async function search(user: ReturnType<typeof userEvent.setup>, term: string) {
+	const input = screen.getByRole('searchbox', { name: 'Search your library' });
+	await user.clear(input);
+	if (term) await user.type(input, term);
 }
 
 afterEach(() => {
@@ -431,10 +481,11 @@ describe('Shelf', () => {
 		expect(remaining[1]).toHaveTextContent('Cyan');
 	});
 
-	// HAZARD (Story 3.4, AC4): the open panel's state lives in the grid, not
-	// the Card — a refetch that reorders/re-chunks the rows (remounting every
-	// Card in jsdom's one-column layout) must not close it.
-	it('keeps the detail panel open across a refetch that re-chunks the grid', async () => {
+	// HAZARD (Story 3.4, AC4 — ROUTED in 7.2): opening a detail is a NAVIGATION to
+	// `/game/:id`, which resolves through its own by-id route. A refetch that
+	// reorders/re-chunks the rows (remounting every Card in jsdom's one-column
+	// layout) must not close it — the URL is what holds it open now.
+	it('the routed detail survives a refetch that re-chunks the grid', async () => {
 		const user = userEvent.setup();
 		const a = card('a', 'Apex', {
 			effectiveState: 'Playing',
@@ -460,7 +511,13 @@ describe('Shelf', () => {
 				if (url.includes('/genres')) {
 					return { ok: true, status: 200, json: async () => ({ genres: [] }) };
 				}
-				return { ok: true, status: 200, json: async () => ({ games }) };
+				return (
+					gameByIdResponse(url, games) ?? {
+						ok: true,
+						status: 200,
+						json: async () => ({ games }),
+					}
+				);
 			}),
 		);
 		renderShelf();
@@ -469,7 +526,8 @@ describe('Shelf', () => {
 		await user.click(
 			screen.getByRole('button', { name: 'Open details — Bolt' }),
 		);
-		const panel = screen.getByRole('dialog', { name: 'Bolt' });
+		expect(screen.getByTestId('location')).toHaveTextContent('/game/b');
+		const panel = await screen.findByRole('dialog', { name: 'Bolt' });
 		expect(panel).toBeVisible();
 
 		// Write from inside the panel; the refetch reorders the grid.
@@ -481,7 +539,11 @@ describe('Shelf', () => {
 		expect(screen.getByRole('dialog', { name: 'Bolt' })).toBeVisible();
 	});
 
-	it('keeps the detail panel open when an ownership write drops the game out of the active filter', async () => {
+	// The same guarantee, from the other direction: the routed detail reads its
+	// game from `GET /api/games/:id`, NOT from the `['shelf']` list — so a write
+	// that drops the game out of the active filter cannot close it (and a game
+	// that isn't in the list yet, 7.3's add-then-navigate, still resolves).
+	it('the routed detail stays open when an ownership write drops the game out of the active filter', async () => {
 		const user = userEvent.setup();
 		const a = card('a', 'Apex', { owned: false, wishlisted: true });
 		const b = card('b', 'Bolt', { owned: false, wishlisted: true });
@@ -501,7 +563,13 @@ describe('Shelf', () => {
 				if (url.includes('/genres')) {
 					return { ok: true, status: 200, json: async () => ({ genres: [] }) };
 				}
-				return { ok: true, status: 200, json: async () => ({ games }) };
+				return (
+					gameByIdResponse(url, games) ?? {
+						ok: true,
+						status: 200,
+						json: async () => ({ games }),
+					}
+				);
 			}),
 		);
 		renderShelf();
@@ -513,7 +581,7 @@ describe('Shelf', () => {
 		await user.click(
 			screen.getByRole('button', { name: 'Open details — Apex' }),
 		);
-		const panel = screen.getByRole('dialog', { name: 'Apex' });
+		const panel = await screen.findByRole('dialog', { name: 'Apex' });
 		await user.click(
 			within(panel).getByRole('button', { name: 'Mark as owned' }),
 		);
@@ -523,9 +591,99 @@ describe('Shelf', () => {
 			expect(screen.getAllByTestId('shelf-card')).toHaveLength(1),
 		);
 		expect(screen.getByTestId('shelf-card')).toHaveTextContent('Bolt');
-		// …but its detail panel stays open (regression: it used to close because
-		// the open-game lookup was scoped to the filtered set, not the library).
+		// …but its detail stays open: it is the URL, not a list membership.
 		expect(screen.getByRole('dialog', { name: 'Apex' })).toBeVisible();
+	});
+
+	// A deep link (a cold tab on `/game/:id`) resolves through the by-id route —
+	// a PENDING fetch is a loading state, and only a RESOLVED miss is not-found.
+	//
+	// Every state of the route is the OVERLAY (review, H4): the 404 used to render
+	// as loose content UNDER a live shelf grid, with the filter empty state's copy
+	// ("No games match the current filters") on a URL where no filter exists.
+	it('a /game/:id deep link resolves by id; an unknown id is a resolved 404 IN the dialog', async () => {
+		mockFetch([card('a', 'Apex')]);
+		const { unmount } = renderShelf('/game/a');
+		expect(await screen.findByRole('dialog', { name: 'Apex' })).toBeVisible();
+		unmount();
+
+		mockFetch([card('a', 'Apex')]);
+		renderShelf('/game/ghost');
+		const dialog = await screen.findByRole('dialog', {
+			name: 'Game not found',
+		});
+		expect(within(dialog).getByText('GAME NOT FOUND')).toBeInTheDocument();
+		// The copy names the real cause — never the filter empty state's.
+		expect(screen.queryByText('NO MATCH')).not.toBeInTheDocument();
+		expect(
+			screen.queryByText('No games match the current filters.'),
+		).not.toBeInTheDocument();
+	});
+
+	// HAZARD (review, L7): the claim under review is "a PENDING fetch is a loading
+	// state, only a RESOLVED 404 is not-found" — so the IN-FLIGHT state gets its
+	// own assertion, not just the settled ones.
+	it('an in-flight /game/:id renders loading — never not-found', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (url: string) => {
+				if (/\/api\/games\/[^/?]+$/.test(url)) return new Promise(() => {});
+				return { ok: true, status: 200, json: async () => ({ games: [] }) };
+			}),
+		);
+		renderShelf('/game/a');
+		const dialog = await screen.findByRole('dialog', { name: 'Loading game' });
+		expect(within(dialog).getByRole('status')).toHaveTextContent(
+			'Loading game',
+		);
+		expect(screen.queryByText('GAME NOT FOUND')).not.toBeInTheDocument();
+	});
+
+	// …and the OTHER error branch: a 500 is a load failure, not a missing game.
+	it('a non-404 failure on /game/:id is an alert, not not-found', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (url: string) => {
+				if (/\/api\/games\/[^/?]+$/.test(url))
+					return { ok: false, status: 500, json: async () => ({}) };
+				return { ok: true, status: 200, json: async () => ({ games: [] }) };
+			}),
+		);
+		renderShelf('/game/a');
+		expect(await screen.findByRole('alert')).toHaveTextContent(
+			'That game couldn’t load.',
+		);
+		expect(screen.queryByText('GAME NOT FOUND')).not.toBeInTheDocument();
+	});
+
+	// HAZARD (review, H3): Close used to infer "this app opened the detail" from
+	// `location.key !== 'default'` — but the SearchBox writes `?q=` with
+	// `{replace: true}`, and a replace MINTS A NEW KEY. So a detail opened from an
+	// emailed link, plus ONE keystroke in the search box, turned Close into
+	// `navigate(-1)`: straight out of the app, back to the mail client.
+	it('Close on a COLD deep link goes to the shelf — even after a keystroke in the search box', async () => {
+		const user = userEvent.setup();
+		mockFetch([card('a', 'Apex')]);
+		renderShelf('/game/a');
+		const panel = await screen.findByRole('dialog', { name: 'Apex' });
+
+		// One character in the header box → a `{replace: true}` write, a fresh key.
+		await user.type(
+			screen.getByRole('searchbox', { name: 'Search your library' }),
+			'a',
+		);
+		await waitFor(() =>
+			expect(screen.getByTestId('location')).toHaveTextContent('/game/a?q=a'),
+		);
+
+		await user.click(
+			within(panel).getByRole('button', { name: 'Close details' }),
+		);
+		// Back on the shelf, inside the app — never a history step out of it.
+		await waitFor(() =>
+			expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+		);
+		expect(screen.getByTestId('location')).toHaveTextContent('/');
 	});
 
 	// HAZARD (Story 3.6, AC3): menu open-state lives in ShelfGrid — a refetch
@@ -551,7 +709,9 @@ describe('Shelf', () => {
 		});
 		render(
 			<QueryClientProvider client={client}>
-				<Shelf />
+				<MemoryRouter initialEntries={['/']}>
+					<Shelf />
+				</MemoryRouter>
 			</QueryClientProvider>,
 		);
 		const cards = await screen.findAllByTestId('shelf-card');
@@ -595,7 +755,9 @@ describe('Shelf', () => {
 		});
 		render(
 			<QueryClientProvider client={client}>
-				<Shelf />
+				<MemoryRouter initialEntries={['/']}>
+					<Shelf />
+				</MemoryRouter>
 			</QueryClientProvider>,
 		);
 		const cards = await screen.findAllByTestId('shelf-card');
@@ -622,42 +784,50 @@ describe('Shelf', () => {
 		expect(screen.queryByTestId('status-menu')).not.toBeInTheDocument();
 	});
 
-	// Story 6.5: the SearchBox re-broadcasts its debounced term on a window event
-	// (SHELF_SEARCH_EVENT); the shelf narrows its VISIBLE cards by title substring.
-	// Dispatch the event directly here — SearchBox isn't in this tree.
-	const search = (term: string) =>
-		act(() => {
-			window.dispatchEvent(
-				new CustomEvent(SHELF_SEARCH_EVENT, { detail: term }),
-			);
-		});
-
+	// Story 6.5, ROUTED in 7.2 (AD-25): the header box writes the settled term to
+	// `?q=` and the shelf reads it from the URL. The window event is deleted — and
+	// with it the mount-race where a shelf mounting after the dispatch started
+	// unfiltered while the input still showed a term.
 	it('narrows the visible shelf live to the search term, then restores on clear', async () => {
+		const user = userEvent.setup();
 		mockFetch([card('a', 'Apex'), card('b', 'Bloodborne'), card('c', 'Cyan')]);
 		renderShelf();
 		expect(await screen.findAllByTestId('shelf-card')).toHaveLength(3);
 
 		// A substring term (normalized) narrows to the one matching card.
-		search('blood');
+		await search(user, 'blood');
 		await waitFor(() => {
 			const cards = screen.getAllByTestId('shelf-card');
 			expect(cards).toHaveLength(1);
 			expect(cards[0]).toHaveTextContent('Bloodborne');
 		});
+		expect(screen.getByTestId('location')).toHaveTextContent('/?q=blood');
 
 		// Clearing the term restores the full visible set.
-		search('');
+		await search(user, '');
 		await waitFor(() =>
 			expect(screen.getAllByTestId('shelf-card')).toHaveLength(3),
 		);
 	});
 
+	// The mount-race regression, stated directly: a shelf that mounts with the
+	// term ALREADY in the URL starts filtered. An event fired before it mounted
+	// would have been swallowed — that is the entire point of routing the intent.
+	it('a shelf mounting with ?q= already set starts filtered (mount-race regression)', async () => {
+		mockFetch([card('a', 'Apex'), card('b', 'Bloodborne')]);
+		renderShelf('/?q=blood');
+		const cards = await screen.findAllByTestId('shelf-card');
+		expect(cards).toHaveLength(1);
+		expect(cards[0]).toHaveTextContent('Bloodborne');
+	});
+
 	it('a search matching nothing shows NO MATCH; the Add path is NOT duplicated in the empty state', async () => {
+		const user = userEvent.setup();
 		mockFetch([card('a', 'Apex'), card('b', 'Bloodborne')]);
 		renderShelf();
 		await screen.findAllByTestId('shelf-card');
 
-		search('zzz nothing here');
+		await search(user, 'zzz nothing here');
 		const empty = await screen.findByTestId('empty-state');
 		expect(within(empty).getByText('NO MATCH')).toBeInTheDocument();
 		// The `＋ Add` action moved to the pinned bar under the search field
@@ -685,7 +855,7 @@ describe('Shelf', () => {
 		);
 
 		// (a) No filter → whole-library search surfaces the hidden completed game.
-		search('donezo');
+		await search(user, 'donezo');
 		await waitFor(() => {
 			const cards = screen.getAllByTestId('shelf-card');
 			expect(cards).toHaveLength(1);
@@ -697,14 +867,14 @@ describe('Shelf', () => {
 
 		// (b) With a State filter active, the same term is scoped within it — the
 		// hidden game stays suppressed → NO MATCH.
-		search('');
+		await search(user, '');
 		await waitFor(() =>
 			expect(screen.getAllByTestId('shelf-card')).toHaveLength(1),
 		);
 		await user.click(screen.getByRole('button', { name: 'State' }));
 		await user.click(screen.getByRole('menuitemcheckbox', { name: 'Playing' }));
 		await user.keyboard('{Escape}');
-		search('donezo');
+		await search(user, 'donezo');
 		await screen.findByText('NO MATCH');
 		expect(screen.getByTestId('search-scope')).toHaveTextContent(
 			'searching within your filters',

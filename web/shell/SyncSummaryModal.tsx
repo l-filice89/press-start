@@ -1,8 +1,8 @@
 import { useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router';
 import { useModalTrap } from '../components/useModalTrap';
 import type { SyncAttentionItem, SyncResult, SyncTitle } from '../settings/api';
-import { seedSearch } from '../shelf/SearchBox';
 import './sync-summary-modal.css';
 
 /**
@@ -65,6 +65,7 @@ export function SyncSummaryModal({
 	const dialogRef = useRef<HTMLDivElement>(null);
 	const closeRef = useRef<HTMLButtonElement>(null);
 	const titleId = useId();
+	const navigate = useNavigate();
 
 	// This dialog auto-opens on async sync completion — a focus steal. The trap
 	// captures the opener before focusing Close and restores it on unmount; a
@@ -77,10 +78,17 @@ export function SyncSummaryModal({
 		preventRestoreRef: jumpedRef,
 	});
 
+	// The jump-to-problem (Story 4.3) is a NAVIGATION now (Story 7.2, AD-25): the
+	// shelf destination with the title as `?q=`. The old `SEED_SEARCH` window
+	// event fired as this modal closed — if the SearchBox happened not to be
+	// listening yet, the intent vanished. A URL cannot be missed; `focusSearch`
+	// hands the field focus once it lands.
 	function jumpTo(title: string) {
 		jumpedRef.current = true;
 		onClose();
-		seedSearch(title);
+		void navigate(`/?q=${encodeURIComponent(title)}`, {
+			state: { focusSearch: true },
+		});
 	}
 
 	return createPortal(

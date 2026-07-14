@@ -1,8 +1,10 @@
 import '@testing-library/jest-dom/vitest';
-import { render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter, useLocation } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
-import { SEED_SEARCH_EVENT } from '../shelf/SearchBox';
+import { SearchBox } from '../shelf/SearchBox';
 import { SyncSummaryModal } from './SyncSummaryModal';
 
 /**
@@ -22,9 +24,37 @@ const result = {
 	needsAttention: [{ title: 'Doppelganger', reason: 'ambiguous match' }],
 };
 
+/** Reads the live URL — where the jump-to-problem intent lives now. */
+function LocationProbe() {
+	const location = useLocation();
+	return (
+		<span data-testid="location">{`${location.pathname}${location.search}`}</span>
+	);
+}
+
+/**
+ * The modal navigates (Story 7.2), so it needs a router in the tree — and the
+ * SearchBox, the jump's actual TARGET: "Find in library" must land the term in
+ * the field AND put focus in it (Story 4.3), every time (review, L2).
+ */
+function renderModal(node: React.ReactElement) {
+	const client = new QueryClient({
+		defaultOptions: { queries: { retry: false } },
+	});
+	return render(
+		<QueryClientProvider client={client}>
+			<MemoryRouter initialEntries={['/']}>
+				<SearchBox />
+				{node}
+				<LocationProbe />
+			</MemoryRouter>
+		</QueryClientProvider>,
+	);
+}
+
 describe('SyncSummaryModal', () => {
 	it('reports the counts and needs-attention items after a sync run', () => {
-		render(
+		renderModal(
 			<SyncSummaryModal
 				result={result}
 				attention={result.needsAttention}
@@ -48,7 +78,7 @@ describe('SyncSummaryModal', () => {
 	});
 
 	it('banner-reopen variant shows items without counts', () => {
-		render(
+		renderModal(
 			<SyncSummaryModal
 				result={null}
 				attention={result.needsAttention}
@@ -65,34 +95,68 @@ describe('SyncSummaryModal', () => {
 		expect(screen.getByText('Doppelganger')).toBeInTheDocument();
 	});
 
-	it('"Find in library" closes the modal and seeds the whole-library search', async () => {
+	// Story 7.2 rewrite (AD-25): the jump used to dispatch `SEED_SEARCH_EVENT` as
+	// this modal closed — an intent the SearchBox swallowed if it wasn't listening
+	// yet. It NAVIGATES now: the shelf destination with the title as `?q=`, which
+	// a late-mounting box reads off the URL instead of missing.
+	it('"Find in library" closes the modal and routes to the shelf with the term', async () => {
 		const onClose = vi.fn();
-		const seeds: string[] = [];
-		const onSeed = (e: Event) => seeds.push((e as CustomEvent<string>).detail);
-		window.addEventListener(SEED_SEARCH_EVENT, onSeed);
+		renderModal(
+			<SyncSummaryModal
+				result={result}
+				attention={result.needsAttention}
+				onClose={onClose}
+			/>,
+		);
+		await userEvent.click(
+			screen.getByRole('button', { name: 'Find in library' }),
+		);
 
-		try {
-			render(
-				<SyncSummaryModal
-					result={result}
-					attention={result.needsAttention}
-					onClose={onClose}
-				/>,
-			);
-			await userEvent.click(
-				screen.getByRole('button', { name: 'Find in library' }),
-			);
+		expect(onClose).toHaveBeenCalledTimes(1);
+		expect(screen.getByTestId('location')).toHaveTextContent(
+			'/?q=Doppelganger',
+		);
+		// The field takes the term AND the focus — the assertion the 7.2 rewrite
+		// dropped (review, L2). Restored: the jump is useless if you have to hunt
+		// for the box afterwards.
+		const input = screen.getByRole('searchbox', {
+			name: 'Search your library',
+		});
+		await waitFor(() => expect(input).toHaveValue('Doppelganger'));
+		expect(input).toHaveFocus();
+	});
 
-			expect(onClose).toHaveBeenCalledTimes(1);
-			expect(seeds).toEqual(['Doppelganger']);
-		} finally {
-			window.removeEventListener(SEED_SEARCH_EVENT, onSeed);
-		}
+	// REGRESSION (review, L2): the focus flag rode in `location.state` and was the
+	// effect's only dependency, so it fired ONCE per mount — reopening the banner
+	// and jumping to another item left focus wherever it was. Every jump focuses.
+	it('focuses the field on EVERY jump, not just the first', async () => {
+		const onClose = vi.fn();
+		renderModal(
+			<SyncSummaryModal
+				result={result}
+				attention={result.needsAttention}
+				onClose={onClose}
+			/>,
+		);
+		const jump = () =>
+			userEvent.click(screen.getByRole('button', { name: 'Find in library' }));
+
+		await jump();
+		const input = screen.getByRole('searchbox', {
+			name: 'Search your library',
+		});
+		await waitFor(() => expect(input).toHaveFocus());
+
+		// Focus moves away (the reader clicks something else), then jumps again.
+		input.blur();
+		expect(input).not.toHaveFocus();
+		await jump();
+		await waitFor(() => expect(input).toHaveFocus());
 	});
 
 	it('Escape and Close both dismiss', async () => {
 		const onClose = vi.fn();
-		render(
+		renderModal(
 			<SyncSummaryModal result={result} attention={[]} onClose={onClose} />,
 		);
 

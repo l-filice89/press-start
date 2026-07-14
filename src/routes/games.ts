@@ -4,12 +4,14 @@ import { createIgdbProvider, type IgdbSearch } from '../providers';
 import { createDb } from '../repositories/db';
 import {
 	addGame,
+	getGameById,
 	previewAddGame,
 	rematchGame,
 	searchGamesForResolve,
 	todayForUser,
 } from '../services';
 import { type AuthVariables, requireAuth } from './auth';
+import { shelfGameSchema } from './shelf';
 
 /**
  * IGDB creds are Wrangler secrets (absent in e2e/dev until set) — the generated
@@ -115,6 +117,19 @@ gamesRoute.get('/games/search', requireAuth, async (c) => {
 	}
 	const candidates = await searchGamesForResolve(igdbFromEnv(c.env), title);
 	return c.json(searchResponseSchema.parse({ candidates }), 200);
+});
+
+/**
+ * ONE game by id (Story 7.2, AD-25) — what `/game/:id` resolves through. It is
+ * registered AFTER the static `/games/preview` + `/games/search` routes, which
+ * therefore still win the match. A pending fetch is a LOADING state client-side;
+ * this 404 is the only "not found" (and a game the user doesn't track is one).
+ */
+gamesRoute.get('/games/:id', requireAuth, async (c) => {
+	const db = createDb(c.env.DB);
+	const game = await getGameById(db, c.get('userId'), c.req.param('id'));
+	if (!game) return c.json({ error: 'game not found' }, 404);
+	return c.json({ game: shelfGameSchema.parse(game) }, 200);
 });
 
 // Rematch an already-added game onto a different IGDB entry (PV-4): the

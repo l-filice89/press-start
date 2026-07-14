@@ -176,6 +176,26 @@ export async function loadLibrary(
 }
 
 /**
+ * ONE game as the card DTO, by id (Story 7.2). `/game/:id` resolves through
+ * THIS — never an id lookup in the client's `['shelf']` list cache: 7.3's
+ * add-then-navigate lands on the new id before that list refetches, and the
+ * route would render not-found on a game that exists (AD-25). User-scoped, so
+ * another user's id is a plain miss.
+ *
+ * ponytail: bakes the whole library and finds the id — one extra query at the
+ * ~350-game scale, and the DTO is then guaranteed identical to the shelf's. A
+ * dedicated single-row read is the upgrade if the library ever gets big.
+ */
+export async function getGameById(
+	db: Db,
+	userId: string,
+	gameId: string,
+): Promise<ShelfGame | null> {
+	const library = await loadLibrary(db, userId);
+	return library.find((game) => game.id === gameId) ?? null;
+}
+
+/**
  * The backlog shelf: ordered Playing→Paused→Up next→Not started (revealed
  * states after), owned before un-owned, alphabetical within each group — the
  * whole sorted set materialized here (AD-7), never a SQL `ORDER BY

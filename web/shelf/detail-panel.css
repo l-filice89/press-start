@@ -458,3 +458,13 @@
 	font-size: 12px;
 	color: var(--color-text-muted);
 }
+
+/* The detail's pending state (review, H4) — a dialog like every other state of
+   /game/:id, never loose text floating under a live shelf grid. */
+.detail-panel__pending {
+	margin: 0;
+	padding: var(--space-6);
+	font-family: var(--font-ui);
+	color: var(--color-text-secondary);
+	text-align: center;
+}
