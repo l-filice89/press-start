@@ -142,8 +142,8 @@ Covers follow their container corners. Two filter-pill *shapes* encode behavior:
 - **Destination toggle** — header segmented control, `SHELF | CATALOG` (Orbitron 600, uppercase, tracked). Active segment is a **solid electric fill with dark ink** and a cyan halo; inactive is muted text on `surface-raised`. Pill-shaped (`999px`), matching the filter/status pill family. Desktop: inline beside the wordmark. Phone: full-width on its own row under the wordmark. → `mockups/catalog-nav-options.html`
 - **Catalog card** — the shelf card's chrome, minus everything that implies ownership. Cover art, `◈ PS+` flag top-left, title below (Orbitron, ellipsis). **No status pill, no owned toggle, no magenta bloom, no flip.** The bottom overlay carries one of three states:
   - **Not tracked** — **`＋ Add`** (solid electric fill, dark ink) beside **`Claim now`** (hairline outline, cyan ink).
-  - **Tracked, not owned** — an **`In library`** marker in `{colors.accent-electric}` (cyan = interactive family, "it's on your shelf") **with `Claim now` still live**, because a game added from the catalog isn't claimed to the PlayStation account yet.
-  - **Owned** — an **`Owned`** marker in `{colors.milestone-silver}` and **no actions**. Silver keeps its established meaning — earned/yours — and its absence of a CTA *is* the message.
+  - **Tracked, not owned** (a wishlist entry that is also Playable-now) — an **`In library`** marker in `{colors.accent-electric}` (cyan = interactive family, "it's on your shelf") **with `Claim now` still live**, because a game added from the catalog isn't claimed to the PlayStation account yet.
+  - **Owned** — an **`Owned`** marker in `{colors.milestone-silver}` and **no actions**. Silver keeps its established meaning — earned/yours — and its absence of a CTA *is* the message. (Owned covers both a purchase and a PS+ claim a sync has seen; the app never guesses a claim succeeded.)
 
   Never a magenta accent here: magenta is reserved for Playing, which is a shelf state.
 - **Skeleton** — cover-shaped shimmer (`surface` → lighter sweep) on first load.

@@ -40,6 +40,7 @@ warnings: []
 - Do not write a store `product_id` into the `'PSN'` external-link namespace (AD-20). No external links at all in this story.
 - No UI. 7.1 is ingest + schema only; the destination is 7.2.
 - Do not auto-add catalog games to the library. Availability is not ownership.
+- **Do not touch ownership or derived state.** `ownership_type` stays `physical|digital`, the source stays `owned_via: purchase|membership`, and `wishlisted = !owned` / `playableNow = (owned || inPsPlusExtraCatalog) && released` stay exactly as shipped. This story only makes `ps_plus_extra` *correct* (owned games included) — it changes no derivation and invents no ownership value. A game being in the catalog has never meant, and must not start meaning, anything about who owns it.
 
 ## I/O & Edge-Case Matrix
 
@@ -98,6 +99,8 @@ warnings: []
 ## Design Notes
 
 **The wipe guard must not confuse "empty" with "finished".** Probed reality: an offset past the end returns HTTP 200, `products: []`, **and `totalCount: 490`** — a legitimate loop terminator. The degenerate wipe case is a *first* page with nothing in it. So the guard keys on the **accumulated** product count after pagination completes (`products.length === 0` overall → abort), never on a single empty page. Getting this backwards either wipes the shelf on a bad response or hangs the pagination loop.
+
+**Flagging owned games changes no UI — verified, do not "fix" the guards.** `ps_plus_extra` is a *stored fact* (is this game in the catalog?); every surface already renders the *derivation* `psPlusExtra && !owned`: the card badge (`web/shelf/Card.tsx:155`), the PS+ filter pill (`web/shelf/filters.ts:97`, `Shelf.tsx:214`), and Story 6.4's buy-vs-claim prompt (`useTrackingMutations.ts:298`, which only fires while `!game.owned`). So maintaining the flag for owned games surfaces no badge on an owned card — it merely stops the stored fact from being false. `services/tracking.ts`'s "re-flag on un-own" becomes a harmless no-op. **Do not remove those `&& !owned` guards** to compensate; they are the display rule, not a workaround.
 
 **Generation stamping** is what keeps a cron prune from corrupting an in-flight sweep (AD-28). Each membership pass mints a generation (a timestamp or uuid) and stamps every row it writes; the prune deletes rows *not* of that generation; the sweep carries the generation it started under and refuses to write tags for a different one — a generation change invalidates its cursor instead of letting it resume into a re-ordered product list.
 

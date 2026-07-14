@@ -35,7 +35,11 @@ The genre sweep is a **separate, chunked, generation-stamped, additive pass** wi
 
 **External-id namespaces (AD-20).** `source='PSN'` external ids are `np_title_id` values **only** (`CUSA…`/`PPSA…`). A store `product_id` is a **different source** (`'PSN_PRODUCT'`) and must never be written into the `'PSN'` namespace — mixing them makes an add-from-catalog of an already-synced game miss on link, match on title, and create a mandatory duplicate. A game may hold multiple links per source.
 
-**What a catalog add writes (AD-24, AD-8 as amended).** The new game gets `EXTERNAL_LINK('PSN_PRODUCT', product_id)`, IGDB genres, and a tracking row of exactly `{owned: false, ownership_type: 'ps_plus', wishlisted_on: null}` — not add-by-name's `{owned: true, via: 'purchase'}` default, and not a bare `owned:false`. **Wishlisted is derived**, not stored: *not owned AND not in the PS+ catalog*. A subscription game is not a wishlist game — you can't "save as wishlisted" from the catalog. `store_url` on the catalog row powers "Claim now".
+**What a catalog add writes (AD-24).** The new game gets `EXTERNAL_LINK('PSN_PRODUCT', product_id)` (AD-20), IGDB genres (AD-26), and the **existing add-by-name not-owned default** — `{owned: false, play_status: 'Not started', wishlisted_on: today}` (`services/games.ts` `newTracking`). Browsing the catalog is not claiming it.
+
+**Ownership vocabulary — do not invent values.** `ownership_type` is **`physical | digital`** (the *format*). The acquisition *source* is **`owned_via: purchase | membership`**. A PS+ claim **counts as owned** with `owned_via: 'membership'` and never stamps `bought_on` (FR-9 amended, 2026-07-11; un-claimed on subscription cancel, Story 6.4) — but ownership is set **only when a sync observes the real entitlement**, never because the user opened the PS Store tab. There is no `ps_plus` ownership type.
+
+**Derived state is unchanged by this epic.** `wishlisted = !owned`; `playableNow = (owned || inPsPlusExtraCatalog) && released` (`core/derived-state.ts`). So a catalog-added game is **Wishlisted *and* Playable-now** — that pairing is the point (*I want it; the subscription covers it, so don't buy it*), not a contradiction to be designed away. `store_url` on the catalog row powers "Claim now".
 
 ## UX & Interaction Patterns
 

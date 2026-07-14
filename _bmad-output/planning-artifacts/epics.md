@@ -1395,9 +1395,9 @@ So that I can explore what's playable through the subscription.
 
 **Given** a catalog game I already track
 **When** it renders in the grid
-**Then** it carries the state that says what I can still do — **`In library`** (cyan) if tracked but **not owned**, with **`Claim now` still offered** (it's on my shelf but not yet claimed to my PlayStation account), or **`Owned`** (silver) with **no actions** if I own it (purchased or already claimed). Never the shelf's status pill — that shows play state, a tracked-game concept the catalog must not carry [FR-42 dedup parity; AD-24]
+**Then** it carries the state that says what I can still do — **`In library`** (cyan) if tracked but **not owned**, with **`Claim now` still offered** (it's on my shelf as a wishlist entry, not yet claimed to my PlayStation account), or **`Owned`** (silver) with **no actions** if I own it (bought, or claimed and picked up by a sync as `owned_via: membership`). Never the shelf's status pill — that shows play state, a tracked-game concept the catalog must not carry [FR-42 dedup parity; AD-24]
 
-> The whole catalog renders, tracked games included — hiding what I already have would just read as a missing game. The three states are keyed on the remaining action, not on tracking alone: dropping `Claim now` the moment a game is tracked would strand exactly the games the catalog itself just added (`owned:false, ownership_type:'ps_plus'`).
+> The whole catalog renders, tracked games included — hiding what I already have would just read as a missing game. The three states are keyed on the remaining action, not on tracking alone: dropping `Claim now` the moment a game is tracked would strand exactly the games the catalog itself just added (`owned:false` = wishlisted, and a PS+ claim only becomes `owned` when a **sync** sees the entitlement — Story 6.4 — never because the store tab was opened).
 
 **Given** the catalog is empty or its region unset
 **When** I open the destination
@@ -1413,9 +1413,9 @@ So that discovery in the catalog turns into a tracked game (or a claimed one) in
 
 **Given** a catalog game not yet in my library
 **When** I add it
-**Then** Epic 6's add preview opens pre-filled (IGDB enrichment on demand) and saves a tracking row of exactly `{owned: false, ownership_type: 'ps_plus', wishlisted_on: null}` — **not owned** (availability is not ownership) but **not wishlisted either**; catalog membership lights its PS+ flag → it shows Playable-now on the shelf [FR-41/42/43; AD-24, AD-8 as amended]
+**Then** Epic 6's add preview opens pre-filled (IGDB enrichment on demand) and saves with the **existing not-owned default** (`{owned: false, play_status: 'Not started', wishlisted_on: today}`) — browsing the catalog is not claiming it. Catalog membership lights its PS+ flag, so it derives as **Wishlisted + Playable-now**: I want it, and I don't have to buy it [FR-41/42/43; AD-24]
 
-> **Amended 2026-07-14 (7.0 gate):** the original AC said "saving as wishlisted". That was wrong in two ways — `Wishlisted` is *derived* (`not owned AND not in the PS+ catalog`, AD-8 as amended), so a catalog add can't "save as" it, and a game the subscription already gives you is not one you still want to buy. AD-8 was tightened so the derivation can't produce that state.
+> **Clarified 2026-07-14 (7.0 gate):** "saving as wishlisted" is *correct* — `Wishlisted` is derived as `!owned` and the add path already writes `wishlisted_on`. It is not "saved as" a state, it *derives* into one. There is **no `ps_plus` ownership type**: `ownership_type` is `physical|digital` (format), and the acquisition *source* is `owned_via: purchase|membership`. A PS+ claim **counts as owned** with `owned_via: 'membership'` (FR-9 amended, 2026-07-11) — but only once a **sync observes the real entitlement**, never because the user visited the store tab.
 
 **Given** the newly added game
 **When** the app returns from the add preview
