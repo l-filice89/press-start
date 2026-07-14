@@ -351,6 +351,8 @@ export interface AddGamePayload {
 	releaseDate?: string | null;
 	genres?: string[];
 	owned?: boolean;
+	/** The PS Store product id this add came from, if any (Story 7.3, AD-20). */
+	psnProductId?: string;
 }
 
 export type AddGameResult = { kind: 'created' | 'duplicate'; gameId: string };

@@ -1,20 +1,24 @@
 import { applyD1Migrations, env } from 'cloudflare:test';
 import { eq, sql } from 'drizzle-orm';
-import { beforeAll, describe, expect, inject, it } from 'vitest';
-import { normalizeTitle } from '../../src/core';
+import { beforeAll, describe, expect, inject, it, vi } from 'vitest';
+import { normalizeTitle, planSync } from '../../src/core';
 import {
 	addExternalLink,
+	findCatalogProduct,
 	getTracking,
 	insertGame,
 	insertTrackingIfAbsent,
 	listExternalLinks,
+	listGamesWithPsnLinks,
 	listGenresForGame,
+	PS_PLUS_TIER,
 	setDiscarded,
+	upsertCatalogProducts,
 } from '../../src/repositories';
 import { createDb } from '../../src/repositories/db';
-import { user } from '../../src/schema';
+import { psPlusCatalog, user } from '../../src/schema';
 import { game, gameTracking, genre } from '../../src/schema/catalog';
-import { previewAddGame } from '../../src/services';
+import { addGame, previewAddGame } from '../../src/services';
 import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
 
 /**
@@ -448,5 +452,427 @@ describe('previewAddGame (service seam, fake IGDB)', () => {
 			available: false,
 			candidate: null,
 		});
+	});
+});
+
+/**
+ * Story 7.3 — adding a game FROM THE CATALOG. The hazards are all identity
+ * hazards (AD-20/AD-18/FR-42), so they are asserted on rows and links, not on
+ * status codes alone:
+ *  - the store `product_id` lands in its OWN namespace (`PSN_PRODUCT`), never in
+ *    `PSN` (which is `np_title_id` only) — mixing them makes an already-synced
+ *    game miss on link, match on title, and (AD-18's clash rule) become a
+ *    MANDATORY duplicate;
+ *  - a discarded game is revived, not duplicated;
+ *  - the add writes the NOT-OWNED default: browsing the catalog is not claiming
+ *    it, and the app never observes whether a PS Store claim succeeded;
+ *  - a product pruned since the card rendered writes no dangling reference.
+ */
+describe('add a game FROM THE CATALOG (Story 7.3, AD-20)', () => {
+	const REGION = 'it-it';
+	const productScope = { region: REGION, tier: PS_PLUS_TIER };
+
+	async function seedProduct(
+		productId: string,
+		name: string,
+		npTitleId: string | null = null,
+	) {
+		await upsertCatalogProducts(
+			db(),
+			productScope,
+			'gen-7-3',
+			[
+				{
+					productId,
+					npTitleId,
+					name,
+					titleNormalized: normalizeTitle(name),
+					coverUrl: 'https://image.api.playstation.com/cover.png',
+					platforms: ['PS5'],
+					storeClassification: null,
+					storeUrl: `https://store.playstation.com/${REGION}/product/${productId}`,
+				},
+			],
+			'2026-07-14T00:00:00.000Z',
+		);
+	}
+
+	const linksOf = async (gameId: string) =>
+		(await listExternalLinks(db(), gameId)).map((l) => ({
+			source: l.source,
+			externalId: l.externalId,
+		}));
+
+	beforeAll(async () => {
+		await applyD1Migrations(env.DB, inject('migrations'));
+		sessionCookie ??= await establishSession();
+		const [row] = await db()
+			.select({ id: user.id })
+			.from(user)
+			.where(eq(user.email, ALLOWED_EMAIL))
+			.limit(1);
+		sessionUser = row.id;
+	});
+
+	it('writes the not-owned default + a PSN_PRODUCT link (never owned_via/bought_on)', async () => {
+		await seedProduct('EP-CATALOG-ADD-1', 'Crow Country');
+		const res = await postGame(
+			{ title: 'Crow Country', psnProductId: 'EP-CATALOG-ADD-1' },
+			sessionCookie,
+		);
+		expect(res.status).toBe(201);
+		const { gameId } = (await res.json()) as { gameId: string };
+
+		// Browsing is NOT claiming: wishlisted, Not started, no ownership at all.
+		const tracking = await getTracking(db(), sessionUser, gameId);
+		expect(tracking).toMatchObject({
+			owned: false,
+			playStatus: 'Not started',
+			boughtOn: null,
+			ownedVia: null,
+			ownershipType: null,
+		});
+		expect(tracking?.wishlistedOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
+		// AD-20: the product id is a PSN_PRODUCT id. It is NOT an np_title_id.
+		expect(await linksOf(gameId)).toEqual([
+			{ source: 'PSN_PRODUCT', externalId: 'EP-CATALOG-ADD-1' },
+		]);
+
+		// The store URL comes off the catalog row (the client never sends one).
+		const [row] = await db().select().from(game).where(eq(game.id, gameId));
+		expect(row.storeUrl).toBe(
+			`https://store.playstation.com/${REGION}/product/EP-CATALOG-ADD-1`,
+		);
+	});
+
+	it('HAZARD AD-20: an already-SYNCED game (PSN np_title_id linked) added from the catalog matches — no duplicate', async () => {
+		// The exact construction the namespace exists to prevent: sync-reconcile
+		// wrote EXTERNAL_LINK('PSN', np_title_id); the catalog knows a store
+		// product_id. If the product id were written as source 'PSN', this add would
+		// MISS on link, MATCH on normalized title, and AD-18 would force a 2nd row.
+		const synced = await insertGame(db(), {
+			title: 'Synced Shooter',
+			titleNormalized: normalizeTitle('Synced Shooter'),
+		});
+		await addExternalLink(db(), {
+			gameId: synced.id,
+			source: 'PSN',
+			externalId: 'CUSA12345_00',
+		});
+		await insertTrackingIfAbsent(db(), sessionUser, synced.id, {
+			owned: true,
+			playStatus: 'Not started',
+		});
+		await seedProduct('EP-SYNCED-1', 'Synced Shooter');
+
+		const res = await postGame(
+			{ title: 'Synced Shooter', psnProductId: 'EP-SYNCED-1' },
+			sessionCookie,
+		);
+		expect(res.status).toBe(409);
+		expect(await res.json()).toEqual({ error: 'duplicate', gameId: synced.id });
+		expect(await gameRowsByNormalizedTitle('Synced Shooter')).toHaveLength(1);
+
+		// Both ids coexist, each in its own namespace — and the product id is NOWHERE
+		// under 'PSN'.
+		const links = await linksOf(synced.id);
+		expect(links).toEqual(
+			expect.arrayContaining([
+				{ source: 'PSN', externalId: 'CUSA12345_00' },
+				{ source: 'PSN_PRODUCT', externalId: 'EP-SYNCED-1' },
+			]),
+		);
+		expect(links).not.toContainEqual({
+			source: 'PSN',
+			externalId: 'EP-SYNCED-1',
+		});
+		// The add did not touch ownership either way.
+		expect(await getTracking(db(), sessionUser, synced.id)).toMatchObject({
+			owned: true,
+		});
+	});
+
+	it('HAZARD: a DISCARDED game added from the catalog is REVIVED, never duplicated', async () => {
+		const created = await postGame(
+			{ title: 'Tombstoned Catalog Game' },
+			sessionCookie,
+		);
+		expect(created.status).toBe(201);
+		const { gameId } = (await created.json()) as { gameId: string };
+		await setDiscarded(db(), sessionUser, gameId, true);
+
+		await seedProduct('EP-REVIVE-1', 'Tombstoned Catalog Game');
+		const res = await postGame(
+			{ title: 'Tombstoned Catalog Game', psnProductId: 'EP-REVIVE-1' },
+			sessionCookie,
+		);
+		expect(res.status).toBe(409);
+		expect(await res.json()).toEqual({ error: 'duplicate', gameId });
+
+		expect((await getTracking(db(), sessionUser, gameId))?.discarded).toBe(
+			false,
+		);
+		expect(
+			await gameRowsByNormalizedTitle('Tombstoned Catalog Game'),
+		).toHaveLength(1);
+		expect(await linksOf(gameId)).toContainEqual({
+			source: 'PSN_PRODUCT',
+			externalId: 'EP-REVIVE-1',
+		});
+	});
+
+	it('a product PRUNED from the catalog since render adds on the title alone — no dangling reference', async () => {
+		// Never seeded (or pruned by the cron between render and Save).
+		const res = await postGame(
+			{ title: 'Rotated Out Game', psnProductId: 'EP-GONE-1' },
+			sessionCookie,
+		);
+		expect(res.status).toBe(201);
+		const { gameId } = (await res.json()) as { gameId: string };
+
+		expect(await linksOf(gameId)).toEqual([]);
+		const [row] = await db().select().from(game).where(eq(game.id, gameId));
+		expect(row.storeUrl).toBeNull();
+	});
+
+	// HAZARD (review, H1): the dialog offered "I own this game" on a CATALOG add,
+	// and ticking it wrote owned_via:'purchase' + today's bought_on for a PS+ EXTRA
+	// title — a purchase that never happened, on a date that means nothing. A PS+
+	// title is owned ONLY via owned_via:'membership', and ONLY once a SYNC observes
+	// the entitlement (Story 6.4). The server refuses it whatever the UI does.
+	it('REFUSES owned:true on an add that carries a psnProductId (400, nothing written)', async () => {
+		await seedProduct('EP-OWNED-REFUSE-1', 'Never Owned By Browsing');
+		const res = await postGame(
+			{
+				title: 'Never Owned By Browsing',
+				psnProductId: 'EP-OWNED-REFUSE-1',
+				owned: true,
+			},
+			sessionCookie,
+		);
+		expect(res.status).toBe(400);
+		expect(
+			await gameRowsByNormalizedTitle('Never Owned By Browsing'),
+		).toHaveLength(0);
+	});
+
+	// HAZARD (review, H2): the PSN_PRODUCT lookup used to be gated on the catalog
+	// row still existing (`if (!existing && product)`), so a PRUNED product skipped
+	// the link lookup entirely — and with the title since diverged (the add re-seeds
+	// it from the IGDB candidate), the title lookup missed too and a SECOND game row
+	// was inserted. The link is the IDENTITY; it does not expire with the snapshot.
+	it('HAZARD AD-20: a PRUNED catalog row still resolves the PSN_PRODUCT link — a diverged title does NOT duplicate', async () => {
+		await seedProduct('EP-PRUNED-ID-1', 'Ghost Runner');
+		const first = await postGame(
+			{ title: 'Ghost Runner', psnProductId: 'EP-PRUNED-ID-1' },
+			sessionCookie,
+		);
+		expect(first.status).toBe(201);
+		const { gameId } = (await first.json()) as { gameId: string };
+
+		// The cron prunes the product…
+		await db()
+			.delete(psPlusCatalog)
+			.where(eq(psPlusCatalog.productId, 'EP-PRUNED-ID-1'));
+		expect(await findCatalogProduct(db(), 'EP-PRUNED-ID-1')).toBeUndefined();
+
+		// …and the user re-adds from a stale card whose title no longer matches the
+		// stored one (IGDB renamed it on the first save).
+		const again = await postGame(
+			{
+				title: 'Ghostrunner: Complete Edition',
+				psnProductId: 'EP-PRUNED-ID-1',
+			},
+			sessionCookie,
+		);
+		expect(again.status).toBe(409);
+		expect(await again.json()).toEqual({ error: 'duplicate', gameId });
+		expect(
+			await gameRowsByNormalizedTitle('Ghostrunner: Complete Edition'),
+		).toHaveLength(0);
+	});
+
+	// HAZARD (review, H4): the add threw the catalog row's np_title_id away, so a
+	// later library sync had only the normalized title to match on — and when PSN
+	// reports a DIFFERENT title for the same game, the sync creates a second row:
+	// the user owns the duplicate and wishlists the original.
+	it('HAZARD: the catalog np_title_id is anchored as PSN, so a later sync MATCHES a diverged title', async () => {
+		await seedProduct('EP-NPTITLE-1', 'Stellar Blade', 'CUSA-STELLAR_00');
+		const res = await postGame(
+			{ title: 'Stellar Blade', psnProductId: 'EP-NPTITLE-1' },
+			sessionCookie,
+		);
+		expect(res.status).toBe(201);
+		const { gameId } = (await res.json()) as { gameId: string };
+
+		// The np_title_id lives in 'PSN' — that IS its namespace (AD-20 forbids the
+		// PRODUCT id there, not this) — and the product id in 'PSN_PRODUCT'.
+		expect(await linksOf(gameId)).toEqual(
+			expect.arrayContaining([
+				{ source: 'PSN', externalId: 'CUSA-STELLAR_00' },
+				{ source: 'PSN_PRODUCT', externalId: 'EP-NPTITLE-1' },
+			]),
+		);
+
+		// The sync's own matching index, on a PSN entry whose TITLE diverges: it
+		// resolves through the link, so nothing is created.
+		const { games, links } = await listGamesWithPsnLinks(db());
+		const index = {
+			linkedGameIdByExternalId: Object.fromEntries(
+				links.map((l) => [l.externalId, l.gameId]),
+			),
+			gamesByNormalizedTitle: Object.fromEntries(
+				games.map((g) => [
+					g.titleNormalized,
+					[{ gameId: g.id, psnExternalIds: [] as string[] }],
+				]),
+			),
+		};
+		const plan = planSync(
+			[
+				{
+					name: 'Stellar Blade™ Deluxe Edition',
+					platform: 'PS5',
+					membership: 'NONE',
+					titleId: 'CUSA-STELLAR_00',
+					productId: null,
+					entitlementId: null,
+					imageUrl: null,
+					storeUrl: null,
+				},
+			],
+			index,
+		);
+		expect(plan.creates).toEqual([]);
+		expect(plan.matches.map((m) => m.gameId)).toEqual([gameId]);
+	});
+
+	// (review, M2): every EXISTING-game branch anchored the link but never wrote the
+	// store URL — and `Claim now` keys off the store URL, so the claim path stayed
+	// dead for exactly the games that were already on the shelf (seed import, a
+	// name-only add, a sync with no store URL).
+	it('BACKFILLS the store URL (and cover) onto an EXISTING game — the claim path is not dead for them', async () => {
+		const existing = await insertGame(db(), {
+			title: 'Name Only Game',
+			titleNormalized: normalizeTitle('Name Only Game'),
+			unenriched: true,
+		});
+		await insertTrackingIfAbsent(db(), sessionUser, existing.id, {
+			owned: false,
+			playStatus: 'Not started',
+		});
+		await seedProduct('EP-BACKFILL-1', 'Name Only Game');
+
+		const res = await postGame(
+			{ title: 'Name Only Game', psnProductId: 'EP-BACKFILL-1' },
+			sessionCookie,
+		);
+		expect(res.status).toBe(409); // already tracked → routes to its detail
+
+		const [row] = await db()
+			.select()
+			.from(game)
+			.where(eq(game.id, existing.id));
+		expect(row.storeUrl).toBe(
+			`https://store.playstation.com/${REGION}/product/EP-BACKFILL-1`,
+		);
+		expect(row.coverUrl).toBe('https://image.api.playstation.com/cover.png');
+		expect(await linksOf(existing.id)).toContainEqual({
+			source: 'PSN_PRODUCT',
+			externalId: 'EP-BACKFILL-1',
+		});
+	});
+
+	// (review, M1): a product id already anchored on a DIFFERENT game was treated as
+	// SUCCESS — the add reported created/duplicate for game A while the product
+	// stayed anchored on game B, and NOTHING said so. Mirror rematchGame's posture:
+	// never write, and surface the clash. The silence IS the defect, so the test
+	// asserts on the signal as well as on the (unchanged) link rows.
+	it('never re-anchors a product id that belongs to a DIFFERENT game — and SAYS so', async () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		await seedProduct('EP-CLASH-1', 'Clash Product');
+		const owner = await postGame(
+			{ title: 'Clash Product', psnProductId: 'EP-CLASH-1' },
+			sessionCookie,
+		);
+		const ownerId = ((await owner.json()) as { gameId: string }).gameId;
+
+		// A DIFFERENT game (resolved by its IGDB id) carrying the same product id.
+		const other = await postGame(
+			{ title: 'Other Game', igdbId: 'igdb-clash-1' },
+			sessionCookie,
+		);
+		const otherId = ((await other.json()) as { gameId: string }).gameId;
+
+		const res = await postGame(
+			{
+				title: 'Other Game',
+				igdbId: 'igdb-clash-1',
+				psnProductId: 'EP-CLASH-1',
+			},
+			sessionCookie,
+		);
+		expect(res.status).toBe(409);
+		expect(await res.json()).toEqual({ error: 'duplicate', gameId: otherId });
+
+		// The link never moved, and no second one was written.
+		expect(await linksOf(otherId)).not.toContainEqual({
+			source: 'PSN_PRODUCT',
+			externalId: 'EP-CLASH-1',
+		});
+		expect(await linksOf(ownerId)).toContainEqual({
+			source: 'PSN_PRODUCT',
+			externalId: 'EP-CLASH-1',
+		});
+		// …and the identity split did not happen in silence.
+		expect(warn).toHaveBeenCalledWith(
+			expect.stringContaining(`PSN_PRODUCT EP-CLASH-1 already anchors game`),
+		);
+		warn.mockRestore();
+	});
+
+	// (review, M3): two POSTs with the same NEW product id both inserted a game row,
+	// and the second anchor hit UNIQUE(source, external_id) → 500, leaving an
+	// unlinked duplicate behind. The anchor is idempotent now and the loser
+	// converges on the winner's game.
+	it('two CONCURRENT adds of the same product converge on ONE game (no 500, no orphan)', async () => {
+		await seedProduct('EP-RACE-1', 'Race Condition Game');
+		const input = {
+			title: 'Race Condition Game',
+			psnProductId: 'EP-RACE-1',
+		};
+		const [a, b] = await Promise.all([
+			addGame(db(), sessionUser, input, '2026-07-14'),
+			addGame(db(), sessionUser, input, '2026-07-14'),
+		]);
+		expect(a).not.toBe('invalid');
+		expect(b).not.toBe('invalid');
+		const ids = [a, b].map((o) => (o as { gameId: string }).gameId);
+		expect(ids[0]).toBe(ids[1]);
+		expect(await gameRowsByNormalizedTitle('Race Condition Game')).toHaveLength(
+			1,
+		);
+		expect(await linksOf(ids[0])).toContainEqual({
+			source: 'PSN_PRODUCT',
+			externalId: 'EP-RACE-1',
+		});
+	});
+
+	it('re-adding the same product resolves to the same game (the PSN_PRODUCT link is the identity)', async () => {
+		await seedProduct('EP-REPEAT-1', 'Repeat Product Game');
+		const first = await postGame(
+			{ title: 'Repeat Product Game', psnProductId: 'EP-REPEAT-1' },
+			sessionCookie,
+		);
+		const { gameId } = (await first.json()) as { gameId: string };
+
+		// Same product, a title the store since re-worded: the LINK still resolves it.
+		const again = await postGame(
+			{ title: 'Repeat Product Game: Deluxe Cut', psnProductId: 'EP-REPEAT-1' },
+			sessionCookie,
+		);
+		expect(again.status).toBe(409);
+		expect(await again.json()).toEqual({ error: 'duplicate', gameId });
 	});
 });

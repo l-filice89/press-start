@@ -79,9 +79,52 @@ export async function addExternalLink(
 	return row;
 }
 
+/**
+ * Attach an external id, tolerating a concurrent writer (Story 7.3 review, M3):
+ * two POSTs for the same NEW product id both insert a game, and the loser's
+ * `addExternalLink` would hit `UNIQUE(source, external_id)` and 500. The insert
+ * is a no-op on conflict; the caller re-reads the link to learn who won.
+ */
+export async function addExternalLinkIfAbsent(
+	db: Db,
+	link: { gameId: string; source: ExternalLinkSource; externalId: string },
+) {
+	await db.insert(externalLink).values(link).onConflictDoNothing();
+}
+
 /** Every external link for a game. */
 export async function listExternalLinks(db: Db, gameId: string) {
 	return db.select().from(externalLink).where(eq(externalLink.gameId, gameId));
+}
+
+/**
+ * Every link of one source — the catalog marker's join (Story 7.3 review, H3).
+ * The `PSN_PRODUCT` link is the STABLE identity between a catalog row and a
+ * game; the normalized title is not (the add re-seeds the title from the IGDB
+ * candidate, so the stored title routinely differs from the store's name).
+ */
+export async function listExternalLinksBySource(
+	db: Db,
+	source: ExternalLinkSource,
+): Promise<{ gameId: string; externalId: string }[]> {
+	return db
+		.select({
+			gameId: externalLink.gameId,
+			externalId: externalLink.externalId,
+		})
+		.from(externalLink)
+		.where(eq(externalLink.source, source));
+}
+
+/**
+ * Drop a game row (links/genres cascade). The ONLY caller is the add path's
+ * concurrent-product race (Story 7.3 review, M3): the request that loses the
+ * `PSN_PRODUCT` anchor deletes the row it just inserted and converges on the
+ * winner's game, rather than leaving an unlinked duplicate behind. Not a
+ * user-facing delete — that is the discard tombstone.
+ */
+export async function deleteGame(db: Db, gameId: string) {
+	await db.delete(game).where(eq(game.id, gameId));
 }
 
 /**

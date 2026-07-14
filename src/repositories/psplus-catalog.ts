@@ -327,6 +327,47 @@ export async function countCatalogProducts(
 }
 
 /**
+ * ONE catalog product by its store id — what the add-from-catalog path (Story
+ * 7.3) resolves before it writes anything. The catalog page the user is looking
+ * at can be minutes stale (the cron prunes, and the destination refreshes
+ * itself), so the product id in the POST body is a CLAIM, not a fact: a product
+ * pruned since render resolves to `undefined` and the add proceeds on the title
+ * alone, never writing a `PSN_PRODUCT` link (or a store URL) for a product the
+ * catalog no longer has.
+ *
+ * Deliberately NOT region-scoped: a store product id is globally unique, and the
+ * add does not care which region's snapshot carried it — the row is only read
+ * for its facts.
+ */
+export async function findCatalogProduct(
+	db: Db,
+	productId: string,
+): Promise<
+	| {
+			productId: string;
+			/** The PSN title id, when the store gave one — the add anchors it as
+			 * `EXTERNAL_LINK('PSN', np_title_id)` so a later library sync MATCHES the
+			 * game instead of creating a second row off a diverged title (7.3 H4). */
+			npTitleId: string | null;
+			storeUrl: string | null;
+			coverUrl: string | null;
+	  }
+	| undefined
+> {
+	const [row] = await db
+		.select({
+			productId: psPlusCatalog.productId,
+			npTitleId: psPlusCatalog.npTitleId,
+			storeUrl: psPlusCatalog.storeUrl,
+			coverUrl: psPlusCatalog.coverUrl,
+		})
+		.from(psPlusCatalog)
+		.where(eq(psPlusCatalog.productId, productId))
+		.limit(1);
+	return row;
+}
+
+/**
  * The snapshot's current generation (Story 7.2 review, M3) — the browse page
  * carries it so the client can tell a torn offset-paged read (a refresh landing
  * between page 1 and page 2) from an intact one. null = the snapshot is empty.

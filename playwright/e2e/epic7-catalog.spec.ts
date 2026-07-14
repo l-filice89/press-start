@@ -4,13 +4,16 @@ import {
 	createWishlistedGame,
 } from '../support/factories/game-factory';
 import {
+	d1Query,
 	deleteCatalog,
 	deleteGames,
 	deleteSetting,
+	E2E_REGION,
 	type SeedCatalogProduct,
 	seedCatalog,
 	seedGames,
 	seedSetting,
+	sq,
 } from '../support/helpers/d1';
 import { expect, test } from '../support/merged-fixtures';
 
@@ -226,6 +229,100 @@ test('an owned catalog game shows Owned and NO actions; a tracked-unowned one sh
 	} finally {
 		await deleteCatalog(products.map((p) => p.productId));
 		await deleteGames([owned.id, wishlisted.id]);
+	}
+});
+
+/**
+ * Story 7.3 — add, or claim, a game from the catalog.
+ *
+ * The add reuses EPIC 6's preview (there is no catalog detail page and no second
+ * preview surface), saves the not-owned default, and lands on the game's real,
+ * editable detail.
+ *
+ * WHAT THIS DOES NOT COVER (review, M4): IGDB has no creds in e2e, so the preview
+ * takes its name-only path — the FR-41 straggler fallback. The saved title is
+ * therefore the CATALOG's, by construction. In production the preview overwrites
+ * it with the IGDB candidate's name, the two DIVERGE, and the `In library` marker
+ * has to resolve through the PSN_PRODUCT link instead of the title. That is the
+ * real guarantee behind the last assertion here, and this tier cannot see it:
+ * integration `psplus-browse.test.ts` › marks a game In library through the
+ * PSN_PRODUCT LINK when the stored title DIVERGED from the catalog name owns it.
+ */
+test('add from the catalog: the Epic 6 preview opens, Save lands on /game/:id, and the card flips to In library with Claim now still offered', async ({
+	page,
+}) => {
+	const id = run();
+	const name = `Addable Catalog ${id}`;
+	const products: SeedCatalogProduct[] = [{ productId: `p-add-${id}`, name }];
+	try {
+		await seedCatalog(products);
+		await page.goto('/catalog');
+
+		await page.getByRole('button', { name: `Add ${name} to library` }).click();
+		const dialog = page.getByTestId('add-game-dialog');
+		await expect(dialog).toBeVisible();
+		// Pre-filled from the catalog row — the dialog is Epic 6's, unchanged.
+		await expect(dialog.getByLabel('Title')).toHaveValue(name);
+
+		await dialog.getByRole('button', { name: 'Add to wishlist' }).click();
+
+		// AD-25: the by-id read route resolves this, not the shelf list cache —
+		// otherwise the add races the refetch and renders not-found.
+		await expect(page).toHaveURL(/\/game\/[0-9a-f-]+$/);
+		await expect(page.getByRole('dialog', { name })).toBeVisible();
+
+		// Back on the catalog: In library, no Add — and Claim now STILL LIVE. It is
+		// on the shelf as a wishlist entry; nothing was claimed on the PSN account.
+		await page.goto('/catalog');
+		const card = catalogCards(page).filter({ hasText: name });
+		await expect(card.getByTestId('catalog-in-library')).toBeVisible();
+		await expect(card.getByTestId('catalog-add')).toHaveCount(0);
+		await expect(card.getByTestId('catalog-claim')).toBeVisible();
+	} finally {
+		const rows = await d1Query<{ id: string }>(
+			`SELECT id FROM game WHERE title = ${sq(name)};`,
+		);
+		await deleteGames(rows.map((row) => row.id));
+		await deleteCatalog(products.map((p) => p.productId));
+	}
+});
+
+// Claim is a DEEP LINK, deliberately (FR-52): firing PlayStation's authenticated
+// add-to-library mutation was investigated and declined — an undocumented write
+// against a real account with an irreversible side effect on a mistaken tap. So
+// the assertion is on the LINK, and the link is never followed: the app must
+// never navigate the suite to Sony, and it writes NOTHING when you click.
+test('Claim now targets the regional PS Store product page in a new tab — and the app writes nothing', async ({
+	page,
+}) => {
+	const id = run();
+	const name = `Claimable Catalog ${id}`;
+	const productId = `p-claim-${id}`;
+	const products: SeedCatalogProduct[] = [{ productId, name }];
+	try {
+		await seedCatalog(products);
+		await page.goto('/catalog');
+
+		const card = catalogCards(page).filter({ hasText: name });
+		const claim = card.getByRole('link', {
+			name: `Claim ${name} on the PlayStation Store (opens in a new tab)`,
+		});
+		await expect(claim).toHaveAttribute(
+			'href',
+			`https://store.playstation.com/${E2E_REGION}/product/${productId}`,
+		);
+		await expect(claim).toHaveAttribute('target', '_blank');
+		await expect(claim).toHaveAttribute('rel', /noopener/);
+		await expect(claim).toHaveAttribute('rel', /noreferrer/);
+
+		// Availability is not ownership: the card still offers ＋ Add, and no game
+		// row exists. Ownership flips only when a SYNC observes the entitlement.
+		await expect(card.getByTestId('catalog-add')).toBeVisible();
+		expect(
+			await d1Query(`SELECT id FROM game WHERE title = ${sq(name)};`),
+		).toHaveLength(0);
+	} finally {
+		await deleteCatalog([productId]);
 	}
 });
 

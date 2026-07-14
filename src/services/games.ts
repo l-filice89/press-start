@@ -12,8 +12,13 @@ import { normalizeTitle } from '../core';
 import type { IgdbCandidate, IgdbSearch } from '../providers';
 import {
 	addExternalLink,
+	addExternalLinkIfAbsent,
+	backfillGameFacts,
 	clearGameGenres,
+	deleteGame,
+	type ExternalLinkSource,
 	enrichGame,
+	findCatalogProduct,
 	findGameByExternalLink,
 	findGamesByNormalizedTitle,
 	findGenreByNameInsensitive,
@@ -57,6 +62,15 @@ export interface AddGameInput {
 	genres?: string[];
 	/** "Add as owned" (default false = wishlisted, FR-43). */
 	owned?: boolean;
+	/**
+	 * The PS STORE product id the add came from (Story 7.3) — an `EXTERNAL_LINK`
+	 * in the `PSN_PRODUCT` namespace, never `PSN` (AD-20: that one is
+	 * `np_title_id` only). Adding from the catalog changes NOTHING else: the
+	 * tracking row is still the not-owned default. Availability is not ownership,
+	 * and the app never learns whether the user claimed anything — only a sync
+	 * that observes the real entitlement sets `owned` (Story 6.4).
+	 */
+	psnProductId?: string;
 }
 
 export type AddGameOutcome =
@@ -156,6 +170,83 @@ function newTracking(owned: boolean, today: string): TrackingPatch {
 }
 
 /**
+ * Anchor an external id on the game and answer WHO the id actually identifies
+ * (Story 7.3 + its review). Two namespaces use it: `PSN_PRODUCT` (the store
+ * product id — its own source, so an already-synced game's `PSN` np_title_id
+ * link is neither shadowed nor clashed with, AD-20) and `PSN` (the catalog row's
+ * np_title_id, which IS that namespace's value — without it a later library sync
+ * matches the game on title alone and duplicates it the moment PSN's title
+ * differs).
+ *
+ * Writes ONLY when the id is unlinked:
+ *  - already this game's → no-op (re-add, another edition);
+ *  - already ANOTHER game's → do NOT write, log the clash, and return that
+ *    game's id (review, M1: this used to short-circuit as success, so the add
+ *    reported created/duplicate for game A while the id stayed on game B — a
+ *    silent identity split. `rematchGame` treats the same state as a conflict);
+ *  - unlinked → insert ON CONFLICT DO NOTHING and re-read (review, M3: a
+ *    concurrent add of the same NEW product id used to 500 on the unique index
+ *    and strand a duplicate game row).
+ */
+async function anchorLink(
+	db: Db,
+	gameId: string,
+	source: ExternalLinkSource,
+	externalId?: string | null,
+): Promise<string> {
+	if (!externalId) return gameId;
+	const owner = await findGameByExternalLink(db, source, externalId);
+	if (owner) {
+		if (owner.id !== gameId) {
+			console.warn(
+				`add-game: ${source} ${externalId} already anchors game ${owner.id}, not ${gameId} — not linking`,
+			);
+		}
+		return owner.id;
+	}
+	await addExternalLinkIfAbsent(db, { gameId, source, externalId });
+	const settled = await findGameByExternalLink(db, source, externalId);
+	return settled?.id ?? gameId;
+}
+
+type CatalogProduct = Awaited<ReturnType<typeof findCatalogProduct>>;
+
+/**
+ * The catalog origin's writes on the game the add resolved to — the ONE place
+ * they happen (review, L4: this used to be four call sites on a non-transactional
+ * path). Returns the game id the PRODUCT identity settled on, which is the same
+ * game except when a concurrent request won the anchor (M3).
+ */
+async function applyCatalogOrigin(
+	db: Db,
+	gameId: string,
+	product: CatalogProduct,
+): Promise<string> {
+	// A product the catalog no longer has writes NOTHING (Story 7.3): no link, no
+	// store URL, no dangling reference. Only the LOOKUP that resolves identity runs
+	// on a pruned id (review, H2) — this is the write side.
+	if (!product) return gameId;
+	const anchored = await anchorLink(
+		db,
+		gameId,
+		'PSN_PRODUCT',
+		product.productId,
+	);
+	if (anchored !== gameId) return anchored;
+	// The np_title_id is the sync's join key, so it must live on the same game.
+	await anchorLink(db, gameId, 'PSN', product.npTitleId);
+	// NULL-only (review, M2): an EXISTING game (seed import, name-only add, a sync
+	// with no store URL) added from the catalog kept the link and no store URL —
+	// and `Claim now` keys off the store URL, so the claim path stayed dead for
+	// exactly those games. Never overwrites a fact that stands.
+	await backfillGameFacts(db, gameId, {
+		coverUrl: product.coverUrl,
+		storeUrl: product.storeUrl,
+	});
+	return gameId;
+}
+
+/**
  * Create (or attach tracking to) a game from the add-by-name dialog.
  * Duplicate hazard (FR-42/AR-9): a title the user already tracks must never
  * become a second row — resolved by IGDB link, then normalized title; the
@@ -170,6 +261,12 @@ export async function addGame(
 	const title = input.title.trim();
 	const titleNormalized = normalizeTitle(title);
 	if (!title || !titleNormalized) return 'invalid';
+	// A CATALOG add is never an owned add (review, H1). Availability is not
+	// ownership: a PS+ title counts as owned only via `owned_via: 'membership'`,
+	// and only when a SYNC observes the entitlement (Story 6.4) — the app cannot
+	// see the PS Store tab. `owned: true` here would write a purchase with a made-up
+	// purchase date. The dialog hides the toggle; this is the defence in depth.
+	if (input.owned && input.psnProductId) return 'invalid';
 
 	// ponytail: the duplicate guard below is read-then-write, not transactional
 	// — title_normalized is deliberately non-unique (AD-18), so two *concurrent*
@@ -178,47 +275,59 @@ export async function addGame(
 	// mutation is in flight. Add a per-user advisory lock (or a partial unique
 	// index) if multi-tab concurrent adds ever become real.
 
+	// The product id is a CLAIM about a snapshot that may have been pruned since
+	// the card rendered. The catalog row carries the FACTS (store URL, cover,
+	// np_title_id) — a miss means the add proceeds on the title alone, writing no
+	// store URL and no dangling reference to a product the catalog no longer has.
+	// IDENTITY is a different question: it does not depend on the row still
+	// existing (review, H2 — gating the link lookup on the row let a pruned
+	// product + a diverged title insert exactly the duplicate the namespace exists
+	// to prevent).
+	const productId = input.psnProductId;
+	const product = productId
+		? await findCatalogProduct(db, productId)
+		: undefined;
+
 	// Resolve an existing catalog game: external-ID identity first (AD-20),
 	// then every normalized-title candidate (non-unique key, AD-18).
 	let existing = input.igdbId
 		? await findGameByExternalLink(db, 'IGDB', input.igdbId)
 		: undefined;
+	if (!existing && productId) {
+		existing = await findGameByExternalLink(db, 'PSN_PRODUCT', productId);
+	}
 	if (!existing) {
 		const candidates = await findGamesByNormalizedTitle(db, titleNormalized);
-		const best = await pickTitleCandidate(db, userId, candidates, input);
-		if (best?.tracking) {
-			// A row this user already tracks: revive a tombstone, else route to it.
-			if (best.tracking.discarded)
-				await setDiscarded(db, userId, best.row.id, false);
-			return { kind: 'duplicate', gameId: best.row.id };
-		}
-		existing = best?.row;
+		existing = (await pickTitleCandidate(db, userId, candidates, input))?.row;
 	}
 
 	if (existing) {
-		if (await reviveIfDiscarded(db, userId, existing.id)) {
-			return { kind: 'duplicate', gameId: existing.id };
+		// A row this user already tracks (live, or a tombstone to revive) is the
+		// SAME game (FR-42): route to it, create nothing. An untracked shared
+		// catalog row gets tracking attached, and its facts stay as ingest wrote
+		// them (AD-19) — bar the NULL-only catalog backfill below.
+		const tracked = await reviveIfDiscarded(db, userId, existing.id);
+		if (!tracked) {
+			// Anchor the IGDB identity if this preview learned it (permanent).
+			if (
+				input.igdbId &&
+				!(await findGameByExternalLink(db, 'IGDB', input.igdbId))
+			) {
+				await addExternalLink(db, {
+					gameId: existing.id,
+					source: 'IGDB',
+					externalId: input.igdbId,
+				});
+			}
+			await insertTrackingIfAbsent(
+				db,
+				userId,
+				existing.id,
+				newTracking(input.owned ?? false, today),
+			);
 		}
-		// Shared catalog game this user never tracked: attach tracking only —
-		// catalog facts stay as ingest wrote them (AD-19). Anchor the IGDB
-		// identity if this preview learned it (permanent, survives re-sync).
-		if (
-			input.igdbId &&
-			!(await findGameByExternalLink(db, 'IGDB', input.igdbId))
-		) {
-			await addExternalLink(db, {
-				gameId: existing.id,
-				source: 'IGDB',
-				externalId: input.igdbId,
-			});
-		}
-		await insertTrackingIfAbsent(
-			db,
-			userId,
-			existing.id,
-			newTracking(input.owned ?? false, today),
-		);
-		return { kind: 'created', gameId: existing.id };
+		await applyCatalogOrigin(db, existing.id, product);
+		return { kind: tracked ? 'duplicate' : 'created', gameId: existing.id };
 	}
 
 	const created = await insertGame(db, {
@@ -226,26 +335,48 @@ export async function addGame(
 		titleNormalized,
 		coverUrl: input.coverUrl ?? null,
 		releaseDate: input.releaseDate ?? null,
+		// The store URL comes from the CATALOG ROW we just resolved, never from the
+		// client — a pruned product contributes nothing (Story 7.3). It is what
+		// "Claim now" deep-links to on the shelf card later.
+		storeUrl: product?.storeUrl ?? null,
 		// No IGDB identity = name-only entry; release date unknown reads as
 		// not released (AR-17). Story 6.2's stragglers list keys off this flag.
 		unenriched: !input.igdbId,
 	});
+	// Anchor BEFORE the rest of the writes: a concurrent add of the same NEW
+	// product id inserted its own game row too, and exactly one of the two wins
+	// the unique `(source, external_id)` index (review, M3). The loser drops the
+	// row it just created and converges on the winner's game — one game, no 500,
+	// no unlinked orphan.
+	const gameId = await applyCatalogOrigin(db, created.id, product);
+	if (gameId !== created.id) {
+		await deleteGame(db, created.id);
+		await insertTrackingIfAbsent(
+			db,
+			userId,
+			gameId,
+			newTracking(input.owned ?? false, today),
+		);
+		return { kind: 'created', gameId };
+	}
 	if (input.igdbId) {
 		await addExternalLink(db, {
-			gameId: created.id,
+			gameId,
 			source: 'IGDB',
 			externalId: input.igdbId,
 		});
 	}
 	// FR-24: unknown genres auto-create exactly once (case-insensitive reuse).
-	await linkGenresByName(db, created.id, input.genres);
+	// They are IGDB genres (AD-26) — the catalog's PS facet keys are a separate
+	// vocabulary and never reach these tables.
+	await linkGenresByName(db, gameId, input.genres);
 	await insertTrackingIfAbsent(
 		db,
 		userId,
-		created.id,
+		gameId,
 		newTracking(input.owned ?? false, today),
 	);
-	return { kind: 'created', gameId: created.id };
+	return { kind: 'created', gameId };
 }
 
 export interface RematchInput {

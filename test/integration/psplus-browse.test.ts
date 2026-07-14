@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { beforeAll, beforeEach, describe, expect, inject, it } from 'vitest';
 import { normalizeTitle } from '../../src/core';
 import {
+	addExternalLink,
 	deleteCatalogOutsideRegion,
 	insertGame,
 	setCatalogGenres,
@@ -266,6 +267,33 @@ describe('GET /api/ps-plus-catalog — the in-library join', () => {
 			expect(row.owned).toBe(false);
 			expect(row.gameId).toBeNull();
 		}
+	});
+
+	// HAZARD (Story 7.3 review, H3 / M4): the marker joined on the normalized title
+	// ALONE — but the add re-seeds the title from the IGDB candidate, so the stored
+	// title routinely differs from the store's name, the keys diverge, and the card
+	// of a game the user just added still read `＋ Add`. Forever: every re-add 409s
+	// and bounces to the detail. The PSN_PRODUCT link 7.3 writes is the stable
+	// identity, and the marker resolves through it FIRST. The e2e tier cannot see
+	// this (no IGDB creds there, so the titles match by construction) — it lives here.
+	it('marks a game In library through the PSN_PRODUCT LINK when the stored title DIVERGED from the catalog name', async () => {
+		const added = await insertGame(db(), {
+			// What IGDB called it on save — NOT what the store calls it.
+			title: 'Ghostrunner: Complete Edition',
+			titleNormalized: normalizeTitle('Ghostrunner: Complete Edition'),
+		});
+		await upsertTracking(db(), userId, added.id, { owned: false });
+		await addExternalLink(db(), {
+			gameId: added.id,
+			source: 'PSN_PRODUCT',
+			externalId: 'p-ghost',
+		});
+		await seedProducts([['p-ghost', 'Ghost Runner']]);
+
+		const [row] = (await browse()).games;
+		expect(row.inLibrary).toBe(true);
+		expect(row.owned).toBe(false);
+		expect(row.gameId).toBe(added.id);
 	});
 
 	// L6: the marker exists ONLY because both sides key on the same normalizer —

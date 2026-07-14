@@ -24,8 +24,18 @@ import {
 import { OWNERSHIP_TYPES, PLAY_STATUSES } from '../core/types';
 import { user } from './auth';
 
-/** DB vocabulary for `external_link.source` (persistence-only, not a domain enum). */
-export const EXTERNAL_LINK_SOURCES = ['PSN', 'IGDB'] as const;
+/**
+ * DB vocabulary for `external_link.source` (persistence-only, not a domain enum).
+ *
+ * `PSN` and `PSN_PRODUCT` are two NAMESPACES, not one (AD-20). `PSN` holds
+ * `np_title_id` values (`CUSA…`/`PPSA…`) — what the library sync observes;
+ * `PSN_PRODUCT` holds PS STORE product ids — what the PS+ catalog knows. They
+ * are both "PSN ids" in English and neither joins to the other, and
+ * `(source, external_id)` is unique: writing a product id as `PSN` would make an
+ * add-from-catalog of an already-synced game MISS on link, MATCH on normalized
+ * title, and (AD-18's clash rule) create a mandatory duplicate.
+ */
+export const EXTERNAL_LINK_SOURCES = ['PSN', 'IGDB', 'PSN_PRODUCT'] as const;
 // `game_tracking.ownership_type` keys off the core vocabulary (AD-3); the
 // re-export keeps existing `schema/catalog` importers working.
 export { OWNERSHIP_TYPES };

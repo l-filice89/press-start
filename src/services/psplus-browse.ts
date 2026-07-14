@@ -24,6 +24,7 @@ import {
 	countCatalogProducts,
 	getCatalogGeneration,
 	listCatalogForBrowse,
+	listExternalLinksBySource,
 	listLibraryForUser,
 	PS_PLUS_TIER,
 } from '../repositories';
@@ -129,6 +130,23 @@ export async function browseCatalog(
 		}
 	}
 
+	// …and the STABLE key, checked FIRST (Story 7.3 review, H3): the add anchors
+	// `EXTERNAL_LINK('PSN_PRODUCT', product_id)` on the game, and the title it
+	// saves is the IGDB candidate's — routinely NOT the store's name. Keyed on the
+	// title alone, the two diverge and the card a user just added still reads
+	// `＋ Add`, forever (every re-add 409s and bounces to the detail). The link is
+	// the one key that cannot drift.
+	const byId = new Map(library.map((row) => [row.id, row]));
+	const linked = new Map<string, { gameId: string; owned: boolean }>();
+	for (const link of await listExternalLinksBySource(db, 'PSN_PRODUCT')) {
+		const row = byId.get(link.gameId);
+		if (!row) continue; // linked, but not in THIS user's library
+		const existing = linked.get(link.externalId);
+		if (!existing || (row.owned && !existing.owned)) {
+			linked.set(link.externalId, { gameId: row.id, owned: row.owned });
+		}
+	}
+
 	// A TOTAL order (review, M1): `compareTitle` is `sensitivity: 'base'`, so NieR
 	// and NIER compare EQUAL — not an order at all. Each page is a separate query
 	// + sort, so an unspecified tie order lets two base-equal titles swap across
@@ -149,9 +167,9 @@ export async function browseCatalog(
 		nextCursor: next < sorted.length ? next : null,
 		generation,
 		games: page.map((row) => {
-			const match = row.titleNormalized
-				? tracked.get(row.titleNormalized)
-				: undefined;
+			const match =
+				linked.get(row.productId) ??
+				(row.titleNormalized ? tracked.get(row.titleNormalized) : undefined);
 			return {
 				productId: row.productId,
 				name: row.name,

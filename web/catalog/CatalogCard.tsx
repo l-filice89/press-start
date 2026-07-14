@@ -22,13 +22,22 @@ import type { CatalogGame } from './api';
  * Both actions are real buttons named after the GAME (never 490 bare icons), and
  * `Claim now` says it opens a new tab.
  */
+/** The only origin `Claim now` will ever link to (review, L2). */
+const STORE_ORIGIN = 'https://store.playstation.com/';
+
 export function CatalogCard({ game }: { game: CatalogGame }) {
 	const [coverFailed, setCoverFailed] = useState(false);
 	const [adding, setAdding] = useState(false);
 	const showCover = !!game.coverUrl && !coverFailed;
 	// A claim is only ever a deep link to the regional PS Store (FR-52) — there
-	// is no in-app claim, and no store URL means no honest link to offer.
-	const claimable = !game.owned && !!game.storeUrl;
+	// is no in-app claim, and no store URL means no honest link to offer. The URL
+	// is checked, not trusted (review, L2): `psplus_catalog.store_url` is provider-
+	// shaped data rendered as an href, and an unchecked one turns a provider change
+	// (or a `javascript:` value) into a live link. Only the real store qualifies.
+	const claimUrl =
+		!game.owned && game.storeUrl?.startsWith(STORE_ORIGIN)
+			? game.storeUrl
+			: null;
 
 	return (
 		<div
@@ -93,10 +102,10 @@ export function CatalogCard({ game }: { game: CatalogGame }) {
 						</button>
 					)}
 
-					{claimable && (
+					{claimUrl && (
 						<a
 							className="catalog-card__claim tap-target"
-							href={game.storeUrl ?? undefined}
+							href={claimUrl}
 							target="_blank"
 							rel="noreferrer noopener"
 							data-testid="catalog-claim"
@@ -112,6 +121,17 @@ export function CatalogCard({ game }: { game: CatalogGame }) {
 				<AddGameDialog
 					title={game.name}
 					navigateToDetail
+					// The preview is Epic 6's, unchanged: it takes two plain facts (a
+					// cover to show before IGDB answers, a store product id to forward to
+					// the add) and knows nothing about catalogs. The store URL is NOT sent
+					// — the server reads it off the catalog row it resolves the product id
+					// against, so a product pruned since this card rendered writes nothing.
+					prefill={{
+						// A cover the browser already FAILED to load is a known-dead URL
+						// (review, L5) — pre-filling it stamps it onto the new game row.
+						coverUrl: coverFailed ? null : game.coverUrl,
+						psnProductId: game.productId,
+					}}
 					onClose={() => setAdding(false)}
 				/>
 			)}

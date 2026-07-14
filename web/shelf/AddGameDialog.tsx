@@ -22,6 +22,7 @@ export function AddGameDialog({
 	title,
 	onClose,
 	navigateToDetail = false,
+	prefill,
 }: {
 	title: string;
 	onClose: () => void;
@@ -29,6 +30,16 @@ export function AddGameDialog({
 	 * path (Story 7.2): there is no catalog detail page, so the real, editable
 	 * one is where the flow ends. The shelf add stays where it is. */
 	navigateToDetail?: boolean;
+	/**
+	 * Facts the CALLER already knows (Story 7.3). Two plain values, not a catalog
+	 * row: a cover to show before IGDB answers (and to fall back on when its match
+	 * has none), and a PS Store product id passed straight through to the add
+	 * payload — which already carries it (`AddGamePayload.psnProductId`). The
+	 * dialog never learns what a catalog is: no fetch, no product lookup, no
+	 * catalog type imported. Any future caller with the same two facts gets the
+	 * same behaviour.
+	 */
+	prefill?: { coverUrl?: string | null; psnProductId?: string };
 }) {
 	const dialogRef = useRef<HTMLDivElement>(null);
 	const titleRef = useRef<HTMLInputElement>(null);
@@ -51,10 +62,13 @@ export function AddGameDialog({
 	// Editable draft, seeded from the typed name and re-seeded ONCE when the
 	// IGDB candidate arrives (the preview resolves in well under a second, so
 	// clobbering pre-arrival edits is a non-issue at this scale).
+	const prefilledCover = prefill?.coverUrl ?? '';
+	/** Opened from a store product (the catalog) — see the owned toggle below. */
+	const fromProduct = Boolean(prefill?.psnProductId);
 	const [draftTitle, setDraftTitle] = useState(title);
 	const [releaseDate, setReleaseDate] = useState('');
 	const [genresText, setGenresText] = useState('');
-	const [coverUrl, setCoverUrl] = useState('');
+	const [coverUrl, setCoverUrl] = useState(prefilledCover);
 	const [owned, setOwned] = useState(false);
 	const seeded = useRef(false);
 	// The candidate the user corrected to (Story 6.6 / PV-6) — it replaces the
@@ -69,7 +83,9 @@ export function AddGameDialog({
 		setDraftTitle(candidate.name);
 		setReleaseDate(candidate.releaseDate ?? '');
 		setGenresText(candidate.genres.join(', '));
-		setCoverUrl(candidate.coverUrl ?? '');
+		// A match with NO cover must not blank a cover the caller supplied — the
+		// game would land on the shelf as a grey tile with an art URL one field away.
+		setCoverUrl(candidate.coverUrl ?? prefilledCover);
 	}
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: seeds off the preview alone — applyCandidate is re-created every render and only ever writes state, so listing it would re-run this on every render for nothing (the `seeded` gate makes it a no-op anyway).
@@ -133,6 +149,10 @@ export function AddGameDialog({
 			// edition tweak keeps the right identity; retyping a different game
 			// entirely is rare enough to not special-case yet.
 			...(candidate ? { igdbId: candidate.igdbId } : {}),
+			// Forwarded, never interpreted: the server resolves it against the stored
+			// catalog and writes the `PSN_PRODUCT` link (AD-20) — or, if it was pruned
+			// meanwhile, ignores it and saves the title alone.
+			...(prefill?.psnProductId ? { psnProductId: prefill.psnProductId } : {}),
 			coverUrl: coverUrl.trim() || null,
 			releaseDate: releaseDate || null,
 			genres: genresText
@@ -250,14 +270,23 @@ export function AddGameDialog({
 								onChange={(e) => setCoverUrl(e.target.value)}
 							/>
 						</label>
-						<label className="add-game__owned">
-							<input
-								type="checkbox"
-								checked={owned}
-								onChange={(e) => setOwned(e.target.checked)}
-							/>
-							<span>I own this game</span>
-						</label>
+						{/* NOT offered on a catalog add (Story 7.3 review, H1): ticking it
+						    wrote owned_via 'purchase' + today's bought_on for a PS+ EXTRA
+						    title — wrong twice (it is not a purchase, and there is no
+						    purchase date). A PS+ title counts as owned ONLY via
+						    owned_via: 'membership', and ONLY when a sync observes the real
+						    entitlement — the app cannot see the PS Store tab. The server
+						    refuses `owned` alongside a product id regardless. */}
+						{!fromProduct && (
+							<label className="add-game__owned">
+								<input
+									type="checkbox"
+									checked={owned}
+									onChange={(e) => setOwned(e.target.checked)}
+								/>
+								<span>I own this game</span>
+							</label>
+						)}
 					</div>
 				</div>
 
