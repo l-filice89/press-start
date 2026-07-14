@@ -107,8 +107,27 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 	it('PSN NPSSO: PUT saves per-user, GET reports presence only and never echoes the value (hazard)', async () => {
 		// The value lands in an outbound Cookie header (`npsso=<value>`) —
 		// whitespace-only, pair-smuggling and control characters are refused at
-		// the boundary.
-		for (const bad of ['   ', 'a;b', 'a b', 'a,b', 'a\nb', 'npsso=']) {
+		// the boundary. So is anything ABOVE Latin1 (Story 9.5): HTTP headers are
+		// Latin1-encoded, so an emoji or a smart quote pasted along with the token
+		// cannot be carried at all — it must fail HERE with a 400, not later as a
+		// 502 when the sync's fetch throws. (An emoji is a surrogate PAIR: a
+		// BMP-only guard would wave it through.)
+		for (const bad of [
+			'   ',
+			'a;b',
+			'a b',
+			'a,b',
+			'a\nb',
+			'npsso=',
+			'token✓',
+			'token😀',
+			'token’s',
+			// C1 control (NEL): Latin1-ENCODABLE, so a "nothing above U+00FF" bound
+			// waved it into the Cookie header. The cookie-octet allowlist does not.
+			'token\u0085x',
+			'token"x',
+			'token\\x',
+		]) {
 			const rejected = await appFetch('/api/settings/psn-npsso', {
 				method: 'PUT',
 				headers: { 'content-type': 'application/json', cookie },

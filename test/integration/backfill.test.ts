@@ -11,12 +11,14 @@ import {
 } from '../../src/repositories';
 import { createDb } from '../../src/repositories/db';
 import { game, gameTracking, user } from '../../src/schema';
+import { PSN_LOCK_SETTING_KEY } from '../../src/services/psn-lock';
 import {
 	PSN_AUTH_EXPIRED,
 	PSN_AUTH_SETTING_KEY,
 	PSN_NPSSO_SETTING_KEY,
 	TIMEZONE_SETTING_KEY,
 } from '../../src/services/settings';
+import { PSN_TROPHY_HOST, stubPsnFetch } from './psn-stub';
 import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
 
 /**
@@ -33,7 +35,6 @@ import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
  */
 
 const db = () => createDb(env.DB);
-const realFetch = globalThis.fetch;
 
 /** UTC 18:30 → the NEXT day in +12: the whole point of the zone conversion. */
 const PLATINUM_INSTANT = '2026-07-06T18:30:27Z';
@@ -70,35 +71,10 @@ const detailPayload = (earnedDateTime: string | null) =>
 		totalItemCount: 2,
 	});
 
-/** Stubs the NPSSO→bearer exchange; `detail` answers every trophy-host call. */
+/** `detail` answers every trophy-host call; the exchange is the shared double. */
 function stubPsn(detail: (url: string) => Response) {
-	vi.stubGlobal(
-		'fetch',
-		async (input: RequestInfo | URL, init?: RequestInit) => {
-			const url = String(input instanceof Request ? input.url : input);
-			if (
-				url.startsWith(
-					'https://ca.account.sony.com/api/authz/v3/oauth/authorize',
-				)
-			) {
-				return new Response(null, {
-					status: 302,
-					headers: {
-						location:
-							'com.scee.psxandroid.scecompcall://redirect?code=test-auth-code',
-					},
-				});
-			}
-			if (
-				url.startsWith('https://ca.account.sony.com/api/authz/v3/oauth/token')
-			) {
-				return json({ access_token: 'test-bearer' });
-			}
-			if (!url.startsWith('https://m.np.playstation.com/')) {
-				return realFetch(input, init);
-			}
-			return detail(url);
-		},
+	stubPsnFetch((url) =>
+		url.startsWith(PSN_TROPHY_HOST) ? detail(url) : undefined,
 	);
 }
 
@@ -107,6 +83,8 @@ interface BackfillBody {
 	skipped: { title: string; reason: string; code: string }[];
 	nextCursor: string | null;
 	hasTrophyData: boolean;
+	/** Present only while the loop continues (the single-flight lock, Story 9.5). */
+	lockToken?: string;
 }
 
 /** A FAILED chunk still reports the rows it wrote before it died. */
@@ -115,11 +93,18 @@ interface BackfillFailure {
 	partial?: BackfillBody;
 }
 
-const postBackfill = (cookie: string, cursor?: string) =>
-	appFetch(
-		`/api/backfill/platinum-dates${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`,
+// A continuation carries the single-flight lock token the previous chunk handed
+// back (Story 9.5): the cursor alone is NOT proof of ownership, so a chunk that
+// presents one without a token is refused like any second run would be.
+const postBackfill = (cookie: string, cursor?: string, lockToken?: string) => {
+	const query = new URLSearchParams();
+	if (cursor) query.set('cursor', cursor);
+	if (cursor && lockToken) query.set('lockToken', lockToken);
+	return appFetch(
+		`/api/backfill/platinum-dates${query.size > 0 ? `?${query}` : ''}`,
 		{ method: 'POST', headers: { cookie } },
 	);
+};
 
 let cookie: string;
 let userId: string;
@@ -147,6 +132,9 @@ const seeded: string[] = [];
 
 afterEach(async () => {
 	vi.unstubAllGlobals();
+	// A run that ended mid-loop (a failed chunk under test) still holds the
+	// single-flight lock until its TTL — clear it so the next test can claim.
+	await deleteSetting(db(), userId, PSN_LOCK_SETTING_KEY);
 	for (const gameId of seeded.splice(0)) {
 		await db().delete(gameTracking).where(eq(gameTracking.gameId, gameId));
 		await db().delete(game).where(eq(game.id, gameId));
@@ -399,13 +387,35 @@ describe('POST /api/backfill/platinum-dates (integration, real workerd + local D
 		);
 		expect(first.nextCursor).toBe(byId[14].id);
 
+		// The continuing chunk handed back the lock it holds — the loop renews it.
+		expect(first.lockToken).toBeTruthy();
+		// And it HOLDS it across the gap between chunks (Story 9.5): a second tab
+		// starting any PSN op here is refused, so it cannot walk the same candidates
+		// or double the fan-out.
+		const intruder = await appFetch('/api/sync', {
+			method: 'POST',
+			headers: { cookie },
+		});
+		expect(intruder.status).toBe(409);
+		// Nothing but this loop's own detail calls reached PSN.
+		expect(fetched).toHaveLength(15);
+
 		const second = (await (
-			await postBackfill(cookie, first.nextCursor as string)
+			await postBackfill(
+				cookie,
+				first.nextCursor as string,
+				first.lockToken as string,
+			)
 		).json()) as BackfillBody;
 		// The cursor PAGED PAST the 15 already seen and picked up the 16th — not a
 		// row earlier, not a row later.
 		expect(second.filled.map((item) => item.gameId)).toEqual([byId[15].id]);
 		expect(second.nextCursor).toBeNull();
+		// The loop ENDED: the lock is gone (no token to carry, nothing to wait out).
+		expect(second.lockToken).toBeUndefined();
+		expect(
+			await getSetting(db(), userId, PSN_LOCK_SETTING_KEY),
+		).toBeUndefined();
 		// 16 detail calls in total: no candidate was fetched twice.
 		expect(fetched).toHaveLength(16);
 		expect(new Set(fetched).size).toBe(16);

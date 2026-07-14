@@ -136,7 +136,7 @@ development_status:
   9-2-trophy-progress-on-every-game-vr-2: done # trophy counts persisted; % + grade derived in core; batched D1 writes
   9-3-one-off-backfill-recover-the-platinum-dates-psn-knows-vr-3: done # chunked cursor backfill; per-title npServiceName (migration 0008)
   9-4-sync-the-ps-store-wishlist-vr-4: future # DROPPED per 9.1c (DW-10 ext): wishlist unreachable under either credential; revisit if PSN exposes a client fetch/REST endpoint
-  9-5-post-retro-hardening-sweep: backlog # 2026-07-14 epic-9 retro: 6 ledger fixes, gates the main merge (single-flight guard across all 3 PSN long-ops, shared exchange stub, seed batch callback, npsso Latin1 guard, discarded-trophy noise, 6.4a flake)
+  9-5-post-retro-hardening-sweep: done # 2026-07-14 epic-9 retro: 6 ledger fixes, gates the main merge (single-flight guard across all 3 PSN long-ops, shared exchange stub, seed batch callback, npsso Latin1 guard, discarded-trophy noise, 6.4a flake)
   epic-9-retrospective: done # 2026-07-14 — epic-9-retro-2026-07-14.md; epic marker stays in-progress until Story 9.5 + the main merge (Luca's gate)
 
   # Epic 10: Know Before You Play — Scores & Expiry Warnings — v1.x, after Epic 7

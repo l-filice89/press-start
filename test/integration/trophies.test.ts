@@ -5,6 +5,7 @@ import {
 	getSetting,
 	getTracking,
 	insertGame,
+	setDiscarded,
 	setSetting,
 	upsertTracking,
 } from '../../src/repositories';
@@ -15,6 +16,7 @@ import {
 	PSN_AUTH_SETTING_KEY,
 	PSN_NPSSO_SETTING_KEY,
 } from '../../src/services/settings';
+import { PSN_TROPHY_HOST, stubPsnFetch } from './psn-stub';
 import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
 
 /**
@@ -43,43 +45,14 @@ const trophyTitle = (over: Record<string, unknown> = {}) => ({
 	...over,
 });
 
-const realFetch = globalThis.fetch;
-
 /**
- * Stubs the NPSSO→bearer exchange plus the trophy host. `trophyResponse` is a
- * factory so a degenerate/401 body can be substituted whole.
+ * Stubs the trophy host (the NPSSO→bearer exchange comes from the shared
+ * double). `trophyResponse` is a factory so a degenerate/401 body can be
+ * substituted whole.
  */
 function stubPsn(trophyResponse: () => Response) {
-	vi.stubGlobal(
-		'fetch',
-		async (input: RequestInfo | URL, init?: RequestInit) => {
-			const url = String(input instanceof Request ? input.url : input);
-			if (
-				url.startsWith(
-					'https://ca.account.sony.com/api/authz/v3/oauth/authorize',
-				)
-			) {
-				return new Response(null, {
-					status: 302,
-					headers: {
-						location:
-							'com.scee.psxandroid.scecompcall://redirect?code=test-auth-code',
-					},
-				});
-			}
-			if (
-				url.startsWith('https://ca.account.sony.com/api/authz/v3/oauth/token')
-			) {
-				return new Response(JSON.stringify({ access_token: 'test-bearer' }), {
-					status: 200,
-					headers: { 'content-type': 'application/json' },
-				});
-			}
-			if (!url.startsWith('https://m.np.playstation.com/')) {
-				return realFetch(input, init);
-			}
-			return trophyResponse();
-		},
+	stubPsnFetch((url) =>
+		url.startsWith(PSN_TROPHY_HOST) ? trophyResponse() : undefined,
 	);
 }
 
@@ -313,6 +286,30 @@ describe('POST /api/sync/trophies (integration, real workerd + local D1)', () =>
 			await appFetch('/api/shelf?include=hidden', { headers: { cookie } })
 		).json()) as { games: { id: string; trophy: unknown }[] };
 		expect(shelf.games.find((g) => g.id === game.id)?.trophy).toBeNull();
+	});
+
+	it('drops a DISCARDED game’s trophy title SILENTLY — matched, not "unmatched" noise on every run (hazard, Story 9.5)', async () => {
+		const game = await trackedGame('Thrown Away', 'thrown away');
+		await setDiscarded(db(), userId, game.id, true);
+		const before = await getTracking(db(), userId, game.id);
+
+		stubTrophies([
+			trophyTitle({
+				trophyTitleName: 'Thrown Away',
+				npCommunicationId: 'NPWR55555_00',
+			}),
+		]);
+		const res = await postTrophySync(cookie);
+		expect(res.status).toBe(200);
+		// Neither updated (it is hidden) nor unmatched (it MATCHED — a game the
+		// user threw away, which is not a name PSN failed to resolve).
+		expect(await res.json()).toEqual({
+			updated: [],
+			unmatched: [],
+			needsAttention: [],
+		});
+		// And no trophy row was written on the tombstone.
+		expect(await getTracking(db(), userId, game.id)).toEqual(before);
 	});
 
 	it('reports a trophy title with no library game as unmatched — not an error, and no game is created', async () => {

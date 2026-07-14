@@ -4,11 +4,13 @@ import { createPortal } from 'react-dom';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useToast } from '../components/Toast';
 import { useModalTrap } from '../components/useModalTrap';
+import { serverMessage } from '../shelf/api';
 import {
 	backfillPartial,
 	cancelPsPlus,
 	fetchSettings,
 	type PlatinumBackfillResult,
+	releaseBackfillLock,
 	runPlatinumBackfill,
 	saveFabHandedness,
 	savePsnNpsso,
@@ -153,16 +155,26 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 		const filled: PlatinumBackfillResult['filled'] = [];
 		const skipped: PlatinumBackfillResult['skipped'] = [];
 		let cursor: string | null = null;
+		// The single-flight lock this loop holds (Story 9.5) — handed back on every
+		// continuation to renew it. Without it the next chunk reads as a fresh run.
+		let lockToken: string | null = null;
 		let hasTrophyData = true;
 		let stoppedEarly = false;
 		try {
 			for (let chunk = 0; ; chunk++) {
 				if (chunk >= MAX_BACKFILL_CHUNKS) {
 					stoppedEarly = true;
+					// Deliberate stop, not a crash: give the lock back, or the "run it
+					// again to continue" the summary offers would be refused for the
+					// next two minutes with "a sync is already running" (Story 9.5).
+					if (lockToken) await releaseBackfillLock(lockToken);
 					break;
 				}
-				const result: PlatinumBackfillResult =
-					await runPlatinumBackfill(cursor);
+				const result: PlatinumBackfillResult = await runPlatinumBackfill(
+					cursor,
+					lockToken,
+				);
+				lockToken = result.lockToken ?? null;
 				filled.push(...result.filled);
 				skipped.push(...result.skipped);
 				hasTrophyData = result.hasTrophyData;
@@ -192,8 +204,12 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 				message:
 					status === 401
 						? 'PlayStation rejected the token — save a fresh one above, then try again.'
-						: status === 409
-							? 'Set your timezone first — a recovered date is permanent, and without your zone an evening platinum would be dated a day off. Reload Press Start to capture it, then try again.'
+						: // Both 409s carry a message worth reading verbatim: no timezone
+							// (the run would misdate permanently) and another PSN op already
+							// running (the 9.5 single-flight lock).
+							status === 409
+							? (serverMessage(error) ??
+								'Set your timezone first, then try again.')
 							: 'Couldn’t reach PlayStation. Try again later.',
 			});
 			// The server persisted the expired flag — refetch settings so the banner

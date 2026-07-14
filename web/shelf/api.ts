@@ -128,6 +128,17 @@ export async function callApi(
 	return response.json();
 }
 
+/**
+ * The server's own message out of a failed `callApi` (Story 9.5). A 409 from a
+ * PSN op says something the user can ACT on — "a sync is already running" —
+ * which a generic "try again later" throws away.
+ */
+export function serverMessage(error: unknown): string | null {
+	const message = (error as { body?: { error?: unknown } } | undefined)?.body
+		?.error;
+	return typeof message === 'string' && message ? message : null;
+}
+
 async function fetchGames(
 	url: string,
 	signal?: AbortSignal,

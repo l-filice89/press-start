@@ -48,9 +48,12 @@ import { getPsnNpsso, getUserTimeZone, markPsnAuthExpired } from './settings';
  * invocation and D1 binding calls count too. This chunk spends, at worst:
  * 2 exchange legs + 15 detail fetches + 15 UPDATEs = 32, plus the D1 READS this
  * request issues that are NOT in that sum — the auth middleware's session/user
- * lookups, the npsso read, the timezone read and the candidate page (~5-6). Call
- * it ~38 of 50: real headroom, unlike the 45 an earlier count claimed by
- * ignoring the middleware. The probed account has 53 platinum titles — 4 chunks.
+ * lookups, the npsso read, the timezone read and the candidate page (~5-6), plus
+ * the single-flight lock (Story 9.5): 1 claim-or-renew on every chunk, and 1
+ * release on the chunk that ENDS the loop — so 1 mid-loop, 2 on the last. Call
+ * it ~40 of 50:
+ * real headroom, unlike the 45 an earlier count claimed by ignoring the
+ * middleware. The probed account has 53 platinum titles — 4 chunks.
  */
 const CHUNK_SIZE = 15;
 
@@ -105,7 +108,7 @@ export async function runPlatinumBackfill(
 			ok: false,
 			reason: 'no-timezone',
 			message:
-				'Set your timezone before recovering platinum dates — a recovered date is permanent, and without your zone every evening platinum would be dated a day off.',
+				'Set your timezone before recovering platinum dates — a recovered date is permanent, and without your zone every evening platinum would be dated a day off. Reload Press Start to capture it, then try again.',
 		};
 	}
 

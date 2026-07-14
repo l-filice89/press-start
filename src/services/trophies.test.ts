@@ -17,6 +17,7 @@ import { runTrophySync } from './trophies';
 const mocks = vi.hoisted(() => ({
 	fetchTrophyTitles: vi.fn(),
 	listLibraryForUser: vi.fn(),
+	listDiscardedTitleKeys: vi.fn(async () => [] as string[]),
 	setTrophyCountsBatch: vi.fn(),
 }));
 
@@ -27,6 +28,7 @@ vi.mock('../providers', async (importOriginal) => ({
 
 vi.mock('../repositories', () => ({
 	listLibraryForUser: mocks.listLibraryForUser,
+	listDiscardedTitleKeys: mocks.listDiscardedTitleKeys,
 	setTrophyCountsBatch: mocks.setTrophyCountsBatch,
 }));
 

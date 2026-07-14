@@ -1,10 +1,4 @@
-import { createGame } from '../support/factories/game-factory';
-import {
-	deleteGames,
-	deleteSetting,
-	seedGames,
-	seedSetting,
-} from '../support/helpers/d1';
+import { deleteSetting, seedSetting } from '../support/helpers/d1';
 import { expect, test } from '../support/merged-fixtures';
 
 /**
@@ -57,6 +51,27 @@ test('the header gear opens Settings; saving a token flips presence without echo
 	await page.getByRole('button', { name: 'Settings' }).click();
 	await expect(page.getByTestId('psn-npsso-status')).toHaveText(
 		/A token is saved/,
+	);
+});
+
+test('a token carrying a character the Cookie header cannot hold is refused at SAVE (Story 9.5)', {
+	// The 400 IS the flow under test — opt out of the network-error monitor.
+	annotation: [{ type: 'skipNetworkMonitoring' }],
+}, async ({ page }) => {
+	// HTTP headers are Latin1. An emoji (or a smart quote, or a checkmark) pasted
+	// along with the token cannot be encoded into the outbound `Cookie:` at all —
+	// so it must fail HERE, visibly, not silently at sync time as a 502.
+	await page.goto('/');
+	await page.getByRole('button', { name: 'Settings' }).click();
+
+	await page.getByLabel('PlayStation NPSSO token').fill('bad-token😀');
+	await page.getByRole('button', { name: 'Save token' }).click();
+
+	const panel = page.getByTestId('settings-panel');
+	await expect(panel.getByRole('status')).toHaveText(/Saving failed/);
+	// And nothing was stored — presence still reads as empty.
+	await expect(page.getByTestId('psn-npsso-status')).toHaveText(
+		/No token saved yet/,
 	);
 });
 
@@ -201,36 +216,39 @@ test('persisted sync needs-attention feeds the amber banner; Review reopens the 
 	await expect(page.getByTestId('attention-banner-stragglers')).toBeVisible();
 });
 
-test('a game owned via PS+ claim carries the PS+ tag on its card (FR-9 amended)', async ({
+/*
+ * The "a game owned via PS+ claim carries the PS+ tag on its card" test moved to
+ * `epic6.spec.ts`'s serial "Story 6.4 ownership source" group (Story 9.5). It
+ * seeds an `owned_via='membership'` row — and 6.4d's "I cancelled PS+" un-owns
+ * EVERY membership row of the single shared e2e user. That group is serial for
+ * exactly this reason, but serial mode does not cross FILES: from here, in a
+ * parallel worker, the cancel wiped this test's claim mid-assert (it failed on
+ * ~2 of 5 full-suite runs). One file owns the membership rows, as one file owns
+ * the PSN setting keys.
+ */
+
+/*
+ * Moved here from `epic9-trophies.spec.ts` (Story 9.5): the platinum backfill is
+ * one of the three PSN long-ops under the per-user single-flight lock, and this
+ * suite has ONE user — a backfill click in a parallel worker and the FAB sync
+ * below refuse each other with the lock's own 409. Every PSN-op flow belongs in
+ * this serial file.
+ */
+test('Settings carries the platinum-date backfill, and a run with no trophy data says to sync trophies first (9.3)', async ({
 	page,
 }) => {
-	const claimed = createGame({
-		tracking: { owned: true, ownedVia: 'membership', playStatus: 'Playing' },
-	});
-	const bought = createGame({
-		tracking: { owned: true, ownedVia: 'purchase', playStatus: 'Playing' },
-	});
-	try {
-		await seedGames([claimed, bought]);
-		await page.goto('/');
+	// The e2e user has no trophy-synced title at all, so the run has ZERO
+	// candidates: it never calls PSN (unstubbable here) and still has to end in a
+	// readable summary — and "nothing to recover, every platinum is dated" would
+	// be a LIE here: there is nothing to recover FROM until the trophy sync runs.
+	await page.goto('/');
+	await page.getByRole('button', { name: 'Settings' }).click();
 
-		const claimedCard = page
-			.getByTestId('shelf-card')
-			.filter({ hasText: claimed.title });
-		await expect(claimedCard).toBeVisible();
-		await expect(
-			claimedCard.getByTestId('card-owned-via-membership'),
-		).toHaveText(/PS\+/);
+	const button = page.getByTestId('backfill-platinum-dates');
+	await expect(button).toBeVisible();
+	await button.click();
 
-		// A purchase shows the plain OWNED chip — no subscription tag.
-		const boughtCard = page
-			.getByTestId('shelf-card')
-			.filter({ hasText: bought.title });
-		await expect(boughtCard).toBeVisible();
-		await expect(
-			boughtCard.getByTestId('card-owned-via-membership'),
-		).toHaveCount(0);
-	} finally {
-		await deleteGames([claimed.id, bought.id]);
-	}
+	await expect(page.getByTestId('backfill-summary')).toHaveText(
+		/No trophy data yet — run the trophy sync first/,
+	);
 });

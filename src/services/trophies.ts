@@ -19,6 +19,7 @@ import {
 	type PsnTrophyTitle,
 } from '../providers';
 import {
+	listDiscardedTitleKeys,
 	listLibraryForUser,
 	setTrophyCountsBatch,
 	type TrophyCountsWrite,
@@ -112,10 +113,20 @@ export async function runTrophySync(
 		throw error;
 	}
 
-	const [today, library] = await Promise.all([
+	const [today, library, discardedKeys] = await Promise.all([
 		todayForUser(db, userId),
 		listLibraryForUser(db, userId),
+		// `listLibraryForUser` hides discarded games, so without this their trophy
+		// titles would fall through to "unmatched" — noise on every run for games
+		// the user threw away (Story 9.5).
+		listDiscardedTitleKeys(db, userId),
 	]);
+	// Both keyings: the STORED normalized title, and the trophy-side key it would
+	// collapse to — a discarded game called "Blood Trophies" is stored as "blood
+	// trophies", while PSN's title for it keys to "blood" (the suffix strip).
+	const discarded = new Set(
+		discardedKeys.flatMap((key) => [key, trophyTitleToMatchKey(key)]),
+	);
 
 	// Bucket by the STORED normalized title — the same key `services/sync.ts`
 	// matches a PSN name on, so the two syncs cannot drift. The " Trophies"
@@ -140,6 +151,9 @@ export async function runTrophySync(
 	for (const [key, title] of collapseByMatchKey(titles)) {
 		const matches = gamesByKey.get(key) ?? [];
 		if (matches.length === 0) {
+			// A DISCARDED game matched — silently. It is not unmatched: the user threw
+			// it away, and the tombstone must stay invisible (no write, no report).
+			if (discarded.has(key)) continue;
 			result.unmatched.push(title.trophyTitleName);
 			continue;
 		}

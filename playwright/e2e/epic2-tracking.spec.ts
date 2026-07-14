@@ -39,9 +39,16 @@ async function openStatusMenu(page: Page, game: SeedGame) {
 	// Our page only refetches on its own writes, so network quiescence is a
 	// deterministic gate: after networkidle nothing is pending, no commit can
 	// race the click.
+	// …and under FULL-SUITE load (Story 9.5, measured across 15 runs) even that is
+	// not enough: the shelf commits on its own cache invalidations too, so a click
+	// can still land in a mid-commit DOM and be swallowed — the button it hit is
+	// no longer in the tree, and the menu never opens. Re-CLICK rather than wait
+	// longer: waiting cannot deliver an event that was already dropped.
 	await page.waitForLoadState('networkidle');
-	await pill.click();
-	await expect(menu).toBeVisible();
+	await expect(async () => {
+		await pill.click();
+		await expect(menu).toBeVisible({ timeout: 2_000 });
+	}).toPass({ timeout: 20_000 });
 	return { pill, menu };
 }
 

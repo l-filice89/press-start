@@ -143,6 +143,13 @@ export const platinumBackfillResultSchema = z.object({
 	nextCursor: z.string().nullable(),
 	/** False = the trophy sync has never run — there is nothing to recover FROM. */
 	hasTrophyData: z.boolean(),
+	/**
+	 * The single-flight lock this loop holds (Story 9.5). Present while the loop
+	 * continues; hand it back with the next chunk to RENEW it. It is a capability,
+	 * not a cursor — the cursor is a game id the server published, so the lock
+	 * cannot key on it. Absent on a `partial` report (the failure released it).
+	 */
+	lockToken: z.string().nullable().optional(),
 });
 
 export type PlatinumBackfillResult = z.infer<
@@ -157,11 +164,31 @@ export type PlatinumBackfillResult = z.infer<
  */
 export async function runPlatinumBackfill(
 	cursor: string | null,
+	lockToken?: string | null,
 ): Promise<PlatinumBackfillResult> {
-	const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+	const query = new URLSearchParams();
+	if (cursor) query.set('cursor', cursor);
+	// Proof this loop already holds the lock — without it a continuation is
+	// treated as a fresh run and refused while someone else is syncing.
+	if (cursor && lockToken) query.set('lockToken', lockToken);
+	const suffix = query.size > 0 ? `?${query}` : '';
 	return platinumBackfillResultSchema.parse(
-		await callApi(`/api/backfill/platinum-dates${query}`, { method: 'POST' }),
+		await callApi(`/api/backfill/platinum-dates${suffix}`, { method: 'POST' }),
 	);
+}
+
+/**
+ * Hand the single-flight lock back when the loop stops WITHOUT finishing (the
+ * chunk brake): the server releases only on the chunk that ends the loop, so an
+ * abandoned run would keep refusing the user's next sync — with a message that
+ * is no longer true — until its TTL. Best-effort: a failure here is survivable
+ * (the TTL still clears it), so it never surfaces.
+ */
+export async function releaseBackfillLock(lockToken: string): Promise<void> {
+	await callApi(
+		`/api/backfill/platinum-dates?release=1&lockToken=${encodeURIComponent(lockToken)}`,
+		{ method: 'POST' },
+	).catch(() => undefined);
 }
 
 /**

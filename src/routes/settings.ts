@@ -55,23 +55,22 @@ function unwrapNpsso(raw: string): string {
 		.trim();
 }
 
-// The unwrapped value goes verbatim into an outbound Cookie header (the
-// provider exchanges it as `npsso=<value>`), so this is a trust boundary: the
-// charset guard runs on the FINAL value and refuses anything that could smuggle
-// extra cookie pairs or break the header — semicolons, commas, whitespace,
-// control characters.
+// The unwrapped value goes verbatim into an outbound Cookie header (the provider
+// exchanges it as `npsso=<value>`), so this is a trust boundary. Story 9.5 turned
+// the old blocklist into RFC 6265's `cookie-octet` ALLOWLIST — the exact bytes a
+// cookie value may carry. It is airtight where a blocklist kept leaking: it drops
+// `;` `,` `"` `\` and whitespace (pair smuggling / header breaking), every C0 AND
+// C1 control (the blocklist missed U+0080–U+009F, which are Latin1-encodable, so
+// the header would happily carry them), and everything non-ASCII — an emoji or a
+// smart quote pasted along with the token can't be encoded into a header at all
+// and used to throw at fetch time, i.e. a 502 mid-sync instead of a 400 at save.
+const COOKIE_OCTET = /^[\x21\x23-\x2b\x2d-\x3a\x3c-\x5b\x5d-\x7e]+$/;
+
 const psnNpssoBodySchema = z.object({
 	npsso: z
 		.string()
 		.transform(unwrapNpsso)
-		.pipe(
-			z
-				.string()
-				.min(1)
-				.max(4096)
-				// biome-ignore lint/suspicious/noControlCharactersInRegex: rejecting control characters is the point — they would corrupt the outbound Cookie header.
-				.regex(/^[^;,\s\x00-\x1f\x7f]+$/),
-		),
+		.pipe(z.string().min(1).max(4096).regex(COOKIE_OCTET)),
 });
 
 type SettingsEnv = { Bindings: Env; Variables: AuthVariables };

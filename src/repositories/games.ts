@@ -287,3 +287,25 @@ export async function listLibraryForUser(
 			and(eq(gameTracking.userId, userId), eq(gameTracking.discarded, false)),
 		);
 }
+
+/**
+ * The normalized titles of this user's DISCARDED games (Story 9.5). The mirror
+ * image of `listLibraryForUser`'s filter: the trophy sync matches PSN titles
+ * against the visible library, so a discarded game's trophy title matched
+ * nothing and was reported as "unmatched" — noise, on every single run, for a
+ * game the user deliberately threw away. It did not fail to match; it matched
+ * something hidden. The trophy sync uses this to drop those titles SILENTLY.
+ */
+export async function listDiscardedTitleKeys(
+	db: Db,
+	userId: string,
+): Promise<string[]> {
+	const rows = await db
+		.select({ titleNormalized: game.titleNormalized })
+		.from(gameTracking)
+		.innerJoin(game, eq(gameTracking.gameId, game.id))
+		.where(
+			and(eq(gameTracking.userId, userId), eq(gameTracking.discarded, true)),
+		);
+	return rows.map((r) => r.titleNormalized).filter((t): t is string => !!t);
+}

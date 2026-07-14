@@ -231,6 +231,31 @@ describe('Fab', () => {
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
+	it('a 409 from the single-flight lock (Story 9.5) toasts the SERVER’s message, not a generic failure', async () => {
+		const { release } = deferredFetch(() =>
+			Promise.resolve(
+				new Response(
+					JSON.stringify({
+						error:
+							'A PlayStation sync is already running for your account — let it finish, then try again.',
+					}),
+					{ status: 409 },
+				),
+			),
+		);
+		renderFab();
+
+		await userEvent.click(screen.getByRole('button', { name: 'Chores' }));
+		await userEvent.click(screen.getByTestId('fab-trophy-sync'));
+		release();
+
+		// "Trophy sync failed — try again later." would hide the one thing the user
+		// can act on: something of theirs is already running.
+		await waitFor(() =>
+			expect(screen.getByTestId('toast')).toHaveTextContent(/already running/),
+		);
+	});
+
 	it('a failed PS+ check toasts', async () => {
 		const { release } = deferredFetch(() =>
 			Promise.resolve(

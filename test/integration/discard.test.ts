@@ -12,6 +12,7 @@ import {
 import { createDb } from '../../src/repositories/db';
 import { user } from '../../src/schema';
 import { PSN_NPSSO_SETTING_KEY } from '../../src/services/settings';
+import { PSN_LIBRARY_HOST, stubPsnFetch } from './psn-stub';
 import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
 
 /**
@@ -43,47 +44,19 @@ async function shelfTitles(cookie: string): Promise<string[]> {
 	return games.map((g) => g.title);
 }
 
-// Stub the outbound PSN call only (same technique as sync.test.ts).
-const realFetch = globalThis.fetch;
+// Stub the outbound PSN library call; the exchange comes from the shared double.
 function stubPsn(games: Record<string, unknown>[]) {
-	vi.stubGlobal(
-		'fetch',
-		async (input: RequestInfo | URL, init?: RequestInit) => {
-			const url = String(input instanceof Request ? input.url : input);
-			// The NPSSO→bearer exchange the provider runs before the library call.
-			if (
-				url.startsWith(
-					'https://ca.account.sony.com/api/authz/v3/oauth/authorize',
+	stubPsnFetch((url) =>
+		url.startsWith(PSN_LIBRARY_HOST)
+			? new Response(
+					JSON.stringify({
+						data: {
+							purchasedTitlesRetrieve: { games, pageInfo: { isLast: true } },
+						},
+					}),
+					{ status: 200, headers: { 'content-type': 'application/json' } },
 				)
-			) {
-				return new Response(null, {
-					status: 302,
-					headers: {
-						location:
-							'com.scee.psxandroid.scecompcall://redirect?code=test-auth-code',
-					},
-				});
-			}
-			if (
-				url.startsWith('https://ca.account.sony.com/api/authz/v3/oauth/token')
-			) {
-				return new Response(JSON.stringify({ access_token: 'test-bearer' }), {
-					status: 200,
-					headers: { 'content-type': 'application/json' },
-				});
-			}
-			if (!url.startsWith('https://web.np.playstation.com/')) {
-				return realFetch(input, init);
-			}
-			return new Response(
-				JSON.stringify({
-					data: {
-						purchasedTitlesRetrieve: { games, pageInfo: { isLast: true } },
-					},
-				}),
-				{ status: 200, headers: { 'content-type': 'application/json' } },
-			);
-		},
+			: undefined,
 	);
 }
 

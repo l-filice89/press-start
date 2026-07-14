@@ -18,6 +18,7 @@ import {
 	PSN_NPSSO_SETTING_KEY,
 	readSyncAttention,
 } from '../../src/services/settings';
+import { PSN_LIBRARY_HOST, stubPsnFetch } from './psn-stub';
 import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
 
 /**
@@ -42,52 +43,28 @@ const psn = (over: Record<string, unknown> = {}) => ({
 });
 
 /**
- * Stub the outbound PSN calls only — both the NPSSO→bearer exchange
- * (ca.account.sony.com) and the GraphQL library call. These tests run in the
- * same isolate as the Worker under vitest-pool-workers, so the provider's
- * global `fetch` is this one; every other URL passes through to the real fetch.
+ * Stub the outbound GraphQL library call; the NPSSO→bearer exchange comes from
+ * the shared double (`psn-stub.ts`). These tests run in the same isolate as the
+ * Worker under vitest-pool-workers, so the provider's global `fetch` is this
+ * one; every other URL passes through to the real fetch.
  */
-const realFetch = globalThis.fetch;
 function stubPsn(games: Record<string, unknown>[], status = 200) {
-	vi.stubGlobal(
-		'fetch',
-		async (input: RequestInfo | URL, init?: RequestInit) => {
-			const url = String(input instanceof Request ? input.url : input);
-			if (
-				url.startsWith(
-					'https://ca.account.sony.com/api/authz/v3/oauth/authorize',
+	stubPsnFetch((url) =>
+		url.startsWith(PSN_LIBRARY_HOST)
+			? new Response(
+					status === 200
+						? JSON.stringify({
+								data: {
+									purchasedTitlesRetrieve: {
+										games,
+										pageInfo: { isLast: true },
+									},
+								},
+							})
+						: '{}',
+					{ status, headers: { 'content-type': 'application/json' } },
 				)
-			) {
-				return new Response(null, {
-					status: 302,
-					headers: {
-						location:
-							'com.scee.psxandroid.scecompcall://redirect?code=test-auth-code',
-					},
-				});
-			}
-			if (
-				url.startsWith('https://ca.account.sony.com/api/authz/v3/oauth/token')
-			) {
-				return new Response(JSON.stringify({ access_token: 'test-bearer' }), {
-					status: 200,
-					headers: { 'content-type': 'application/json' },
-				});
-			}
-			if (!url.startsWith('https://web.np.playstation.com/')) {
-				return realFetch(input, init);
-			}
-			return new Response(
-				status === 200
-					? JSON.stringify({
-							data: {
-								purchasedTitlesRetrieve: { games, pageInfo: { isLast: true } },
-							},
-						})
-					: '{}',
-				{ status, headers: { 'content-type': 'application/json' } },
-			);
-		},
+			: undefined,
 	);
 }
 

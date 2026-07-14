@@ -405,13 +405,43 @@ describe('SettingsPanel', () => {
 	});
 
 	it('refuses the run without a timezone and says to set one (hazard: a UTC-guessed date is permanent)', async () => {
-		mockBackfill([], 409);
+		// The 409 body carries the server's own copy — shown verbatim, because the
+		// server knows WHICH refusal this is (no timezone, or the 9.5 lock).
+		mockBackfill([
+			{
+				status: 409,
+				body: {
+					error:
+						'Set your timezone before recovering platinum dates — a recovered date is permanent, and without your zone every evening platinum would be dated a day off. Reload Press Start to capture it, then try again.',
+				},
+			},
+		]);
 		renderPanel();
 
 		await userEvent.click(screen.getByTestId('backfill-platinum-dates'));
 		await waitFor(() =>
 			expect(screen.getByTestId('backfill-summary')).toHaveTextContent(
-				/Set your timezone first/,
+				/Set your timezone before recovering platinum dates/,
+			),
+		);
+	});
+
+	it('surfaces the single-flight refusal (Story 9.5) — not a generic failure', async () => {
+		mockBackfill([
+			{
+				status: 409,
+				body: {
+					error:
+						'A PlayStation sync is already running for your account — let it finish, then try again.',
+				},
+			},
+		]);
+		renderPanel();
+
+		await userEvent.click(screen.getByTestId('backfill-platinum-dates'));
+		await waitFor(() =>
+			expect(screen.getByTestId('backfill-summary')).toHaveTextContent(
+				/already running/,
 			),
 		);
 	});

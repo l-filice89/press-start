@@ -11,6 +11,7 @@ import {
 	type SyncResult,
 	type TrophySyncResult,
 } from '../settings/api';
+import { serverMessage } from '../shelf/api';
 import './fab.css';
 
 /**
@@ -66,7 +67,11 @@ export function Fab({
 				});
 				queryClient.invalidateQueries({ queryKey: ['settings'] });
 			} else {
-				toast({ message: 'Sync failed — try again later.' });
+				// 409 = another PSN op holds the single-flight lock (9.5): the server's
+				// message says so, and "try again later" would hide why.
+				toast({
+					message: serverMessage(error) ?? 'Sync failed — try again later.',
+				});
 			}
 		},
 		onSettled: () => setOpen(false),
@@ -109,7 +114,10 @@ export function Fab({
 				});
 				queryClient.invalidateQueries({ queryKey: ['settings'] });
 			} else {
-				toast({ message: 'Trophy sync failed — try again later.' });
+				toast({
+					message:
+						serverMessage(error) ?? 'Trophy sync failed — try again later.',
+				});
 			}
 		},
 		onSettled: () => setOpen(false),

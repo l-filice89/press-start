@@ -349,16 +349,19 @@ resolution: spike complete; the table above IS the deliverable. Firm: NPSSO gate
   summary: Playwright 6.4a ("Claimed with PS+" writes owned_via=membership) flakes under full-suite load — the test asserts the D1 row right after the dialog closes, without waiting on the ownership PUT to land.
   evidence: PRE-EXISTING, not caused by 9.1b — reproduced on the baseline commit (7b2d979) with the story's changes stashed: 1 of 2 full `bun run test:e2e` runs failed the same test the same way. Passes in isolation and with --repeat-each 3. Fix is to await the write (response or a UI settle) before querying D1.
   decision: 2026-07-14 (Epic 9 retro) Homed in Story 9.5 — investigate and fix (Luca's call: fixed here, not carried), with the full suite green 3x consecutively as the bar. Gates the main merge.
+  resolution: fixed 2026-07-14 (Story 9.5) — 6.4a now awaits the owned toast (the mutation's onSuccess, i.e. the write's completion signal) before reading D1, as its "Purchased" sibling already did. Holding the WHOLE suite green 3x forced two MORE pre-existing races out of hiding, both fixed at the root: epic6's "I cancelled PS+" bulk-un-owns every membership row of the shared e2e user and was wiping a claim epic4-settings seeded in a parallel worker (serial mode does not cross files — that test moved into epic6's serial group), and `openStatusMenu`'s pill click could land in a mid-commit DOM and be dropped (the helper re-clicks). Local Playwright workers capped at 4: the default put TEN chromium workers on one vite+workerd+D1. Suite: 88/88, three consecutive runs.
 
 - source_spec: `spec-9-1b-swap-psnprovider-cookie-to-npsso-bearer-vr-1.md`
   summary: The NPSSO→bearer exchange stub is copy-pasted verbatim into `test/integration/sync.test.ts` and `test/integration/discard.test.ts`.
   evidence: Two places to update when the exchange shape moves; both would keep passing against a stale shape while production breaks. Extract one shared helper next time either is touched.
   decision: 2026-07-14 (Epic 9 retro) Homed in Story 9.5 — post-retro hardening sweep, carried as an AC. Gates the main merge.
+  resolution: fixed 2026-07-14 (Story 9.5) — `test/integration/psn-stub.ts` is now the ONE exchange double; sync, discard, trophies and backfill (four suites, not two) consume it and their copies are gone.
 
 - source_spec: `spec-9-1b-swap-psnprovider-cookie-to-npsso-bearer-vr-1.md`
   summary: The npsso charset guard in `src/routes/settings.ts` admits non-Latin1 codepoints, which the outbound Cookie header cannot carry.
   evidence: Such a value saves fine, then fails at `fetch` with a TypeError → a 502 at sync time instead of a 400 at save time. Fails closed (no injection, no bad write), so it is a diagnosability nit, not a security hole.
   decision: 2026-07-14 (Epic 9 retro) Homed in Story 9.5 — refuse it at save time with a 400. Gates the main merge.
+  resolution: fixed 2026-07-14 (Story 9.5) — the guard is now RFC 6265's `cookie-octet` ALLOWLIST, refused at SAVE with a 400. Review caught that the first cut (a "nothing above U+00FF" bound) still admitted the C1 control block (U+0080–U+009F), which is Latin1-encodable; the allowlist drops every control, all non-ASCII, and `;` `,` `"` `\` in one expression.
 
 - source_spec: `spec-9-2-trophy-progress-on-every-game-vr-2.md`
   summary: Trophy counts are never cleared or aged — a game whose trophy title stops matching PSN keeps its last-synced "62% · B" forever, and the UI never shows how old the numbers are (`trophy_synced_at` is stored but never read).
@@ -369,6 +372,7 @@ resolution: spike complete; the table above IS the deliverable. Firm: NPSSO gate
   summary: `Db` now types a `batch` method, but the seed script's sqlite-proxy driver is built without a batch callback — any future repository function that batches and is reused by the seed path fails at RUNTIME, not compile time.
   evidence: `src/repositories/db.ts` widens the type; `scripts/seed-import.ts` calls `drizzle(callback, { schema })` with no batch callback. Harmless today (the seed path never calls `setTrophyCountsBatch`), a trap tomorrow.
   decision: 2026-07-14 (Epic 9 retro) Homed in Story 9.5 — supply the batch callback (or stop the type promising one) so the failure is at COMPILE time, never runtime. Gates the main merge.
+  resolution: fixed 2026-07-14 (Story 9.5) — `createHttpDb` supplies drizzle's batch callback, and `scripts/` is now a `tsc` project (`tsconfig.scripts.json`, referenced from `tsconfig.json`), so the `Db` promise is checked at COMPILE time. ponytail ceiling recorded in the code: the callback runs the statements sequentially, so it satisfies the TYPE but not atomicity — a repository function that batches for all-or-nothing would half-apply from the seed path.
 
 - source_spec: `spec-9-2-trophy-progress-on-every-game-vr-2.md`
   summary: No e2e test drives the FAB -> trophy sync -> shelf-repaint seam end to end, because PSN cannot be stubbed in the Playwright environment.
@@ -379,6 +383,7 @@ resolution: spike complete; the table above IS the deliverable. Firm: NPSSO gate
   summary: A discarded game's trophy title is reported as "no library match" noise on every trophy sync, and two trophy syncs in flight for the same user are not locked (same posture as the library sync).
   evidence: `listLibraryForUser` excludes discarded rows, so their trophy titles fall into `unmatched`; the FAB disable is per-component only. Both are cosmetic / pre-existing-pattern, not data hazards.
   decision: 2026-07-14 (Epic 9 retro) BOTH halves homed in Story 9.5. Discarded-game noise: match discarded rows too and drop them SILENTLY — they are not unmatched, they matched a game the user threw away. Locking: folded into the single-flight guard AC, which covers all three PSN long-ops (library sync, trophy sync, backfill) rather than just this one — Dana's point, that "same as the existing pattern" had been the justification for three epics running.
+  resolution: fixed 2026-07-14 (Story 9.5) — the trophy sync now reads the user's discarded normalized titles (`listDiscardedTitleKeys`) and drops a matching trophy title SILENTLY: neither `updated` nor `unmatched`, no write. Both keyings are covered (the stored title and the trophy-side " Trophies"-stripped key). The locking half is the single-flight guard below.
 
 - source_spec: `spec-9-3-one-off-backfill-recover-the-platinum-dates-psn-knows-vr-3.md`
   summary: Trophy rows written by story 9.2 before migration 0008 carry no `trophy_np_service_name`, so the backfill falls back to `trophy2` for them — a PS4-era title in that state 404s into a per-title skip until the trophy sync is re-run.
@@ -389,6 +394,7 @@ resolution: spike complete; the table above IS the deliverable. Firm: NPSSO gate
   summary: Two concurrent backfill runs (two tabs) are not locked, and neither is the trophy sync.
   evidence: The COALESCE write makes the duplicate write a no-op, so no data is corrupted — but both loops report the same dates as "filled" and the PSN fan-out is doubled. Same posture as the existing library sync; a single-flight guard would cover all three.
   decision: 2026-07-14 (Epic 9 retro) Homed in Story 9.5 — Luca: "Add guard". One single-flight guard across ALL THREE PSN long-ops (library sync, trophy sync, backfill), not a per-sync patch; a second concurrent run is refused with a human message. Deferred since Epic 4; gates the main merge.
+  resolution: fixed 2026-07-14 (Story 9.5) — one per-user lock (a `setting` row, value `<expiry>:<op>:<uuid>`) covers all three PSN long-ops; a second run is refused with a 409 and a human message and makes NO PSN call. The claim is ONE SQL statement (an upsert whose DO UPDATE branch fires only on an expired lock — or on the exact held token, the backfill's cross-request renewal path — with RETURNING naming the winner), because a read-then-write acquire is the very race being closed. Review found the first cut treated the backfill's CURSOR as proof of ownership, which made the refusal bypassable with `?cursor=anything` (it would overwrite a running sync's lock); the capability is now a rotating token the server hands back, and both the forgery and the renewal paths are pinned in `psn-lock.test.ts`. Known ceiling, recorded in the code: the 2-minute TTL is preemption without a fence — a run still alive after it can be taken over (worst case is the pre-9.5 doubled fan-out, not corruption, since every write is idempotent/COALESCE).
 
 ### DW-10 extension (Story 9.1c, 2026-07-14): wishlist reachable under NEITHER credential — Story 9.4 dropped to Future
 
@@ -413,3 +419,12 @@ resolution: Wishlist reachable under NEITHER credential from the app's server-to
 - source_spec: `spec-fab-menu-trophy-icon-mobile-labels.md`
   summary: The card's platinum badge uses a fixed `data-testid="platinum-trophy"`, so a test doing `getByTestId('platinum-trophy')` in a render with 2+ platinum cards would throw on multiple matches.
   evidence: PRE-EXISTING (the card carried this id before the icon was extracted; behaviour unchanged). No code or test currently does a singular `getByTestId` in a multi-card context — `Card.test.tsx` renders one card — so it is latent, not a live failure. If a future full-app test needs it, key by game id or use `getAllByTestId`.
+
+- source_spec: `spec-9-5-post-retro-hardening-sweep.md`
+  summary: An abandoned platinum-backfill loop (tab closed, or the client's 40-chunk brake trips) leaves the single-flight lock held until its 2-minute TTL, so the user's next sync is refused with the busy message.
+  evidence: `src/routes/sync.ts` releases the lock only when the loop ENDS (last chunk or a failure); a client that simply stops looping has no release call and no `beforeunload` best-effort. Self-healing within the TTL, and the busy message says so — but a stopped-early run (600+ candidates) makes it deterministic. A `DELETE /api/backfill/platinum-dates/lock` presenting the token, called from the brake and on unmount, would close it.
+
+- source_spec: `spec-9-5-post-retro-hardening-sweep.md`
+  summary: `listDiscardedTitleKeys` is a second full user-scoped join per trophy sync, one row-set away from the `listLibraryForUser` scan that just ran.
+  evidence: `src/repositories/games.ts` — both select the same user's `game_tracking ⋈ game`, differing only on the `discarded` flag. One query selecting `discarded` and partitioned in JS would be one D1 binding call instead of two, and binding calls count against the 50-subrequest budget the backfill's chunk size is busy defending. Not a hazard today (the trophy sync's budget has headroom); a cleanup when that file is next touched.
+
