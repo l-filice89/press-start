@@ -190,7 +190,7 @@ _From `DESIGN.md` (visual identity) and `EXPERIENCE.md` (behavior). Both spines 
 - **UX-DR7** — Status pill: shows effective state; tap opens the status popover.
 - **UX-DR8** — Status popover: menu anchored to the pill (flips above/below to stay on-screen) with 5 play statuses (instant, no confirm) + 2 milestone rows (confirm-gated); menu ARIA semantics, arrow traversal, Escape closes and returns focus to the pill.
 - **UX-DR9** — Filter row: State multiselect dropdown, Genre multiselect dropdown, Flags solid toggle pills, State-reveal dashed pills; solid = narrow (AND), dashed = reveal hidden state; a live plain-English summary sentence (OR-connectors in glow-cyan, AND-connectors in heat-magenta); active pills glow.
-- **UX-DR10** — FAB + upward drawer: electric-blue launcher, bottom-right by default (configurable to bottom-left), opening chores (Sync library · Check PS+ Extra · Export CSV · Settings · About/Help); icons-only mobile, icons+text desktop; no Add here.
+- **UX-DR10** — FAB + upward drawer: electric-blue launcher, bottom-right by default (configurable to bottom-left), opening chores (Sync library · Check PS+ Extra · Sync trophies · Export CSV · Settings · About/Help); icons+text on all sizes (revised 2026-07-14 — icons-only on mobile was too unclear); no Add here.
 - **UX-DR11** — Attention banner: full-width under-header notice zone, shown only when action is needed, persistent until cleared; amber (stragglers), magenta (expired cookie), steel (failed refresh); self-clears when the condition resolves.
 - **UX-DR12** — Toast: transient bottom, `surface-raised` cyan-edged, ~3s auto-dismiss; UNDO variant for reversible risky actions (mark Dropped, un-own).
 - **UX-DR13** — Summary modal: post-op readout (sync/import/PS+), `surface-raised` with glow-ring; counts + needs-attention + a button jumping to the problem.
@@ -212,7 +212,7 @@ _From `DESIGN.md` (visual identity) and `EXPERIENCE.md` (behavior). Both spines 
 
 **Responsive & platform**
 
-- **UX-DR26** — Responsive deltas: phone (2-up lean card, genres hidden, single Filters button + count → bottom sheet, icons-only FAB, full-screen detail, compact header "175 · 52 OWNED") vs desktop (auto-fill dense grid, full filter row + inline summary sentence, icons+text FAB, ~760px detail panel, full header with `PS+ CATALOG AS OF …` timestamp).
+- **UX-DR26** — Responsive deltas: phone (2-up lean card, genres hidden, single Filters button + count → bottom sheet, icons+text FAB [revised 2026-07-14 — was icons-only], full-screen detail, compact header "175 · 52 OWNED") vs desktop (auto-fill dense grid, full filter row + inline summary sentence, icons+text FAB, ~760px detail panel, full header with `PS+ CATALOG AS OF …` timestamp).
 - **UX-DR27** — PWA: installable, home-screen icon; no offline requirement; when the games DB is unreachable, add-by-name falls back to a name-only entry landing in stragglers.
 
 ### FR Coverage Map

@@ -400,3 +400,7 @@ reason: S-1 (DW-10) left the wishlist's persisted-query hash and auth path open;
 
 status: done 2026-07-14
 resolution: Wishlist reachable under NEITHER credential from the app's server-to-server position — the only working path is Sony's server-side persisted manifest, not client-observable and not obtainable by the Worker. Per Story 9.1c's contract and Story 9.4's first AC, **Story 9.4 is removed from Epic 9 and filed to Future.** Epic 9 ships with 9.1b + 9.2 + 9.3. Future revisit: if PSN re-exposes a client-side wishlist fetch, or publishes a REST wishlist endpoint, capture the hash then and restore 9.4.
+
+- source_spec: `spec-fab-menu-trophy-icon-mobile-labels.md`
+  summary: The card's platinum badge uses a fixed `data-testid="platinum-trophy"`, so a test doing `getByTestId('platinum-trophy')` in a render with 2+ platinum cards would throw on multiple matches.
+  evidence: PRE-EXISTING (the card carried this id before the icon was extracted; behaviour unchanged). No code or test currently does a singular `getByTestId` in a multi-card context — `Card.test.tsx` renders one card — so it is latent, not a live failure. If a future full-app test needs it, key by game id or use `getAllByTestId`.

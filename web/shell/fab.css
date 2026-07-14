@@ -52,6 +52,15 @@
 	font: inherit;
 	font-family: var(--font-ui);
 	cursor: pointer;
+	/* Now that labels show on every width, keep a long pill inside the viewport
+	   on the narrowest phones — ellipsize the label rather than overflow. */
+	max-width: calc(100vw - 2 * var(--space-4));
+}
+
+.fab__item-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .fab__item:disabled {
@@ -88,13 +97,9 @@
 	}
 }
 
-/* Phone delta: icons only (EXPERIENCE.md FAB row). */
+/* Phone delta: items keep icon + text (unclear icons-only on small screens);
+   just keep the drawer clear of the bottom-pinned search bar. */
 @media (max-width: 600px) {
-	.fab__item-label {
-		display: none;
-	}
-
-	/* keep clear of the bottom-pinned search bar */
 	.fab {
 		bottom: calc(var(--space-4) + 64px);
 	}

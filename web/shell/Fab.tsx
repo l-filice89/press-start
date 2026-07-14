@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useAnnounce } from '../components/LiveRegion';
+import { PlatinumTrophy } from '../components/PlatinumTrophy';
 import { useToast } from '../components/Toast';
 import {
 	type PsPlusCheckResult,
@@ -17,7 +18,7 @@ import './fab.css';
  * bottom-right toggle opening an upward item list. Need-scoped — Sync (4.2)
  * and Check PS+ Extra (5.1); Epic 6 adds its own (export, settings, about).
  * Long-op items show a spinner while running (UX-DR10). Escape and
- * outside-click close the drawer; icons-only on phone, icons+text desktop.
+ * outside-click close the drawer; every item shows icon + text on all sizes.
  */
 export function Fab({
 	onSyncComplete,
@@ -221,10 +222,10 @@ export function Fab({
 									data-testid="fab-trophy-spinner"
 								/>
 							) : (
-								// A monochrome text glyph, like every other item: the trophy
-								// emoji renders full-color gold and reads flat against the
-								// neon-outline language (same reason Card.tsx strokes an SVG).
-								'★'
+								// The app's own platinum trophy mark, shared with the card's
+								// platinum badge — a stroke-only SVG that reads as neon
+								// outline rather than the flat full-color emoji.
+								<PlatinumTrophy />
 							)}
 						</span>
 						<span className="fab__item-label">

@@ -86,6 +86,22 @@ describe('Fab', () => {
 		expect(screen.queryByTestId('fab-drawer')).not.toBeInTheDocument();
 	});
 
+	it('shows the trophy item with the shared platinum SVG and its text label, without the card testid', async () => {
+		renderFab();
+		await userEvent.click(screen.getByRole('button', { name: 'Chores' }));
+
+		const trophyItem = screen.getByTestId('fab-trophy-sync');
+		// The item carries the app's stroke-only trophy mark (the shared SVG).
+		expect(trophyItem.querySelector('svg')).toBeInTheDocument();
+		// But NOT the card's testid — only the card owns `platinum-trophy`, so a
+		// full-app render never ends up with two of that id.
+		expect(
+			trophyItem.querySelector('[data-testid="platinum-trophy"]'),
+		).toBeNull();
+		// The text label is present (shown on every viewport, mobile included).
+		expect(trophyItem).toHaveTextContent('Sync trophies');
+	});
+
 	it('shows a spinner while the sync runs, then hands the result to the summary and invalidates', async () => {
 		const { release } = deferredFetch(okResult);
 		const { invalidate, onSyncComplete } = renderFab();
