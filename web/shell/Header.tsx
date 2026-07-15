@@ -1,6 +1,7 @@
 import { type ReactNode, useRef } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { formatDisplayDate } from '../date';
+import { useActiveDestination } from '../shelf/detail-navigation';
 import { Wordmark } from './Wordmark';
 import './header.css';
 
@@ -25,9 +26,13 @@ const DESTINATIONS = [
  */
 function DestinationToggle() {
 	const navigate = useNavigate();
-	const { pathname } = useLocation();
+	// The destination BEHIND an open detail, not the detail's own path: a detail
+	// opened from the catalog would otherwise highlight SHELF, because `/game/:id`
+	// is neither destination's path. A COLD `/game/:id` has no background and falls
+	// back to SHELF — today's behavior, and the honest one (the shelf is what
+	// renders behind it).
+	const { pathname } = useActiveDestination();
 	const refs = useRef<(HTMLAnchorElement | null)[]>([]);
-	// `/game/:id` is a detail over the SHELF — the toggle keeps reading SHELF.
 	const activeIndex = pathname.startsWith('/catalog') ? 1 : 0;
 
 	return (

@@ -271,8 +271,28 @@ test('add from the catalog: the Epic 6 preview opens, Save lands on /game/:id, a
 		await expect(page).toHaveURL(/\/game\/[0-9a-f-]+$/);
 		await expect(page.getByRole('dialog', { name })).toBeVisible();
 
-		// Back on the catalog: In library, no Add — and Claim now STILL LIVE. It is
-		// on the shelf as a wishlist entry; nothing was claimed on the PSN account.
+		// The detail surfaces OVER THE DESTINATION YOU ADDED FROM: the catalog is
+		// still the thing behind it, and no shelf was ever mounted. `/game/:id` used
+		// to hardcode the shelf there, so this add tore the catalog down and flashed
+		// the shelf in behind the dialog.
+		await expect(page.getByTestId('catalog-grid')).toBeVisible();
+		await expect(page.getByTestId('shelf-grid')).toHaveCount(0);
+
+		// …and Close lands back on the CATALOG, not the shelf. The shipped test
+		// jumped straight to a fresh `page.goto('/catalog')` — which is exactly how
+		// this shipped: it never pressed the button that was broken.
+		await page.getByRole('button', { name: 'Close details' }).click();
+		await expect(page.getByRole('dialog')).toHaveCount(0);
+		await expect(page).toHaveURL(/\/catalog$/);
+		// `exact` — the card's own "Claim <name> on the PlayStation Store" link is a
+		// link whose accessible name also contains "catalog" (the seeded titles do).
+		await expect(
+			page.getByRole('link', { name: 'CATALOG', exact: true }),
+		).toHaveAttribute('aria-current', 'page');
+
+		// In library, no Add — and Claim now STILL LIVE. It is on the shelf as a
+		// wishlist entry; nothing was claimed on the PSN account. Re-read from a cold
+		// load too: the marker must come from the server, not an optimistic grid.
 		await page.goto('/catalog');
 		const card = catalogCards(page).filter({ hasText: name });
 		await expect(card.getByTestId('catalog-in-library')).toBeVisible();

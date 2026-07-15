@@ -6,6 +6,7 @@ import { useAnnounce } from '../components/LiveRegion';
 import { SkeletonGrid } from '../components/Skeleton';
 import { fetchShelf, type ShelfGame } from './api';
 import { Card } from './Card';
+import { toDetail, useActiveDestination } from './detail-navigation';
 import { FilterRow } from './FilterRow';
 import {
 	applyShelfFilter,
@@ -269,7 +270,7 @@ function ShelfGrid({ games }: { games: ShelfGame[] }) {
 	const progressive = useProgressiveList(games, PAGE_SIZE);
 	const visible = supportsObserver ? progressive.visible : games;
 	const navigate = useNavigate();
-	const [searchParams] = useSearchParams();
+	const destination = useActiveDestination();
 
 	const [focusedIndex, setFocusedIndex] = useState(0);
 	const [columnCount, setColumnCount] = useState(1);
@@ -279,28 +280,19 @@ function ShelfGrid({ games }: { games: ShelfGame[] }) {
 	// Only steal focus after a keyboard move — never on mount or refetch.
 	const pendingFocus = useRef(false);
 
-	// Opening a detail is a NAVIGATION (Story 7.2, AD-25) — `/game/:id`, carrying
-	// the live `?q=` so Back lands on the same filtered shelf. The panel itself is
-	// mounted by the shell beside this grid and resolves the game through its own
-	// by-id route, so it no longer depends on the game being in this list at all:
-	// the 3.4 open-detail hoist, its stale-id cleanup, and the refetch-survival
-	// dance all DELETE with it.
-	// `fromApp` is the detail's ONLY evidence that Back leads somewhere inside this
-	// app (review, H3) — `location.key` is not: a `{replace: true}` `?q=` write
-	// mints a fresh key, so a cold deep link plus one keystroke used to look
-	// "opened from inside" and Close would walk the user out of the app.
+	// Opening a detail is a NAVIGATION (Story 7.2, AD-25) — `/game/:id` over THIS
+	// destination, carrying the live `?q=` so the grid behind the overlay stays
+	// filtered and Back lands on the same shelf. The panel itself is mounted by the
+	// shell beside this grid and resolves the game through its own by-id route, so
+	// it no longer depends on the game being in this list at all: the 3.4
+	// open-detail hoist, its stale-id cleanup, and the refetch-survival dance all
+	// DELETE with it. `toDetail` owns the state (`fromApp` + the background) — see
+	// `detail-navigation.ts` for what each key is load-bearing for.
 	const openDetail = useCallback(
 		(gameId: string) => {
-			const search = searchParams.toString();
-			void navigate(
-				{
-					pathname: `/game/${encodeURIComponent(gameId)}`,
-					search: search ? `?${search}` : '',
-				},
-				{ state: { fromApp: true } },
-			);
+			void navigate(...toDetail(gameId, destination));
 		},
-		[navigate, searchParams],
+		[navigate, destination],
 	);
 
 	// Hoisted status-popover menu (Story 3.6, AC3): the open menu's

@@ -13,6 +13,7 @@ import {
 	type TrophySyncResult,
 } from '../settings/api';
 import { SettingsPanel } from '../settings/SettingsPanel';
+import { useActiveDestination } from '../shelf/detail-navigation';
 import { GameDetailRoute } from '../shelf/GameRoute';
 import { SearchBox } from '../shelf/SearchBox';
 import { Shelf } from '../shelf/Shelf';
@@ -59,6 +60,17 @@ export function AppShell({
 	onSignOut: () => void;
 	signOutFailed?: boolean;
 }) {
+	// The location the routes render AGAINST: the background behind an open detail,
+	// or the real location when there is none. This is ALWAYS a location object,
+	// NEVER `undefined` — and that is load-bearing, not lazy. `<Routes>` toggling
+	// between "has a location prop" and "has none" remounts the matched route
+	// element, so a `background ?? undefined` would tear the shelf grid down every
+	// time a detail closes — destroying the card node the close handoff just moved
+	// focus to (e2e epic2-detail 2.3e) and losing scroll/roving index. A stable,
+	// always-present prop keeps the destination mounted across open/close; the cost
+	// is that `<Routes location>` re-renders its subtree on every AppShell render,
+	// which is the deliberate price of the non-remount guarantee.
+	const destination = useActiveDestination();
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [stragglersOpen, setStragglersOpen] = useState(false);
 	// The summary surface has two sources (UX-DR13): a completed sync run
@@ -138,39 +150,39 @@ export function AppShell({
 				{/* Only <main> swaps between destinations (AD-25): the header, the
 				    banners, the toast host, the FAB, and every modal are SHARED chrome
 				    that surfaces OVER whichever destination is active.
-				    `/game/:id` renders the shelf WITH the detail beside it rather than
-				    instead of it — so opening and closing the detail never remounts the
-				    grid (focus, scroll, roving index all survive), and a cold deep link
-				    still resolves while the shelf is still loading.
+				    The routes render against the BACKGROUND location when a detail was
+				    opened from inside the app — react-router's background-location
+				    pattern. `/game/:id` used to hardcode the shelf as the thing behind
+				    the overlay, so an add from the catalog tore the catalog down and
+				    Close snapped back to it through a shelf flash. Now the destination
+				    behind the detail is simply the one you were on.
+				    `<GameDetailRoute />` sits BESIDE the routes, not inside a route
+				    element: it matches on the REAL url (`useMatch` reads router context,
+				    not the `location` prop given to <Routes>) and renders null off
+				    `/game/:id`. That asymmetry is the whole trick — <Routes> shows the
+				    background while the overlay still sees the detail — and it is also
+				    what keeps the destination from remounting when the detail opens and
+				    closes (focus, scroll, roving index all survive).
+				    `/game/:id` keeps a route entry rendering the shelf ALONE, for the
+				    COLD case: a pasted link or a reload has no background in state, and
+				    the URL by itself cannot know where you came from.
 				    The routes are EXPLICIT (review, M10): the shelf used to sit on the
 				    catch-all, so `/catlog`, `/game/` and `/anything` silently rendered
 				    it at whatever address you mistyped. An unknown URL is a NOT FOUND. */}
-				<main className="app-shell__main" id="main-content">
-					<Routes>
+				{/* `tabIndex={-1}`: the close-detail focus handoff falls back here when the
+				    background renders no grid (GameRoute.close) — a bare <main> is not
+				    focusable, so without this the fallback would still land on <body>. */}
+				<main className="app-shell__main" id="main-content" tabIndex={-1}>
+					<Routes location={destination}>
 						<Route
 							path="/catalog"
 							element={<Catalog onOpenSettings={() => setSettingsOpen(true)} />}
 						/>
-						<Route
-							path="/"
-							element={
-								<>
-									<Shelf />
-									<GameDetailRoute />
-								</>
-							}
-						/>
-						<Route
-							path="/game/:id"
-							element={
-								<>
-									<Shelf />
-									<GameDetailRoute />
-								</>
-							}
-						/>
+						<Route path="/" element={<Shelf />} />
+						<Route path="/game/:id" element={<Shelf />} />
 						<Route path="*" element={<NotFound />} />
 					</Routes>
+					<GameDetailRoute />
 				</main>
 			</div>
 			<Fab

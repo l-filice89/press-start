@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router';
 import { useToast } from '../components/Toast';
 import { useModalTrap } from '../components/useModalTrap';
 import { addGame, fetchAddPreview, type IgdbCandidate } from './api';
+import { toDetail, useActiveDestination } from './detail-navigation';
 import { IgdbMatchPicker } from './IgdbMatchPicker';
 import './add-game-dialog.css';
 import './stragglers-dialog.css';
@@ -46,6 +47,10 @@ export function AddGameDialog({
 	const headingId = useId();
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
+	// The destination the dialog was opened OVER — the shelf when the search bar
+	// raised it, the CATALOG when a catalog card did. Both detail navigations below
+	// carry it, so the detail surfaces over the destination you are still on.
+	const destination = useActiveDestination();
 	const { toast } = useToast();
 
 	const {
@@ -119,9 +124,7 @@ export function AddGameDialog({
 				// stale grid would keep reading ＋Add after you navigate back.
 				queryClient.invalidateQueries({ queryKey: ['catalog'] });
 				onClose();
-				void navigate(`/game/${encodeURIComponent(result.gameId)}`, {
-					state: { fromApp: true },
-				});
+				void navigate(...toDetail(result.gameId, destination));
 				return;
 			}
 			toast({
@@ -135,9 +138,7 @@ export function AddGameDialog({
 			]);
 			onClose();
 			if (navigateToDetail) {
-				void navigate(`/game/${encodeURIComponent(result.gameId)}`, {
-					state: { fromApp: true },
-				});
+				void navigate(...toDetail(result.gameId, destination));
 			}
 		},
 		onError: () => toast({ message: `Couldn’t add ${draftTitle}. Try again.` }),

@@ -92,15 +92,28 @@ export function GameDetail({ id }: { id: string }) {
 	// fires no blur, so focus would otherwise silently fall to <body>. Looked up
 	// by game id, not a captured node: the grid may have re-chunked while the
 	// panel was open. A detail with no card behind it (a cold deep link, a
-	// catalog add) has nowhere to hand focus back to, so the grid itself takes it.
+	// catalog add) has nowhere to hand focus back to, so the grid itself takes it —
+	// and WHICH grid depends on the destination behind the overlay. Only one of the
+	// two is ever mounted (the shell renders a single destination), so the pair can
+	// be one selector: the catalog's cards carry `data-product-id`, not
+	// `data-game-id`, so on `/catalog` there is no cell to aim at at all.
 	const openedInApp =
 		(location.state as { fromApp?: boolean } | null)?.fromApp === true;
 	const close = useCallback(() => {
 		const cell = document.querySelector<HTMLElement>(
 			`[role="gridcell"][data-game-id="${CSS.escape(id)}"]`,
 		);
+		// …and `#main-content` as the LAST resort: both grids are conditionally
+		// mounted (a shelf skeleton/empty/error, a no-region/empty catalog render no
+		// grid at all), so a close over a gridless background would otherwise no-op
+		// and drop focus to <body> — the UX-DR19 hazard this handoff exists to
+		// prevent. `<main id="main-content">` is always mounted and focusable.
 		(
-			cell ?? document.querySelector<HTMLElement>('[data-testid="shelf-grid"]')
+			cell ??
+			document.querySelector<HTMLElement>(
+				'[data-testid="shelf-grid"], [data-testid="catalog-grid"]',
+			) ??
+			document.getElementById('main-content')
 		)?.focus();
 		if (openedInApp) void navigate(-1);
 		else void navigate('/');

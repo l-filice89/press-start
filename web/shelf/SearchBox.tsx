@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useSearchParams } from 'react-router';
 import { AddGameDialog } from './AddGameDialog';
+import { type DetailNavState, useActiveDestination } from './detail-navigation';
 import './search-box.css';
 
 /**
@@ -29,7 +30,12 @@ import './search-box.css';
 export function SearchBox() {
 	const [searchParams, setSearchParams] = useSearchParams();
 	const location = useLocation();
-	const pathname = location.pathname;
+	// The term is scoped to the destination you are LOOKING AT, which behind an
+	// open detail is the background, not `/game/:id` (a path that is neither
+	// destination). Read the raw pathname here and a keystroke with a detail open
+	// over the catalog searches the library instead — one input writing at a
+	// destination the user cannot see.
+	const pathname = useActiveDestination().pathname;
 	const onCatalog = pathname.startsWith('/catalog');
 	const term = searchParams.get('q') ?? '';
 
@@ -67,6 +73,22 @@ export function SearchBox() {
 		const trimmed = value.trim();
 		if (typedOn.current !== pathname) return;
 		if (trimmed === term) return;
+		// Carry ONLY the detail-nav keys across the `?q=` write. `fromApp`/`background`
+		// stay so a keystroke does not blank the state that holds a detail over its
+		// destination (a replace with no state clears it, flipping a detail open over
+		// the catalog back onto the shelf). `focusSearch` is deliberately DROPPED: it
+		// is a ONE-SHOT jump flag (Story 4.3) and a `{replace}` mints a fresh
+		// `location.key` per debounce, so re-propagating it would re-fire the
+		// focus-steal effect on EVERY keystroke — yanking focus off the ＋Add button
+		// mid-reach. Computed inside the timer off the STABLE `location.state`, never a
+		// render-fresh object (that would be an unstable effect dep and reset the
+		// debounce every render). Cold links have neither key → undefined → state
+		// blanks as it always did (keeps H3's Close-goes-to-the-shelf true).
+		const detailState = location.state as Partial<DetailNavState> | null;
+		const carried =
+			detailState?.fromApp || detailState?.background
+				? { fromApp: detailState.fromApp, background: detailState.background }
+				: undefined;
 		const timer = setTimeout(() => {
 			setSearchParams(
 				(prev) => {
@@ -75,11 +97,11 @@ export function SearchBox() {
 					else next.delete('q');
 					return next;
 				},
-				{ replace: true },
+				{ replace: true, state: carried },
 			);
 		}, 200);
 		return () => clearTimeout(timer);
-	}, [value, term, pathname, setSearchParams]);
+	}, [value, term, pathname, setSearchParams, location.state]);
 
 	// The routed jump (Story 4.3): the sync summary navigates to `/?q=<title>`
 	// with `focusSearch`, and the field takes focus once the term lands. Routed

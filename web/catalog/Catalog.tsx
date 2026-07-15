@@ -231,6 +231,11 @@ export function Catalog({ onOpenSettings }: { onOpenSettings?: () => void }) {
 					className="catalog__grid"
 					aria-label="The PS Plus Extra catalog"
 					data-testid="catalog-grid"
+					// Programmatic focus target, like the shelf grid: closing a detail
+					// opened from here hands focus back to the grid (UX-DR19), and a
+					// catalog card is not a gridcell to aim at. Without a tabindex the
+					// `.focus()` no-ops and focus falls to <body> as the panel unmounts.
+					tabIndex={-1}
 				>
 					{games.map((game) => (
 						<CatalogCard key={game.productId} game={game} />

@@ -1,6 +1,12 @@
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import {
+	act,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
@@ -152,6 +158,61 @@ describe('SyncSummaryModal', () => {
 		expect(input).not.toHaveFocus();
 		await jump();
 		await waitFor(() => expect(input).toHaveFocus());
+	});
+
+	// REGRESSION (Epic 7 detail-overlay review): the `?q=` debounce write began
+	// carrying `location.state` whole so a keystroke would not blank the `background`
+	// that holds a detail over its destination — but that also re-propagated
+	// `focusSearch`, and a `{replace}` mints a fresh `location.key` per keystroke, so
+	// the focus effect re-fired on EVERY debounce for the rest of the session. Symptom:
+	// after a jump, you reach for ＋Add and the field yanks focus back as the debounce
+	// lands. `focusSearch` must clear after the first write.
+	//
+	// Manual timers, `fireEvent` for the keystroke: the point is to move focus OFF the
+	// field while the 200ms write is still PENDING, then let it fire — `userEvent`'s
+	// auto-advancing timers fire the write mid-type and never exercise the re-steal.
+	it('does not re-steal focus when the debounce lands after a jump', () => {
+		vi.useFakeTimers();
+		try {
+			renderModal(
+				<>
+					<SyncSummaryModal
+						result={result}
+						attention={result.needsAttention}
+						onClose={vi.fn()}
+					/>
+					{/* stands in for the ＋Add button the reader reaches for */}
+					<button type="button" data-testid="elsewhere">
+						add
+					</button>
+				</>,
+			);
+
+			// Jump: routes to /?q=<title> with focusSearch and takes the field.
+			fireEvent.click(screen.getByRole('button', { name: 'Find in library' }));
+			const input = screen.getByRole('searchbox', {
+				name: 'Search your library',
+			});
+			act(() => {
+				vi.advanceTimersByTime(0);
+			});
+			expect(input).toHaveFocus();
+
+			// A keystroke arms the 200ms write; before it lands, focus moves to ＋Add.
+			fireEvent.change(input, { target: { value: 'Doppelganger x' } });
+			const elsewhere = screen.getByTestId('elsewhere');
+			elsewhere.focus();
+			expect(elsewhere).toHaveFocus();
+
+			// The write lands. With focusSearch dropped it is inert; the bug re-fired
+			// the focus effect here and stole focus back to the field.
+			act(() => {
+				vi.advanceTimersByTime(250);
+			});
+			expect(elsewhere).toHaveFocus();
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it('Escape and Close both dismiss', async () => {
