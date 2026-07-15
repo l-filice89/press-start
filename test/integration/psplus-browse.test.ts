@@ -295,6 +295,46 @@ describe('GET /api/ps-plus-catalog/genres — facet counts', () => {
 		expect(horror?.count).toBe(filtered.total);
 		expect(horror?.count).toBe(1);
 	});
+
+	// HAZARD (DW-11): the store lists a game's PS4 and PS5 editions as separate
+	// SKUs, BOTH tagged — the grid collapses the pair onto one card, but the count
+	// was a GROUP BY over tag rows, so the chip said 13 while the filtered grid
+	// answered "12 games matching" (live: MORDHAU, it-it, 2026-07-15). The counts
+	// now run the same collapse the grid does — assert the two agree ON the pair.
+	it('counts a PS4/PS5 edition pair as ONE card, exactly like the filtered grid', async () => {
+		await upsertCatalogProducts(
+			db(),
+			scope,
+			GENERATION,
+			(
+				[
+					['p-mord-ps4', ['PS4']],
+					['p-mord-ps5', ['PS5']],
+				] as [string, string[]][]
+			).map(([productId, platforms]) => ({
+				productId,
+				npTitleId: null,
+				name: 'MORDHAU',
+				titleNormalized: normalizeTitle('MORDHAU'),
+				coverUrl: null,
+				platforms,
+				storeClassification: null,
+				storeUrl: `https://store.playstation.com/${REGION}/product/${productId}`,
+			})),
+			'2026-07-01',
+		);
+		await seedProducts([['p-brawl', 'Brawlout']]); // a plain single-SKU sibling
+		await setCatalogGenres(db(), scope, 'FIGHTING', [
+			'p-mord-ps4',
+			'p-mord-ps5',
+			'p-brawl',
+		]);
+
+		const fighting = (await genres()).genres.find((g) => g.key === 'FIGHTING');
+		const filtered = await browse('?genre=FIGHTING');
+		expect(filtered.total).toBe(2); // the pair collapsed + Brawlout
+		expect(fighting?.count).toBe(filtered.total);
+	});
 });
 
 describe('GET /api/ps-plus-catalog — the in-library join', () => {

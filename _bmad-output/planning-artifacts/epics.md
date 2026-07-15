@@ -1891,6 +1891,10 @@ So that I play them before they vanish instead of finding out when the shelf goe
 **When** the catalog changes
 **Then** no warning — ownership makes catalog membership irrelevant (FR-38: the flag is hidden the moment a game is owned) [FR-38]
 
+**Given** `ps_plus_catalog.first_seen_at` today means "first seen since the last prune" — a pruned-then-readded game reads as new (DW-13, ledgered at the Epic 7 retro)
+**When** this story builds its diff/history semantics on the snapshot
+**Then** it first decides and documents what `first_seen_at` MUST mean for the warning (and fixes or renames the column if "since last prune" is not it) — the diff must not silently treat a returning game as a new arrival [VR-6, deferred-work.md DW-13]
+
 > **Open at design time:** whether the PS+ ingest exposes any leave-date signal at all. If it does not, this story ships as *"left the catalog"* (observable, honest) rather than *"leaving soon"* (a guess) — and that is the correct outcome, not a degraded one.
 
 ### Story 10.3: Time to beat — the story, and 100% (VR-8)

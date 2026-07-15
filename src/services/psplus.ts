@@ -240,9 +240,16 @@ export async function runPsPlusCheck(
 		(await listCatalogTitleKeys(db, scope)).filter(Boolean),
 	);
 
-	// EVERY tracked game is a candidate — owned included (AD-27). The old
-	// `!row.owned` filter is what left owned catalog games permanently unflagged.
-	const candidates = await listLibraryForUser(db, userId);
+	// EVERY tracked game is a candidate — owned included (AD-27), DISCARDED
+	// included (DW-12): the flag lives on the shared game row and describes
+	// catalog membership, not user visibility, so a pass that skips tombstones
+	// froze a discarded game's flag forever — stale the moment it was revived.
+	// The old `!row.owned` filter is what left owned catalog games permanently
+	// unflagged. The check's READOUT below still reports visible games only —
+	// "Flagged: <a game you deleted>" is noise.
+	const candidates = await listLibraryForUser(db, userId, {
+		includeDiscarded: true,
+	});
 
 	const toFlag = candidates.filter(
 		(row) => !row.psPlusExtra && catalog.has(normalizeTitle(row.title)),
@@ -279,9 +286,9 @@ export async function runPsPlusCheck(
 	return {
 		ok: true,
 		result: {
-			flagged: toFlag.map((row) => row.title),
-			cleared: toClear.map((row) => row.title),
-			checked: candidates.length,
+			flagged: toFlag.filter((row) => !row.discarded).map((row) => row.title),
+			cleared: toClear.filter((row) => !row.discarded).map((row) => row.title),
+			checked: candidates.filter((row) => !row.discarded).length,
 			region,
 			products: products.length,
 			pruned: pruned.length,

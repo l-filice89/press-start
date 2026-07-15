@@ -211,6 +211,7 @@ resolution: discarded (watch closed) 2026-07-13 triage — 1.7c has not flaked a
   evidence: FR-9 amendment (2026-07-11) counts claims as owned specifically because the `owned_via` flag makes a clean cancel-time rollback possible; the flag is written by seed and sync but nothing reads it yet. Natural home: a Settings action ("I cancelled PS+") or an Epic 5 region/subscription surface.
   decision: 2026-07-11 Stays deferred (Epic 4 retro action item #5) — Epic 5 shipped 3/3 (5.1 region/check button, 5.2 cron, 5.3 timestamp) without a subscription-cancel surface; none of its stories needed the un-own flow. No code change today; the `owned_via` escape-hatch flag is already persisted by seed and sync, so the deferral carries no data cost.
   decision: 2026-07-11 Scheduled into Story 6.4 (Ownership source — purchased vs claimed, and un-claim on cancel), epics.md. Story 6.4 bundles this un-own flow with the manual Purchased/Claimed confirm (the `owned_via` manual-set gap) into one "subscription ownership" surface. Ledger closes when 6.4 ships.
+  resolution: done 2026-07-12 (stamp backfilled 2026-07-15, epic-7 retro sweep) — Story 6.4 shipped the cancel-PS+ Settings action: un-owns exactly the `owned_via = 'membership'` rows, purchases untouched. The entry's own closing condition fired; only the stamp was missing.
 - source_spec: `_bmad-output/implementation-artifacts/epic-4-retro-2026-07-11.md`
   summary: web/shell/Fab.tsx re-hand-rolls the `['shelf']` + `['shelf-search']` invalidation pair that `invalidateShelfQueries` already encapsulates — if a third shelf query key is added, one site is likely missed and drifts.
   evidence: Epic 4 retro independent review (finding #3). The existing `invalidateShelfQueries` is a per-game `useCallback` bound inside `web/shelf/useTrackingMutations.ts:127` (not exported); Fab additionally invalidates `['settings']`. YAGNI extraction until a third invalidation site appears (same reasoning as the trap-dedup deferral) — extract a shared exported helper then. No user-visible bug today.
@@ -442,14 +443,16 @@ resolution: Wishlist reachable under NEITHER credential from the app's server-to
 origin: source_spec spec-7-genre-sweep-client-loop.md (live browser test, 2026-07-15)
 location: src/repositories/psplus-catalog.ts (browse query vs genres-with-counts query), web/catalog/Catalog.tsx (chip counts)
 reason: The FIGHTING chip showed 13 while the filtered grid said "12 games matching": MORDHAU exists in the it-it store as two product_ids with the same name, both genre-tagged; the vocabulary count counts tag rows, the browse query dedupes by normalized title. Pre-existing 7.2 behavior surfaced by the first live sweep, not caused by the client loop. Cosmetic — the two counts disagree only for duplicate-named store products.
-status: open
+status: done 2026-07-15
+resolution: done 2026-07-15 (post-retro deferred sweep) — the facet counts now run the SAME pipeline as a filtered browse: `listCatalogGenreFacets` (services/psplus-browse.ts) feeds each key's tagged rows through the grid's own `collapseEditions`, so a PS4/PS5 edition pair counts as one card by construction. The SQL GROUP BY (`countCatalogGenreKeys`) is deleted — parity by shared code path, not a parallel query kept honest by hand. Pinned by "counts a PS4/PS5 edition pair as ONE card, exactly like the filtered grid" in test/integration/psplus-browse.test.ts.
 
 ### DW-12: A discarded (soft-deleted) game keeps a stale ps_plus_extra flag until the next refresh
 
 origin: spec-7-1 review deferral (2026-07-14), ledgered at epic-7 retro 2026-07-15
 location: src/services/psplus.ts (flag pass) / game discard path
 reason: The flag pass covers tracked games; a game discarded between refreshes keeps whatever flag it had until the next check/cron rewrites it. Harmless single-user (discarded games are hidden), self-heals monthly. Candidate for the Epic 10 snapshot work (10.2 diffs the same table).
-status: open
+status: done 2026-07-15
+resolution: done 2026-07-15 (post-retro deferred sweep) — worse than ledgered: the next refresh ALSO skipped tombstones (`listLibraryForUser` filters `discarded = false`), so the flag froze forever, not "until the next refresh" — stale the moment the game was revived. The flag pass now reads `listLibraryForUser(db, userId, { includeDiscarded: true })` and writes through tombstones (the flag describes catalog membership on the shared game row, not user visibility); the check's readout still reports visible games only. Pinned by "updates a DISCARDED game's flag in both directions — without reporting it" in test/integration/psplus.test.ts.
 
 ### DW-13: first_seen_at resets when a catalog row is pruned and later re-added
 
@@ -457,3 +460,4 @@ origin: spec-7-1 review deferral (2026-07-14), ledgered at epic-7 retro 2026-07-
 location: src/repositories/psplus-catalog.ts (upsert)
 reason: The column means "first seen since the last prune", not "first ever seen" — a game that leaves PS+ and returns looks new. Matters only for Epic 10's "leaving soon"/history features; decide the intended semantics there before building on it.
 status: open
+decision: 2026-07-15 Homed in Story 10.2 ("Leaving PS+ Extra soon", VR-6), epics.md — carried as an AC: the story must decide and document what `first_seen_at` means for its diff (and fix or rename the column if "since last prune" is not it) before building on it. A semantics decision, not a patch — deciding it now, without 10.2's design in hand, would be guessing. Ledger closes when 10.2 ships.

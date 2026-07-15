@@ -65,14 +65,14 @@ let userId: string;
 
 async function seedGame(
 	title: string,
-	{ owned = false, psPlusExtra = false } = {},
+	{ owned = false, psPlusExtra = false, discarded = false } = {},
 ) {
 	const created = await insertGame(db(), {
 		title,
 		titleNormalized: title.toLowerCase(),
 		psPlusExtra,
 	});
-	await upsertTracking(db(), userId, created.id, { owned });
+	await upsertTracking(db(), userId, created.id, { owned, discarded });
 	return created;
 }
 
@@ -173,6 +173,39 @@ describe('POST /api/ps-plus-check (integration, real workerd + local D1)', () =>
 		expect(await flagOf(left.id)).toBe(false);
 		expect(await flagOf(ownedInCatalog.id)).toBe(true);
 		expect(await flagOf(ownedLeft.id)).toBe(false);
+	});
+
+	// HAZARD (DW-12): the flag lives on the shared game row and describes catalog
+	// membership, not user visibility — but the pass used the tombstone-filtered
+	// library read, so a DISCARDED game's flag froze forever: stale (and visible)
+	// the moment the game was revived. The pass now writes through tombstones;
+	// the check's readout still reports only visible games, because "Flagged:
+	// <a game you deleted>" is noise.
+	it("updates a DISCARDED game's flag in both directions — without reporting it", async () => {
+		const staleFlag = await seedGame('Outer Wilds', {
+			psPlusExtra: true,
+			discarded: true,
+		}); // left the catalog while discarded
+		const nowIn = await seedGame('Returnal', { discarded: true }); // entered it
+		const visible = await seedGame('Hollow Knight'); // proves the readout shape
+
+		stubCatalog(['Returnal', 'Hollow Knight']);
+		const res = await postCheck(cookie);
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as {
+			flagged: string[];
+			cleared: string[];
+			checked: number;
+		};
+
+		// The stored facts move for tombstones too…
+		expect(await flagOf(staleFlag.id)).toBe(false);
+		expect(await flagOf(nowIn.id)).toBe(true);
+		// …but the readout names only the visible library. (The suite shares one
+		// D1, so assert on THIS test's titles, not the whole lists.)
+		expect(body.flagged).toContain(visible.title);
+		expect(body.flagged).not.toContain(nowIn.title);
+		expect(body.cleared).not.toContain(staleFlag.title);
 	});
 
 	it('never auto-adds catalog games absent from the library (AR-10)', async () => {

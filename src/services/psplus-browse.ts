@@ -21,10 +21,10 @@
 import { compareTitle, normalizeTitle } from '../core';
 import {
 	type CatalogBrowseRow,
-	countCatalogGenreKeys,
 	countCatalogProducts,
 	getCatalogGeneration,
 	listCatalogForBrowse,
+	listCatalogGenres,
 	listExternalLinksBySource,
 	listLibraryForUser,
 	PS_PLUS_TIER,
@@ -269,6 +269,14 @@ export async function browseCatalog(
  * stored). The sweep's FROZEN key list (7.1 state) is the vocabulary, so a key
  * the sweep has not reached yet is still listed (count 0) rather than looking
  * like it does not exist; keys the tag table knows are unioned in.
+ *
+ * COUNTS ARE CARDS, NOT SKUs (DW-11): a chip's number must equal what the grid
+ * says when that chip is pressed, and the grid collapses PS4/PS5 edition pairs
+ * onto one card. Counting tag rows said "Fighting 13" while the filtered grid
+ * answered "12 games matching" (MORDHAU ships as two SKUs, both tagged). So the
+ * counts run the SAME pipeline as a filtered browse — the rows a key's tags
+ * name, through the same `collapseEditions` — parity by construction, not by a
+ * parallel query kept honest by hand.
  */
 export async function listCatalogGenreFacets(
 	db: Db,
@@ -277,11 +285,25 @@ export async function listCatalogGenreFacets(
 ): Promise<CatalogGenre[]> {
 	const region = await getPsnRegion(db, userId, env);
 	if (!region) return [];
-	const counts = await countCatalogGenreKeys(db, {
-		region,
-		tier: PS_PLUS_TIER,
-	});
-	const byKey = new Map(counts.map((row) => [row.key, row.count]));
+	const scope = { region, tier: PS_PLUS_TIER };
+	const [rows, tags] = await Promise.all([
+		listCatalogForBrowse(db, scope),
+		listCatalogGenres(db, scope),
+	]);
+	const rowById = new Map(rows.map((row) => [row.productId, row]));
+	const taggedRows = new Map<string, CatalogBrowseRow[]>();
+	for (const tag of tags) {
+		// A tag whose product left the snapshot counts nothing (7.2 review, M6) —
+		// the FK cascade removes it, but a read can land between prune and cascade.
+		const row = rowById.get(tag.productId);
+		if (!row) continue;
+		const list = taggedRows.get(tag.genreKey) ?? [];
+		list.push(row);
+		taggedRows.set(tag.genreKey, list);
+	}
+	const byKey = new Map(
+		[...taggedRows].map(([key, list]) => [key, collapseEditions(list).length]),
+	);
 	const state = await getPsPlusSweepState(db, userId);
 	const keys =
 		state?.region === region

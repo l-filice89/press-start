@@ -278,6 +278,9 @@ export type LibraryRow = {
 	owned: boolean;
 	ownershipType: (typeof gameTracking.$inferSelect)['ownershipType'];
 	ownedVia: (typeof gameTracking.$inferSelect)['ownedVia'];
+	/** Tombstone (DW-12): only surfaced when `includeDiscarded` asked for it —
+	 * the PS+ flag pass writes through tombstones but must not REPORT them. */
+	discarded: boolean;
 	// Raw trophy counts (Story 9.2). `trophySyncedAt` is the "this row has trophy
 	// data" column — a NULL there means the trophy sync never wrote this game,
 	// which is what makes the card/detail show NOTHING (never a fake 0%). The %
@@ -307,6 +310,10 @@ export type LibraryRow = {
 export async function listLibraryForUser(
 	db: Db,
 	userId: string,
+	// DW-12: the PS+ flag pass needs the tombstones too — `game.psPlusExtra`
+	// describes catalog membership, not user visibility, and a pass that skips
+	// discarded rows freezes their flag forever (wrong the moment one is revived).
+	{ includeDiscarded = false }: { includeDiscarded?: boolean } = {},
 ): Promise<LibraryRow[]> {
 	return db
 		.select({
@@ -327,6 +334,7 @@ export async function listLibraryForUser(
 			owned: gameTracking.owned,
 			ownershipType: gameTracking.ownershipType,
 			ownedVia: gameTracking.ownedVia,
+			discarded: gameTracking.discarded,
 			trophySyncedAt: gameTracking.trophySyncedAt,
 			trophyEarnedBronze: gameTracking.trophyEarnedBronze,
 			trophyEarnedSilver: gameTracking.trophyEarnedSilver,
@@ -340,7 +348,10 @@ export async function listLibraryForUser(
 		.from(gameTracking)
 		.innerJoin(game, eq(gameTracking.gameId, game.id))
 		.where(
-			and(eq(gameTracking.userId, userId), eq(gameTracking.discarded, false)),
+			and(
+				eq(gameTracking.userId, userId),
+				...(includeDiscarded ? [] : [eq(gameTracking.discarded, false)]),
+			),
 		);
 }
 

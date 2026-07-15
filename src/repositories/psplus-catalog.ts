@@ -395,38 +395,7 @@ export async function getCatalogGeneration(
 	return rows[0]?.generation ?? null;
 }
 
-/**
- * Facet key → number of catalog games carrying it (the filter's counts).
- *
- * JOINED to the snapshot (review, M6): counting the tag table alone counts tags
- * whose product is GONE — a pruned game leaves its rows behind only until the
- * FK cascade runs, and any tag written for a product outside the snapshot has no
- * product at all. The chip said 26 while the filtered grid rendered 24.
- */
-export async function countCatalogGenreKeys(
-	db: Db,
-	{ region, tier = PS_PLUS_TIER }: Scope,
-): Promise<{ key: string; count: number }[]> {
-	const rows = await db
-		.select({
-			key: psPlusCatalogGenre.genreKey,
-			count: count(psPlusCatalogGenre.productId),
-		})
-		.from(psPlusCatalogGenre)
-		.innerJoin(
-			psPlusCatalog,
-			and(
-				eq(psPlusCatalogGenre.region, psPlusCatalog.region),
-				eq(psPlusCatalogGenre.tier, psPlusCatalog.tier),
-				eq(psPlusCatalogGenre.productId, psPlusCatalog.productId),
-			),
-		)
-		.where(
-			and(
-				eq(psPlusCatalogGenre.region, region),
-				eq(psPlusCatalogGenre.tier, tier),
-			),
-		)
-		.groupBy(psPlusCatalogGenre.genreKey);
-	return rows;
-}
+// `countCatalogGenreKeys` (a SQL GROUP BY over the tag table) is GONE (DW-11):
+// it counted SKUs while the grid counts collapsed cards, so the chip and the
+// grid disagreed on any PS4/PS5 edition pair. The facet counts now run through
+// `services/psplus-browse.ts`'s own collapse — one pipeline, one answer.
