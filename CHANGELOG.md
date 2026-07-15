@@ -4,6 +4,31 @@ All notable changes to PRESS START are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/); this project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] — 2026-07-16
+
+PSN account safety: everything that signed in as you is gone.
+
+### Removed
+- **PSN library sync** — the shelf no longer fills itself from your purchase
+  history. New games enter through add-by-name; ownership fields are set by
+  seed or by hand.
+- **Trophy sync and the trophy readout** — cards and the detail panel no
+  longer show trophy progress or grades, and the trophy columns are dropped
+  from the database. The platinum badge and manually entered milestone dates
+  (platinum, story completion) are untouched.
+- **Platinum-date backfill** — the one-off recovery pass and its Settings
+  panel are gone.
+- **PSN sign-in (NPSSO)** — Settings has no token field and no expired-token
+  banner; the app no longer holds any PSN credential, anywhere.
+
+### Security
+- Every remaining PlayStation call is anonymous. The credentialed flows
+  impersonated the PSN app against undocumented endpoints and got the real
+  account locked (2026-07-15); this release deletes that entire surface and
+  pins it with a CI guard so credentialed code cannot quietly return. The
+  PS+ catalog (browse, check, monthly refresh) carries no account identity
+  and is unaffected.
+
 ## [1.4.0] — 2026-07-15
 
 Browse the PS+ catalog without leaving the app.
