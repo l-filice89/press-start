@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, inject, it } from 'vitest';
 import { todayInZone } from '../../src/core';
 import {
+	deleteSetting,
 	findGamesByNormalizedTitle,
 	getSetting,
 	getTracking,
@@ -188,6 +189,25 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 
 		// No setting and no seed reads as unset (the route reports null).
 		expect(await getPsnRegion(db(), 'user-with-no-region', {})).toBeUndefined();
+
+		// A MALFORMED env seed behaves as unset and persists NOTHING — both write
+		// paths share normalizePsnRegion, so a value the PUT would 400 can never
+		// enter through the wrangler var (Epic 11 sweep).
+		expect(
+			await getPsnRegion(db(), 'user-with-no-region', { PSN_REGION: 'IT_IT' }),
+		).toBeUndefined();
+		expect(
+			await getSetting(db(), 'user-with-no-region', PSN_REGION_SETTING_KEY),
+		).toBeUndefined();
+		// A well-formed but shouty seed is normalized before it persists (a real
+		// user row: the setting write is FK-bound to `user`).
+		await deleteSetting(db(), userId, PSN_REGION_SETTING_KEY);
+		expect(await getPsnRegion(db(), userId, { PSN_REGION: ' IT-IT ' })).toBe(
+			'it-it',
+		);
+		expect(await getSetting(db(), userId, PSN_REGION_SETTING_KEY)).toBe(
+			'it-it',
+		);
 
 		// Auth is required on the write path.
 		const unauthed = await appFetch('/api/settings/psn-region', {

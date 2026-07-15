@@ -103,7 +103,7 @@ describe('Card', () => {
 			}),
 		);
 		expect(screen.getByText('Platinum achieved')).toBeInTheDocument();
-		expect(screen.getByTestId('platinum-trophy')).toBeInTheDocument();
+		expect(screen.getByTestId(/^platinum-trophy-/)).toBeInTheDocument();
 		expect(screen.queryByText('Story completed')).not.toBeInTheDocument();
 	});
 

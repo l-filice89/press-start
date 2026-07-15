@@ -50,6 +50,19 @@ export async function readFabHandedness(
  */
 export const PSN_REGION_SETTING_KEY = 'psn_region';
 
+/**
+ * THE locale-shape rule for `psn_region` — both write paths (the PUT and the
+ * env seed below) must agree, or a case-mismatched seed orphans catalog rows
+ * keyed by the raw string. Returns the normalized value, or undefined when
+ * the shape is wrong.
+ */
+export function normalizePsnRegion(
+	value: string | undefined,
+): string | undefined {
+	const v = value?.trim().toLowerCase();
+	return v && /^[a-z]{2}(-[a-z]{2,4})?-[a-z]{2}$/.test(v) ? v : undefined;
+}
+
 export async function getPsnRegion(
 	db: Db,
 	userId: string,
@@ -57,7 +70,9 @@ export async function getPsnRegion(
 ): Promise<string | undefined> {
 	const stored = await getSetting(db, userId, PSN_REGION_SETTING_KEY);
 	if (stored) return stored;
-	const seed = env.PSN_REGION?.trim();
+	// A malformed Wrangler var is NOT persisted — behaves as unset rather than
+	// storing a value the PUT validator would refuse.
+	const seed = normalizePsnRegion(env.PSN_REGION);
 	if (!seed) return undefined;
 	await setSetting(db, userId, PSN_REGION_SETTING_KEY, seed);
 	return seed;

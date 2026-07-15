@@ -64,7 +64,9 @@ export function Card({
 	const isPlaying = game.effectiveState === 'Playing';
 	const milestone = game.hasPlatinum
 		? {
-				glyph: <PlatinumTrophy data-testid="platinum-trophy" />,
+				// Game-scoped testid: a fixed id would throw on `getByTestId` the
+				// first time a test renders two platinum cards.
+				glyph: <PlatinumTrophy data-testid={`platinum-trophy-${game.id}`} />,
 				label: 'Platinum achieved',
 				platinum: true,
 			}

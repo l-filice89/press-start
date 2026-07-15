@@ -11,7 +11,6 @@ export * from './seed-reconcile';
 export * from './shelf';
 export * from './status-transition';
 export * from './straggler-title';
-export * from './sync-reconcile';
 export * from './title-normalizer';
 export * from './today';
 export * from './types';

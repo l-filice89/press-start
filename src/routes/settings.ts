@@ -9,6 +9,7 @@ import {
 	getPsnRegion,
 	getPsPlusRefreshedAt,
 	isPsPlusRefreshFailed,
+	normalizePsnRegion,
 	PSN_REGION_SETTING_KEY,
 	PSPLUS_REFRESHED_AT_SETTING_KEY,
 	readFabHandedness,
@@ -110,10 +111,8 @@ settingsRoute.put('/settings/timezone', requireAuth, async (c) => {
 // drifts, so no pinned list; a wrong-but-well-formed value degrades to the
 // provider's existing bad-region handling (null grid → provider error).
 const psnRegionBodySchema = z.object({
-	region: z
-		.string()
-		.transform((value) => value.trim().toLowerCase())
-		.pipe(z.string().regex(/^[a-z]{2}(-[a-z]{2,4})?-[a-z]{2}$/)),
+	// One shape rule for both write paths (PUT + env seed) — normalizePsnRegion.
+	region: z.string().transform(normalizePsnRegion).pipe(z.string()),
 });
 
 settingsRoute.put('/settings/psn-region', requireAuth, async (c) => {
