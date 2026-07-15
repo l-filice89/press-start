@@ -4,6 +4,31 @@ All notable changes to PRESS START are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/); this project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] — 2026-07-15
+
+Browse the PS+ catalog without leaving the app.
+
+### Added
+- **PS+ catalog as a destination** — browse the PlayStation Plus game catalog
+  from its own tab, filterable by genre, newest first. No PSN sign-in needed;
+  the catalog is fetched anonymously.
+- **Add or claim straight from the catalog** — a catalog game you don't have
+  yet can be added to the shelf; one you already track is claimed and linked.
+- **PSN region setting** — pick the storefront region the catalog reads from,
+  with a pointed hint when the store rejects the region.
+
+### Changed
+- **The genre sweep runs from the client after a PS+ check**, so the catalog
+  only refreshes when PS+ data is actually reachable.
+
+### Fixed
+- **Opening a game's detail from the catalog** keeps you on the catalog
+  instead of bouncing back to the shelf.
+- **Games sold under two SKUs** no longer appear twice in the catalog.
+- **Long toast messages wrap** instead of clipping off-screen on phones.
+- **PSN's sign-in redirect is treated as an auth denial**, not a mystery
+  failure.
+
 ## [1.3.0] — 2026-07-14
 
 Trophies on the shelf, and a PSN connection that stays connected.
