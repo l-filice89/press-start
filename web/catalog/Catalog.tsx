@@ -18,6 +18,7 @@ import {
 	fetchCatalogGenres,
 	fetchCatalogPage,
 	genreLabel,
+	startGenreSweep,
 } from './api';
 import { CatalogCard } from './CatalogCard';
 import './catalog.css';
@@ -86,12 +87,15 @@ export function Catalog({ onOpenSettings }: { onOpenSettings?: () => void }) {
 	// same ingest the FAB fires, so the destination is never a dead end.
 	const check = useMutation({
 		mutationFn: runPsPlusCheck,
-		onSuccess: () => {
+		onSuccess: (result) => {
 			announce('PS plus check complete.');
 			queryClient.invalidateQueries({ queryKey: ['catalog'] });
 			queryClient.invalidateQueries({ queryKey: ['catalog-genres'] });
 			queryClient.invalidateQueries({ queryKey: ['shelf'] });
 			queryClient.invalidateQueries({ queryKey: ['settings'] });
+			// The snapshot is in; now tag it — otherwise the genre filter stays
+			// empty until the monthly cron converges (Story 7.1's "do it now" loop).
+			startGenreSweep(queryClient, result.generation);
 		},
 		onError: (error: Error) =>
 			toast({
