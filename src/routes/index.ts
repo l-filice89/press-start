@@ -9,7 +9,6 @@ import { psPlusRoute } from './psplus';
 import { settingsRoute } from './settings';
 import { shelfRoute } from './shelf';
 import { stragglersRoute } from './stragglers';
-import { syncRoute } from './sync';
 import { trackingRoute } from './tracking';
 
 /**
@@ -29,6 +28,5 @@ apiRoutes.route('/', stragglersRoute);
 apiRoutes.route('/', exportRoute);
 apiRoutes.route('/', genresRoute);
 apiRoutes.route('/', settingsRoute);
-apiRoutes.route('/', syncRoute);
 apiRoutes.route('/', psPlusRoute);
 apiRoutes.route('/', e2eRoute); // 404s unless E2E_TEST_HOOKS=1 (local e2e env only)

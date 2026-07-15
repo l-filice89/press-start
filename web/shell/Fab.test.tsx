@@ -7,9 +7,10 @@ import { ToastHost } from '../components/Toast';
 import { Fab } from './Fab';
 
 /**
- * FAB drawer (Story 4.2): open/close semantics, the Sync item's
- * spinner-while-pending (UX-DR10), the result toast, and the query
- * invalidations that repaint the shelf and light the banner on failure.
+ * FAB drawer: open/close semantics, the long-op items' spinner-while-pending
+ * (UX-DR10), the result toast, and the query invalidations that repaint the
+ * shelf. The credentialed sync items were severed by Epic 11 story 11.1 —
+ * the drawer carries exactly Check PS+ Extra and Export CSV.
  */
 
 function deferredFetch(result: () => Promise<Response>) {
@@ -25,46 +26,23 @@ function deferredFetch(result: () => Promise<Response>) {
 	return { fetchMock, release };
 }
 
-const okResult = () =>
-	Promise.resolve(
-		new Response(
-			JSON.stringify({
-				added: [{ title: 'Astro Bot', viaMembership: true }],
-				flipped: [{ title: 'Hollow Knight', viaMembership: false }],
-				upgraded: [],
-				skippedWebApps: 0,
-				needsAttention: [],
-			}),
-			{ status: 200, headers: { 'content-type': 'application/json' } },
-		),
-	);
-
 function renderFab(handedness: 'left' | 'right' = 'right') {
 	const client = new QueryClient({
 		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 	});
 	const invalidate = vi.spyOn(client, 'invalidateQueries');
-	const onSyncComplete = vi.fn();
 	const onPsPlusCheckComplete = vi.fn();
-	const onTrophySyncComplete = vi.fn();
 	render(
 		<QueryClientProvider client={client}>
 			<ToastHost>
 				<Fab
-					onSyncComplete={onSyncComplete}
 					onPsPlusCheckComplete={onPsPlusCheckComplete}
-					onTrophySyncComplete={onTrophySyncComplete}
 					handedness={handedness}
 				/>
 			</ToastHost>
 		</QueryClientProvider>,
 	);
-	return {
-		invalidate,
-		onSyncComplete,
-		onPsPlusCheckComplete,
-		onTrophySyncComplete,
-	};
+	return { invalidate, onPsPlusCheckComplete };
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -79,56 +57,24 @@ describe('Fab', () => {
 		await userEvent.click(toggle);
 		expect(toggle).toHaveAttribute('aria-expanded', 'true');
 		expect(
-			screen.getByRole('button', { name: 'Sync library' }),
+			screen.getByRole('button', { name: 'Check PS+ Extra' }),
 		).toBeInTheDocument();
 
 		await userEvent.keyboard('{Escape}');
 		expect(screen.queryByTestId('fab-drawer')).not.toBeInTheDocument();
 	});
 
-	it('shows the trophy item with the shared platinum SVG and its text label, without the card testid', async () => {
+	it('offers exactly Check PS+ Extra and Export CSV — no sync or trophy control survives Epic 11', async () => {
 		renderFab();
 		await userEvent.click(screen.getByRole('button', { name: 'Chores' }));
 
-		const trophyItem = screen.getByTestId('fab-trophy-sync');
-		// The item carries the app's stroke-only trophy mark (the shared SVG).
-		expect(trophyItem.querySelector('svg')).toBeInTheDocument();
-		// But NOT the card's testid — only the card owns `platinum-trophy`, so a
-		// full-app render never ends up with two of that id.
-		expect(
-			trophyItem.querySelector('[data-testid="platinum-trophy"]'),
-		).toBeNull();
-		// The text label is present (shown on every viewport, mobile included).
-		expect(trophyItem).toHaveTextContent('Sync trophies');
-	});
-
-	it('shows a spinner while the sync runs, then hands the result to the summary and invalidates', async () => {
-		const { release } = deferredFetch(okResult);
-		const { invalidate, onSyncComplete } = renderFab();
-
-		await userEvent.click(screen.getByRole('button', { name: 'Chores' }));
-		await userEvent.click(screen.getByRole('button', { name: 'Sync library' }));
-
-		// Pending: spinner up, item disabled (UX-DR10).
-		expect(await screen.findByTestId('fab-sync-spinner')).toBeInTheDocument();
-		expect(screen.getByRole('button', { name: 'Sync library' })).toBeDisabled();
-
-		release();
-		// The result goes to the summary modal (FR-37), not a toast.
-		await waitFor(() =>
-			expect(onSyncComplete).toHaveBeenCalledWith({
-				added: [{ title: 'Astro Bot', viaMembership: true }],
-				flipped: [{ title: 'Hollow Knight', viaMembership: false }],
-				upgraded: [],
-				skippedWebApps: 0,
-				needsAttention: [],
-			}),
-		);
-		expect(screen.queryByTestId('toast')).not.toBeInTheDocument();
-		expect(invalidate).toHaveBeenCalledWith({ queryKey: ['shelf'] });
-		expect(invalidate).toHaveBeenCalledWith({ queryKey: ['settings'] });
-		// Drawer closed after settling.
-		expect(screen.queryByTestId('fab-drawer')).not.toBeInTheDocument();
+		const drawer = screen.getByTestId('fab-drawer');
+		const items = drawer.querySelectorAll('button');
+		expect(items).toHaveLength(2);
+		expect(screen.getByTestId('fab-psplus-check')).toBeInTheDocument();
+		expect(screen.getByTestId('fab-export')).toBeInTheDocument();
+		expect(screen.queryByTestId('fab-sync')).not.toBeInTheDocument();
+		expect(screen.queryByTestId('fab-trophy-sync')).not.toBeInTheDocument();
 	});
 
 	it('runs the PS+ Extra check with a spinner, hands the result over, and repaints the shelf', async () => {
@@ -171,91 +117,6 @@ describe('Fab', () => {
 		expect(screen.queryByTestId('fab-drawer')).not.toBeInTheDocument();
 	});
 
-	it('runs the trophy sync with a spinner, hands the result over, and repaints the shelf (Story 9.2)', async () => {
-		const { release, fetchMock } = deferredFetch(() =>
-			Promise.resolve(
-				new Response(
-					JSON.stringify({
-						updated: ['Ultimate Chicken Horse'],
-						unmatched: ['Some Demo'],
-						needsAttention: [],
-					}),
-					{ status: 200, headers: { 'content-type': 'application/json' } },
-				),
-			),
-		);
-		const { invalidate, onTrophySyncComplete } = renderFab();
-
-		await userEvent.click(screen.getByRole('button', { name: 'Chores' }));
-		await userEvent.click(screen.getByTestId('fab-trophy-sync'));
-
-		expect(await screen.findByTestId('fab-trophy-spinner')).toBeInTheDocument();
-		expect(screen.getByTestId('fab-trophy-sync')).toBeDisabled();
-
-		release();
-		await waitFor(() =>
-			expect(onTrophySyncComplete).toHaveBeenCalledWith({
-				updated: ['Ultimate Chicken Horse'],
-				unmatched: ['Some Demo'],
-				needsAttention: [],
-			}),
-		);
-		expect(fetchMock).toHaveBeenCalledWith(
-			'/api/sync/trophies',
-			expect.objectContaining({ method: 'POST' }),
-		);
-		// The counts feed the card's %/grade — the shelf must re-derive.
-		expect(invalidate).toHaveBeenCalledWith({ queryKey: ['shelf'] });
-		expect(screen.queryByTestId('toast')).not.toBeInTheDocument();
-	});
-
-	it('a trophy sync rejected for an expired token toasts and refetches settings so the banner lights (hazard: no retry)', async () => {
-		const { release, fetchMock } = deferredFetch(() =>
-			Promise.resolve(
-				new Response(JSON.stringify({ error: 'expired' }), { status: 401 }),
-			),
-		);
-		const { invalidate } = renderFab();
-
-		await userEvent.click(screen.getByRole('button', { name: 'Chores' }));
-		await userEvent.click(screen.getByTestId('fab-trophy-sync'));
-		release();
-
-		await waitFor(() =>
-			expect(screen.getByTestId('toast')).toHaveTextContent(
-				/Trophy sync failed/,
-			),
-		);
-		expect(invalidate).toHaveBeenCalledWith({ queryKey: ['settings'] });
-		// One attempt — the client never re-fires a rejected credential.
-		expect(fetchMock).toHaveBeenCalledTimes(1);
-	});
-
-	it('a 409 from the single-flight lock (Story 9.5) toasts the SERVER’s message, not a generic failure', async () => {
-		const { release } = deferredFetch(() =>
-			Promise.resolve(
-				new Response(
-					JSON.stringify({
-						error:
-							'A PlayStation sync is already running for your account — let it finish, then try again.',
-					}),
-					{ status: 409 },
-				),
-			),
-		);
-		renderFab();
-
-		await userEvent.click(screen.getByRole('button', { name: 'Chores' }));
-		await userEvent.click(screen.getByTestId('fab-trophy-sync'));
-		release();
-
-		// "Trophy sync failed — try again later." would hide the one thing the user
-		// can act on: something of theirs is already running.
-		await waitFor(() =>
-			expect(screen.getByTestId('toast')).toHaveTextContent(/already running/),
-		);
-	});
-
 	it('a failed PS+ check toasts the SERVER message when it carries one', async () => {
 		// A bad-region 409 names the actual fix — swallowing it into a generic
 		// "try again later" sent a real user in a circle (uk-uk vs en-gb).
@@ -282,24 +143,6 @@ describe('Fab', () => {
 				/did not recognize your region/,
 			),
 		);
-	});
-
-	it('a failed sync toasts and refetches settings so the banner can light', async () => {
-		const { release } = deferredFetch(() =>
-			Promise.resolve(
-				new Response(JSON.stringify({ error: 'expired' }), { status: 401 }),
-			),
-		);
-		const { invalidate } = renderFab();
-
-		await userEvent.click(screen.getByRole('button', { name: 'Chores' }));
-		await userEvent.click(screen.getByRole('button', { name: 'Sync library' }));
-		release();
-
-		await waitFor(() =>
-			expect(screen.getByTestId('toast')).toHaveTextContent(/Sync failed/),
-		);
-		expect(invalidate).toHaveBeenCalledWith({ queryKey: ['settings'] });
 	});
 
 	it('Export CSV downloads the 200 body as a file (Story 6.3)', async () => {

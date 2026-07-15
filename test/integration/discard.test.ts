@@ -1,26 +1,22 @@
 import { applyD1Migrations, env } from 'cloudflare:test';
 import { eq } from 'drizzle-orm';
-import { afterEach, beforeAll, describe, expect, inject, it, vi } from 'vitest';
+import { beforeAll, describe, expect, inject, it } from 'vitest';
 import { normalizeTitle } from '../../src/core';
 import {
-	addExternalLink,
 	getTracking,
 	insertGame,
 	insertTrackingIfAbsent,
-	setSetting,
 } from '../../src/repositories';
 import { createDb } from '../../src/repositories/db';
 import { user } from '../../src/schema';
-import { PSN_NPSSO_SETTING_KEY } from '../../src/services/settings';
-import { PSN_LIBRARY_HOST, stubPsnFetch } from './psn-stub';
 import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
 
 /**
  * Discard (soft-delete tombstone) integration, through the real Worker + local
  * D1. The hazards: a discarded game must leave EVERY library surface (shelf,
- * search, stragglers) via the single `listLibraryForUser` filter; re-adding the
- * name must REVIVE the row (never duplicate); and additive PSN sync must NOT
- * re-own a discarded game (the reinstatement bug the tombstone exists to stop).
+ * search, stragglers) via the single `listLibraryForUser` filter, and re-adding
+ * the name must REVIVE the row (never duplicate). (The "sync must not re-own a
+ * tombstone" hazard died with the credentialed sync — Epic 11 story 11.1.)
  */
 
 const db = () => createDb(env.DB);
@@ -42,22 +38,6 @@ async function shelfTitles(cookie: string): Promise<string[]> {
 	});
 	const { games } = (await res.json()) as { games: { title: string }[] };
 	return games.map((g) => g.title);
-}
-
-// Stub the outbound PSN library call; the exchange comes from the shared double.
-function stubPsn(games: Record<string, unknown>[]) {
-	stubPsnFetch((url) =>
-		url.startsWith(PSN_LIBRARY_HOST)
-			? new Response(
-					JSON.stringify({
-						data: {
-							purchasedTitlesRetrieve: { games, pageInfo: { isLast: true } },
-						},
-					}),
-					{ status: 200, headers: { 'content-type': 'application/json' } },
-				)
-			: undefined,
-	);
 }
 
 let cookie: string;
@@ -88,8 +68,6 @@ describe('discard (soft-delete tombstone, through the route)', () => {
 			.limit(1);
 		userId = row.id;
 	});
-
-	afterEach(() => vi.unstubAllGlobals());
 
 	it('hides a discarded game from the shelf and revives it on undo', async () => {
 		const g = await trackedGame('Discard Me');
@@ -146,40 +124,5 @@ describe('discard (soft-delete tombstone, through the route)', () => {
 		expect(((await readd.json()) as { gameId: string }).gameId).toBe(g.id);
 		expect((await getTracking(db(), userId, g.id))?.discarded).toBe(false);
 		expect(await shelfTitles(cookie)).toContain('Revive By Readd');
-	});
-
-	it('does NOT let additive PSN sync re-own a discarded game', async () => {
-		// A wishlisted (un-owned) game the user then discards…
-		const g = await trackedGame('Synced But Discarded');
-		await addExternalLink(db(), {
-			gameId: g.id,
-			source: 'PSN',
-			externalId: 'PPSA-DISCARD_00',
-		});
-		await discard(g.id, true, cookie);
-		await setSetting(db(), userId, PSN_NPSSO_SETTING_KEY, 'test-psn-npsso');
-
-		// …appears in the PSN purchase list. A normal sync would flip owned→true;
-		// the tombstone must veto that so the game stays hidden.
-		stubPsn([
-			{
-				name: 'Synced But Discarded',
-				platform: 'PS5',
-				membership: null,
-				titleId: 'PPSA-DISCARD_00',
-				image: { url: 'https://image.api.playstation.com/x.png' },
-				conceptId: '99999',
-			},
-		]);
-		const sync = await appFetch('/api/sync', {
-			method: 'POST',
-			headers: { cookie },
-		});
-		expect(sync.status).toBe(200);
-
-		const tracking = await getTracking(db(), userId, g.id);
-		expect(tracking?.owned).toBe(false);
-		expect(tracking?.discarded).toBe(true);
-		expect(await shelfTitles(cookie)).not.toContain('Synced But Discarded');
 	});
 });

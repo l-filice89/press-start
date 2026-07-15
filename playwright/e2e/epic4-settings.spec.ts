@@ -2,13 +2,13 @@ import { deleteSetting, seedSetting } from '../support/helpers/d1';
 import { expect, test } from '../support/merged-fixtures';
 
 /**
- * Stories 4.1 + 4.2, re-credentialed in 9.1b (FR-36/FR-33, UX-DR10/11): the
- * Settings panel edits the PSN NPSSO token (presence-only readback, never the
- * value) and carries the ssocookie deep link, a persisted `psn_auth = expired`
- * state surfaces the refresh instructions in the attention banner until a fresh
- * token is saved, and the FAB drawer's Sync item drives the live missing-token
- * → 401 → flag → banner wiring. All in ONE serial file: every test mutates
- * the same per-user PSN setting keys.
+ * Story 4.1, re-credentialed in 9.1b (FR-36, UX-DR10/11): the Settings panel
+ * edits the PSN NPSSO token (presence-only readback, never the value) and
+ * carries the ssocookie deep link, and a persisted `psn_auth = expired` state
+ * surfaces the refresh instructions in the attention banner until a fresh
+ * token is saved. The credentialed sync/trophy/backfill flows were severed by
+ * Epic 11 story 11.1 — the FAB-surface test below pins their absence. All in
+ * ONE serial file: every test mutates the same per-user PSN setting keys.
  */
 
 // Both tests mutate the SAME per-user setting keys (one e2e user); parallel
@@ -20,7 +20,6 @@ test.afterEach(async () => {
 	// return the Epic 4 keys to their absent baseline.
 	await deleteSetting('psn_npsso');
 	await deleteSetting('psn_auth');
-	await deleteSetting('sync_attention');
 });
 
 test('the header gear opens Settings; saving a token flips presence without echoing the value', async ({
@@ -124,96 +123,25 @@ test('an expired PSN auth state feeds the attention banner until a fresh token i
 	);
 });
 
-test('Sync from the FAB with no token configured lights the expired-token banner (4.2 → 4.1c live wiring)', {
-	// The 401 IS the flow under test — opt out of the network-error monitor.
-	annotation: [{ type: 'skipNetworkMonitoring' }],
-}, async ({ page }) => {
-	// No psn_npsso setting and no env seed in the e2e Worker: the provider fails
-	// as PsnAuthError before any outbound PSN call — not even the authorize leg.
+test('the FAB drawer offers exactly Check PS+ Extra and Export CSV — no credentialed sync control exists (Epic 11 story 11.1)', async ({
+	page,
+}) => {
+	// The severed routes' UI entry points must be GONE, not disabled: a chores
+	// drawer with a dead sync item would still read as "this app syncs".
 	await page.goto('/');
-	await expect(page.getByTestId('attention-banner-expired-token')).toHaveCount(
-		0,
-	);
 
 	const toggle = page.getByRole('button', { name: 'Chores' });
 	await expect(toggle).toHaveAttribute('aria-expanded', 'false');
 	await toggle.click();
-	await page.getByTestId('fab-sync').click();
 
-	// The failure surfaces (toast) and the persisted flag feeds the banner.
-	await expect(page.getByTestId('toast')).toHaveText(/Sync failed/);
-	const banner = page.getByTestId('attention-banner-expired-token');
-	await expect(banner).toBeVisible();
-	await expect(banner).toHaveClass(/attention-banner--expired-token/);
-	// Its action opens Settings — recovery is one tap from the failure.
-	await banner.getByRole('button', { name: 'Update token' }).click();
-	await expect(page.getByTestId('settings-panel')).toBeVisible();
-});
-
-test('Sync trophies from the FAB with no token configured lights the expired-token banner (Story 9.2)', {
-	// The 401 IS the flow under test — opt out of the network-error monitor.
-	annotation: [{ type: 'skipNetworkMonitoring' }],
-}, async ({ page }) => {
-	// Lives HERE, not in epic9-trophies.spec.ts: it mutates the same per-user
-	// PSN setting keys as every test in this serial file, and a parallel
-	// worker's cleanup would wipe the flag mid-assert.
-	await page.goto('/');
-	await expect(page.getByTestId('attention-banner-expired-token')).toHaveCount(
-		0,
-	);
-
-	await page.getByRole('button', { name: 'Chores' }).click();
-	await page.getByTestId('fab-trophy-sync').click();
-
-	// The trophy sync fails as PsnAuthError before any outbound PSN call, the
-	// server persists the flag, and the banner lights — no retry, and no trophy
-	// count anywhere was written.
-	await expect(page.getByTestId('toast')).toHaveText(/Trophy sync failed/);
-	const banner = page.getByTestId('attention-banner-expired-token');
-	await expect(banner).toBeVisible();
-	await expect(banner).toHaveClass(/attention-banner--expired-token/);
-	// Recovery is one tap from the failure.
-	await banner.getByRole('button', { name: 'Update token' }).click();
-	await expect(page.getByTestId('settings-panel')).toBeVisible();
-});
-
-test('persisted sync needs-attention feeds the amber banner; Review reopens the summary and jumps to search (4.3)', async ({
-	page,
-}) => {
-	// Items persisted by a sync run (seeded directly — a live conflicted sync
-	// needs PSN, which the e2e Worker cannot stub).
-	await seedSetting(
-		'sync_attention',
-		JSON.stringify([
-			{ title: 'Doppelganger', reason: 'ambiguous match — not merged' },
-		]),
-	);
-	await page.goto('/');
-
-	// Survives reloads and sessions: present on a fresh page load (AR-22).
-	const banner = page.getByTestId('attention-banner-stragglers');
-	await expect(banner).toBeVisible();
-	await expect(banner).toHaveClass(/attention-banner--stragglers/);
-	await expect(banner).toHaveText(/1 sync item needs attention/);
-
-	// Review reopens the items summary (no counts — banner-sourced).
-	await banner.getByRole('button', { name: 'Review' }).click();
-	const summary = page.getByTestId('sync-summary');
-	await expect(summary).toBeVisible();
-	await expect(summary).toHaveText(/Doppelganger/);
-	await expect(page.getByTestId('sync-counts')).toHaveCount(0);
-
-	// Jump-to-problem: the whole-library search is seeded and focused.
-	await summary.getByRole('button', { name: 'Find in library' }).click();
-	await expect(summary).toBeHidden();
-	const search = page.getByRole('searchbox', { name: 'Search your library' });
-	await expect(search).toHaveValue('Doppelganger');
-	await expect(search).toBeFocused();
-
-	// No dismissal affordance exists by design — only a clean sync resolves
-	// the items, so the banner is still there on a fresh load.
-	await page.reload();
-	await expect(page.getByTestId('attention-banner-stragglers')).toBeVisible();
+	const drawer = page.getByTestId('fab-drawer');
+	await expect(drawer).toBeVisible();
+	await expect(page.getByTestId('fab-psplus-check')).toBeVisible();
+	await expect(page.getByTestId('fab-export')).toBeVisible();
+	// Exactly two items — nothing else can trigger anything.
+	await expect(drawer.getByRole('button')).toHaveCount(2);
+	await expect(page.getByTestId('fab-sync')).toHaveCount(0);
+	await expect(page.getByTestId('fab-trophy-sync')).toHaveCount(0);
 });
 
 /*
@@ -226,32 +154,6 @@ test('persisted sync needs-attention feeds the amber banner; Review reopens the 
  * ~2 of 5 full-suite runs). One file owns the membership rows, as one file owns
  * the PSN setting keys.
  */
-
-/*
- * Moved here from `epic9-trophies.spec.ts` (Story 9.5): the platinum backfill is
- * one of the three PSN long-ops under the per-user single-flight lock, and this
- * suite has ONE user — a backfill click in a parallel worker and the FAB sync
- * below refuse each other with the lock's own 409. Every PSN-op flow belongs in
- * this serial file.
- */
-test('Settings carries the platinum-date backfill, and a run with no trophy data says to sync trophies first (9.3)', async ({
-	page,
-}) => {
-	// The e2e user has no trophy-synced title at all, so the run has ZERO
-	// candidates: it never calls PSN (unstubbable here) and still has to end in a
-	// readable summary — and "nothing to recover, every platinum is dated" would
-	// be a LIE here: there is nothing to recover FROM until the trophy sync runs.
-	await page.goto('/');
-	await page.getByRole('button', { name: 'Settings' }).click();
-
-	const button = page.getByTestId('backfill-platinum-dates');
-	await expect(button).toBeVisible();
-	await button.click();
-
-	await expect(page.getByTestId('backfill-summary')).toHaveText(
-		/No trophy data yet — run the trophy sync first/,
-	);
-});
 
 test('Settings names the PSN region and saves a normalized locale', async ({
 	page,

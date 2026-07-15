@@ -5,13 +5,7 @@ import { Catalog } from '../catalog/Catalog';
 import { AttentionBanner } from '../components/AttentionBanner';
 import { EmptyState } from '../components/EmptyState';
 import { ToastHost } from '../components/Toast';
-import {
-	fetchSettings,
-	type PsPlusCheckResult,
-	type SyncAttentionItem,
-	type SyncResult,
-	type TrophySyncResult,
-} from '../settings/api';
+import { fetchSettings, type PsPlusCheckResult } from '../settings/api';
 import { SettingsPanel } from '../settings/SettingsPanel';
 import { useActiveDestination } from '../shelf/detail-navigation';
 import { GameDetailRoute } from '../shelf/GameRoute';
@@ -22,8 +16,6 @@ import { Background } from './Background';
 import { Fab } from './Fab';
 import { Header } from './Header';
 import { PsPlusCheckModal } from './PsPlusCheckModal';
-import { SyncSummaryModal } from './SyncSummaryModal';
-import { TrophySyncModal } from './TrophySyncModal';
 import './app-shell.css';
 
 /**
@@ -35,9 +27,8 @@ import './app-shell.css';
  *
  * Providers wrap the tree so surfaces can `useToast()` / `useAnnounce()` from
  * anywhere. The attention-banner slot under the header is fed by the settings
- * query: a PSN-rejected token surfaces the refresh path (4.1), and persisted
- * sync needs-attention items surface the amber banner (4.3) — both survive
- * reloads until their condition self-resolves (NFR-4 — never one dismissed
+ * query: a PSN-rejected token surfaces the refresh path (4.1) — it survives
+ * reloads until its condition self-resolves (NFR-4 — never one dismissed
  * modal away).
  */
 /** The explicit not-found destination (review, M10) — never a shelf at /catlog. */
@@ -73,27 +64,15 @@ export function AppShell({
 	const destination = useActiveDestination();
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [stragglersOpen, setStragglersOpen] = useState(false);
-	// The summary surface has two sources (UX-DR13): a completed sync run
-	// (with counts) or the banner reopening the persisted items (no counts).
-	// Both snapshot their items at open time — a background settings refetch
-	// must not swap or empty the list under the reader.
-	const [summary, setSummary] = useState<{
-		result: SyncResult | null;
-		attention: SyncAttentionItem[];
-	} | null>(null);
-	// The PS+ check readout (5.1) — snapshot semantics match `summary`.
+	// The PS+ check readout (5.1) — snapshots its result at open time, so a
+	// background settings refetch never swaps the list under the reader.
 	const [psPlusResult, setPsPlusResult] = useState<PsPlusCheckResult | null>(
-		null,
-	);
-	// The trophy-sync readout (Story 9.2) — snapshot semantics match `summary`.
-	const [trophyResult, setTrophyResult] = useState<TrophySyncResult | null>(
 		null,
 	);
 	const { data: settings } = useQuery({
 		queryKey: ['settings'],
 		queryFn: ({ signal }) => fetchSettings(signal),
 	});
-	const syncAttention = settings?.syncAttention ?? [];
 	const stragglerCount = settings?.stragglerCount ?? 0;
 
 	// LiveRegionProvider is mounted above the session gate (main.tsx) so the
@@ -117,17 +96,6 @@ export function AppShell({
 						action={{
 							label: 'Update token',
 							onClick: () => setSettingsOpen(true),
-						}}
-					/>
-				)}
-				{syncAttention.length > 0 && (
-					<AttentionBanner
-						variant="stragglers"
-						message={`${syncAttention.length} sync ${syncAttention.length === 1 ? 'item needs' : 'items need'} attention — review, fix it in your library, then re-sync to clear this.`}
-						action={{
-							label: 'Review',
-							onClick: () =>
-								setSummary({ result: null, attention: syncAttention }),
 						}}
 					/>
 				)}
@@ -187,11 +155,7 @@ export function AppShell({
 			</div>
 			<Fab
 				handedness={settings?.fabHandedness ?? 'right'}
-				onSyncComplete={(result) =>
-					setSummary({ result, attention: result.needsAttention })
-				}
 				onPsPlusCheckComplete={setPsPlusResult}
-				onTrophySyncComplete={setTrophyResult}
 			/>
 			{settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
 			{psPlusResult && (
@@ -200,21 +164,8 @@ export function AppShell({
 					onClose={() => setPsPlusResult(null)}
 				/>
 			)}
-			{trophyResult && (
-				<TrophySyncModal
-					result={trophyResult}
-					onClose={() => setTrophyResult(null)}
-				/>
-			)}
 			{stragglersOpen && (
 				<StragglersDialog onClose={() => setStragglersOpen(false)} />
-			)}
-			{summary && (
-				<SyncSummaryModal
-					result={summary.result}
-					attention={summary.attention}
-					onClose={() => setSummary(null)}
-				/>
 			)}
 		</ToastHost>
 	);
