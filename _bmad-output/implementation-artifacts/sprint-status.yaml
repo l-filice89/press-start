@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-06
-last_updated: 2026-07-14
+last_updated: 2026-07-15
 project: ps-game-catalog
 project_key: NOKEY
 tracking_system: file-system
@@ -116,7 +116,7 @@ development_status:
   7-1-persist-the-ps-plus-catalog-as-browsable-data: done # 2026-07-14 (dev-auto): ps_plus_catalog + ps_plus_catalog_genre (0009), provider widened to full product records, one-fetch ingest, cron-driven chunked genre sweep, PS+ path put under the single-flight lock. Review: 19 patches incl. 5 HIGH — truncated-walk wipe (a shipped test ENCODED it), cross-op lock steal, concurrent-prune wipe, permanent stale genre tags, CSV export leaking the flag. followup_review_recommended:true (FORCED by the HIGHs)
   7-2-browse-the-catalog-a-genre-filterable-destination: done # 2026-07-14 (dev-auto): react-router adopted, all 3 CustomEvents DELETED (Epic 6 retro item 2 closed), SHELF/CATALOG toggle, A-Z paged catalog grid + PS-facet genre filter + scoped search, routed /game/:id via a by-id route. Review: 21 patches incl 4 HIGH - the q-does-not-follow guarantee was broken AND its test could not observe a query string; the search box ate characters; Close could navigate out of the app; a 404 detail rendered under a live shelf. followup_review_recommended:true
   7-3-add-or-claim-a-game-from-the-catalog: done # 2026-07-14 (dev-auto): Add reuses Epic 6 preview (not-owned default; PSN_PRODUCT + PSN npTitleId anchored in separate namespaces), Claim now deep-links the regional store and writes nothing. Review: 14 patches incl 4 HIGH - the owned toggle was live on a catalog add; a pruned row disabled the link lookup (the very duplicate the namespace prevents); the In-library marker ignored that link so a successful add still showed +Add forever (e2e blind to it: no IGDB creds means titles match by construction); the add threw away np_title_id so a later sync would duplicate the game. followup_review_recommended:true
-  epic-7-retrospective: optional
+  epic-7-retrospective: done # 2026-07-15 — epic-7-retro-2026-07-15.md; +1 follow-up fix same day (genre-sweep client loop, 927d0ff)
 
   # Epic 8: Multi-user Readiness — POST-v1.0.0, demand-driven (after Epic 7)
   epic-8: backlog
@@ -307,8 +307,28 @@ action_items:
   - epic: 9
     action: "Story 9.5 — post-retro hardening sweep (6 ledger fixes): shared NPSSO exchange-stub helper; seed-driver batch callback; single-flight guard across library sync + trophy sync + backfill; npsso Latin1 guard at save; discarded-game trophy noise; the pre-existing epic6 6.4a e2e flake"
     owner: "Amelia"
-    status: open
+    status: done # 2026-07-14: story 9-5 done (see development_status); closed at epic-7 retro housekeeping 2026-07-15
   - epic: 9
     action: "Merge feat/epic-9-psn-record to main through the CI gate and deploy a new version — gated on Story 9.5"
     owner: "Luca"
+    status: done # 2026-07-14: merged to main (PR #20); closed at epic-7 retro housekeeping 2026-07-15
+  - epic: 7
+    action: "DELEGATED-WORK-CARRIES-AN-AC rule: a story receiving delegated work must carry >=1 AC verifying it landed; wired into _bmad/custom/bmad-dev-auto.toml"
+    owner: "Winston + Murat"
+    status: done # 2026-07-15: persistent fact added at the retro
+  - epic: 7
+    action: "Orphan-test guard: every *.test.* file on disk must match a vitest project include"
+    owner: "Murat + Amelia"
+    status: done # 2026-07-15: src/orphan-tests.test.ts shipped at the retro
+  - epic: 7
+    action: "Ledger the 7.1 spec deferrals (DW-12 stale flag on discarded games, DW-13 first_seen_at semantics); DW-11 chip-vs-grid count stays open — all candidates for Epic 10 snapshot work"
+    owner: "Amelia"
+    status: done # 2026-07-15: deferred-work.md updated at the retro
+  - epic: 7
+    action: "Critical path: merge feat/epic-7-catalog-browse to main via PR + CI gate, deploy, then run one Check PS+ Extra in prod (drives the genre sweep in prod)"
+    owner: "Luca"
+    status: open
+  - epic: 7
+    action: "Epic 11 kickoff after the epic-7 merge - stories 11.1 -> 11.2 -> 11.3; 11.2 subsumes the login_required stopgap"
+    owner: "Luca + Amelia"
     status: open

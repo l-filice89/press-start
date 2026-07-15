@@ -436,3 +436,24 @@ resolution: Wishlist reachable under NEITHER credential from the app's server-to
 - source_spec: `spec-psn-region-setting.md`
   summary: The `PSN_REGION` env seed is persisted verbatim by `getPsnRegion` — no lowercase, no locale-format guard — so a malformed Wrangler var stores a value the new PUT validator would reject.
   evidence: `src/services/settings.ts:74-85` (pre-existing Story 5.1 code, untouched by this spec) persists `env.PSN_REGION?.trim()` on first read. Two write paths to `psn_region` now carry different invariants; catalog rows are keyed by the raw string, so a case-mismatched seed would orphan a snapshot. Harmless today (the var is pinned lowercase `it-it` in wrangler.jsonc) — normalize/validate the seed inside `getPsnRegion` when that file is next touched.
+
+### DW-11: Genre chip count can exceed the filtered grid count when the store carries duplicate-named products
+
+origin: source_spec spec-7-genre-sweep-client-loop.md (live browser test, 2026-07-15)
+location: src/repositories/psplus-catalog.ts (browse query vs genres-with-counts query), web/catalog/Catalog.tsx (chip counts)
+reason: The FIGHTING chip showed 13 while the filtered grid said "12 games matching": MORDHAU exists in the it-it store as two product_ids with the same name, both genre-tagged; the vocabulary count counts tag rows, the browse query dedupes by normalized title. Pre-existing 7.2 behavior surfaced by the first live sweep, not caused by the client loop. Cosmetic — the two counts disagree only for duplicate-named store products.
+status: open
+
+### DW-12: A discarded (soft-deleted) game keeps a stale ps_plus_extra flag until the next refresh
+
+origin: spec-7-1 review deferral (2026-07-14), ledgered at epic-7 retro 2026-07-15
+location: src/services/psplus.ts (flag pass) / game discard path
+reason: The flag pass covers tracked games; a game discarded between refreshes keeps whatever flag it had until the next check/cron rewrites it. Harmless single-user (discarded games are hidden), self-heals monthly. Candidate for the Epic 10 snapshot work (10.2 diffs the same table).
+status: open
+
+### DW-13: first_seen_at resets when a catalog row is pruned and later re-added
+
+origin: spec-7-1 review deferral (2026-07-14), ledgered at epic-7 retro 2026-07-15
+location: src/repositories/psplus-catalog.ts (upsert)
+reason: The column means "first seen since the last prune", not "first ever seen" — a game that leaves PS+ and returns looks new. Matters only for Epic 10's "leaving soon"/history features; decide the intended semantics there before building on it.
+status: open
