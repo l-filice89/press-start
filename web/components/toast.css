@@ -19,6 +19,9 @@
 	display: flex;
 	align-items: center;
 	gap: var(--space-3);
+	/* Never wider than the host's viewport cap — a long message wraps instead
+	   of clipping off-screen (seen with the bad-region 409 copy on a phone). */
+	max-width: 100%;
 	padding: var(--space-3) var(--space-4);
 	background: var(--color-surface-raised);
 	border: 1px solid rgba(53, 224, 255, 0.35);
@@ -31,7 +34,9 @@
 }
 
 .toast__message {
-	white-space: nowrap;
+	/* min-width 0 lets the flex item shrink below its text's intrinsic width,
+	   so long messages wrap; short ones still render on one line. */
+	min-width: 0;
 }
 
 .toast__undo {
