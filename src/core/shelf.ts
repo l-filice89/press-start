@@ -72,7 +72,18 @@ export function compareShelf(a: ShelfSortable, b: ShelfSortable): number {
 	const byState = shelfRank(a.effectiveState) - shelfRank(b.effectiveState);
 	if (byState !== 0) return byState;
 	if (a.owned !== b.owned) return a.owned ? -1 : 1;
-	return a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
+	return compareTitle(a.title, b.title);
+}
+
+/**
+ * The title tiebreaker — case-insensitive, locale-aware (`apex` sorts with
+ * `Apex`). Extracted (Story 7.2) because the CATALOG orders by title ALONE:
+ * it reuses this comparison, never `compareShelf` itself, whose state and
+ * ownership tiers would hoist the games you already have to the top of a
+ * discovery surface (UX: "reuse the tiebreaker, not the sort").
+ */
+export function compareTitle(a: string, b: string): number {
+	return a.localeCompare(b, undefined, { sensitivity: 'base' });
 }
 
 /** Return a new array ordered for the shelf (never mutates the input). */

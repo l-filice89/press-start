@@ -4,12 +4,14 @@ import { createIgdbProvider, type IgdbSearch } from '../providers';
 import { createDb } from '../repositories/db';
 import {
 	addGame,
+	getGameById,
 	previewAddGame,
 	rematchGame,
 	searchGamesForResolve,
 	todayForUser,
 } from '../services';
 import { type AuthVariables, requireAuth } from './auth';
+import { shelfGameSchema } from './shelf';
 
 /**
  * IGDB creds are Wrangler secrets (absent in e2e/dev until set) — the generated
@@ -53,29 +55,47 @@ const previewResponseSchema = z.object({
 		.nullable(),
 });
 
-const addBodySchema = z.object({
-	title: z.string().trim().min(1).max(200),
-	igdbId: z.string().min(1).max(64).optional(),
-	// Rendered as an <img src> — https only, bounded.
-	coverUrl: z
-		.string()
-		.max(500)
-		.regex(/^https:\/\//)
-		.nullish(),
-	releaseDate: z
-		.string()
-		.regex(/^\d{4}-\d{2}-\d{2}$/)
-		// Reject impossible calendar dates the regex lets through (2020-13-45):
-		// round-trip through Date and require it lands on the same day. Guard the
-		// Invalid-Date case first — .toISOString() on it throws (would 500).
-		.refine((s) => {
-			const ms = Date.parse(`${s}T00:00:00Z`);
-			return !Number.isNaN(ms) && new Date(ms).toISOString().slice(0, 10) === s;
-		})
-		.nullish(),
-	genres: z.array(z.string().max(64)).max(20).optional(),
-	owned: z.boolean().optional(),
-});
+const addBodySchema = z
+	.object({
+		title: z.string().trim().min(1).max(200),
+		igdbId: z.string().min(1).max(64).optional(),
+		// Rendered as an <img src> — https only, bounded.
+		coverUrl: z
+			.string()
+			.max(500)
+			.regex(/^https:\/\//)
+			.nullish(),
+		releaseDate: z
+			.string()
+			.regex(/^\d{4}-\d{2}-\d{2}$/)
+			// Reject impossible calendar dates the regex lets through (2020-13-45):
+			// round-trip through Date and require it lands on the same day. Guard the
+			// Invalid-Date case first — .toISOString() on it throws (would 500).
+			.refine((s) => {
+				const ms = Date.parse(`${s}T00:00:00Z`);
+				return (
+					!Number.isNaN(ms) && new Date(ms).toISOString().slice(0, 10) === s
+				);
+			})
+			.nullish(),
+		genres: z.array(z.string().max(64)).max(20).optional(),
+		owned: z.boolean().optional(),
+		// The PS Store product the add came from (Story 7.3). Resolved against the
+		// stored catalog server-side — a pruned id is ignored, not trusted, and the
+		// store URL is read from the row rather than taken from the client.
+		// SHAPED (review, L1): it is a client-controlled key into a SHARED table
+		// that `findCatalogProduct` reads un-scoped — keep it to the store's own
+		// alphabet rather than accept 128 arbitrary bytes of probe.
+		psnProductId: z
+			.string()
+			.regex(/^[A-Za-z0-9_-]{1,128}$/)
+			.optional(),
+	})
+	// A catalog add is NEVER an owned add (review, H1). Availability is not
+	// ownership: a PS+ claim is owned only via `owned_via: 'membership'`, and only
+	// once a SYNC observes the entitlement (Story 6.4). Refused at the boundary as
+	// well as in the service — the UI hiding the toggle is not a control.
+	.refine((body) => !(body.owned && body.psnProductId));
 
 const addResponseSchema = z.object({ gameId: z.string() });
 
@@ -115,6 +135,19 @@ gamesRoute.get('/games/search', requireAuth, async (c) => {
 	}
 	const candidates = await searchGamesForResolve(igdbFromEnv(c.env), title);
 	return c.json(searchResponseSchema.parse({ candidates }), 200);
+});
+
+/**
+ * ONE game by id (Story 7.2, AD-25) — what `/game/:id` resolves through. It is
+ * registered AFTER the static `/games/preview` + `/games/search` routes, which
+ * therefore still win the match. A pending fetch is a LOADING state client-side;
+ * this 404 is the only "not found" (and a game the user doesn't track is one).
+ */
+gamesRoute.get('/games/:id', requireAuth, async (c) => {
+	const db = createDb(c.env.DB);
+	const game = await getGameById(db, c.get('userId'), c.req.param('id'));
+	if (!game) return c.json({ error: 'game not found' }, 404);
+	return c.json({ game: shelfGameSchema.parse(game) }, 200);
 });
 
 // Rematch an already-added game onto a different IGDB entry (PV-4): the

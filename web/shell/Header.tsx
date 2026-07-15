@@ -1,7 +1,70 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, useRef } from 'react';
+import { Link, useNavigate } from 'react-router';
 import { formatDisplayDate } from '../date';
+import { useActiveDestination } from '../shelf/detail-navigation';
 import { Wordmark } from './Wordmark';
 import './header.css';
+
+/** The two destinations (EXPERIENCE.md IA). Everything else surfaces over them. */
+const DESTINATIONS = [
+	{ path: '/', label: 'SHELF' },
+	{ path: '/catalog', label: 'CATALOG' },
+] as const;
+
+/**
+ * `SHELF | CATALOG` — the one navigation control in the app (AD-25). Switching
+ * navigates to the bare path, which is what CLEARS a live `?q=`: the search term
+ * belongs to the destination you are looking at, and carrying it across would
+ * rebuild "two live surfaces from one input" through the URL.
+ *
+ * REAL LINKS (review, L1). They were `<button>`s with no `href`, so ctrl/cmd-
+ * click, middle-click and "open in a new tab" were dead on the app's only
+ * navigation control — and the `role="tab"` they carried named a tablist with no
+ * `aria-controls` and no tabpanel behind it. Two destinations you can link to
+ * are NAVIGATION, so this is a `<nav>` of links with `aria-current`; arrow-key
+ * traversal and the single-tab-stop roving index are kept.
+ */
+function DestinationToggle() {
+	const navigate = useNavigate();
+	// The destination BEHIND an open detail, not the detail's own path: a detail
+	// opened from the catalog would otherwise highlight SHELF, because `/game/:id`
+	// is neither destination's path. A COLD `/game/:id` has no background and falls
+	// back to SHELF — today's behavior, and the honest one (the shelf is what
+	// renders behind it).
+	const { pathname } = useActiveDestination();
+	const refs = useRef<(HTMLAnchorElement | null)[]>([]);
+	const activeIndex = pathname.startsWith('/catalog') ? 1 : 0;
+
+	return (
+		<nav className="destination-toggle" aria-label="Destination">
+			{DESTINATIONS.map((destination, index) => (
+				<Link
+					key={destination.path}
+					ref={(el) => {
+						refs.current[index] = el;
+					}}
+					to={destination.path}
+					className="destination-toggle__tab tap-target"
+					aria-current={index === activeIndex ? 'page' : undefined}
+					// Roving tabindex: the pair is ONE tab stop; arrows move within it.
+					tabIndex={index === activeIndex ? 0 : -1}
+					onKeyDown={(e) => {
+						const step =
+							e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+						if (step === 0) return;
+						e.preventDefault();
+						const next =
+							(index + step + DESTINATIONS.length) % DESTINATIONS.length;
+						refs.current[next]?.focus();
+						void navigate(DESTINATIONS[next].path);
+					}}
+				>
+					{destination.label}
+				</Link>
+			))}
+		</nav>
+	);
+}
 
 /**
  * The shell header (EXPERIENCE.md IA + Responsive deltas). Holds the wordmark,
@@ -42,6 +105,8 @@ export function Header({
 			<div className="app-header__brand">
 				<Wordmark variant="compact" showTagline />
 			</div>
+
+			<DestinationToggle />
 
 			<div className="app-header__search">
 				{search ?? (

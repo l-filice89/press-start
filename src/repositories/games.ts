@@ -79,9 +79,52 @@ export async function addExternalLink(
 	return row;
 }
 
+/**
+ * Attach an external id, tolerating a concurrent writer (Story 7.3 review, M3):
+ * two POSTs for the same NEW product id both insert a game, and the loser's
+ * `addExternalLink` would hit `UNIQUE(source, external_id)` and 500. The insert
+ * is a no-op on conflict; the caller re-reads the link to learn who won.
+ */
+export async function addExternalLinkIfAbsent(
+	db: Db,
+	link: { gameId: string; source: ExternalLinkSource; externalId: string },
+) {
+	await db.insert(externalLink).values(link).onConflictDoNothing();
+}
+
 /** Every external link for a game. */
 export async function listExternalLinks(db: Db, gameId: string) {
 	return db.select().from(externalLink).where(eq(externalLink.gameId, gameId));
+}
+
+/**
+ * Every link of one source — the catalog marker's join (Story 7.3 review, H3).
+ * The `PSN_PRODUCT` link is the STABLE identity between a catalog row and a
+ * game; the normalized title is not (the add re-seeds the title from the IGDB
+ * candidate, so the stored title routinely differs from the store's name).
+ */
+export async function listExternalLinksBySource(
+	db: Db,
+	source: ExternalLinkSource,
+): Promise<{ gameId: string; externalId: string }[]> {
+	return db
+		.select({
+			gameId: externalLink.gameId,
+			externalId: externalLink.externalId,
+		})
+		.from(externalLink)
+		.where(eq(externalLink.source, source));
+}
+
+/**
+ * Drop a game row (links/genres cascade). The ONLY caller is the add path's
+ * concurrent-product race (Story 7.3 review, M3): the request that loses the
+ * `PSN_PRODUCT` anchor deletes the row it just inserted and converges on the
+ * winner's game, rather than leaving an unlinked duplicate behind. Not a
+ * user-facing delete — that is the discard tombstone.
+ */
+export async function deleteGame(db: Db, gameId: string) {
+	await db.delete(game).where(eq(game.id, gameId));
 }
 
 /**
@@ -154,19 +197,32 @@ export async function backfillGameFacts(
 
 /**
  * Set/clear the PS+ Extra catalog flag on a batch of games (Story 5.1,
- * FR-38). Caller scopes the ids to tracked, non-owned games — this is a dumb
- * batched write.
+ * FR-38). Caller scopes the ids to tracked games — this is a dumb batched write.
+ *
+ * CHUNKED, like `listGenresForGames`: D1 caps bound parameters per statement at
+ * 100, and a real library clears more games than that in one refresh (103 →
+ * `D1_ERROR: too many SQL variables`, which failed the whole PS+ check). The
+ * `value` bind takes one slot, so the id slice is 99, and the chunks go through
+ * one `db.batch` so the write still costs a single binding call (AD-15).
  */
+const PS_PLUS_FLAG_CHUNK_SIZE = 99;
+
 export async function setPsPlusExtraFlags(
 	db: Db,
 	gameIds: string[],
 	value: boolean,
 ) {
 	if (gameIds.length === 0) return;
-	await db
-		.update(game)
-		.set({ psPlusExtra: value })
-		.where(inArray(game.id, gameIds));
+	const statements = [];
+	for (let i = 0; i < gameIds.length; i += PS_PLUS_FLAG_CHUNK_SIZE) {
+		statements.push(
+			db
+				.update(game)
+				.set({ psPlusExtra: value })
+				.where(inArray(game.id, gameIds.slice(i, i + PS_PLUS_FLAG_CHUNK_SIZE))),
+		);
+	}
+	await db.batch(statements as [(typeof statements)[0], ...typeof statements]);
 }
 
 /**
@@ -222,6 +278,9 @@ export type LibraryRow = {
 	owned: boolean;
 	ownershipType: (typeof gameTracking.$inferSelect)['ownershipType'];
 	ownedVia: (typeof gameTracking.$inferSelect)['ownedVia'];
+	/** Tombstone (DW-12): only surfaced when `includeDiscarded` asked for it —
+	 * the PS+ flag pass writes through tombstones but must not REPORT them. */
+	discarded: boolean;
 	// Raw trophy counts (Story 9.2). `trophySyncedAt` is the "this row has trophy
 	// data" column — a NULL there means the trophy sync never wrote this game,
 	// which is what makes the card/detail show NOTHING (never a fake 0%). The %
@@ -251,6 +310,10 @@ export type LibraryRow = {
 export async function listLibraryForUser(
 	db: Db,
 	userId: string,
+	// DW-12: the PS+ flag pass needs the tombstones too — `game.psPlusExtra`
+	// describes catalog membership, not user visibility, and a pass that skips
+	// discarded rows freezes their flag forever (wrong the moment one is revived).
+	{ includeDiscarded = false }: { includeDiscarded?: boolean } = {},
 ): Promise<LibraryRow[]> {
 	return db
 		.select({
@@ -271,6 +334,7 @@ export async function listLibraryForUser(
 			owned: gameTracking.owned,
 			ownershipType: gameTracking.ownershipType,
 			ownedVia: gameTracking.ownedVia,
+			discarded: gameTracking.discarded,
 			trophySyncedAt: gameTracking.trophySyncedAt,
 			trophyEarnedBronze: gameTracking.trophyEarnedBronze,
 			trophyEarnedSilver: gameTracking.trophyEarnedSilver,
@@ -284,7 +348,10 @@ export async function listLibraryForUser(
 		.from(gameTracking)
 		.innerJoin(game, eq(gameTracking.gameId, game.id))
 		.where(
-			and(eq(gameTracking.userId, userId), eq(gameTracking.discarded, false)),
+			and(
+				eq(gameTracking.userId, userId),
+				...(includeDiscarded ? [] : [eq(gameTracking.discarded, false)]),
+			),
 		);
 }
 

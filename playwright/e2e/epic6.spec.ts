@@ -741,14 +741,27 @@ test.describe('Story 6.4 ownership source', () => {
 		}
 	});
 
-	test('Settings "I cancelled PS+" un-owns claimed rows and re-shows their PS+ pill (6.4d)', async ({
+	test('Settings "I cancelled PS+" un-owns claimed rows and leaves ps_plus_extra to the catalog (6.4d)', async ({
 		page,
 	}) => {
-		// A sync-ingested claim: owned from the start, so runPsPlusCheck (which only
-		// flags NON-owned rows) never set its psPlusExtra. Cancel must re-flag it so
-		// the pill returns once it is un-owned.
+		// `ps_plus_extra` is the CACHE of `ps_plus_catalog`, maintained for every
+		// tracked game (Story 7.1) — owned ones included. So cancel writes NOTHING to
+		// it: an Extra claim already carries `true` (its pill returns the moment it is
+		// un-owned), and an ESSENTIAL monthly claim — not in the Extra catalog at all —
+		// must NOT be handed one (Epic 7 cross-story review, H2: cancel used to force
+		// the flag true, so an Essential game wore the ◈ PS+ pill, counted in the PS+
+		// filter and exported as `yes` for up to a month).
 		const claim = createGame({
 			title: `Cancel Claim ${randomUUID().slice(0, 8)}`,
+			psPlusExtra: true,
+			tracking: {
+				owned: true,
+				ownedVia: 'membership',
+				playStatus: 'Not started',
+			},
+		});
+		const essential = createGame({
+			title: `Cancel Essential ${randomUUID().slice(0, 8)}`,
 			psPlusExtra: false,
 			tracking: {
 				owned: true,
@@ -758,6 +771,7 @@ test.describe('Story 6.4 ownership source', () => {
 		});
 		try {
 			await seedGame(claim);
+			await seedGame(essential);
 			await page.goto('/');
 			await page.getByRole('button', { name: 'Settings' }).click();
 
@@ -772,24 +786,29 @@ test.describe('Story 6.4 ownership source', () => {
 			await cancel.click();
 			await page.getByRole('button', { name: 'Un-own claims' }).click();
 
-			// The claim is un-owned (ownership only) and re-flagged in-catalog so
-			// the pill re-shows.
+			// The Extra claim is un-owned (ownership only) and keeps the flag the
+			// catalog gave it — so its pill re-shows.
+			const rowOf = (gameId: string) =>
+				d1Query<{
+					owned: number;
+					owned_via: string | null;
+					ps_plus_extra: number;
+				}>(
+					`SELECT t.owned, t.owned_via, g.ps_plus_extra
+					 FROM game_tracking t JOIN game g ON g.id = t.game_id
+					 WHERE t.game_id = '${gameId}'`,
+				).then((rows) => rows[0]);
+
 			await expect
-				.poll(async () => {
-					const rows = await d1Query<{
-						owned: number;
-						owned_via: string | null;
-						ps_plus_extra: number;
-					}>(
-						`SELECT t.owned, t.owned_via, g.ps_plus_extra
-						 FROM game_tracking t JOIN game g ON g.id = t.game_id
-						 WHERE t.game_id = '${claim.id}'`,
-					);
-					return rows[0];
-				})
+				.poll(() => rowOf(claim.id))
 				.toEqual({ owned: 0, owned_via: null, ps_plus_extra: 1 });
+			// …and the Essential claim is un-owned with its flag UNTOUCHED: cancelling
+			// a subscription does not put a game into the Extra catalog.
+			await expect
+				.poll(() => rowOf(essential.id))
+				.toEqual({ owned: 0, owned_via: null, ps_plus_extra: 0 });
 		} finally {
-			await deleteGames([claim.id]);
+			await deleteGames([claim.id, essential.id]);
 		}
 	});
 });

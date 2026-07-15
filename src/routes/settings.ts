@@ -1,16 +1,20 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { isValidTimeZone } from '../core';
-import { getSetting, setSetting } from '../repositories';
+import { deleteSetting, getSetting, setSetting } from '../repositories';
 import { createDb } from '../repositories/db';
 import {
 	clearPsnAuthExpired,
+	clearPsPlusRefreshFailed,
 	FAB_HANDEDNESS_SETTING_KEY,
 	getPsnNpsso,
+	getPsnRegion,
 	getPsPlusRefreshedAt,
 	isPsnAuthExpired,
 	isPsPlusRefreshFailed,
 	PSN_NPSSO_SETTING_KEY,
+	PSN_REGION_SETTING_KEY,
+	PSPLUS_REFRESHED_AT_SETTING_KEY,
 	readFabHandedness,
 	readSyncAttention,
 	TIMEZONE_SETTING_KEY,
@@ -93,6 +97,7 @@ settingsRoute.get('/settings', requireAuth, async (c) => {
 		stragglerCount,
 		fabHandedness,
 		psPlusClaimCount,
+		region,
 	] = await Promise.all([
 		getSetting(db, userId, TIMEZONE_SETTING_KEY),
 		getPsnNpsso(db, userId, c.env),
@@ -103,6 +108,9 @@ settingsRoute.get('/settings', requireAuth, async (c) => {
 		countStragglers(db, userId),
 		readFabHandedness(db, userId),
 		countMembershipClaims(db, userId),
+		// Effective region (saved setting or the PSN_REGION seed) — same
+		// presence-of-the-working-value policy as the NPSSO flag above.
+		getPsnRegion(db, userId, c.env),
 	]);
 	return c.json(
 		{
@@ -118,6 +126,8 @@ settingsRoute.get('/settings', requireAuth, async (c) => {
 			fabHandedness,
 			// Owned PS+ claims (Story 6.4): drives + names the cancel-PS+ confirm.
 			psPlusClaimCount,
+			// PSN store region the PS+ catalog is fetched for (anonymous call).
+			region: region ?? null,
 		},
 		200,
 	);
@@ -168,6 +178,40 @@ settingsRoute.put('/settings/timezone', requireAuth, async (c) => {
 	// earlier value, not the one just sent.
 	const timezone = await getSetting(db, userId, TIMEZONE_SETTING_KEY);
 	return c.json({ timezone: timezone ?? null }, 200);
+});
+
+// Store locale, e.g. `it-it` / `en-us` / `zh-hans-hk` (Sony has 3-part locales
+// with a script segment). Free text with a shape guard — Sony's locale set
+// drifts, so no pinned list; a wrong-but-well-formed value degrades to the
+// provider's existing bad-region handling (null grid → provider error).
+const psnRegionBodySchema = z.object({
+	region: z
+		.string()
+		.transform((value) => value.trim().toLowerCase())
+		.pipe(z.string().regex(/^[a-z]{2}(-[a-z]{2,4})?-[a-z]{2}$/)),
+});
+
+settingsRoute.put('/settings/psn-region', requireAuth, async (c) => {
+	const body = psnRegionBodySchema.safeParse(
+		await c.req.json().catch(() => null),
+	);
+	if (!body.success) {
+		return c.json({ error: 'invalid region' }, 400);
+	}
+	const db = createDb(c.env.DB);
+	const userId = c.get('userId');
+	const previous = await getSetting(db, userId, PSN_REGION_SETTING_KEY);
+	await setSetting(db, userId, PSN_REGION_SETTING_KEY, body.data.region);
+	// A REAL region change orphans the old region's refresh stamps: the header
+	// would date a catalog the new region never had. Clear both; the next check
+	// (button or cron) restamps them. Re-saving the same region clears nothing.
+	if (previous && previous !== body.data.region) {
+		await Promise.all([
+			deleteSetting(db, userId, PSPLUS_REFRESHED_AT_SETTING_KEY),
+			clearPsPlusRefreshFailed(db, userId),
+		]);
+	}
+	return c.json({ region: body.data.region }, 200);
 });
 
 const handednessBodySchema = z.object({

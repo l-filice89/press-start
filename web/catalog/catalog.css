@@ -1,0 +1,220 @@
+/**
+ * The catalog destination (Story 7.2, DESIGN.md). Same grid geometry as the
+ * shelf — the two destinations must read as one product — with the shelf card's
+ * chrome minus everything that implies ownership. NEVER magenta here: magenta is
+ * reserved for Playing, which is a shelf state.
+ */
+
+.catalog {
+	width: 100%;
+}
+
+.catalog__grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+	gap: var(--space-4);
+}
+
+/* Phone: 2-up, tighter gaps (the shelf's own phone delta). */
+@media (max-width: 600px) {
+	.catalog__grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: var(--space-3);
+	}
+}
+
+/* A <fieldset> for the grouping semantics (its legend names the group for a
+   screen reader) — its default chrome is reset away. */
+.catalog__filters {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+	margin: 0 0 var(--space-3);
+	padding: 0;
+	border: 0;
+}
+
+.catalog__genre,
+.catalog__clear {
+	padding: var(--space-2) var(--space-3);
+	font-family: var(--font-ui);
+	font-size: 12px;
+	color: var(--color-text-secondary);
+	background: var(--color-surface);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-pill);
+	cursor: pointer;
+}
+
+.catalog__genre[aria-pressed="true"] {
+	color: var(--color-void);
+	background: var(--color-accent-electric);
+	border-color: var(--color-accent-electric);
+}
+
+.catalog__genre-count {
+	font-family: var(--font-mono);
+	opacity: 0.7;
+}
+
+/* The genre vocabulary failed to load — say so, rather than letting an empty
+   filter row read as "this region has no genres" (review, M9). */
+.catalog__genres-error {
+	flex: 1 0 100%;
+	margin: 0;
+	font-family: var(--font-ui);
+	font-size: 12px;
+	color: var(--color-accent-warn, var(--color-text-secondary));
+}
+
+.catalog__count {
+	margin: 0 0 var(--space-3);
+	font-family: var(--font-mono);
+	font-size: 11px;
+	letter-spacing: 0.06em;
+	color: var(--text-meta);
+}
+
+.catalog-card {
+	display: flex;
+	flex-direction: column;
+	background: var(--color-surface);
+	border: 1px solid var(--color-border-soft);
+	border-radius: var(--radius-md);
+}
+
+.catalog-card__cover {
+	position: relative;
+	aspect-ratio: 3 / 4;
+	background: var(--color-surface-raised);
+	border-radius: calc(var(--radius-md) - 1px) calc(var(--radius-md) - 1px) 0 0;
+	overflow: hidden;
+}
+
+.catalog-card__cover-img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.catalog-card__cover-fallback {
+	display: grid;
+	place-items: center;
+	width: 100%;
+	height: 100%;
+	color: var(--text-meta);
+}
+
+.catalog-card__flag {
+	position: absolute;
+	top: var(--space-2);
+	left: var(--space-2);
+	padding: 2px 6px;
+	font-family: var(--font-mono);
+	font-size: 10px;
+	color: var(--color-accent-electric);
+	background: color-mix(in srgb, var(--color-void) 70%, transparent);
+	border: 1px solid var(--color-accent-electric);
+	border-radius: var(--radius-pill);
+}
+
+.catalog-card__info {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+	padding: var(--space-3);
+}
+
+.catalog-card__title {
+	margin: 0;
+	font-family: var(--font-ui);
+	font-size: 13px;
+	color: var(--text-body);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* STACKED, not side by side: at the grid's card width two pills sat shoulder to
+   shoulder and both wrapped their own labels onto two lines ("＋ / Add"). Full-
+   width stacked buttons read as buttons and keep their labels on one line.
+   `min-height` floors the SHORTER states (in-library = marker + Claim; owned =
+   marker only) so a card with actions is never dwarfed by its neighbours; the
+   not-tracked state (two stacked 44px targets) is taller, and that is accepted —
+   forcing every block to the two-button height would strand a lone Owned marker
+   above a block of empty space. Rows still align: the grid stretches cards in a
+   row to the tallest. */
+.catalog-card__actions {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: var(--space-2);
+	min-height: 72px;
+}
+
+/* The label fills the 44px hit target rather than floating in it: the height is
+   the WCAG floor (`.tap-target`), NOT padding, so a 12px label just left the
+   button looking over-padded. Centring is explicit because `Claim now` is an <a>. */
+.catalog-card__add,
+.catalog-card__claim {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	white-space: nowrap;
+	font-size: 14px;
+}
+
+/* Not tracked: the primary action, solid electric fill with dark ink. */
+.catalog-card__add {
+	padding: var(--space-2) var(--space-3);
+	font-family: var(--font-ui);
+	font-weight: 600;
+	color: var(--color-void);
+	background: var(--color-accent-electric);
+	border: none;
+	border-radius: var(--radius-pill);
+	cursor: pointer;
+}
+
+/* Claim: hairline outline, cyan ink — a deep link to the store, never a write. */
+.catalog-card__claim {
+	padding: var(--space-2) var(--space-3);
+	font-family: var(--font-ui);
+	color: var(--color-accent-electric);
+	text-decoration: none;
+	background: transparent;
+	border: 1px solid var(--color-accent-electric);
+	border-radius: var(--radius-pill);
+}
+
+/* The markers are TEXT, not a colour state (accessibility floor). */
+.catalog-card__marker {
+	font-family: var(--font-ui);
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.catalog-card__marker--library {
+	color: var(--color-accent-electric);
+}
+
+.catalog-card__marker--owned {
+	color: var(--color-milestone-silver, var(--color-text-secondary));
+}
+
+.catalog__sentinel {
+	display: flex;
+	justify-content: center;
+	padding: var(--space-5) 0;
+}
+
+.catalog__more {
+	padding: var(--space-2) var(--space-4);
+	font-family: var(--font-ui);
+	font-size: 13px;
+	color: var(--color-accent-electric);
+	background: transparent;
+	border: 1px solid var(--color-accent-electric);
+	border-radius: var(--radius-pill);
+	cursor: pointer;
+}

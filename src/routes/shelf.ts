@@ -21,7 +21,7 @@ const trophyTiersSchema = z.object({
 	platinum: z.number(),
 });
 
-const shelfGameSchema = z.object({
+export const shelfGameSchema = z.object({
 	id: z.string(),
 	title: z.string(),
 	coverUrl: z.string().nullable(),

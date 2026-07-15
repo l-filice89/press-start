@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router';
 import { useToast } from '../components/Toast';
 import { useModalTrap } from '../components/useModalTrap';
 import { addGame, fetchAddPreview, type IgdbCandidate } from './api';
+import { toDetail, useActiveDestination } from './detail-navigation';
 import { IgdbMatchPicker } from './IgdbMatchPicker';
-import { openDetail } from './open-detail';
 import './add-game-dialog.css';
 import './stragglers-dialog.css';
 
@@ -21,14 +22,35 @@ import './stragglers-dialog.css';
 export function AddGameDialog({
 	title,
 	onClose,
+	navigateToDetail = false,
+	prefill,
 }: {
 	title: string;
 	onClose: () => void;
+	/** Land on the new game's detail after a successful add — the CATALOG add
+	 * path (Story 7.2): there is no catalog detail page, so the real, editable
+	 * one is where the flow ends. The shelf add stays where it is. */
+	navigateToDetail?: boolean;
+	/**
+	 * Facts the CALLER already knows (Story 7.3). Two plain values, not a catalog
+	 * row: a cover to show before IGDB answers (and to fall back on when its match
+	 * has none), and a PS Store product id passed straight through to the add
+	 * payload — which already carries it (`AddGamePayload.psnProductId`). The
+	 * dialog never learns what a catalog is: no fetch, no product lookup, no
+	 * catalog type imported. Any future caller with the same two facts gets the
+	 * same behaviour.
+	 */
+	prefill?: { coverUrl?: string | null; psnProductId?: string };
 }) {
 	const dialogRef = useRef<HTMLDivElement>(null);
 	const titleRef = useRef<HTMLInputElement>(null);
 	const headingId = useId();
 	const queryClient = useQueryClient();
+	const navigate = useNavigate();
+	// The destination the dialog was opened OVER — the shelf when the search bar
+	// raised it, the CATALOG when a catalog card did. Both detail navigations below
+	// carry it, so the detail surfaces over the destination you are still on.
+	const destination = useActiveDestination();
 	const { toast } = useToast();
 
 	const {
@@ -45,10 +67,13 @@ export function AddGameDialog({
 	// Editable draft, seeded from the typed name and re-seeded ONCE when the
 	// IGDB candidate arrives (the preview resolves in well under a second, so
 	// clobbering pre-arrival edits is a non-issue at this scale).
+	const prefilledCover = prefill?.coverUrl ?? '';
+	/** Opened from a store product (the catalog) — see the owned toggle below. */
+	const fromProduct = Boolean(prefill?.psnProductId);
 	const [draftTitle, setDraftTitle] = useState(title);
 	const [releaseDate, setReleaseDate] = useState('');
 	const [genresText, setGenresText] = useState('');
-	const [coverUrl, setCoverUrl] = useState('');
+	const [coverUrl, setCoverUrl] = useState(prefilledCover);
 	const [owned, setOwned] = useState(false);
 	const seeded = useRef(false);
 	// The candidate the user corrected to (Story 6.6 / PV-6) — it replaces the
@@ -63,7 +88,9 @@ export function AddGameDialog({
 		setDraftTitle(candidate.name);
 		setReleaseDate(candidate.releaseDate ?? '');
 		setGenresText(candidate.genres.join(', '));
-		setCoverUrl(candidate.coverUrl ?? '');
+		// A match with NO cover must not blank a cover the caller supplied — the
+		// game would land on the shelf as a grey tile with an art URL one field away.
+		setCoverUrl(candidate.coverUrl ?? prefilledCover);
 	}
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: seeds off the preview alone — applyCandidate is re-created every render and only ever writes state, so listing it would re-run this on every render for nothing (the `seeded` gate makes it a no-op anyway).
@@ -84,16 +111,20 @@ export function AddGameDialog({
 		onSuccess: async (result) => {
 			if (result.kind === 'duplicate') {
 				// A duplicate may be a REVIVED discard: re-adding the name clears the
-				// soft-delete tombstone server-side, so the just-revived card isn't in
-				// the shelf cache yet. Kick the refetch FIRST (marks the shelf query
-				// fetching), THEN open detail — the shelf holds a not-yet-present id
-				// while it is refetching and opens the panel once the revived card
-				// lands (Shelf.tsx stale-id guard). Not awaited, so the open is queued
-				// against the in-flight fetch rather than a settled empty payload.
+				// soft-delete tombstone server-side. Story 7.2 (AD-25): the detail is
+				// ROUTED and resolves through `GET /api/games/:id`, so it no longer
+				// depends on the game having landed in the `['shelf']` list cache —
+				// the whole "hold the id while the shelf refetches" dance is gone with
+				// the window event that needed it.
 				toast({ message: 'Already in your library.' });
 				queryClient.invalidateQueries({ queryKey: ['shelf'] });
+				// …and the CATALOG (Epic 7 cross-story review, M3): the server anchors the
+				// PSN_PRODUCT link on the duplicate path too — a catalog game that turned
+				// out to be already tracked under a different title is now marked, and the
+				// stale grid would keep reading ＋Add after you navigate back.
+				queryClient.invalidateQueries({ queryKey: ['catalog'] });
 				onClose();
-				openDetail(result.gameId);
+				void navigate(...toDetail(result.gameId, destination));
 				return;
 			}
 			toast({
@@ -103,8 +134,12 @@ export function AddGameDialog({
 			await Promise.all([
 				queryClient.invalidateQueries({ queryKey: ['shelf'] }),
 				queryClient.invalidateQueries({ queryKey: ['genres'] }),
+				queryClient.invalidateQueries({ queryKey: ['catalog'] }),
 			]);
 			onClose();
+			if (navigateToDetail) {
+				void navigate(...toDetail(result.gameId, destination));
+			}
 		},
 		onError: () => toast({ message: `Couldn’t add ${draftTitle}. Try again.` }),
 	});
@@ -120,6 +155,10 @@ export function AddGameDialog({
 			// edition tweak keeps the right identity; retyping a different game
 			// entirely is rare enough to not special-case yet.
 			...(candidate ? { igdbId: candidate.igdbId } : {}),
+			// Forwarded, never interpreted: the server resolves it against the stored
+			// catalog and writes the `PSN_PRODUCT` link (AD-20) — or, if it was pruned
+			// meanwhile, ignores it and saves the title alone.
+			...(prefill?.psnProductId ? { psnProductId: prefill.psnProductId } : {}),
 			coverUrl: coverUrl.trim() || null,
 			releaseDate: releaseDate || null,
 			genres: genresText
@@ -237,14 +276,23 @@ export function AddGameDialog({
 								onChange={(e) => setCoverUrl(e.target.value)}
 							/>
 						</label>
-						<label className="add-game__owned">
-							<input
-								type="checkbox"
-								checked={owned}
-								onChange={(e) => setOwned(e.target.checked)}
-							/>
-							<span>I own this game</span>
-						</label>
+						{/* NOT offered on a catalog add (Story 7.3 review, H1): ticking it
+						    wrote owned_via 'purchase' + today's bought_on for a PS+ EXTRA
+						    title — wrong twice (it is not a purchase, and there is no
+						    purchase date). A PS+ title counts as owned ONLY via
+						    owned_via: 'membership', and ONLY when a sync observes the real
+						    entitlement — the app cannot see the PS Store tab. The server
+						    refuses `owned` alongside a product id regardless. */}
+						{!fromProduct && (
+							<label className="add-game__owned">
+								<input
+									type="checkbox"
+									checked={owned}
+									onChange={(e) => setOwned(e.target.checked)}
+								/>
+								<span>I own this game</span>
+							</label>
+						)}
 					</div>
 				</div>
 

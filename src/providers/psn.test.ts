@@ -1,5 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createPsnProvider, PsnAuthError } from './psn';
+import {
+	BAD_CATEGORY_PAYLOAD,
+	BAD_REGION_PAYLOAD,
+	CAPTURED_COVER_URL,
+	CATALOG_FACETS_EN_US_PAYLOAD,
+	CATALOG_PAGE_PAYLOAD,
+	catalogPagePayload,
+	DE_DE_GENRE_KEYS,
+	EN_US_GENRE_KEYS,
+	GENRE_PAGE_MUSIC_RHYTHM_PAYLOAD,
+	PAST_END_PAYLOAD,
+	productId,
+} from '../../test/fixtures/psn';
+import { createPsnProvider, PsnAuthError, PsnStoreRejectionError } from './psn';
 
 /**
  * Wire-level PSN adapter tests (Story 4.1, re-credentialed in 9.1b) over a
@@ -380,6 +393,29 @@ describe('createPsnProvider', () => {
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
+	it('throws PsnAuthError when a lapsed NPSSO 302s to the Sony sign-in page with error=login_required (hazard: a real expiry that 502s instead of lighting the refresh banner)', async () => {
+		const fetchMock = vi.fn(async (input: unknown) => {
+			if (String(input).startsWith(AUTHORIZE))
+				return new Response(null, {
+					status: 302,
+					headers: {
+						// The captured live shape (probed 2026-07-15): a fully lapsed
+						// token redirects to the sign-in page, NOT the app scheme.
+						location:
+							'https://my.account.sony.com/sonyacct/signin/?access_type=offline&client_id=09515159-7237-4370-9b40-3806e67c0891&response_type=code&redirect_uri=com.scee.psxandroid.scecompcall%3A%2F%2Fredirect&error=login_required&error_code=4165&error_description=User+is+not+authenticated&no_captcha=true',
+					},
+				});
+			throw new Error('the token leg must not be reached');
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(
+			provider(['lapsed-npsso']).provider.fetchPurchasedGames(),
+		).rejects.toBeInstanceOf(PsnAuthError);
+		// One authorize attempt, and the token leg is never reached.
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
 	it('retries the exchange after a failed one (hazard: a memoized REJECTED promise replays the stale failure)', async () => {
 		let firstAuthorize = true;
 		const fetchMock = vi.fn(async (input: unknown) => {
@@ -747,17 +783,17 @@ describe('fetchTrophyTitles', () => {
 	});
 });
 
-/** Catalog page response (Story 5.1). */
+/**
+ * Catalog page response (Story 5.1, widened in 7.1) — built from the CAPTURED
+ * payload (`test/fixtures/psn/catalog-page-de-de.json`, probed live 2026-07-14),
+ * so the record this adapter reads is the record the store actually sends.
+ */
 function catalogPage(names: string[], totalCount: number) {
-	return jsonResponse({
-		data: {
-			categoryGridRetrieve: {
-				products: names.map((name) => ({ name })),
-				pageInfo: { totalCount },
-			},
-		},
-	});
+	return jsonResponse(catalogPagePayload(names, { totalCount }));
 }
+
+const catalogNames = (products: { name: string }[]) =>
+	products.map((product) => product.name);
 
 describe('fetchPsPlusExtraCatalog', () => {
 	it('sends the catalog persisted query with the region header and NO credential', async () => {
@@ -795,11 +831,14 @@ describe('fetchPsPlusExtraCatalog', () => {
 			.mockResolvedValueOnce(catalogPage(['E'], 5));
 		vi.stubGlobal('fetch', fetchMock);
 
-		const names = await provider(['x']).provider.fetchPsPlusExtraCatalog(
-			'en-us',
-		);
+		const { products, totalCount } = await provider([
+			'x',
+		]).provider.fetchPsPlusExtraCatalog('en-us');
 
-		expect(names).toEqual(['A', 'B', 'C', 'D', 'E']);
+		expect(catalogNames(products)).toEqual(['A', 'B', 'C', 'D', 'E']);
+		// The count rides back out — the ingest reconciles against it before it
+		// prunes anything (review, H1).
+		expect(totalCount).toBe(5);
 		expect(fetchMock).toHaveBeenCalledTimes(3);
 		expect(decodeURIComponent(fetchMock.mock.calls[1][0])).toContain(
 			'"offset":2',
@@ -810,29 +849,122 @@ describe('fetchPsPlusExtraCatalog', () => {
 	});
 
 	it('stops on an empty page when totalCount is missing', async () => {
+		const page = (names: string[]) => {
+			const payload = catalogPagePayload(names);
+			// @ts-expect-error — deliberately dropping the count the loop leans on.
+			payload.data.categoryGridRetrieve.pageInfo = {};
+			return jsonResponse(payload);
+		};
 		const fetchMock = vi
 			.fn()
-			.mockResolvedValueOnce(
-				jsonResponse({
-					data: {
-						categoryGridRetrieve: {
-							products: [{ name: 'Only' }],
-							pageInfo: {},
-						},
-					},
-				}),
-			)
-			.mockResolvedValueOnce(
-				jsonResponse({
-					data: { categoryGridRetrieve: { products: [], pageInfo: {} } },
-				}),
-			);
+			.mockResolvedValueOnce(page(['Only']))
+			.mockResolvedValueOnce(page([]));
 		vi.stubGlobal('fetch', fetchMock);
 
 		expect(
-			await provider(['x']).provider.fetchPsPlusExtraCatalog('en-us'),
+			catalogNames(
+				(await provider(['x']).provider.fetchPsPlusExtraCatalog('en-us'))
+					.products,
+			),
 		).toEqual(['Only']);
 		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
+
+	/**
+	 * The record the store ACTUALLY sends (captured 2026-07-14): ids, platforms,
+	 * a store classification, a cover picked out of `media[]` — and NO genre, NO
+	 * release date. A per-product fetch for either would cost ~490 subrequests.
+	 */
+	it('maps the CAPTURED product record: ids, platforms, classification, a cover from media[] — and no release date', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(catalogPage(['Sifu'], 1)));
+
+		const {
+			products: [product],
+		} = await provider(['x']).provider.fetchPsPlusExtraCatalog('de-de');
+
+		expect(product).toEqual({
+			productId: productId('Sifu'),
+			npTitleId: `NP${productId('Sifu')}`,
+			name: 'Sifu',
+			platforms: ['PS5'],
+			coverUrl: CAPTURED_COVER_URL,
+			storeClassification: 'GAME_BUNDLE',
+			storeUrl: `https://store.playstation.com/de-de/product/${productId('Sifu')}`,
+		});
+		expect(product).not.toHaveProperty('releaseDate');
+	});
+
+	/**
+	 * THE TRUNCATED WALK (review, H1). An empty page is a terminator ONLY where
+	 * the store's own count says the walk is over. Page 0 of 490 followed by an
+	 * empty page at offset 100 used to answer "100 products, all of them" — and
+	 * the ingest would then prune the other 390 rows and clear their flags. It is
+	 * a provider failure now, and nothing downstream ever sees a short catalog.
+	 */
+	it('THROWS on an empty page while offset < totalCount (hazard: a truncated walk reads as a complete catalog)', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi
+				.fn()
+				.mockResolvedValueOnce(catalogPage(['A', 'B'], 490))
+				.mockResolvedValueOnce(jsonResponse(PAST_END_PAYLOAD)),
+		);
+
+		await expect(
+			provider(['x']).provider.fetchPsPlusExtraCatalog('en-us'),
+		).rejects.toThrow(/empty page at offset 2 while totalCount is 490/);
+	});
+
+	it('the genuine terminator: an empty page once the count is reached ends the walk', async () => {
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(catalogPage(['A', 'B'], 2))
+			.mockResolvedValueOnce(jsonResponse(PAST_END_PAYLOAD));
+		vi.stubGlobal('fetch', fetchMock);
+
+		const { products, totalCount } = await provider([
+			'x',
+		]).provider.fetchPsPlusExtraCatalog('en-us');
+		expect(catalogNames(products)).toEqual(['A', 'B']);
+		expect(totalCount).toBe(2);
+		// The count was already reached — the past-the-end page is never even asked for.
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
+	// The store renaming its media roles must not blank EVERY cover (review, L4).
+	it('falls back to the first IMAGE when no known cover role is present', async () => {
+		const payload = catalogPagePayload(['Rebranded']);
+		payload.data.categoryGridRetrieve.products[0].media = [
+			{
+				__typename: 'Media',
+				role: 'SOMETHING_NEW',
+				type: 'VIDEO',
+				url: 'https://v/clip.mp4',
+			},
+			{
+				__typename: 'Media',
+				role: 'SOMETHING_NEW',
+				type: 'IMAGE',
+				url: 'https://i/cover.png',
+			},
+		];
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(payload)));
+
+		const {
+			products: [product],
+		} = await provider(['x']).provider.fetchPsPlusExtraCatalog('de-de');
+		expect(product.coverUrl).toBe('https://i/cover.png');
+	});
+
+	it('a product with no usable image stores null rather than costing a second fetch', async () => {
+		const payload = catalogPagePayload(['Coverless']);
+		payload.data.categoryGridRetrieve.products[0].media = [];
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(payload)));
+
+		const {
+			products: [product],
+		} = await provider(['x']).provider.fetchPsPlusExtraCatalog('de-de');
+		expect(product.coverUrl).toBeNull();
 	});
 
 	it('aborts a runaway catalog pagination instead of looping forever', async () => {
@@ -871,6 +1003,65 @@ describe('fetchPsPlusExtraCatalog', () => {
 		await expect(
 			provider(['x']).provider.fetchPsPlusExtraCatalog('en-us'),
 		).rejects.toThrow(/well-formed/);
+	});
+
+	/**
+	 * EVERY degenerate catalog answer is an HTTP 200 (captured 2026-07-14): a null
+	 * grid on a bad region carries an `errors[]` with an EMPTY message; a bad
+	 * category id carries `errors: ["Invalid args"]` + a null grid. The adapter
+	 * throws on both — a 200 is not success.
+	 */
+	it.each([
+		['a bad region (null grid, empty message)', BAD_REGION_PAYLOAD],
+		['a bad category id (null grid + errors)', BAD_CATEGORY_PAYLOAD],
+	])('throws on the CAPTURED degenerate 200 for %s', async (_label, payload) => {
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(payload)));
+		// The TYPED rejection is the seam the route's "check your region" 409
+		// hangs off — a plain Error here would degrade it to a retry-later 502.
+		await expect(
+			provider(['x']).provider.fetchPsPlusExtraCatalog('en-us'),
+		).rejects.toThrow(PsnStoreRejectionError);
+	});
+});
+
+describe('fetchPsPlusCatalogGenreKeys / fetchPsPlusExtraCatalogByGenre (Story 7.1)', () => {
+	// AD-26: a pinned 19-key enum would silently drop a whole genre for any region
+	// that names one we never saw — de-de has 19, en-us has 20.
+	it.each([
+		['en-us', CATALOG_FACETS_EN_US_PAYLOAD, EN_US_GENRE_KEYS, 20, true],
+		['de-de', CATALOG_PAGE_PAYLOAD, DE_DE_GENRE_KEYS, 19, false],
+	])('DISCOVERS the %s facet keys FROM THE RESPONSE — the PROVIDER returns what the payload named', async (_region, payload, expected, count, hasMusicRhythm) => {
+		// Driven through the provider, not asserted on the fixture: a test that
+		// reads a JSON file back and checks it contains what its author typed is
+		// not evidence (review, L6).
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(payload)));
+
+		const keys = await provider(['x']).provider.fetchPsPlusCatalogGenreKeys(
+			_region,
+		);
+
+		expect(keys).toEqual(expected);
+		expect(keys).toHaveLength(count);
+		expect(keys.includes('MUSIC/RHYTHM')).toBe(hasMusicRhythm);
+	});
+
+	it('sends a SLASHED key inside the URL-encoded filterBy variable (never a path)', async () => {
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValue(jsonResponse(GENRE_PAGE_MUSIC_RHYTHM_PAYLOAD));
+		vi.stubGlobal('fetch', fetchMock);
+
+		const products = await provider([
+			'x',
+		]).provider.fetchPsPlusExtraCatalogByGenre('en-us', 'MUSIC/RHYTHM');
+
+		const url = String(fetchMock.mock.calls[0][0]);
+		// The raw slash never appears outside the encoded variables blob.
+		expect(url).toContain('productGenres%3AMUSIC%2FRHYTHM');
+		expect(decodeURIComponent(url)).toContain(
+			'"filterBy":["productGenres:MUSIC/RHYTHM"]',
+		);
+		expect(catalogNames(products)).toEqual(['Entwined™']);
 	});
 });
 

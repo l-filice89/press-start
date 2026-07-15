@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { normalizeTitle } from '../../../src/core';
 import { createGame, type SeedGame } from '../factories/game-factory';
 import { BASE_URL } from '../server';
 
@@ -135,7 +136,7 @@ const seedSql = (game: SeedGame): string[] => {
 	const defined = t.trophyDefined ?? undefined;
 	return [
 		`INSERT INTO game (id, title, title_normalized, release_date, cover_url, store_url, ps_plus_extra, unenriched)
-		 VALUES (${sq(game.id)}, ${sq(game.title)}, ${sq(game.title.toLowerCase())}, ${sq(game.releaseDate)}, ${sq(game.coverUrl)}, ${sq(game.storeUrl)}, ${game.psPlusExtra ? 1 : 0}, 0);`,
+		 VALUES (${sq(game.id)}, ${sq(game.title)}, ${sq(normalizeTitle(game.title))}, ${sq(game.releaseDate)}, ${sq(game.coverUrl)}, ${sq(game.storeUrl)}, ${game.psPlusExtra ? 1 : 0}, 0);`,
 		`INSERT INTO game_tracking (user_id, game_id, owned, owned_via, play_status, completed_on, platinum_on, wishlisted_on,
 		   trophy_earned_bronze, trophy_earned_silver, trophy_earned_gold, trophy_earned_platinum,
 		   trophy_defined_bronze, trophy_defined_silver, trophy_defined_gold, trophy_defined_platinum, trophy_synced_at)
@@ -153,6 +154,59 @@ export async function seedGame(game: SeedGame): Promise<void> {
 /** Seeds many games in one round trip. */
 export async function seedGames(games: SeedGame[]): Promise<void> {
 	if (games.length > 0) await apiSql(games.flatMap(seedSql));
+}
+
+/**
+ * One PS+ catalog product (Story 7.2). `title_normalized` is written with the
+ * REAL `core/normalizeTitle` (review, L6) — the same function both production
+ * ingests use — because that shared key is the ONLY thing that makes a catalog
+ * row read as "in library" / "Owned". Seeding a lookalike key
+ * (`title.toLowerCase()`) made the join agree BY CONSTRUCTION in e2e: the two
+ * normalizers could diverge in production, every card would silently lose its
+ * marker, and this suite would stay green.
+ */
+export interface SeedCatalogProduct {
+	productId: string;
+	name: string;
+	coverUrl?: string | null;
+	storeUrl?: string | null;
+	/** PS-store facet KEYS (AD-26), e.g. `HORROR` — never IGDB genre names. */
+	genres?: string[];
+}
+
+/** The e2e region: `wrangler.jsonc`'s `env.e2e` seeds `PSN_REGION` with it. */
+export const E2E_REGION = 'it-it';
+
+/** Seed catalog products (+ their facet tags) for the e2e region. */
+export async function seedCatalog(
+	products: SeedCatalogProduct[],
+	region = E2E_REGION,
+): Promise<void> {
+	if (products.length === 0) return;
+	await d1Execute(
+		...products.flatMap((product) => [
+			`INSERT OR REPLACE INTO ps_plus_catalog
+			   (region, tier, product_id, np_title_id, name, title_normalized, cover_url, platforms,
+			    store_classification, store_url, generation, first_seen_at, last_seen_at)
+			 VALUES (${sq(region)}, 'extra', ${sq(product.productId)}, NULL, ${sq(product.name)},
+			   ${sq(normalizeTitle(product.name))}, ${sq(product.coverUrl ?? null)}, '["PS5"]', NULL,
+			   ${sq(product.storeUrl ?? `https://store.playstation.com/${region}/product/${product.productId}`)},
+			   'e2e', '2026-07-01', '2026-07-01');`,
+			...(product.genres ?? []).map(
+				(key) =>
+					`INSERT OR REPLACE INTO ps_plus_catalog_genre (region, tier, product_id, genre_key)
+					 VALUES (${sq(region)}, 'extra', ${sq(product.productId)}, ${sq(key)});`,
+			),
+		]),
+	);
+}
+
+/** Remove catalog products (genre tags cascade with them). */
+export async function deleteCatalog(productIds: string[]): Promise<void> {
+	if (productIds.length === 0) return;
+	await d1Execute(
+		`DELETE FROM ps_plus_catalog WHERE product_id IN (${productIds.map(sq).join(', ')});`,
+	);
 }
 
 /** Deletes games in one call; game_tracking rows cascade. */

@@ -1,6 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
+import { Route, Routes, useNavigate } from 'react-router';
+import { Catalog } from '../catalog/Catalog';
 import { AttentionBanner } from '../components/AttentionBanner';
+import { EmptyState } from '../components/EmptyState';
 import { ToastHost } from '../components/Toast';
 import {
 	fetchSettings,
@@ -10,6 +13,8 @@ import {
 	type TrophySyncResult,
 } from '../settings/api';
 import { SettingsPanel } from '../settings/SettingsPanel';
+import { useActiveDestination } from '../shelf/detail-navigation';
+import { GameDetailRoute } from '../shelf/GameRoute';
 import { SearchBox } from '../shelf/SearchBox';
 import { Shelf } from '../shelf/Shelf';
 import { StragglersDialog } from '../shelf/StragglersDialog';
@@ -35,6 +40,17 @@ import './app-shell.css';
  * reloads until their condition self-resolves (NFR-4 — never one dismissed
  * modal away).
  */
+/** The explicit not-found destination (review, M10) — never a shelf at /catlog. */
+function NotFound() {
+	const navigate = useNavigate();
+	return (
+		<EmptyState
+			variant="page-not-found"
+			actions={[{ label: 'Back to shelf', onClick: () => void navigate('/') }]}
+		/>
+	);
+}
+
 export function AppShell({
 	email,
 	onSignOut,
@@ -44,6 +60,17 @@ export function AppShell({
 	onSignOut: () => void;
 	signOutFailed?: boolean;
 }) {
+	// The location the routes render AGAINST: the background behind an open detail,
+	// or the real location when there is none. This is ALWAYS a location object,
+	// NEVER `undefined` — and that is load-bearing, not lazy. `<Routes>` toggling
+	// between "has a location prop" and "has none" remounts the matched route
+	// element, so a `background ?? undefined` would tear the shelf grid down every
+	// time a detail closes — destroying the card node the close handoff just moved
+	// focus to (e2e epic2-detail 2.3e) and losing scroll/roving index. A stable,
+	// always-present prop keeps the destination mounted across open/close; the cost
+	// is that `<Routes location>` re-renders its subtree on every AppShell render,
+	// which is the deliberate price of the non-remount guarantee.
+	const destination = useActiveDestination();
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [stragglersOpen, setStragglersOpen] = useState(false);
 	// The summary surface has two sources (UX-DR13): a completed sync run
@@ -120,8 +147,42 @@ export function AppShell({
 						}}
 					/>
 				)}
-				<main className="app-shell__main" id="shelf">
-					<Shelf />
+				{/* Only <main> swaps between destinations (AD-25): the header, the
+				    banners, the toast host, the FAB, and every modal are SHARED chrome
+				    that surfaces OVER whichever destination is active.
+				    The routes render against the BACKGROUND location when a detail was
+				    opened from inside the app — react-router's background-location
+				    pattern. `/game/:id` used to hardcode the shelf as the thing behind
+				    the overlay, so an add from the catalog tore the catalog down and
+				    Close snapped back to it through a shelf flash. Now the destination
+				    behind the detail is simply the one you were on.
+				    `<GameDetailRoute />` sits BESIDE the routes, not inside a route
+				    element: it matches on the REAL url (`useMatch` reads router context,
+				    not the `location` prop given to <Routes>) and renders null off
+				    `/game/:id`. That asymmetry is the whole trick — <Routes> shows the
+				    background while the overlay still sees the detail — and it is also
+				    what keeps the destination from remounting when the detail opens and
+				    closes (focus, scroll, roving index all survive).
+				    `/game/:id` keeps a route entry rendering the shelf ALONE, for the
+				    COLD case: a pasted link or a reload has no background in state, and
+				    the URL by itself cannot know where you came from.
+				    The routes are EXPLICIT (review, M10): the shelf used to sit on the
+				    catch-all, so `/catlog`, `/game/` and `/anything` silently rendered
+				    it at whatever address you mistyped. An unknown URL is a NOT FOUND. */}
+				{/* `tabIndex={-1}`: the close-detail focus handoff falls back here when the
+				    background renders no grid (GameRoute.close) — a bare <main> is not
+				    focusable, so without this the fallback would still land on <body>. */}
+				<main className="app-shell__main" id="main-content" tabIndex={-1}>
+					<Routes location={destination}>
+						<Route
+							path="/catalog"
+							element={<Catalog onOpenSettings={() => setSettingsOpen(true)} />}
+						/>
+						<Route path="/" element={<Shelf />} />
+						<Route path="/game/:id" element={<Shelf />} />
+						<Route path="*" element={<NotFound />} />
+					</Routes>
+					<GameDetailRoute />
 				</main>
 			</div>
 			<Fab

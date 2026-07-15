@@ -296,6 +296,25 @@ export function fetchShelf(signal?: AbortSignal): Promise<ShelfGame[]> {
 	return fetchGames('/api/shelf?include=hidden', signal);
 }
 
+const gameResponseSchema = z.object({ game: shelfGameSchema });
+
+/**
+ * ONE game by id (Story 7.2) — what the routed `/game/:id` detail resolves
+ * through. Deliberately its own read route, not a lookup in the `['shelf']`
+ * list cache: an add-then-navigate (7.3) would otherwise race the shelf refetch
+ * and render not-found on a game that exists. `callApi` throws with `.status`,
+ * so the caller can tell a resolved 404 from a failed load.
+ */
+export async function fetchGame(
+	gameId: string,
+	signal?: AbortSignal,
+): Promise<ShelfGame> {
+	const body = await callApi(`/api/games/${encodeURIComponent(gameId)}`, {
+		signal,
+	});
+	return gameResponseSchema.parse(body).game;
+}
+
 /* ---- Add a game by name (Story 6.1) ---- */
 
 const addPreviewSchema = z.object({
@@ -332,6 +351,8 @@ export interface AddGamePayload {
 	releaseDate?: string | null;
 	genres?: string[];
 	owned?: boolean;
+	/** The PS Store product id this add came from, if any (Story 7.3, AD-20). */
+	psnProductId?: string;
 }
 
 export type AddGameResult = { kind: 'created' | 'duplicate'; gameId: string };

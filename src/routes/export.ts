@@ -56,7 +56,11 @@ exportRoute.get('/export.csv', requireAuth, async (c) => {
 			yesNo(g.owned),
 			g.ownershipType ?? '',
 			g.ownedVia ?? '',
-			yesNo(g.psPlusExtra),
+			// The SAME derivation every other surface renders (Story 7.1 review, H5):
+			// `ps_plus_extra` is the stored fact "this game is in the catalog", and
+			// 7.1 now maintains it for OWNED games too. Exporting the raw flag would
+			// silently flip this column to `yes` for every owned catalog game.
+			yesNo(g.psPlusExtra && !g.owned),
 			g.releaseDate ?? '',
 			g.startedOn ?? '',
 			g.boughtOn ?? '',

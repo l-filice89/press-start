@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
+import { startGenreSweep } from '../catalog/api';
 import { useAnnounce } from '../components/LiveRegion';
 import { PlatinumTrophy } from '../components/PlatinumTrophy';
 import { useToast } from '../components/Toast';
@@ -87,9 +88,21 @@ export function Fab({
 			// A successful check clears any failed-cron flag (5.2) — refetch
 			// settings so the failed-refresh banner disappears without a reload.
 			queryClient.invalidateQueries({ queryKey: ['settings'] });
+			// The check rewrote the snapshot (and its prune cascades genre rows) —
+			// both catalog reads must refetch NOW, not only if the sweep succeeds,
+			// or the FAB path drifts from Catalog.tsx's (review #2).
+			queryClient.invalidateQueries({ queryKey: ['catalog'] });
+			queryClient.invalidateQueries({ queryKey: ['catalog-genres'] });
+			// The snapshot is in; now tag it — otherwise the genre filter stays
+			// empty until the monthly cron converges (Story 7.1's "do it now" loop).
+			startGenreSweep(queryClient, result.generation);
 		},
-		onError: () => {
-			toast({ message: 'PS+ check failed — try again later.' });
+		onError: (error: Error) => {
+			// The server's own message when it carries one — a bad-region 409 names
+			// the actual fix; "try again later" would send the user in a circle.
+			toast({
+				message: serverMessage(error) ?? 'PS+ check failed — try again later.',
+			});
 		},
 		onSettled: () => setOpen(false),
 	});

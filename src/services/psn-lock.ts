@@ -29,14 +29,25 @@
  * ever gets slow enough that this bites, add a fence: stamp the token on the
  * write path and refuse a write whose token no longer holds the lock.
  */
-import { acquireLock, releaseLock } from '../repositories';
+import { acquireLock, getSetting, releaseLock } from '../repositories';
 import type { Db } from '../repositories/db';
 
 export const PSN_LOCK_SETTING_KEY = 'psn_op_lock';
 
 const LOCK_TTL_MS = 2 * 60 * 1000;
 
-export type PsnOp = 'library-sync' | 'trophy-sync' | 'platinum-backfill';
+/**
+ * `catalog-refresh` (Story 7.1) covers BOTH the PS+ membership refresh (button
+ * + cron) and the genre sweep that follows it: they hit the same store host and
+ * write the same snapshot, so they must not run beside each other — a sweep
+ * tagging products a concurrent refresh is pruning is the corruption AD-28's
+ * generation stamp exists to catch, and one lock is cheaper than catching it.
+ */
+export type PsnOp =
+	| 'library-sync'
+	| 'trophy-sync'
+	| 'platinum-backfill'
+	| 'catalog-refresh';
 
 /** What the refused caller is told (shown verbatim by the UI). */
 export const PSN_BUSY_MESSAGE =
@@ -65,6 +76,13 @@ export async function acquirePsnLock(
 	op: PsnOp,
 	heldToken?: string,
 ): Promise<string | null> {
+	// A token belongs to the OP that minted it (Story 7.1 review, H2). The
+	// sync/backfill routes hand their LIVE token to the browser, so without this
+	// a running `platinum-backfill` token presented to the catalog endpoint would
+	// pass the raw string-equality renewal check, STEAL the lock, and 409 the
+	// backfill's next chunk to death. The `op` segment is authorization, not a
+	// label for `wrangler tail`.
+	if (heldToken && heldToken.split(':')[1] !== op) return null;
 	const token = mintToken(op);
 	const won = await acquireLock(
 		db,
@@ -86,20 +104,42 @@ export async function releasePsnLock(
 }
 
 /**
+ * THE FENCE (Story 7.1 review, H3). The TTL is preemption, not just cleanup: a
+ * run that stalls past two minutes can have its lock taken over by the cron,
+ * which then writes a whole new snapshot — and the stalled run, waking up, would
+ * prune "everything that is not MY generation" and delete every row the winner
+ * just wrote, emptying the table and clearing every flag.
+ *
+ * So the destructive phase asks first: do I still hold the lock I claimed? A run
+ * that lost it writes NOTHING and reports a conflict. Cheap (one D1 read) and it
+ * is the only thing standing between a slow store and an empty catalog.
+ */
+export async function holdsPsnLock(
+	db: Db,
+	userId: string,
+	token: string,
+): Promise<boolean> {
+	return (await getSetting(db, userId, PSN_LOCK_SETTING_KEY)) === token;
+}
+
+/**
  * Run `fn` under the lock. `busy: true` means someone else holds it and `fn`
  * NEVER ran — no PSN call, no write. The release is in a `finally`: a run that
  * throws must not leave the user locked out until the TTL.
+ *
+ * `fn` receives the token so a destructive run can FENCE its write phase with
+ * `holdsPsnLock` (H3) — the TTL can hand the lock to someone else mid-run.
  */
 export async function withPsnLock<T>(
 	db: Db,
 	userId: string,
 	op: PsnOp,
-	fn: () => Promise<T>,
+	fn: (token: string) => Promise<T>,
 ): Promise<{ busy: true } | { busy: false; result: T }> {
 	const token = await acquirePsnLock(db, userId, op);
 	if (!token) return { busy: true };
 	try {
-		return { busy: false, result: await fn() };
+		return { busy: false, result: await fn(token) };
 	} finally {
 		// A failed RELEASE must not destroy a successful RUN: the sync already
 		// wrote its rows, and throwing here would turn a 200 into a 500 for work

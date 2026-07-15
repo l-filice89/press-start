@@ -94,6 +94,44 @@ describe('CSV export (Story 6.3, through the route)', () => {
 		).toBeUndefined();
 	});
 
+	/**
+	 * Story 7.1 flags OWNED catalog games too (`ps_plus_extra` is the stored fact
+	 * "in the catalog", not the badge). Every surface renders `psPlusExtra &&
+	 * !owned` — the export exported the RAW flag, so this column silently flipped
+	 * to `yes` for every owned catalog game (review, H5).
+	 */
+	it('an OWNED catalog game exports PS+ Extra = no (the same derivation every surface renders)', async () => {
+		const g = await insertGame(db(), {
+			title: 'Owned And In The Catalog',
+			titleNormalized: normalizeTitle('Owned And In The Catalog'),
+			psPlusExtra: true,
+		});
+		await insertTrackingIfAbsent(db(), userId, g.id, { owned: true });
+
+		const rows = parseCsv(
+			await (await appFetch('/api/export.csv', { headers: { cookie } })).text(),
+		);
+		const row = rows.find((r) => r.Title === 'Owned And In The Catalog');
+		expect(row?.Owned).toBe('yes');
+		expect(row?.['PS+ Extra']).toBe('no');
+	});
+
+	it('an UNOWNED catalog game still exports PS+ Extra = yes', async () => {
+		const g = await insertGame(db(), {
+			title: 'Claimable From The Catalog',
+			titleNormalized: normalizeTitle('Claimable From The Catalog'),
+			psPlusExtra: true,
+		});
+		await insertTrackingIfAbsent(db(), userId, g.id, { owned: false });
+
+		const rows = parseCsv(
+			await (await appFetch('/api/export.csv', { headers: { cookie } })).text(),
+		);
+		expect(
+			rows.find((r) => r.Title === 'Claimable From The Catalog')?.['PS+ Extra'],
+		).toBe('yes');
+	});
+
 	it('neutralizes formula-leading cells so the backup is safe in Excel/Sheets', async () => {
 		const g = await insertGame(db(), {
 			title: '=cmd|/c calc!A0',

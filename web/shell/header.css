@@ -95,8 +95,58 @@
 	border-color: var(--color-accent-electric);
 }
 
+/* Destination toggle (Story 7.2, DESIGN.md): segmented control, pill family.
+   The active segment is a SOLID electric fill with dark ink — never glow alone,
+   so the state survives high-contrast and colour-blind viewing. */
+.destination-toggle {
+	display: flex;
+	flex: 0 0 auto;
+	gap: 2px;
+	padding: 2px;
+	background: var(--color-surface-raised);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-pill);
+}
+
+.destination-toggle__tab {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	text-decoration: none;
+	padding: var(--space-2) var(--space-4);
+	font-family: var(--font-ui);
+	font-weight: 600;
+	font-size: 12px;
+	letter-spacing: 0.1em;
+	color: var(--color-text-secondary);
+	background: transparent;
+	border: none;
+	border-radius: var(--radius-pill);
+	cursor: pointer;
+}
+
+.destination-toggle__tab:hover {
+	color: var(--color-accent-electric);
+}
+
+.destination-toggle__tab[aria-current="page"] {
+	color: var(--color-void);
+	background: var(--color-accent-electric);
+	box-shadow: var(--glow-accent, none);
+}
+
 /* ---- Phone deltas (UX-DR26/DR27) ---- */
 @media (max-width: 600px) {
+	/* Phone: the toggle takes its own full-width row under the wordmark. */
+	.destination-toggle {
+		order: 3;
+		flex: 1 0 100%;
+	}
+	.destination-toggle__tab {
+		flex: 1 1 0;
+		text-align: center;
+	}
+
 	.app-header {
 		gap: var(--space-2);
 		/* leave room for the bottom-pinned search bar */

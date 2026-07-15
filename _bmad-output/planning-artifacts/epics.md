@@ -337,6 +337,10 @@ Three decision-support signals on the card: what the world thinks of a game (IGD
 **VRs covered:** VR-5, VR-6, VR-8 · reuses AR-5 (`IgdbProvider`), AR-6 (nothing external on render), AR-15 (bulk work chunked), AR-23 (per-region catalog)
 **Sequencing:** VR-6 diffs the `ps_plus_catalog` snapshot Story 7.1 builds, so this epic follows Epic 7. Stories 10.1 (scores) and 10.3 (time to beat) carry no such dependency and are pullable ahead alone; 10.3 rides 10.1's refresh job, so it follows 10.1.
 
+### Epic 11: PSN Account Safety — Sanitize the Credentialed Surface — _HIGH PRIORITY, sequenced first_
+Every call Press Start makes to PlayStation with Luca's own NPSSO token is attributed to his real account — and locked it once (2026-07-15). This epic removes the entire credentialed PSN surface: library sync, trophy sync, and the platinum backfill, plus the NPSSO auth machinery and the trophy display that depended on it. What stays is everything that carries no account identity — the anonymous PS+ Extra catalog (check + monthly cron), manual add-by-name, and manual milestone tracking. After this epic, no credential ever reaches the wire, so the account is out of the ban blast radius.
+**FRs affected:** FR-33–FR-37 removed; FR-9/FR-10 sync-clauses removed; FR-36 superseded; Epic 9 VR-2/VR-3 display removed · AR-5 narrowed to anonymous catalog. **Supersedes Epic 4 and the credentialed half of Epic 9; PS+ awareness (Epics 5/7) untouched. Sequenced ahead of Epics 8 and 10.** (Rationale: `sprint-change-proposal-2026-07-15.md`.)
+
 ---
 
 ## Epic 1: Foundation & the Seeded Shelf
@@ -1351,17 +1355,19 @@ So that the whole subscription catalog is queryable without a live fetch.
 
 **Given** the PS+ check (button or cron, Story 5.1/5.2)
 **When** it fetches the region's catalog
-**Then** each product's browsable fields (product id, title, `title_normalized`, cover URL, PS-store genres, release date, `tier='extra'`) are upserted into a new region-scoped `ps_plus_catalog` table [AR-5; new]
+**Then** each product's browsable fields (product id, `np_title_id`, title, `title_normalized`, cover URL, platforms, store URL, `tier='extra'`) are upserted into a new region+tier-scoped `ps_plus_catalog` table [AR-5; AD-24]
+
+> **Amended 2026-07-14 (Story 7.0 gate, from a live probe of `categoryGridRetrieve`):** the store product payload exposes **no release date** and **no genres**. Release date is dropped from this story (AD-24 — the architecture will not carry a field the source can't fill). Genres are obtainable **only** as a category facet, so they are a **separate chunked, generation-stamped sweep** (`filterBy: ["productGenres:<KEY>"]` once per facet key) writing `ps_plus_catalog_genre` — additive, and never blocking the membership snapshot [AD-26, AD-28].
+
+**Given** the catalog snapshot is written
+**When** the tracked-game `ps_plus_extra` flag pass runs
+**Then** it reads **the stored table**, not a second fetch, and maintains the flag for **every** tracked game with a match — **owned games included** — so the shelf pill and the catalog grid can never give opposite answers for the same game [AD-27]
 
 **Given** a catalog that changed since the last run (games left)
 **When** the refresh completes
 **Then** rows for products no longer in the region's catalog are pruned, so the table is a faithful current snapshot (same both-directions discipline as the flag check) [new]
 
-**Given** the stored catalog now exists
-**When** the Story 5.1 flag check runs
-**Then** it MAY read tracked-game matches from the stored table instead of a second fetch (consolidation opportunity — not required if it complicates the ingest) [AR-10]
-
-> The fetch is extended from `string[]` (names) to full product records; the empty-catalog wipe guard (Story 5.1) still applies before any prune.
+> The fetch is extended from `string[]` (names) to full product records; the empty-catalog wipe guard (Story 5.1) still applies before any prune — it now guards **two** datasets, so it stays a hard abort. *(The "MAY consolidate the flag check" option is now mandatory, not optional — see AD-27 above: two fetch paths were found to be a divergence hazard, not a nicety.)*
 
 ### Story 7.2: Browse the catalog (a genre-filterable destination)
 
@@ -1371,13 +1377,25 @@ So that I can explore what's playable through the subscription.
 
 **Acceptance Criteria:**
 
+**Given** the app has only ever had one screen
+**When** the Catalog destination is introduced
+**Then** **react-router** is adopted (library mode) with routes `/` (shelf), `/catalog`, `/game/:id`, and the three `window` CustomEvents (`OPEN_DETAIL`, `SEED_SEARCH`, `SHELF_SEARCH`) are **deleted** and replaced by `navigate()` / `useSearchParams` — closing the Epic 6 mount-race bug class instead of extending it to a second destination [AD-25; Epic 6 retro item 2]
+
+**Given** both destinations
+**When** I switch between them
+**Then** a **header segmented toggle** (`SHELF | CATALOG`) moves me in one tap, and the search term (`?q=`) is **scoped to the active destination and cleared on switch** — a shelf search never silently filters the catalog. The `＋ Add "<name>"` row stays **shelf-only** [AD-25; EXPERIENCE.md IA]
+
 **Given** a stored catalog for my region (Story 7.1)
 **When** I open the Catalog destination
-**Then** its games render in a shelf-style grid (cover, title), paged/virtualized for the full ~473-item set, reusing the shelf card chrome where practical [new; UX-DR reuse]
+**Then** its games render in a shelf-style grid (cover, title), paged/virtualized for the full ~490-item set, reusing the shelf card chrome — but with **no status pill, no owned toggle and no flip**, because catalog games are not tracked games [AD-24; UX-DR reuse]
+
+**Given** the catalog is a discovery surface, not a "what can I play today" surface (that's the shelf)
+**When** the grid orders its games
+**Then** it orders **alphabetically by title** — case-insensitive, locale-aware (`localeCompare` with `sensitivity: 'base'`), the same tiebreaker the shelf already ends on — with **no state tier and no ownership tier**. Games I already track are neither hoisted nor hidden; they sit in A–Z order carrying their `In library` / `Owned` marker. **Do not reuse `compareShelf` (`core/shelf.ts`)** — it leads with state and ownership, which would open the catalog on the games I've already found. Reuse its *title comparison*, not the comparator [EXPERIENCE.md]
 
 **Given** the catalog grid
 **When** I filter by genre
-**Then** only catalog games in the selected genre(s) show (genre-only filter, PS-store taxonomy) — no state/ownership filters, since these aren't tracked games [new]
+**Then** only catalog games in the selected genre(s) show — the **PS-store facet vocabulary** (~19 locale-independent keys, from `ps_plus_catalog_genre`), **never** the shelf's IGDB genre list; the two vocabularies must not mix. Genre-only — no state/ownership filters, since these aren't tracked games [AD-26]
 
 **Given** the catalog grid
 **When** I type in the catalog search bar
@@ -1385,7 +1403,9 @@ So that I can explore what's playable through the subscription.
 
 **Given** a catalog game I already track
 **When** it renders in the grid
-**Then** it is marked as already in my library (so I don't re-add it) [FR-42 dedup parity]
+**Then** it carries the state that says what I can still do — **`In library`** (cyan) if tracked but **not owned**, with **`Claim now` still offered** (it's on my shelf as a wishlist entry, not yet claimed to my PlayStation account), or **`Owned`** (silver) with **no actions** if I own it (bought, or claimed and picked up by a sync as `owned_via: membership`). Never the shelf's status pill — that shows play state, a tracked-game concept the catalog must not carry [FR-42 dedup parity; AD-24]
+
+> The whole catalog renders, tracked games included — hiding what I already have would just read as a missing game. The three states are keyed on the remaining action, not on tracking alone: dropping `Claim now` the moment a game is tracked would strand exactly the games the catalog itself just added (`owned:false` = wishlisted, and a PS+ claim only becomes `owned` when a **sync** sees the entitlement — Story 6.4 — never because the store tab was opened).
 
 **Given** the catalog is empty or its region unset
 **When** I open the destination
@@ -1401,7 +1421,21 @@ So that discovery in the catalog turns into a tracked game (or a claimed one) in
 
 **Given** a catalog game not yet in my library
 **When** I add it
-**Then** Epic 6's add preview opens pre-filled (IGDB enrichment on demand), saving as wishlisted; catalog membership immediately lights its PS+ flag → it shows Playable-now on the shelf [FR-41, FR-42, FR-43; AR-5]
+**Then** Epic 6's add preview opens pre-filled (IGDB enrichment on demand) and saves with the **existing not-owned default** (`{owned: false, play_status: 'Not started', wishlisted_on: today}`) — browsing the catalog is not claiming it. Catalog membership lights its PS+ flag, so it derives as **Wishlisted + Playable-now**: I want it, and I don't have to buy it [FR-41/42/43; AD-24]
+
+> **Clarified 2026-07-14 (7.0 gate):** "saving as wishlisted" is *correct* — `Wishlisted` is derived as `!owned` and the add path already writes `wishlisted_on`. It is not "saved as" a state, it *derives* into one. There is **no `ps_plus` ownership type**: `ownership_type` is `physical|digital` (format), and the acquisition *source* is `owned_via: purchase|membership`. A PS+ claim **counts as owned** with `owned_via: 'membership'` (FR-9 amended, 2026-07-11) — but only once a **sync observes the real entitlement**, never because the user visited the store tab.
+
+**Given** the newly added game
+**When** the app returns from the add preview
+**Then** it navigates to `/game/:id` — the real, **editable** detail — resolved through a **by-id read route**, never an id lookup in the shelf list cache (or the add-then-navigate races the refetch and 404s) [AD-25]
+
+**Given** the catalog grid
+**When** a game is already tracked
+**Then** it offers **no Add action** (there is no second add) — but **`Claim now` stays live while the game is not owned**, since a catalog-added game sits on the shelf unclaimed until I claim it on PlayStation. Once owned, the card shows **`Owned`** and offers nothing. No read-only catalog detail page stands between browsing and the add preview [AD-24; EXPERIENCE.md IA]
+
+**Given** I claim a tracked-but-unowned game on the PlayStation Store
+**When** the next library sync runs
+**Then** the existing claim/purchase ownership path (Story 6.4) takes over — the catalog does not try to guess that the claim succeeded, because it cannot observe the PS Store tab [AD-10]
 
 **Given** a catalog game
 **When** I tap "Claim now"
@@ -1857,6 +1891,10 @@ So that I play them before they vanish instead of finding out when the shelf goe
 **When** the catalog changes
 **Then** no warning — ownership makes catalog membership irrelevant (FR-38: the flag is hidden the moment a game is owned) [FR-38]
 
+**Given** `ps_plus_catalog.first_seen_at` today means "first seen since the last prune" — a pruned-then-readded game reads as new (DW-13, ledgered at the Epic 7 retro)
+**When** this story builds its diff/history semantics on the snapshot
+**Then** it first decides and documents what `first_seen_at` MUST mean for the warning (and fixes or renames the column if "since last prune" is not it) — the diff must not silently treat a returning game as a new arrival [VR-6, deferred-work.md DW-13]
+
 > **Open at design time:** whether the PS+ ingest exposes any leave-date signal at all. If it does not, this story ships as *"left the catalog"* (observable, honest) rather than *"leaving soon"* (a guess) — and that is the correct outcome, not a degraded one.
 
 ### Story 10.3: Time to beat — the story, and 100% (VR-8)
@@ -1892,3 +1930,92 @@ So that I pick a game that fits the time I actually have, instead of stalling ou
 **Given** a failed refresh
 **When** the next app open happens
 **Then** the failure surfaces (the FR-40 posture) rather than leaving stale hours passing as current [NFR-4, AR-14]
+
+---
+
+## Epic 11: PSN Account Safety — Sanitize the Credentialed Surface
+
+**Goal:** Remove every code path that puts Luca's PSN credential on the wire, so his real account can never again be the actor in a reverse-engineered call. Keep everything that carries no account identity. Sequenced FIRST, ahead of Epics 8 and 10.
+
+### Story 11.1: Sever the credentialed PSN operations
+Delete the three credentialed routes (`POST /sync`, `/sync/trophies`, `/backfill/platinum-dates`) and their services (`services/sync.ts`, `services/trophies.ts`, `services/backfill.ts`). Remove the FAB "Sync library" and "Sync trophies" buttons and both readout modals (`SyncSummaryModal`, `TrophySyncModal`). The FAB keeps "Check PS+ Extra" and "Export CSV". Remove the Settings backfill panel.
+
+**Given** the app is running
+**When** Luca opens the FAB drawer
+**Then** no control can trigger a credentialed PSN call — only "Check PS+ Extra" and "Export CSV" remain [Epic 11]
+
+**Given** a client posts to `/sync`, `/sync/trophies`, or `/backfill/platinum-dates`
+**When** the route resolves
+**Then** it 404s — the credentialed routes no longer exist [Epic 11]
+
+**Given** the anonymous PS+ catalog check and CSV export
+**When** their flows run
+**Then** both still work and their suites stay green [Epic 5, Epic 6]
+
+### Story 11.2: Strip PSN credential auth from the provider and settings
+Collapse `PsnProvider` to its anonymous catalog methods only — remove `exchange`/`getBearer`, the `getNpsso` plumbing, `fetchPurchasedGames`, `fetchTrophyTitles`, and the credentialed `PsnAuthError` paths. Remove the NPSSO settings field, the expired-token banner (`markPsnAuthExpired`, `psn_auth` setting), and the psn-lock ops that only served credentialed work (keep the lock for `catalog-refresh`). Migration drops the `psn_npsso` and `psn_auth` setting rows. Retire the Wrangler `PSN_NPSSO` secret from deploy.
+
+**Given** the codebase after this story
+**When** grepped for `fetchPurchasedGames`, `fetchTrophyTitles`, NPSSO, or the bearer exchange
+**Then** nothing remains — `PsnProvider` exposes only anonymous catalog methods [Epic 11, AR-5]
+
+**Given** the settings page
+**When** Luca opens it
+**Then** there is no NPSSO token field and no expired-token banner [Epic 11]
+
+**Given** the monthly catalog cron and the PS+ check
+**When** they run under the single-flight lock
+**Then** both still pass — the lock now carries only `catalog-refresh` [Epic 5, Epic 7]
+
+### Story 11.3: Remove the trophy display and schema
+Drop the trophy 
+---
+
+## Epic 11: PSN Account Safety — Sanitize the Credentialed Surface
+
+**Goal:** Remove every code path that puts Luca's PSN credential on the wire, so his real account can never again be the actor in a reverse-engineered call. Keep everything that carries no account identity. Sequenced FIRST, ahead of Epics 8 and 10.
+
+### Story 11.1: Sever the credentialed PSN operations
+Delete the three credentialed routes (`POST /sync`, `/sync/trophies`, `/backfill/platinum-dates`) and their services (`services/sync.ts`, `services/trophies.ts`, `services/backfill.ts`). Remove the FAB "Sync library" and "Sync trophies" buttons and both readout modals (`SyncSummaryModal`, `TrophySyncModal`). The FAB keeps "Check PS+ Extra" and "Export CSV". Remove the Settings backfill panel.
+
+**Given** the app is running
+**When** Luca opens the FAB drawer
+**Then** no control can trigger a credentialed PSN call — only "Check PS+ Extra" and "Export CSV" remain [Epic 11]
+
+**Given** a client posts to `/sync`, `/sync/trophies`, or `/backfill/platinum-dates`
+**When** the route resolves
+**Then** it 404s — the credentialed routes no longer exist [Epic 11]
+
+**Given** the anonymous PS+ catalog check and CSV export
+**When** their flows run
+**Then** both still work and their suites stay green [Epic 5, Epic 6]
+
+### Story 11.2: Strip PSN credential auth from the provider and settings
+Collapse `PsnProvider` to its anonymous catalog methods only — remove `exchange`/`getBearer`, the `getNpsso` plumbing, `fetchPurchasedGames`, `fetchTrophyTitles`, and the credentialed `PsnAuthError` paths. Remove the NPSSO settings field, the expired-token banner (`markPsnAuthExpired`, `psn_auth` setting), and the psn-lock ops that only served credentialed work (keep the lock for `catalog-refresh`). Migration drops the `psn_npsso` and `psn_auth` setting rows. Retire the Wrangler `PSN_NPSSO` secret from deploy.
+
+**Given** the codebase after this story
+**When** grepped for `fetchPurchasedGames`, `fetchTrophyTitles`, NPSSO, or the bearer exchange
+**Then** nothing remains — `PsnProvider` exposes only anonymous catalog methods [Epic 11, AR-5]
+
+**Given** the settings page
+**When** Luca opens it
+**Then** there is no NPSSO token field and no expired-token banner [Epic 11]
+
+**Given** the monthly catalog cron and the PS+ check
+**When** they run under the single-flight lock
+**Then** both still pass — the lock now carries only `catalog-refresh` [Epic 5, Epic 7]
+
+### Story 11.3: Remove the trophy display and schema
+Drop the trophy %/grade readout from `Card.tsx` and `DetailPanel.tsx`, delete `core/trophy.ts` and its tests, and migrate out the `trophy_*` columns (`trophy_earned_*`, `trophy_defined_*`, `trophy_np_comm_id`, `trophy_np_service_name`). Delete `playwright/e2e/epic9-trophies.spec.ts`. **Untouched:** `platinum_on` / `completed_on` and the manual milestone flow (Epic 2), and `owned_via` / `bought_on` (manual ownership model, Epic 6.4).
+
+**Given** a game card and its detail view
+**When** they render
+**Then** no trophy %/grade/tier readout appears anywhere [Epic 11]
+
+**Given** the D1 schema after the migration
+**When** inspected
+**Then** no `trophy_*` column remains, while `platinum_on`, `completed_on`, `owned_via`, and `bought_on` are intact [Epic 11]
+
+**Given** a platinum or story-completion milestone
+**When** Luca sets it manually in the detail view
+**Then** it records and displays exactly as before — the manual flow is unchanged [Epic 2, FR-5/FR-6]

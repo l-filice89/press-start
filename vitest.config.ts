@@ -67,7 +67,9 @@ export default defineConfig({
 				test: {
 					name: 'web',
 					environment: 'jsdom',
-					include: ['web/**/*.test.tsx'],
+					// .ts too — `web/shelf/filters.test.ts` sat outside the old
+					// `*.test.tsx` glob and never ran in any project.
+					include: ['web/**/*.test.{ts,tsx}'],
 					setupFiles: ['./web/test-setup.ts'],
 				},
 			},

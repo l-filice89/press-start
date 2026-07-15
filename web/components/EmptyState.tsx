@@ -10,7 +10,13 @@ import './empty-state.css';
  * Actions are optional and NOT rendered when omitted — no dead CTA buttons for
  * features that don't exist yet (Sync = Epic 4, Add = Epic 6).
  */
-type EmptyVariant = 'insert-games' | 'no-match';
+type EmptyVariant =
+	| 'insert-games'
+	| 'no-match'
+	| 'no-region'
+	| 'empty-catalog'
+	| 'game-not-found'
+	| 'page-not-found';
 
 const COPY: Record<EmptyVariant, { headline: string; subtext: string }> = {
 	'insert-games': {
@@ -20,6 +26,32 @@ const COPY: Record<EmptyVariant, { headline: string; subtext: string }> = {
 	'no-match': {
 		headline: 'NO MATCH',
 		subtext: 'No games match the current filters.',
+	},
+	// The catalog's three causes get three answers (Story 7.2, NFR-4) — never a
+	// blank grid, and never one shrug that covers all of them. The third cause (a
+	// FAILED refresh) is the existing attention banner plus the stale grid, so it
+	// has no variant here: an empty state would replace the catalog it still has.
+	'no-region': {
+		headline: 'NO REGION',
+		subtext:
+			'The PS+ catalog is per-region. Set your PlayStation region to see it.',
+	},
+	'empty-catalog': {
+		headline: 'EMPTY CATALOG',
+		subtext: 'Run Check PS+ Extra to load the catalog for your region.',
+	},
+	// A resolved 404 on `/game/:id` (Story 7.2 review, H4). It is NOT `no-match`:
+	// no filter is involved, and "no games match the current filters" on a pasted
+	// link is a lie. The game is gone (or never was) — say that.
+	'game-not-found': {
+		headline: 'GAME NOT FOUND',
+		subtext: 'That game isn’t in your library — it may have been removed.',
+	},
+	// An unknown URL (review, M10) — `/catlog`, `/game/` with no id. Without this
+	// the shelf rendered silently at whatever address you mistyped.
+	'page-not-found': {
+		headline: 'PAGE NOT FOUND',
+		subtext: 'That address doesn’t exist. Head back to your shelf.',
 	},
 };
 

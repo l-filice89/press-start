@@ -13,6 +13,9 @@
 		"module": "esnext",
 		"moduleResolution": "bundler",
 		"allowImportingTsExtensions": true,
+		/* The Story 7.1 tests assert against the CAPTURED store payloads in
+		 * `test/fixtures/psn/*.json` — imported, never hand-written. */
+		"resolveJsonModule": true,
 		"verbatimModuleSyntax": true,
 		"moduleDetection": "force",
 		"noEmit": true,

@@ -1,11 +1,12 @@
-import { useIsFetching, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router';
 import { EmptyState } from '../components/EmptyState';
 import { useAnnounce } from '../components/LiveRegion';
 import { SkeletonGrid } from '../components/Skeleton';
 import { fetchShelf, type ShelfGame } from './api';
 import { Card } from './Card';
-import { DetailPanel } from './DetailPanel';
+import { toDetail, useActiveDestination } from './detail-navigation';
 import { FilterRow } from './FilterRow';
 import {
 	applyShelfFilter,
@@ -16,8 +17,6 @@ import {
 	type ShelfFilter,
 	summarizeFilterText,
 } from './filters';
-import { OPEN_DETAIL_EVENT } from './open-detail';
-import { currentShelfSearchTerm, SHELF_SEARCH_EVENT } from './SearchBox';
 import { useProgressiveList } from './useProgressiveList';
 import './shelf.css';
 
@@ -60,60 +59,15 @@ export function Shelf() {
 function FilteredShelf({ games }: { games: ShelfGame[] }) {
 	const [filter, setFilter] = useState<ShelfFilter>(EMPTY_FILTER);
 	const announce = useAnnounce();
-	// Reactive fetch signal for the shelf query (see the stale-id cleanup below).
-	const shelfFetching = useIsFetching({ queryKey: ['shelf'] }) > 0;
 
-	// Open-detail-by-id (Story 6.1, FR-42): the add-by-name dedup/revive path
-	// (AddGameDialog answers a 409 by dispatching OPEN_DETAIL_EVENT) carries a
-	// game id here, where the WHOLE library payload (hidden states included) is
-	// in hand — so a completed/dropped or just-revived game still opens. Rendered
-	// as its own panel: ShelfGrid's panel only knows the filtered visible set.
-	const [searchGameId, setSearchGameId] = useState<string | null>(null);
-	useEffect(() => {
-		function onOpen(e: Event) {
-			const id = (e as CustomEvent<string>).detail;
-			if (id) setSearchGameId(id);
-		}
-		window.addEventListener(OPEN_DETAIL_EVENT, onOpen);
-		return () => window.removeEventListener(OPEN_DETAIL_EVENT, onOpen);
-	}, []);
-	const searchGame = searchGameId
-		? games.find((g) => g.id === searchGameId)
-		: undefined;
-	// Stale-id cleanup (3.4 pattern): an id the payload doesn't hold clears
-	// instead of resurrecting a dialog later — but NOT while the shelf is
-	// refetching. A re-add that REVIVES a discarded game dispatches open-detail
-	// against a payload that doesn't include it yet (the revived card lands one
-	// refetch later, when the parent forwards fresh `games`); nulling mid-fetch
-	// would drop the open. `shelfFetching` is reactive and a dependency, so this
-	// re-runs when the fetch settles: the id opens if the game arrived, or clears
-	// if it was genuinely absent (a failed revive / bogus id) — never stranded.
-	useEffect(() => {
-		if (searchGameId && !searchGame && !shelfFetching) setSearchGameId(null);
-	}, [searchGameId, searchGame, shelfFetching]);
-	const closeSearchDetail = useCallback(() => {
-		setSearchGameId(null);
-		// Focus returns to the search field that opened it (UX-DR19).
-		document.querySelector<HTMLElement>('.search-box__input')?.focus();
-	}, []);
-	// Free-text shelf search (Story 6.5 + 2026-07-12 redesign): the header's
-	// SearchBox re-broadcasts its debounced/trimmed term; the shelf is the ONE
-	// result surface (the suggestion dropdown is gone). With no filter it whole-
-	// library searches (hidden included), with a filter it narrows within — see
-	// the scope rule below. Kept out of `ShelfFilter` on purpose so `isFilterActive`
-	// / Clear filters semantics stay untouched.
-	// Seed from the last broadcast term (not just ''): if the user typed while the
-	// shelf was still loading — or this remounted after a refetch — the event
-	// already fired with no listener. `currentShelfSearchTerm()` retains it.
-	const [searchTerm, setSearchTerm] = useState(currentShelfSearchTerm);
-	useEffect(() => {
-		function onSearch(e: Event) {
-			const detail = (e as CustomEvent).detail;
-			setSearchTerm(typeof detail === 'string' ? detail : '');
-		}
-		window.addEventListener(SHELF_SEARCH_EVENT, onSearch);
-		return () => window.removeEventListener(SHELF_SEARCH_EVENT, onSearch);
-	}, []);
+	// Free-text shelf search (Story 6.5 + 2026-07-12 redesign; routed in 7.2):
+	// the term is `?q=` — the header's SearchBox writes it, the shelf READS it.
+	// No window event, so no mount-race: a shelf that mounts late (skeleton →
+	// grid, a refetch) reads the URL and starts filtered, where a fire-and-forget
+	// CustomEvent would already have been swallowed. Kept out of `ShelfFilter` on
+	// purpose so `isFilterActive` / Clear filters semantics stay untouched.
+	const [searchParams] = useSearchParams();
+	const searchTerm = searchParams.get('q') ?? '';
 	// A non-empty folded term is what makes an empty shelf a "search miss"
 	// rather than a filter/empty-backlog outcome — a whitespace-only term folds
 	// away and matches all, so it never reaches here.
@@ -275,12 +229,9 @@ function FilteredShelf({ games }: { games: ShelfGame[] }) {
 						<EmptyState variant="insert-games" />
 					)
 				) : (
-					<ShelfGrid games={visible} library={games} />
+					<ShelfGrid games={visible} />
 				)}
 			</div>
-			{searchGame && (
-				<DetailPanel game={searchGame} onClose={closeSearchDetail} />
-			)}
 		</>
 	);
 }
@@ -312,18 +263,14 @@ export function chunkIntoRows<T>(items: T[], columnCount: number): T[][] {
 }
 
 /** The card grid with roving-tabindex keyboard nav + progressive rendering. */
-function ShelfGrid({
-	games,
-	library,
-}: {
-	games: ShelfGame[];
-	library: ShelfGame[];
-}) {
+function ShelfGrid({ games }: { games: ShelfGame[] }) {
 	// jsdom (tests) has no IntersectionObserver — render everything there so the
 	// full set is assertable; real browsers page it in on scroll.
 	const supportsObserver = typeof IntersectionObserver !== 'undefined';
 	const progressive = useProgressiveList(games, PAGE_SIZE);
 	const visible = supportsObserver ? progressive.visible : games;
+	const navigate = useNavigate();
+	const destination = useActiveDestination();
 
 	const [focusedIndex, setFocusedIndex] = useState(0);
 	const [columnCount, setColumnCount] = useState(1);
@@ -333,12 +280,22 @@ function ShelfGrid({
 	// Only steal focus after a keyboard move — never on mount or refetch.
 	const pendingFocus = useRef(false);
 
-	// Open-detail state lives HERE, not in Card (Story 3.4): a refetch that
-	// re-chunks the rows remounts Cards, and a panel owned by one would die
-	// mid-interaction. One panel renders below, looked up by id — so it also
-	// re-renders with fresh data after every refetch.
-	const [openGameId, setOpenGameId] = useState<string | null>(null);
-	// Same hoist for the status-popover menu (Story 3.6, AC3): the open menu's
+	// Opening a detail is a NAVIGATION (Story 7.2, AD-25) — `/game/:id` over THIS
+	// destination, carrying the live `?q=` so the grid behind the overlay stays
+	// filtered and Back lands on the same shelf. The panel itself is mounted by the
+	// shell beside this grid and resolves the game through its own by-id route, so
+	// it no longer depends on the game being in this list at all: the 3.4
+	// open-detail hoist, its stale-id cleanup, and the refetch-survival dance all
+	// DELETE with it. `toDetail` owns the state (`fromApp` + the background) — see
+	// `detail-navigation.ts` for what each key is load-bearing for.
+	const openDetail = useCallback(
+		(gameId: string) => {
+			void navigate(...toDetail(gameId, destination));
+		},
+		[navigate, destination],
+	);
+
+	// Hoisted status-popover menu (Story 3.6, AC3): the open menu's
 	// Card remounts on any refetch re-chunk — the boolean living here re-opens
 	// it on the remounted Card. Single id: at most one menu open at a time.
 	const [openStatusGameId, setOpenStatusGameId] = useState<string | null>(null);
@@ -350,37 +307,6 @@ function ShelfGrid({
 			setOpenStatusGameId(null);
 		}
 	}, [visible, openStatusGameId]);
-	// Look up in the whole LIBRARY, not the filtered/paged grid: a write that
-	// drops the open game out of the active filter (e.g. owning a wishlisted
-	// game, changing its status under a state filter) — or pages it past the
-	// rendered window — must keep the panel open so the user can keep editing.
-	// The deliberate close on a status→hidden write still fires via `onHidden`;
-	// the stale-id cleanup below now only triggers on true library removal
-	// (a discard), where closing IS right.
-	const openGame = openGameId
-		? library.find((g) => g.id === openGameId)
-		: undefined;
-	const closeDetail = useCallback(() => {
-		// Return focus to the owning gridcell (UX-DR19) — by game id, not a
-		// captured index: the grid may have re-chunked while the panel was open.
-		// Focus first, then clear state (no side effects inside the updater).
-		const cell = openGameId
-			? gridRef.current?.querySelector<HTMLElement>(
-					`[role="gridcell"][data-game-id="${CSS.escape(openGameId)}"]`,
-				)
-			: null;
-		(cell ?? gridRef.current)?.focus();
-		setOpenGameId(null);
-	}, [openGameId]);
-
-	// A lookup miss (the open game left the filtered list outside the onHidden
-	// path — e.g. removed by another actor's refetch) must CLOSE deliberately:
-	// clearing the stale id stops the dialog resurrecting when the game
-	// reappears, and the focus handoff keeps the user off <body>.
-	useEffect(() => {
-		if (openGameId && !openGame) closeDetail();
-	}, [openGameId, openGame, closeDetail]);
-
 	// Focus restoration (Story 3.4, AC1+AC3): when the focused card unmounts —
 	// a resize re-chunk moving it across row parents, or a write removing it
 	// from the visible set — browsers drop focus to <body> with NO blur event,
@@ -591,7 +517,7 @@ function ShelfGrid({
 										cardRefs.current[index] = el;
 									}}
 									onKeyDown={onCardKeyDown(index)}
-									onOpenDetail={setOpenGameId}
+									onOpenDetail={openDetail}
 									statusMenuOpen={game.id === openStatusGameId}
 									onStatusMenuOpenChange={(menuOpen) =>
 										setOpenStatusGameId(menuOpen ? game.id : null)
@@ -605,10 +531,6 @@ function ShelfGrid({
 			{supportsObserver && progressive.hasMore && (
 				<div ref={sentinelRef} className="shelf__sentinel" aria-hidden="true" />
 			)}
-			{/* One panel for the whole grid: it survives any row re-chunk, and the
-			    id lookup feeds it fresh data after every refetch. A lookup miss
-			    (game left the visible set outside the onHidden path) unmounts it. */}
-			{openGame && <DetailPanel game={openGame} onClose={closeDetail} />}
 		</div>
 	);
 }

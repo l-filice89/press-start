@@ -256,10 +256,17 @@ describe('Fab', () => {
 		);
 	});
 
-	it('a failed PS+ check toasts', async () => {
+	it('a failed PS+ check toasts the SERVER message when it carries one', async () => {
+		// A bad-region 409 names the actual fix — swallowing it into a generic
+		// "try again later" sent a real user in a circle (uk-uk vs en-gb).
 		const { release } = deferredFetch(() =>
 			Promise.resolve(
-				new Response(JSON.stringify({ error: 'nope' }), { status: 502 }),
+				new Response(
+					JSON.stringify({
+						error: 'The PlayStation store did not recognize your region.',
+					}),
+					{ status: 409 },
+				),
 			),
 		);
 		renderFab();
@@ -272,7 +279,7 @@ describe('Fab', () => {
 
 		await waitFor(() =>
 			expect(screen.getByTestId('toast')).toHaveTextContent(
-				/PS\+ check failed/,
+				/did not recognize your region/,
 			),
 		);
 	});

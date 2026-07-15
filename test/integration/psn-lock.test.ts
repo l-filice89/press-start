@@ -13,7 +13,13 @@ import {
 	PSN_NPSSO_SETTING_KEY,
 	TIMEZONE_SETTING_KEY,
 } from '../../src/services/settings';
-import { PSN_LIBRARY_HOST, PSN_TROPHY_HOST, stubPsnFetch } from './psn-stub';
+import { catalogPagePayload } from '../fixtures/psn';
+import {
+	PSN_LIBRARY_HOST,
+	PSN_TROPHY_HOST,
+	stubPsnFetch,
+	stubStore,
+} from './psn-stub';
 import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
 
 /**
@@ -149,6 +155,39 @@ describe('PSN single-flight lock (integration, real workerd + local D1)', () => 
 		expect(psnCalls).toBe(0);
 	});
 
+	/**
+	 * A TOKEN BELONGS TO ITS OP (review, H2). The sync and sweep routes hand their
+	 * LIVE token back to the browser, so a *valid* backfill token is in the page's
+	 * hands while the backfill is still chunking. Ownership used to be raw string
+	 * equality on the stored value — the `op` segment was decorative — so
+	 * presenting that live token to the catalog endpoint STOLE the lock, and the
+	 * backfill's next chunk 409'd and died mid-run. (Distinct from the forged-token
+	 * test above, which only proves that garbage fails.)
+	 */
+	it('a VALID token for a DIFFERENT op cannot renew this one’s lock (hazard: cross-op steal)', async () => {
+		stubStore(() => ({ body: catalogPagePayload(['Whatever']) }));
+		// A platinum backfill is mid-run and holds the lock; its token is live and
+		// the browser has it.
+		const live = await acquirePsnLock(db(), userId, 'platinum-backfill');
+		expect(live).toBeTruthy();
+
+		// At the service seam: the token is real, unexpired, and IS the stored value.
+		expect(
+			await acquirePsnLock(db(), userId, 'catalog-refresh', live as string),
+		).toBeNull();
+
+		// And through the route the browser would actually call.
+		const stolen = await post(
+			`/api/ps-plus-catalog/genres?cursor=ACTION&generation=x&lockToken=${encodeURIComponent(live as string)}`,
+		);
+		expect(stolen.status).toBe(409);
+		expect(((await stolen.json()) as { error: string }).error).toMatch(
+			/already running/i,
+		);
+		// The backfill still holds its lock — its next chunk is not about to 409.
+		expect(await getSetting(db(), userId, PSN_LOCK_SETTING_KEY)).toBe(live);
+	});
+
 	it('a continuation that presents its OWN token renews the lock and proceeds', async () => {
 		stubPsn();
 		const token = await acquirePsnLock(db(), userId, 'platinum-backfill');
@@ -259,6 +298,86 @@ describe('PSN single-flight lock (integration, real workerd + local D1)', () => 
 		);
 		stubPsn();
 		expect((await post('/api/sync')).status).toBe(200);
+	});
+
+	/**
+	 * The PS+ catalog ops (Story 7.1). The refresh took NO lock before this story
+	 * — and 7.1 multiplies its fan-out (5 catalog pages + a ~20-key genre sweep)
+	 * and makes it a WRITER of a snapshot a second run would prune underneath it.
+	 */
+	it('refuses a second PS+ catalog op with a 409 — and the STORE sees zero calls', async () => {
+		const storeCalls = stubStore(() => ({
+			body: catalogPagePayload(['Whatever']),
+		}));
+		expect(await acquirePsnLock(db(), userId, 'library-sync')).toBeTruthy();
+
+		for (const path of ['/api/ps-plus-check', '/api/ps-plus-catalog/genres']) {
+			const res = await post(path);
+			expect(res.status, `expected 409 for ${path}`).toBe(409);
+			expect(((await res.json()) as { error: string }).error).toMatch(
+				/already running/i,
+			);
+		}
+		expect(storeCalls).toHaveLength(0);
+	});
+
+	it('a CURSOR is not a capability: a genre-sweep continuation cannot steal a running refresh’s lock (hazard)', async () => {
+		const storeCalls = stubStore(() => ({
+			body: catalogPagePayload(['Whatever']),
+		}));
+		expect(await acquirePsnLock(db(), userId, 'catalog-refresh')).toBeTruthy();
+
+		// The cursor is a GENRE KEY — server-published data (the facet list is
+		// public store data), so anyone can present one. It authorizes nothing.
+		const stolen = await post(
+			'/api/ps-plus-catalog/genres?cursor=ACTION&generation=whatever',
+		);
+		expect(stolen.status).toBe(409);
+		// A stale/forged TOKEN is no better.
+		const forged = await post(
+			'/api/ps-plus-catalog/genres?cursor=ACTION&generation=whatever&lockToken=999:catalog-refresh:not-mine',
+		);
+		expect(forged.status).toBe(409);
+		expect(storeCalls).toHaveLength(0);
+	});
+
+	it('a genre-sweep continuation that presents its OWN token renews (and ROTATES) it and proceeds', async () => {
+		stubStore(() => ({ body: catalogPagePayload([]) }));
+		const token = await acquirePsnLock(db(), userId, 'catalog-refresh');
+		const renewed = await acquirePsnLock(
+			db(),
+			userId,
+			'catalog-refresh',
+			token as string,
+		);
+		expect(renewed).toBeTruthy();
+		expect(renewed).not.toBe(token);
+		// The old token is SPENT — a replayed chunk cannot renew a moved-on lock.
+		expect(
+			await acquirePsnLock(db(), userId, 'catalog-refresh', token as string),
+		).toBeNull();
+
+		// The loop's own chunk is never self-refused. (No catalog is stored for this
+		// user, so the sweep answers 409 `no-catalog` — NOT the busy 409; the point
+		// under test is that it got past the lock. The message tells them apart.)
+		const res = await post(
+			`/api/ps-plus-catalog/genres?cursor=ACTION&generation=x&lockToken=${encodeURIComponent(renewed as string)}`,
+		);
+		expect(((await res.json()) as { error: string }).error).not.toMatch(
+			/already running/i,
+		);
+		// A non-continuing chunk releases: the row is GONE, not merely expired.
+		expect(
+			await getSetting(db(), userId, PSN_LOCK_SETTING_KEY),
+		).toBeUndefined();
+	});
+
+	it('the PS+ refresh releases on the way out — a finished run does not block the next one', async () => {
+		stubStore(() => ({ body: catalogPagePayload(['Crow Country']) }));
+		expect((await post('/api/ps-plus-check')).status).toBe(200);
+		expect(
+			await getSetting(db(), userId, PSN_LOCK_SETTING_KEY),
+		).toBeUndefined();
 	});
 
 	it('a release only ever clears the caller’s OWN lock', async () => {
