@@ -478,14 +478,20 @@ export function createPsnProvider({
 				).searchParams.get('code')
 			: null;
 		if (!code) {
-			// Denial vs. outage. Sony REFUSES a stale npsso by redirecting to the
-			// app scheme WITHOUT a `?code=` (never a 401) — that, plus the two
-			// statuses OAuth itself denies with, is the whole denial set. Anything
-			// else (5xx, 429, a 403 bot-challenge or WAF interstitial, an HTML
-			// page) means Sony is unwell: a plain Error, never the expired flag —
-			// the user cannot fix a challenge page by re-pasting a valid token.
+			// Denial vs. outage. Sony REFUSES a stale npsso two ways (both probed
+			// live, never a 401): an early expiry redirects to the app scheme
+			// WITHOUT a `?code=`; a fully lapsed one 302s to the Sony SIGN-IN page
+			// carrying `error=login_required` (`error_code=4165`, "User is not
+			// authenticated" — probed 2026-07-15). Both, plus the two statuses
+			// OAuth itself denies with, are the whole denial set. Anything else
+			// (5xx, 429, a 403 bot-challenge or WAF interstitial, an unlabelled
+			// HTML page) means Sony is unwell: a plain Error, never the expired
+			// flag — the user cannot fix a challenge page by re-pasting a token.
+			// `login_required` is the OAuth-standard "not authenticated" signal, so
+			// it is specific — a challenge/interstitial does not carry it.
 			const denied =
 				location.startsWith(OAUTH_REDIRECT_URI) ||
+				/[?&]error=login_required(&|$)/.test(location) ||
 				authResponse.status === 400 ||
 				authResponse.status === 401;
 			if (denied) throw new PsnAuthError('denied');

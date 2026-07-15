@@ -393,6 +393,29 @@ describe('createPsnProvider', () => {
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
+	it('throws PsnAuthError when a lapsed NPSSO 302s to the Sony sign-in page with error=login_required (hazard: a real expiry that 502s instead of lighting the refresh banner)', async () => {
+		const fetchMock = vi.fn(async (input: unknown) => {
+			if (String(input).startsWith(AUTHORIZE))
+				return new Response(null, {
+					status: 302,
+					headers: {
+						// The captured live shape (probed 2026-07-15): a fully lapsed
+						// token redirects to the sign-in page, NOT the app scheme.
+						location:
+							'https://my.account.sony.com/sonyacct/signin/?access_type=offline&client_id=09515159-7237-4370-9b40-3806e67c0891&response_type=code&redirect_uri=com.scee.psxandroid.scecompcall%3A%2F%2Fredirect&error=login_required&error_code=4165&error_description=User+is+not+authenticated&no_captcha=true',
+					},
+				});
+			throw new Error('the token leg must not be reached');
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(
+			provider(['lapsed-npsso']).provider.fetchPurchasedGames(),
+		).rejects.toBeInstanceOf(PsnAuthError);
+		// One authorize attempt, and the token leg is never reached.
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
 	it('retries the exchange after a failed one (hazard: a memoized REJECTED promise replays the stale failure)', async () => {
 		let firstAuthorize = true;
 		const fetchMock = vi.fn(async (input: unknown) => {
