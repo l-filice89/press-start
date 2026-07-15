@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-06
-last_updated: 2026-07-15
+last_updated: 2026-07-16
 project: ps-game-catalog
 project_key: NOKEY
 tracking_system: file-system
@@ -153,7 +153,7 @@ development_status:
   11-1-sever-the-credentialed-psn-operations: done # 2026-07-15 (dev-auto): routes/services/UI severed, hazard 404 test, FAB keeps check+export; 5 review patches; followup_review_recommended:false
   11-2-strip-psn-credential-auth-from-provider-and-settings: done # 2026-07-15 (dev-auto): provider collapsed to anonymous catalog, NPSSO/auth/sync_attention plumbing + migration 0010, grep-clean CI guard; 6 review patches; followup_review_recommended:false
   11-3-remove-the-trophy-display-and-schema: done # 2026-07-15 (dev-auto): readout/core/DTO/orphan-fns deleted, migration 0011 drops 11 trophy_* columns (hazard test: survivors byte-identical); 6 review patches; followup_review_recommended:false
-  epic-11-retrospective: optional
+  epic-11-retrospective: done # 2026-07-16 — epic-11-retro-2026-07-16.md; EXTERNAL-RISK-FLAG rule shipped; merge = critical path
 
 action_items:
   - epic: 1
@@ -327,8 +327,20 @@ action_items:
   - epic: 7
     action: "Critical path: merge feat/epic-7-catalog-browse to main via PR + CI gate, deploy, then run one Check PS+ Extra in prod (drives the genre sweep in prod)"
     owner: "Luca"
-    status: open
+    status: done # 2026-07-15: PR #23 merged, v1.4.0 released (PR #24), prod PS+ check confirmed by Luca; closed at epic-11 retro housekeeping 2026-07-16
   - epic: 7
     action: "Epic 11 kickoff after the epic-7 merge - stories 11.1 -> 11.2 -> 11.3; 11.2 subsumes the login_required stopgap"
+    owner: "Luca + Amelia"
+    status: done # 2026-07-15: epic 11 kicked off and completed same day (3/3 stories); closed at epic-11 retro housekeeping 2026-07-16
+  - epic: 11
+    action: "EXTERNAL-RISK-FLAG rule: any spec touching a third-party service carries a named ToS/account/legal risk assessment with Luca's sign-off before code; unflagged = BLOCK. Persistent fact in _bmad/custom/bmad-dev-auto.toml"
+    owner: "Winston + Murat"
+    status: done # 2026-07-16: fact added at the retro
+  - epic: 11
+    action: "Critical path: merge feat/epic-11/psn-account-safety to main via PR + CI gate, human-approving the destructive migrations (0010/0011), watching the documented deploy window"
+    owner: "Luca"
+    status: open
+  - epic: 11
+    action: "Epic 10 kickoff after the epic-11 merge: 10.1 -> 10.2 -> 10.3; 10.1/10.3 specs are the first mandatory EXTERNAL-RISK-FLAG applications (new score/HLTB providers); fold in sprint-change-proposal-2026-07-13-hltb.md"
     owner: "Luca + Amelia"
     status: open
