@@ -29,11 +29,14 @@ const SKIP_DIRS = new Set([
 function walkTestFiles(dir: string, found: string[] = []): string[] {
 	for (const entry of readdirSync(dir, { withFileTypes: true })) {
 		if (entry.isDirectory()) {
-			if (!SKIP_DIRS.has(entry.name)) walkTestFiles(join(dir, entry.name), found);
+			if (!SKIP_DIRS.has(entry.name))
+				walkTestFiles(join(dir, entry.name), found);
 			continue;
 		}
 		if (/\.test\.[jt]sx?$/.test(entry.name)) {
-			found.push(relative(REPO_ROOT, join(dir, entry.name)).replaceAll('\\', '/'));
+			found.push(
+				relative(REPO_ROOT, join(dir, entry.name)).replaceAll('\\', '/'),
+			);
 		}
 	}
 	return found;
