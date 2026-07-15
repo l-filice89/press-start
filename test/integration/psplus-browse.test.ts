@@ -148,6 +148,58 @@ describe('GET /api/ps-plus-catalog — ordering', () => {
 		await seedProducts([['p-a', 'Apex Arena']]);
 		expect((await browse()).generation).toBe(GENERATION);
 	});
+
+	// The store sells a game's PS4 and PS5 editions as SEPARATE products, each with
+	// its own product id and np_title_id — so the grid rendered the same game twice
+	// (seen live: "A Space for the Unbound", CUSA39157 + PPSA12231), each card
+	// offering its own ＋ Add, and adding one left its twin still saying ＋ Add.
+	it('collapses a PS4/PS5 edition pair onto ONE card, preferring the PS5 SKU', async () => {
+		await upsertCatalogProducts(
+			db(),
+			scope,
+			GENERATION,
+			[
+				['p-ps4', 'CUSA39157_00', ['PS4']] as const,
+				['p-ps5', 'PPSA12231_00', ['PS5']] as const,
+			].map(([productId, npTitleId, platforms]) => ({
+				productId,
+				npTitleId,
+				name: 'A Space for the Unbound',
+				titleNormalized: normalizeTitle('A Space for the Unbound'),
+				coverUrl: null,
+				platforms: [...platforms],
+				storeClassification: null,
+				storeUrl: `https://store.playstation.com/${REGION}/product/${productId}`,
+			})),
+			'2026-07-01',
+		);
+
+		const page = await browse();
+
+		expect(page.total).toBe(1);
+		expect(page.games.map((g) => g.productId)).toEqual(['p-ps5']);
+		// The snapshot still mirrors the store faithfully — only the VIEW collapses.
+		expect(page.snapshotTotal).toBe(2);
+	});
+
+	// …and the collapse must NOT eat two DIFFERENT games that merely share a title
+	// (NieR / NIER normalize alike; so would a remake carrying its original's name).
+	// Disjoint platforms are what make a pair an edition pair — same platform, two
+	// cards.
+	it('keeps two same-title products on the SAME platform as two cards', async () => {
+		await seedProducts([
+			['p-one', 'Resident Evil 4'],
+			['p-two', 'RESIDENT EVIL 4'],
+		]);
+
+		const page = await browse();
+
+		expect(page.total).toBe(2);
+		expect(page.games.map((g) => g.productId).sort()).toEqual([
+			'p-one',
+			'p-two',
+		]);
+	});
 });
 
 describe('GET /api/ps-plus-catalog — search', () => {

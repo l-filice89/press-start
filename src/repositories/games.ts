@@ -197,19 +197,32 @@ export async function backfillGameFacts(
 
 /**
  * Set/clear the PS+ Extra catalog flag on a batch of games (Story 5.1,
- * FR-38). Caller scopes the ids to tracked, non-owned games — this is a dumb
- * batched write.
+ * FR-38). Caller scopes the ids to tracked games — this is a dumb batched write.
+ *
+ * CHUNKED, like `listGenresForGames`: D1 caps bound parameters per statement at
+ * 100, and a real library clears more games than that in one refresh (103 →
+ * `D1_ERROR: too many SQL variables`, which failed the whole PS+ check). The
+ * `value` bind takes one slot, so the id slice is 99, and the chunks go through
+ * one `db.batch` so the write still costs a single binding call (AD-15).
  */
+const PS_PLUS_FLAG_CHUNK_SIZE = 99;
+
 export async function setPsPlusExtraFlags(
 	db: Db,
 	gameIds: string[],
 	value: boolean,
 ) {
 	if (gameIds.length === 0) return;
-	await db
-		.update(game)
-		.set({ psPlusExtra: value })
-		.where(inArray(game.id, gameIds));
+	const statements = [];
+	for (let i = 0; i < gameIds.length; i += PS_PLUS_FLAG_CHUNK_SIZE) {
+		statements.push(
+			db
+				.update(game)
+				.set({ psPlusExtra: value })
+				.where(inArray(game.id, gameIds.slice(i, i + PS_PLUS_FLAG_CHUNK_SIZE))),
+		);
+	}
+	await db.batch(statements as [(typeof statements)[0], ...typeof statements]);
 }
 
 /**

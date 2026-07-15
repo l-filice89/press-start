@@ -135,13 +135,33 @@
 	text-overflow: ellipsis;
 }
 
+/* STACKED, not side by side: at the grid's card width two pills sat shoulder to
+   shoulder and both wrapped their own labels onto two lines ("＋ / Add"). Full-
+   width stacked buttons read as buttons and keep their labels on one line.
+   `min-height` floors the SHORTER states (in-library = marker + Claim; owned =
+   marker only) so a card with actions is never dwarfed by its neighbours; the
+   not-tracked state (two stacked 44px targets) is taller, and that is accepted —
+   forcing every block to the two-button height would strand a lone Owned marker
+   above a block of empty space. Rows still align: the grid stretches cards in a
+   row to the tallest. */
 .catalog-card__actions {
 	display: flex;
-	align-items: center;
+	flex-direction: column;
+	align-items: stretch;
 	gap: var(--space-2);
-	/* The row is always present, so all cards are the same height whichever of
-	   the three states they are in (the owned state has no actions at all). */
-	min-height: 32px;
+	min-height: 72px;
+}
+
+/* The label fills the 44px hit target rather than floating in it: the height is
+   the WCAG floor (`.tap-target`), NOT padding, so a 12px label just left the
+   button looking over-padded. Centring is explicit because `Claim now` is an <a>. */
+.catalog-card__add,
+.catalog-card__claim {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	white-space: nowrap;
+	font-size: 14px;
 }
 
 /* Not tracked: the primary action, solid electric fill with dark ink. */
@@ -149,7 +169,6 @@
 	padding: var(--space-2) var(--space-3);
 	font-family: var(--font-ui);
 	font-weight: 600;
-	font-size: 12px;
 	color: var(--color-void);
 	background: var(--color-accent-electric);
 	border: none;
@@ -161,7 +180,6 @@
 .catalog-card__claim {
 	padding: var(--space-2) var(--space-3);
 	font-family: var(--font-ui);
-	font-size: 12px;
 	color: var(--color-accent-electric);
 	text-decoration: none;
 	background: transparent;

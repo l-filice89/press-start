@@ -20,6 +20,7 @@
  */
 import { compareTitle, normalizeTitle } from '../core';
 import {
+	type CatalogBrowseRow,
 	countCatalogGenreKeys,
 	countCatalogProducts,
 	getCatalogGeneration,
@@ -71,6 +72,65 @@ export interface CatalogGenre {
 	count: number;
 }
 
+/**
+ * ONE CARD PER GAME, not per store SKU. The store lists a game's PS4 and PS5
+ * editions as SEPARATE products with their own `product_id` and `np_title_id`
+ * ("A Space for the Unbound" ships as `CUSA39157` (PS4) and `PPSA12231` (PS5)),
+ * so the grid rendered the same game twice, side by side, each offering its own
+ * ＋ Add — and adding one left its twin still saying ＋ Add, since the identity
+ * keys (link, np_title_id) differ per SKU.
+ *
+ * The snapshot keeps BOTH rows — it is a faithful mirror of the store (AD-24),
+ * and the flag pass and the add path need whichever SKU the user's library
+ * actually carries. Only the BROWSE VIEW collapses them, and it collapses on
+ * title + DISJOINT PLATFORMS: a shared title alone is not an edition pair (NieR
+ * and NIER normalize alike and are two different games; so would a remake
+ * carrying its original's name). Two products with the same title that both ship
+ * on PS5 stay two cards — the safe way to be wrong here is to show too much.
+ *
+ * The PS5 SKU wins the card: it is the one a PS5 owner wants to claim.
+ */
+
+/** The column is JSON array TEXT. Unparseable or absent = no known platform, and
+ * a row with no known platform is disjoint from nothing, so it never collapses. */
+function platformsOf(row: CatalogBrowseRow): string[] {
+	if (!row.platforms) return [];
+	try {
+		const parsed: unknown = JSON.parse(row.platforms);
+		return Array.isArray(parsed)
+			? parsed.filter((p) => typeof p === 'string')
+			: [];
+	} catch {
+		return [];
+	}
+}
+
+function collapseEditions(rows: CatalogBrowseRow[]): CatalogBrowseRow[] {
+	const byTitle = new Map<string, { row: CatalogBrowseRow; on: string[] }[]>();
+	const kept: CatalogBrowseRow[] = [];
+	for (const row of rows) {
+		// A title that normalizes to '' is not a key — it would collapse every such
+		// product onto one card (the same hazard the membership join guards, M7).
+		const on = platformsOf(row);
+		if (!row.titleNormalized || on.length === 0) {
+			kept.push(row);
+			continue;
+		}
+		const siblings = byTitle.get(row.titleNormalized) ?? [];
+		// The edition it supersedes, if any: same title, no platform in common.
+		const twin = siblings.findIndex(
+			(sibling) => !sibling.on.some((platform) => on.includes(platform)),
+		);
+		if (twin === -1) siblings.push({ row, on });
+		else if (on.includes('PS5')) siblings[twin] = { row, on };
+		byTitle.set(row.titleNormalized, siblings);
+	}
+	return [
+		...kept,
+		...[...byTitle.values()].flat().map((sibling) => sibling.row),
+	];
+}
+
 export async function browseCatalog(
 	db: Db,
 	userId: string,
@@ -106,6 +166,8 @@ export async function browseCatalog(
 	// (review, M5): re-reading the whole table for its `.length` is a count query
 	// wearing a table scan.
 	const filtering = Boolean(genreKeys?.length || searchNormalized);
+	// Only ever compared against 0 (EMPTY CATALOG vs NO MATCH), so the raw SKU
+	// count is the honest answer — the collapsed count is `total`, below.
 	const snapshotTotal = filtering
 		? await countCatalogProducts(db, scope)
 		: rows.length;
@@ -164,7 +226,7 @@ export async function browseCatalog(
 	// + sort, so an unspecified tie order lets two base-equal titles swap across
 	// the offset boundary between requests: one row served twice, one never shown.
 	// `productId` is the primary key, so it makes the order total.
-	const sorted = [...rows].sort(
+	const sorted = collapseEditions(rows).sort(
 		(a, b) =>
 			compareTitle(a.name, b.name) || a.productId.localeCompare(b.productId),
 	);

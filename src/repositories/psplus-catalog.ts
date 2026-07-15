@@ -240,6 +240,11 @@ export type CatalogBrowseRow = {
 	titleNormalized: string;
 	coverUrl: string | null;
 	storeUrl: string | null;
+	/** JSON array text as stored, e.g. `["PS4","PS5"]`. The browse view collapses a
+	 * PS4/PS5 edition PAIR onto one card, and disjoint platforms are what
+	 * distinguish that pair from two different games that merely share a title
+	 * (NieR / NIER). */
+	platforms: string | null;
 };
 
 /** LIKE wildcards in a user-typed term are literal characters, not syntax. */
@@ -308,6 +313,7 @@ export async function listCatalogForBrowse(
 			titleNormalized: psPlusCatalog.titleNormalized,
 			coverUrl: psPlusCatalog.coverUrl,
 			storeUrl: psPlusCatalog.storeUrl,
+			platforms: psPlusCatalog.platforms,
 		})
 		.from(psPlusCatalog)
 		.where(and(...scoped))
