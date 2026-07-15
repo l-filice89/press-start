@@ -51,6 +51,17 @@ psPlusRoute.post('/ps-plus-check', requireAuth, async (c) => {
 				{ error: 'No PSN region is configured — set PSN_REGION.' },
 				409,
 			);
+		// The store answered and refused the query — near-always a region that is
+		// no real store locale (`uk-uk` instead of `en-gb`). Config, not outage:
+		// "try again later" would be a lie, so name the fix.
+		if (outcome.reason === 'bad-region')
+			return c.json(
+				{
+					error:
+						'The PlayStation store did not recognize your region. Store locales are language-country — en-gb for the UK, en-us for the US, it-it for Italy. Fix it in Settings → PlayStation region.',
+				},
+				409,
+			);
 		// The fence tripped: another run owns the catalog now, and it wrote a whole
 		// snapshot. Nothing was lost and nothing is wrong — this run just stood down.
 		if (outcome.reason === 'conflict')

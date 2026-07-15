@@ -236,15 +236,23 @@ describe('POST /api/ps-plus-check (integration, real workerd + local D1)', () =>
 		const before = await snapshotNames();
 		expect(before.length).toBeGreaterThan(0);
 
+		// The store ANSWERED with nothing — the bad-region/de-listed shape, so the
+		// failure is a 409 naming the region fix, not a "try again later" 502.
 		stubStore(() => ({ body: EMPTY_CATALOG_PAYLOAD }));
-		expect((await postCheck(cookie)).status).toBe(502);
+		const emptied = await postCheck(cookie);
+		expect(emptied.status).toBe(409);
+		expect(((await emptied.json()) as { error: string }).error).toMatch(
+			/did not recognize your region/,
+		);
 
 		expect(await flagOf(flagged.id)).toBe(true);
 		expect(await snapshotNames()).toEqual(before);
 	});
 
-	// A 200 whose grid is NULL (a bad region, and separately a bad category id) is
-	// a PROVIDER failure, not an empty catalog — fail closed on both.
+	// A 200 whose grid is NULL (a bad region, and separately a bad category id)
+	// fails closed — and as a 409 pointing at the region, not a retry-later 502:
+	// the store answered and refused, so retrying cannot fix it (a real user hit
+	// this with `uk-uk` for the UK store, which is `en-gb`).
 	it.each([
 		['a bad region (null grid, empty error message)', BAD_REGION_PAYLOAD],
 		['a bad category id (null grid + errors[])', BAD_CATEGORY_PAYLOAD],
@@ -255,7 +263,11 @@ describe('POST /api/ps-plus-check (integration, real workerd + local D1)', () =>
 		const before = await snapshotNames();
 
 		stubStore(() => ({ body: payload }));
-		expect((await postCheck(cookie)).status).toBe(502);
+		const refused = await postCheck(cookie);
+		expect(refused.status).toBe(409);
+		expect(((await refused.json()) as { error: string }).error).toMatch(
+			/language-country/,
+		);
 		expect(await flagOf(flagged.id)).toBe(true);
 		expect(await snapshotNames()).toEqual(before);
 	});

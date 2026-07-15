@@ -21,7 +21,11 @@
  */
 
 import { normalizeTitle } from '../core';
-import { createPsnProvider, type PsnCatalog } from '../providers';
+import {
+	createPsnProvider,
+	type PsnCatalog,
+	PsnStoreRejectionError,
+} from '../providers';
 import {
 	deleteCatalogOutsideRegion,
 	findUserByEmail,
@@ -66,7 +70,12 @@ export interface PsPlusCheckResult {
 
 export type PsPlusCheckOutcome =
 	| { ok: true; result: PsPlusCheckResult }
-	| { ok: false; reason: 'no-region' | 'provider' | 'conflict' };
+	| {
+			ok: false;
+			// `bad-region` = the store ANSWERED and refused the query (a locale that
+			// is no store, like `uk-uk`) — a retry cannot fix it, the region can.
+			reason: 'no-region' | 'bad-region' | 'provider' | 'conflict';
+	  };
 
 /**
  * How far the accumulated walk may fall short of the store's own `totalCount`
@@ -120,8 +129,11 @@ export async function runPsPlusCheck(
 		// EVERY degenerate response lands here, and all of them are HTTP 200: a
 		// null grid on a bad region, and a null grid + `errors` on a bad category
 		// id, both carry a GraphQL `errors` array the provider throws on. A 200 is
-		// not success.
+		// not success. The typed rejection separates "the store refused the query"
+		// (fix the region) from an outage/timeout (try again later).
 		console.error('ps+ check: catalog fetch failed', error);
+		if (error instanceof PsnStoreRejectionError)
+			return { ok: false, reason: 'bad-region' };
 		return { ok: false, reason: 'provider' };
 	}
 
@@ -155,7 +167,12 @@ export async function runPsPlusCheck(
 		console.error(
 			`ps+ check: refusing a suspect catalog — ${products.length} products (+${fetched.skipped} skipped) against a reported totalCount of ${fetched.totalCount}`,
 		);
-		return { ok: false, reason: 'provider' };
+		// A whole-catalog EMPTY answer is the bad-region/de-listed shape (fix the
+		// config); a truncated walk is transient (retry may fix).
+		return {
+			ok: false,
+			reason: products.length === 0 ? 'bad-region' : 'provider',
+		};
 	}
 
 	// THE FENCE (Story 7.1 review, H3), immediately before the write phase — the
@@ -350,9 +367,9 @@ export async function runScheduledPsPlusCheck(
 		const outcome = held.result;
 		if (!outcome) return; // a sweep invocation — no membership verdict to act on
 		// Only a genuine provider failure (a retry may fix) lights the banner.
-		// `no-region` is a deploy/config gap, not a transient refresh failure:
-		// the banner tells the user to run the button, but the button hits the
-		// same no-region wall — lighting it would be a permanent dead-end.
+		// `no-region` and `bad-region` are config gaps, not transient refresh
+		// failures: the banner tells the user to run the button, but the button
+		// hits the same wall — lighting it would be a permanent dead-end.
 		if (!outcome.ok && outcome.reason === 'provider') {
 			await markPsPlusRefreshFailed(db, user.id);
 		}

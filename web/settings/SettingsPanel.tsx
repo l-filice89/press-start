@@ -344,7 +344,9 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 					<p className="settings-panel__status" data-testid="psn-region-status">
 						{settings?.region
 							? `Your PS+ catalog region is ${settings.region}.`
-							: 'No region set — the PS+ catalog needs one.'}
+							: 'No region set — the PS+ catalog needs one.'}{' '}
+						Store locales are language-country: en-us for the US, en-gb for the
+						UK, it-it for Italy.
 					</p>
 					<input
 						type="text"
@@ -377,7 +379,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 						{saveRegion.isError && 'Saving failed — try again.'}
 						{!regionValid &&
 							region.trim() !== '' &&
-							'Use a store locale like it-it or en-us.'}
+							'Use a language-country store locale, like en-us or en-gb.'}
 					</div>
 				</section>
 

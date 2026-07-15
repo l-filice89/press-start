@@ -88,8 +88,12 @@ export function Fab({
 			// settings so the failed-refresh banner disappears without a reload.
 			queryClient.invalidateQueries({ queryKey: ['settings'] });
 		},
-		onError: () => {
-			toast({ message: 'PS+ check failed — try again later.' });
+		onError: (error: Error) => {
+			// The server's own message when it carries one — a bad-region 409 names
+			// the actual fix; "try again later" would send the user in a circle.
+			toast({
+				message: serverMessage(error) ?? 'PS+ check failed — try again later.',
+			});
 		},
 		onSettled: () => setOpen(false),
 	});

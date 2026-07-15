@@ -238,7 +238,7 @@ describe('SettingsPanel', () => {
 		await userEvent.type(input, 'italy');
 		expect(screen.getByTestId('save-psn-region')).toBeDisabled();
 		expect(screen.getByTestId('psn-region-feedback')).toHaveTextContent(
-			/Use a store locale like it-it/,
+			/Use a language-country store locale/,
 		);
 
 		// A valid one is normalized (trim + lowercase) before the PUT.

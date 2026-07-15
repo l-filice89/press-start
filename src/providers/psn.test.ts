@@ -12,7 +12,7 @@ import {
 	PAST_END_PAYLOAD,
 	productId,
 } from '../../test/fixtures/psn';
-import { createPsnProvider, PsnAuthError } from './psn';
+import { createPsnProvider, PsnAuthError, PsnStoreRejectionError } from './psn';
 
 /**
  * Wire-level PSN adapter tests (Story 4.1, re-credentialed in 9.1b) over a
@@ -1016,9 +1016,11 @@ describe('fetchPsPlusExtraCatalog', () => {
 		['a bad category id (null grid + errors)', BAD_CATEGORY_PAYLOAD],
 	])('throws on the CAPTURED degenerate 200 for %s', async (_label, payload) => {
 		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(payload)));
+		// The TYPED rejection is the seam the route's "check your region" 409
+		// hangs off — a plain Error here would degrade it to a retry-later 502.
 		await expect(
 			provider(['x']).provider.fetchPsPlusExtraCatalog('en-us'),
-		).rejects.toThrow(/GraphQL error/);
+		).rejects.toThrow(PsnStoreRejectionError);
 	});
 });
 

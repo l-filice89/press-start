@@ -107,6 +107,20 @@ export class PsnAuthError extends Error {
 	}
 }
 
+/**
+ * The store ANSWERED (HTTP 200) but refused the catalog query — a null grid or
+ * a GraphQL `errors[]`. In practice this is a region that is not a real store
+ * locale (`uk-uk` instead of `en-gb`), or category-id rot. Distinct from an
+ * outage/timeout so the caller can say "check your region" instead of "try
+ * again later".
+ */
+export class PsnStoreRejectionError extends Error {
+	constructor(detail: string) {
+		super(`PlayStation store rejected the catalog query: ${detail}`);
+		this.name = 'PsnStoreRejectionError';
+	}
+}
+
 /** One purchased-list entry, as sync (4.2) needs it. */
 export interface PsnGame {
 	name: string;
@@ -647,14 +661,14 @@ export function createPsnProvider({
 			);
 		}
 		if (payload.errors) {
-			throw new Error(
-				`PS+ catalog GraphQL error: ${JSON.stringify(payload.errors)}`,
+			throw new PsnStoreRejectionError(
+				`GraphQL error: ${JSON.stringify(payload.errors)}`,
 			);
 		}
 		const page = payload.data?.categoryGridRetrieve;
 		if (!page || !Array.isArray(page.products) || !page.pageInfo) {
-			throw new Error(
-				'PS+ catalog response missing a well-formed categoryGridRetrieve page',
+			throw new PsnStoreRejectionError(
+				'response missing a well-formed categoryGridRetrieve page',
 			);
 		}
 		return page;
