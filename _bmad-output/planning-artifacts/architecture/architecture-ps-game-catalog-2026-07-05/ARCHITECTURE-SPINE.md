@@ -101,7 +101,8 @@ flowchart LR
 
 - **Binds:** PSN + IGDB access; FR-33/34/36/38/41; the cookie→NPSSO swap.
 - **Prevents:** ad-hoc `fetch` calls to third parties; auth mechanics bleeding into sync logic.
-- **Rule:** Every third-party call goes through a `providers/` adapter (`PsnProvider`, `IgdbProvider`). The PSN auth mechanism (the NPSSO token and the authorize→code→bearer exchange it rides through; story 9.1b, 2026-07-13 — the `pdccws_p` cookie is gone) lives **entirely inside** `PsnProvider`; the swap did in fact change only that adapter. The **account region** (AD-23) is a `PsnProvider` input — the PS+ Extra catalog is per-region.
+- **Rule:** Every third-party call goes through a `providers/` adapter (`PsnProvider`, `IgdbProvider`). ~~The PSN auth mechanism (the NPSSO token and the authorize→code→bearer exchange it rides through; story 9.1b, 2026-07-13 — the `pdccws_p` cookie is gone) lives **entirely inside** `PsnProvider`.~~ The **account region** (AD-23) is a `PsnProvider` input — the PS+ Extra catalog is per-region.
+- **AMENDED 2026-07-15 (Epic 11, PSN Account Safety):** `PsnProvider` is narrowed to **anonymous store-browse only** (the PS+ Extra catalog fetch, which carries no account identity). The NPSSO exchange, the credentialed methods (`fetchPurchasedGames`, `fetchTrophyTitles`), and the `PsnAuthError` credentialed paths are **removed** — the app makes no credentialed PSN call. The single-flight PSN lock's `PsnOp` reduces to `catalog-refresh`. Rationale: `sprint-change-proposal-2026-07-15.md`.
 
 ### AD-6 — Nothing external on render, enforced structurally (NFR-3) [ADOPTED]
 

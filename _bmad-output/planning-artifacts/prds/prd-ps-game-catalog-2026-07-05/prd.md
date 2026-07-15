@@ -9,7 +9,9 @@ updated: 2026-07-05
 
 ## 1. Vision & Success
 
-**ps-game-catalog** is a personal web app that replaces Luca's Notion database as the record of his PlayStation gaming life — owned, wanted, playing, finished. Notion only works as hard as Luca does; this is **a library that fills itself**: append-only PS library sync, one name-search to add anything else, and PS+ Extra awareness on games he doesn't own.
+**ps-game-catalog** is a personal web app that replaces Luca's Notion database as the record of his PlayStation gaming life — owned, wanted, playing, finished. Notion only works as hard as Luca does; this is **a library that fills itself**†: append-only PS library sync, one name-search to add anything else, and PS+ Extra awareness on games he doesn't own.
+
+> † **Amended 2026-07-15 (Epic 11):** automated PS library sync removed for account safety — it authenticated as the user and risked a PSN ban. The library is **seeded once** (§4.1), then maintained by manual add-by-name (§4.4). Trust now rests on manual upkeep rather than auto-sync — an accepted trade (see `sprint-change-proposal-2026-07-15.md`). PS+ Extra awareness and name-search are unaffected.
 
 It is a single-user tool, reachable from the phone at the moment of discovery — that moment being the only one that counts for the wishlist. If it turns out well, it may be published someday; v1 builds nothing for that beyond not welding the door shut.
 
@@ -55,7 +57,7 @@ effective state = play status, if set
 
 ### Ownership
 
-- **FR-9** — `Owned` is a flag, not a status, and it means **purchased**. It is set by the PS library sync (source of truth for digital) **or manually in the detail view** (physical discs, which the PS API cannot see). PS library entries that are **membership-sourced** (PS+ claims — the export's `membership` field) never set it: availability is not ownership (§6), and in the real export the majority of entries are claims, not purchases.
+- **FR-9** — `Owned` is a flag, not a status, and it means **purchased**. ~~It is set by the PS library sync (source of truth for digital)~~ **or manually in the detail view** (physical discs, which the PS API cannot see). *(Sync-set clause removed 2026-07-15, Epic 11 — ownership is now seed- or manually-set only.)* PS library entries that are **membership-sourced** (PS+ claims — the export's `membership` field) never set it: availability is not ownership (§6), and in the real export the majority of entries are claims, not purchases.
 - **FR-10** — Sync may set `Owned` to true on any existing game — including ones added by hand or by name — and never sets it false; nothing unsets it except the user.
 - **FR-11** — Ownership type (`digital` / `physical`) is inferred — sync-sourced games are digital, manually flagged ones default to physical — and editable in the detail view.
 
@@ -117,10 +119,12 @@ Three doors into the library. All of them record lifecycle dates silently (§4.5
 
 ### 4.2 PS library sync
 
+> **RESCINDED 2026-07-15 (Epic 11, PSN Account Safety):** the credentialed PS library sync (FR-33–FR-37) is removed — it authenticates as the user and risks a PSN account ban. New purchases are added via §4.4 add-by-name (manual). The one-time seed (§4.1) remains the library's origin. Rationale: `sprint-change-proposal-2026-07-15.md`.
+
 - **FR-33** — Triggered by a **button**. **Append-only applies to user-entered data:** sync may create games (defaults: `Owned`, digital, `Not started`) and may flip `Owned` to true on existing games of any origin (stamping `bought_on`, ownership type digital); it never deletes a game, never sets `Owned` false, and never touches status, milestones, dates, or genres. **Purchase-sourced entries only:** membership-sourced entries (PS+ claims, FR-9) are skipped — never created, never flipped to `Owned` — and a claim that matches an already-tracked game leaves it untouched.
 - **FR-34** — Matching order: stored external-ID/alias links first, then normalized title. PS4/PS5 collapse applies. A title-matched game that already carries a *different* external-ID link is flagged in the sync summary's needs-attention list rather than silently merged (two distinct games can normalize to the same name).
 - **FR-35** — Cover art and the PS Store product URL are captured at sync time and persisted — nothing is fetched on page render (NFR-3).
-- **FR-36** — Auth is a stored PlayStation credential, editable from the UI; on auth failure the app surfaces the refresh instructions and does not retry. (v1: `pdccws_p` cookie. **Resolved 2026-07-13 by S-1 / DW-10 → moving to NPSSO bearer in Epic 9 story 9.1b**, since trophies require it and it also serves the library sync; the credential and its refresh live entirely inside `PsnProvider`, AR-5.)
+- **FR-36** — Auth is a stored PlayStation credential, editable from the UI; on auth failure the app surfaces the refresh instructions and does not retry. (v1: `pdccws_p` cookie. **Resolved 2026-07-13 by S-1 / DW-10 → moving to NPSSO bearer in Epic 9 story 9.1b**, since trophies require it and it also serves the library sync; the credential and its refresh live entirely inside `PsnProvider`, AR-5.) **Superseded 2026-07-15 (Epic 11):** no stored PS credential — the app makes no credentialed PSN call. The only PSN traffic left is the anonymous PS+ catalog fetch (§4.3), which carries no account identity.
 - **FR-37** — Every sync ends with a **visible summary**: games added, `Owned` flips, membership-sourced entries skipped (FR-33), and anything needing attention (failed external lookups).
 
 ### 4.3 PS+ Extra check
@@ -169,7 +173,7 @@ Three doors into the library. All of them record lifecycle dates silently (§4.5
 
 ### v1.x — enriches a working app (next, not now)
 
-- Trophy sync from PSN: completion % and a PSNProfiles-style letter grade (computable client-side once counts are synced).
+- ~~Trophy sync from PSN: completion % and a PSNProfiles-style letter grade (computable client-side once counts are synced).~~ **Removed 2026-07-15 (Epic 11):** trophy sync withdrawn (account-ban risk); completion/platinum tracked manually via milestones (§2). Safe revival only via the PSNProfiles model — a burner account reading the public profile, never the main credential.
 - Critic and user scores from games-DB sources, stored and refreshed on a schedule.
 - **Time to beat** — hours to finish the story and hours to 100%, shown next to the scores. Source: IGDB `/game_time_to_beats`, keyed by the `igdbId` already stored (open-q #6); HowLongToBeat is the fallback only if IGDB coverage is thin. Same stored-and-scheduled-refresh discipline as the scores. *(Not personal playtime tracking — that stays Future.)*
 - "Leaving PS+ Extra soon" warnings for backlog games.

@@ -337,6 +337,10 @@ Three decision-support signals on the card: what the world thinks of a game (IGD
 **VRs covered:** VR-5, VR-6, VR-8 · reuses AR-5 (`IgdbProvider`), AR-6 (nothing external on render), AR-15 (bulk work chunked), AR-23 (per-region catalog)
 **Sequencing:** VR-6 diffs the `ps_plus_catalog` snapshot Story 7.1 builds, so this epic follows Epic 7. Stories 10.1 (scores) and 10.3 (time to beat) carry no such dependency and are pullable ahead alone; 10.3 rides 10.1's refresh job, so it follows 10.1.
 
+### Epic 11: PSN Account Safety — Sanitize the Credentialed Surface — _HIGH PRIORITY, sequenced first_
+Every call Press Start makes to PlayStation with Luca's own NPSSO token is attributed to his real account — and locked it once (2026-07-15). This epic removes the entire credentialed PSN surface: library sync, trophy sync, and the platinum backfill, plus the NPSSO auth machinery and the trophy display that depended on it. What stays is everything that carries no account identity — the anonymous PS+ Extra catalog (check + monthly cron), manual add-by-name, and manual milestone tracking. After this epic, no credential ever reaches the wire, so the account is out of the ban blast radius.
+**FRs affected:** FR-33–FR-37 removed; FR-9/FR-10 sync-clauses removed; FR-36 superseded; Epic 9 VR-2/VR-3 display removed · AR-5 narrowed to anonymous catalog. **Supersedes Epic 4 and the credentialed half of Epic 9; PS+ awareness (Epics 5/7) untouched. Sequenced ahead of Epics 8 and 10.** (Rationale: `sprint-change-proposal-2026-07-15.md`.)
+
 ---
 
 ## Epic 1: Foundation & the Seeded Shelf
@@ -1922,3 +1926,92 @@ So that I pick a game that fits the time I actually have, instead of stalling ou
 **Given** a failed refresh
 **When** the next app open happens
 **Then** the failure surfaces (the FR-40 posture) rather than leaving stale hours passing as current [NFR-4, AR-14]
+
+---
+
+## Epic 11: PSN Account Safety — Sanitize the Credentialed Surface
+
+**Goal:** Remove every code path that puts Luca's PSN credential on the wire, so his real account can never again be the actor in a reverse-engineered call. Keep everything that carries no account identity. Sequenced FIRST, ahead of Epics 8 and 10.
+
+### Story 11.1: Sever the credentialed PSN operations
+Delete the three credentialed routes (`POST /sync`, `/sync/trophies`, `/backfill/platinum-dates`) and their services (`services/sync.ts`, `services/trophies.ts`, `services/backfill.ts`). Remove the FAB "Sync library" and "Sync trophies" buttons and both readout modals (`SyncSummaryModal`, `TrophySyncModal`). The FAB keeps "Check PS+ Extra" and "Export CSV". Remove the Settings backfill panel.
+
+**Given** the app is running
+**When** Luca opens the FAB drawer
+**Then** no control can trigger a credentialed PSN call — only "Check PS+ Extra" and "Export CSV" remain [Epic 11]
+
+**Given** a client posts to `/sync`, `/sync/trophies`, or `/backfill/platinum-dates`
+**When** the route resolves
+**Then** it 404s — the credentialed routes no longer exist [Epic 11]
+
+**Given** the anonymous PS+ catalog check and CSV export
+**When** their flows run
+**Then** both still work and their suites stay green [Epic 5, Epic 6]
+
+### Story 11.2: Strip PSN credential auth from the provider and settings
+Collapse `PsnProvider` to its anonymous catalog methods only — remove `exchange`/`getBearer`, the `getNpsso` plumbing, `fetchPurchasedGames`, `fetchTrophyTitles`, and the credentialed `PsnAuthError` paths. Remove the NPSSO settings field, the expired-token banner (`markPsnAuthExpired`, `psn_auth` setting), and the psn-lock ops that only served credentialed work (keep the lock for `catalog-refresh`). Migration drops the `psn_npsso` and `psn_auth` setting rows. Retire the Wrangler `PSN_NPSSO` secret from deploy.
+
+**Given** the codebase after this story
+**When** grepped for `fetchPurchasedGames`, `fetchTrophyTitles`, NPSSO, or the bearer exchange
+**Then** nothing remains — `PsnProvider` exposes only anonymous catalog methods [Epic 11, AR-5]
+
+**Given** the settings page
+**When** Luca opens it
+**Then** there is no NPSSO token field and no expired-token banner [Epic 11]
+
+**Given** the monthly catalog cron and the PS+ check
+**When** they run under the single-flight lock
+**Then** both still pass — the lock now carries only `catalog-refresh` [Epic 5, Epic 7]
+
+### Story 11.3: Remove the trophy display and schema
+Drop the trophy 
+---
+
+## Epic 11: PSN Account Safety — Sanitize the Credentialed Surface
+
+**Goal:** Remove every code path that puts Luca's PSN credential on the wire, so his real account can never again be the actor in a reverse-engineered call. Keep everything that carries no account identity. Sequenced FIRST, ahead of Epics 8 and 10.
+
+### Story 11.1: Sever the credentialed PSN operations
+Delete the three credentialed routes (`POST /sync`, `/sync/trophies`, `/backfill/platinum-dates`) and their services (`services/sync.ts`, `services/trophies.ts`, `services/backfill.ts`). Remove the FAB "Sync library" and "Sync trophies" buttons and both readout modals (`SyncSummaryModal`, `TrophySyncModal`). The FAB keeps "Check PS+ Extra" and "Export CSV". Remove the Settings backfill panel.
+
+**Given** the app is running
+**When** Luca opens the FAB drawer
+**Then** no control can trigger a credentialed PSN call — only "Check PS+ Extra" and "Export CSV" remain [Epic 11]
+
+**Given** a client posts to `/sync`, `/sync/trophies`, or `/backfill/platinum-dates`
+**When** the route resolves
+**Then** it 404s — the credentialed routes no longer exist [Epic 11]
+
+**Given** the anonymous PS+ catalog check and CSV export
+**When** their flows run
+**Then** both still work and their suites stay green [Epic 5, Epic 6]
+
+### Story 11.2: Strip PSN credential auth from the provider and settings
+Collapse `PsnProvider` to its anonymous catalog methods only — remove `exchange`/`getBearer`, the `getNpsso` plumbing, `fetchPurchasedGames`, `fetchTrophyTitles`, and the credentialed `PsnAuthError` paths. Remove the NPSSO settings field, the expired-token banner (`markPsnAuthExpired`, `psn_auth` setting), and the psn-lock ops that only served credentialed work (keep the lock for `catalog-refresh`). Migration drops the `psn_npsso` and `psn_auth` setting rows. Retire the Wrangler `PSN_NPSSO` secret from deploy.
+
+**Given** the codebase after this story
+**When** grepped for `fetchPurchasedGames`, `fetchTrophyTitles`, NPSSO, or the bearer exchange
+**Then** nothing remains — `PsnProvider` exposes only anonymous catalog methods [Epic 11, AR-5]
+
+**Given** the settings page
+**When** Luca opens it
+**Then** there is no NPSSO token field and no expired-token banner [Epic 11]
+
+**Given** the monthly catalog cron and the PS+ check
+**When** they run under the single-flight lock
+**Then** both still pass — the lock now carries only `catalog-refresh` [Epic 5, Epic 7]
+
+### Story 11.3: Remove the trophy display and schema
+Drop the trophy %/grade readout from `Card.tsx` and `DetailPanel.tsx`, delete `core/trophy.ts` and its tests, and migrate out the `trophy_*` columns (`trophy_earned_*`, `trophy_defined_*`, `trophy_np_comm_id`, `trophy_np_service_name`). Delete `playwright/e2e/epic9-trophies.spec.ts`. **Untouched:** `platinum_on` / `completed_on` and the manual milestone flow (Epic 2), and `owned_via` / `bought_on` (manual ownership model, Epic 6.4).
+
+**Given** a game card and its detail view
+**When** they render
+**Then** no trophy %/grade/tier readout appears anywhere [Epic 11]
+
+**Given** the D1 schema after the migration
+**When** inspected
+**Then** no `trophy_*` column remains, while `platinum_on`, `completed_on`, `owned_via`, and `bought_on` are intact [Epic 11]
+
+**Given** a platinum or story-completion milestone
+**When** Luca sets it manually in the detail view
+**Then** it records and displays exactly as before — the manual flow is unchanged [Epic 2, FR-5/FR-6]

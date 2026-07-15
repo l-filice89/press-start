@@ -146,6 +146,15 @@ development_status:
   10-3-time-to-beat-the-story-and-100-vr-8: backlog # rides 10.1's refresh job — follows 10.1
   epic-10-retrospective: optional
 
+  # Epic 11: PSN Account Safety — Sanitize the Credentialed Surface — HIGH PRIORITY, sequenced first
+  # Added 2026-07-15 via correct-course (sprint-change-proposal-2026-07-15.md): account locked;
+  # removes every credentialed PSN call. Supersedes Epic 4 + credentialed half of Epic 9.
+  epic-11: backlog
+  11-1-sever-the-credentialed-psn-operations: backlog
+  11-2-strip-psn-credential-auth-from-provider-and-settings: backlog # depends on 11.1
+  11-3-remove-the-trophy-display-and-schema: backlog # migration drops trophy_* columns
+  epic-11-retrospective: optional
+
 action_items:
   - epic: 1
     action: "Wire a hazard-named-AC-gets-a-hazard-named-test rule into the bmad-loop dev/review gate"
