@@ -20,8 +20,8 @@
 	border: 1px solid var(--color-border-hairline);
 	border-radius: var(--radius-lg);
 	background: var(--color-surface-raised);
-	/* The PSN cookie instructions carry an unbreakable URL — on a phone it
-	   pushes the panel into a sideways scroll unless it can break mid-word. */
+	/* Long unbreakable strings (URLs, locales) must not push the panel into a
+	   sideways scroll on a phone — let them break mid-word. */
 	overflow-wrap: anywhere;
 }
 
@@ -51,20 +51,13 @@
 	font-size: 1rem;
 }
 
-.settings-panel__status,
-.settings-panel__instructions {
+.settings-panel__status {
 	margin: 0 0 var(--space-3);
 	color: var(--color-text-secondary);
 	font-size: 0.875rem;
 }
 
-.settings-panel__instructions {
-	padding-left: var(--space-4);
-	display: grid;
-	gap: var(--space-1);
-}
-
-.settings-panel__token-input {
+.settings-panel__text-input {
 	width: 100%;
 	padding: var(--space-2);
 	border: 1px solid var(--color-border-hairline);

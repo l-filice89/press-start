@@ -150,8 +150,8 @@ development_status:
   # Added 2026-07-15 via correct-course (sprint-change-proposal-2026-07-15.md): account locked;
   # removes every credentialed PSN call. Supersedes Epic 4 + credentialed half of Epic 9.
   epic-11: backlog
-  11-1-sever-the-credentialed-psn-operations: backlog
-  11-2-strip-psn-credential-auth-from-provider-and-settings: backlog # depends on 11.1
+  11-1-sever-the-credentialed-psn-operations: done # 2026-07-15 (dev-auto): routes/services/UI severed, hazard 404 test, FAB keeps check+export; 5 review patches; followup_review_recommended:false
+  11-2-strip-psn-credential-auth-from-provider-and-settings: done # 2026-07-15 (dev-auto): provider collapsed to anonymous catalog, NPSSO/auth/sync_attention plumbing + migration 0010, grep-clean CI guard; 6 review patches; followup_review_recommended:false
   11-3-remove-the-trophy-display-and-schema: backlog # migration drops trophy_* columns
   epic-11-retrospective: optional
 

@@ -5,13 +5,11 @@ import { loadAllPages } from '../support/helpers/shelf';
 import { expect, test } from '../support/merged-fixtures';
 
 /**
- * Story 9.2 (trophy progress on every game). The trophy sync itself needs a PSN
- * response the e2e Worker cannot stub — the run is pinned at the integration
- * tier (`trophies.test.ts`) — so here we drive what the PERSISTED counts do to
- * the UI: a card with data shows `% · grade`, a card without shows NOTHING (the
- * "never a fake 0%" rule), the detail panel carries the tier breakdown, and the
- * no-credential trophy sync lights the expired-token banner (the live 401 →
- * flag → banner wiring).
+ * Story 9.2 (trophy progress on every game). The credentialed trophy sync was
+ * severed by Epic 11 (stories 11.1/11.2); the DISPLAY of already-persisted
+ * counts survives until story 11.3 removes the schema, and this file pins it:
+ * a card with data shows `% · grade`, a card without shows NOTHING (the
+ * "never a fake 0%" rule), and the detail panel carries the tier breakdown.
  */
 
 test('a game with trophy counts shows % · grade on its card; one without shows NOTHING (never a fake 0%)', async ({
@@ -115,19 +113,7 @@ test('the detail panel carries a Trophies section with the tier breakdown, and o
 });
 
 /*
- * The platinum-backfill trigger test moved to `epic4-settings.spec.ts` (Story
- * 9.5). The backfill is now one of the three PSN long-ops under the per-user
- * SINGLE-FLIGHT lock — and the e2e suite has exactly ONE user, so a backfill
- * click here and a FAB sync in that file, in parallel workers, refuse each other
- * with the 409 the lock exists to send. That is the app behaving correctly; the
- * tests have to stop pretending they are different people. Every PSN-op flow
- * lives in that one serial file, which already owns the PSN setting keys.
- */
-
-/*
- * The no-credential trophy sync → expired-token banner flow lives in
- * `epic4-settings.spec.ts`, NOT here: it mutates the same per-user PSN setting
- * keys (`psn_auth`) as every test in that SERIAL file, and a parallel worker's
- * cleanup wipes the flag mid-assert (observed 2026-07-13). One file owns those
- * keys — that is the only place the flow can be driven deterministically.
+ * The credentialed-flow tests that used to be referenced from here (platinum
+ * backfill trigger, trophy-sync failure banner) were deleted with the flows
+ * themselves — Epic 11 stories 11.1/11.2.
  */

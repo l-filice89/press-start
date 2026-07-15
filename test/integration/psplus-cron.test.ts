@@ -172,7 +172,9 @@ describe('scheduled PS+ Extra refresh (Story 5.2)', () => {
 	it('SKIPS (without lighting the banner) when another PSN op holds the lock', async () => {
 		await setSetting(db(), userId, PSN_REGION_SETTING_KEY, 'it-it');
 		const seen = stubCatalog(['Anything']);
-		const token = await acquirePsnLock(db(), userId, 'library-sync');
+		// A concurrent catalog refresh (another tab's button press) holds the lock
+		// under its own token — the cron must yield, not steal it.
+		const token = await acquirePsnLock(db(), userId, 'catalog-refresh');
 		expect(token).toBeTruthy();
 
 		try {

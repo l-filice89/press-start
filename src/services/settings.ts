@@ -42,27 +42,6 @@ export async function readFabHandedness(
 		: 'right';
 }
 
-/** Live PlayStation NPSSO token (Story 9.1b, FR-36) — read fresh per call. */
-export const PSN_NPSSO_SETTING_KEY = 'psn_npsso';
-
-/** `'expired'` while PSN last rejected the token; absent otherwise (AD-14). */
-export const PSN_AUTH_SETTING_KEY = 'psn_auth';
-export const PSN_AUTH_EXPIRED = 'expired';
-
-/**
- * The NPSSO the `PsnProvider` exchanges for a bearer: the user-saved setting,
- * else the `PSN_NPSSO` Wrangler secret as unset-seed (FR-36 — the secret only
- * seeds; a saved setting always wins and takes effect without redeploy).
- */
-export async function getPsnNpsso(
-	db: Db,
-	userId: string,
-	env: { PSN_NPSSO?: string },
-): Promise<string | undefined> {
-	const stored = await getSetting(db, userId, PSN_NPSSO_SETTING_KEY);
-	return stored || env.PSN_NPSSO?.trim() || undefined;
-}
-
 /**
  * PSN store region (Story 5.1, AR-18/23): the locale the PS+ Extra catalog is
  * checked against. `SETTING` wins; the `PSN_REGION` Wrangler var only seeds —
@@ -199,85 +178,4 @@ export async function setPsPlusSweepState(
 		PSPLUS_SWEEP_STATE_SETTING_KEY,
 		JSON.stringify(state),
 	);
-}
-
-/** Persist the PSN-rejected state so the banner survives reloads (NFR-4). */
-export async function markPsnAuthExpired(db: Db, userId: string) {
-	await setSetting(db, userId, PSN_AUTH_SETTING_KEY, PSN_AUTH_EXPIRED);
-}
-
-/** A fresh token clears the expired flag (the banner's only exit). */
-export async function clearPsnAuthExpired(db: Db, userId: string) {
-	await deleteSetting(db, userId, PSN_AUTH_SETTING_KEY);
-}
-
-/** True while the last PSN call was rejected and no new token was saved. */
-export async function isPsnAuthExpired(
-	db: Db,
-	userId: string,
-): Promise<boolean> {
-	return (
-		(await getSetting(db, userId, PSN_AUTH_SETTING_KEY)) === PSN_AUTH_EXPIRED
-	);
-}
-
-/**
- * Sync needs-attention items (Story 4.3, FR-37/AR-22): persisted per-user as
- * one JSON row so they survive dismissing the summary modal, reloads, and
- * sessions. Written only by a COMPLETED sync — a clean run clears the row
- * (self-resolution); a failed/auth-blocked run leaves it untouched.
- */
-export const SYNC_ATTENTION_SETTING_KEY = 'sync_attention';
-
-export interface SyncAttentionItem {
-	title: string;
-	reason: string;
-}
-
-/** Persisted needs-attention items; corrupt/absent JSON reads as empty. */
-export async function readSyncAttention(
-	db: Db,
-	userId: string,
-): Promise<SyncAttentionItem[]> {
-	const raw = await getSetting(db, userId, SYNC_ATTENTION_SETTING_KEY);
-	if (!raw) return [];
-	try {
-		const parsed = JSON.parse(raw);
-		if (!Array.isArray(parsed)) throw new Error('not an array');
-		const items = parsed.filter(
-			(item): item is SyncAttentionItem =>
-				typeof item?.title === 'string' &&
-				item.title.trim() !== '' &&
-				typeof item?.reason === 'string',
-		);
-		if (items.length !== parsed.length) {
-			console.warn(
-				`sync_attention: dropped ${parsed.length - items.length} malformed item(s)`,
-			);
-		}
-		return items;
-	} catch (error) {
-		// Corrupt storage degrades to "nothing needs attention" (the next
-		// completed sync overwrites it) — but never silently.
-		console.warn('sync_attention: unreadable row treated as empty', error);
-		return [];
-	}
-}
-
-/** Replace the persisted items; an empty list deletes the row (resolved). */
-export async function writeSyncAttention(
-	db: Db,
-	userId: string,
-	items: SyncAttentionItem[],
-) {
-	if (items.length === 0) {
-		await deleteSetting(db, userId, SYNC_ATTENTION_SETTING_KEY);
-	} else {
-		await setSetting(
-			db,
-			userId,
-			SYNC_ATTENTION_SETTING_KEY,
-			JSON.stringify(items),
-		);
-	}
 }

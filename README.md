@@ -98,12 +98,10 @@ fresh remote environment:
    Environments) with required reviewers so the deploy job in
    `.github/workflows/deploy.yml` pauses for approval before a destructive
    migration/deploy runs.
-5. Worker runtime secrets **not** synced by CD (`IGDB_CLIENT_ID`,
-   `IGDB_CLIENT_SECRET`, and the initial `PSN_NPSSO`) are set with
-   `wrangler secret put <NAME>` — never hardcoded, never committed. The live
-   PSN NPSSO token (grab it from
-   <https://ca.account.sony.com/api/v1/ssocookie> while signed in) later moves
-   into a D1 `SETTING` row, editable in-app (Epic 4 / Story 9.1b).
+5. Worker runtime secrets **not** synced by CD (`IGDB_CLIENT_ID` and
+   `IGDB_CLIENT_SECRET`) are set with `wrangler secret put <NAME>` — never
+   hardcoded, never committed. (The PSN credential secret was retired by
+   Epic 11: all remaining PlayStation traffic is anonymous.)
 
 ## CI/CD
 

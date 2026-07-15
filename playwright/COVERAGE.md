@@ -102,10 +102,10 @@ Epic 1's deferred 1.5h (prefers-reduced-motion) is closed by
 
 | AC | Coverage |
 |----|----------|
-| 4.1a all PSN access through `PsnProvider` (persisted query, auth inside the adapter) | skipped — wire-level adapter, no UI flow; pinned in Vitest `psn.test.ts` (persisted query/pagination/headers) + `psn-encapsulation.test.ts` (auth mechanics allowed nowhere else) |
-| 4.1b NPSSO token in `SETTING`, editable from a settings surface, read fresh per call (9.1b) | `epic4-settings.spec.ts` › the header gear opens Settings; saving a token flips presence without echoing the value (fresh-per-call read pinned in Vitest `psn.test.ts`; secret-seed fallback in `settings.test.ts` integration) |
-| 9.1b the token field carries a “Get / refresh token” deep link to the ssocookie endpoint | `epic4-settings.spec.ts` › the token field carries the "Get / refresh token" deep link, opening Sony in a new tab (href/target/rel; the same attributes pinned in jsdom `SettingsPanel.test.tsx`) |
-| 4.1c a denied credential (401/403, a code-less authorize redirect, a refused token exchange, or HTTP 200 + `errors[]`) surfaces refresh instructions in the attention banner, no retry | `epic4-settings.spec.ts` › an expired PSN auth state feeds the attention banner… (the one-attempt/fail-closed rows are pinned in Vitest `psn.test.ts`; the live 401-during-sync wiring was REMOVED with the sync itself by Epic 11 story 11.1) |
+| 4.1a all PSN access through `PsnProvider` (persisted query, auth inside the adapter) | the credentialed adapter half is REMOVED by Epic 11 story 11.2; the surviving anonymous catalog surface stays pinned in Vitest `psn.test.ts` (persisted query/pagination/headers/no-credential) + `psn-encapsulation.test.ts` (store mechanics allowed nowhere else, deleted machinery allowed nowhere at all) |
+| 4.1b PSN credential token in `SETTING`, editable from a settings surface, read fresh per call (9.1b) | REMOVED by Epic 11 story 11.2 — the token setting, its PUT route and the Settings token section are deleted; the absence is pinned by `epic4-settings.spec.ts` › Settings renders NO credential surface + the `src/no-credential-code.test.ts` grep-clean guard |
+| 9.1b the token field carries a “Get / refresh token” deep link to the ssocookie endpoint | REMOVED by Epic 11 story 11.2 — the token field (and its deep link) no longer exists |
+| 4.1c a denied credential surfaces refresh instructions in the attention banner, no retry | REMOVED by Epic 11 story 11.2 — the expired-credential banner, its setting flag and the provider auth paths are all deleted (the live 401-during-sync wiring went earlier, with 11.1) |
 | 4.2a FAB drawer + Sync runs with a spinner | REMOVED by Epic 11 story 11.1 — the credentialed library sync (route, service, FAB item) is severed; the drawer's surviving surface is pinned by › the FAB drawer offers exactly Check PS+ Extra and Export CSV |
 | 4.2b new games created with defaults; owned flips stamp bought_on | REMOVED by Epic 11 story 11.1 (`sync.test.ts` deleted with the sync) |
 | 4.2c append-only: never deletes, never un-owns, never touches status/milestones/dates/genres | REMOVED by Epic 11 story 11.1 (`sync.test.ts` deleted; `sync-reconcile.test.ts` survives as a unit suite until its module goes) |
@@ -115,7 +115,7 @@ Epic 1's deferred 1.5h (prefers-reduced-motion) is closed by
 | 4.3a summary modal after every completed sync (counts + needs-attention) | REMOVED by Epic 11 story 11.1 (`SyncSummaryModal` deleted with its suite) |
 | 4.3b needs-action items seed the persistent attention banner, surviving the modal and reloads | REMOVED by Epic 11 story 11.1 — the `syncAttention` banner is gone (its Review action opened the deleted modal and the field never repopulates once sync is gone; story 11.2 cleans up the dead `sync_attention` rows) |
 | 4.3c summary offers a button jumping to the problem | REMOVED by Epic 11 story 11.1 |
-| ad-hoc FR-9 amendment: claimed games show a PS+ tag on the OWNED chip | `epic4-settings.spec.ts` › a game owned via PS+ claim carries the PS+ tag on its card (purchase negative asserted; chip content also jsdom-pinned in `Card.test.tsx`; the detail panel's acquisition-source line — claim/purchase/silent-NULL — jsdom-pinned in `DetailPanel.test.tsx`, same DTO field the e2e already drives) |
+| ad-hoc FR-9 amendment: claimed games show a PS+ tag on the OWNED chip | `epic6.spec.ts` › Story 6.4 ownership source group (moved from `epic4-settings.spec.ts` by Story 9.5 — one file owns the membership rows) › a game owned via PS+ claim carries the PS+ tag on its card (purchase negative asserted; chip content also jsdom-pinned in `Card.test.tsx`; the detail panel's acquisition-source line — claim/purchase/silent-NULL — jsdom-pinned in `DetailPanel.test.tsx`, same DTO field the e2e already drives) |
 
 ## Epic 5
 
@@ -198,11 +198,11 @@ drives what the persisted counts do to the UI.
 
 | AC | Coverage |
 |----|----------|
-| 9.2a counts fetched through `PsnProvider` and persisted; no PSN call on render | REMOVED by Epic 11 story 11.1 — the trophy sync (route + service + `trophies.test.ts`) is severed; the provider's `fetchTrophyTitles` rows go with story 11.2 |
+| 9.2a counts fetched through `PsnProvider` and persisted; no PSN call on render | REMOVED by Epic 11 story 11.1 — the trophy sync (route + service + `trophies.test.ts`) is severed; the provider's trophy-list rows went with story 11.2 |
 | 9.2b % + grade derived in `core/` from the stored counts; no trophy data → NOTHING, never `0%` | the SYNC that fed the counts is removed by Epic 11 story 11.1; the display of already-persisted counts survives until story 11.3 and stays pinned by `epic9-trophies.spec.ts` › a game with trophy counts shows % · grade on its card… + `trophy.test.ts` + jsdom `Card.test.tsx`/`DetailPanel.test.tsx` |
 | 9.2b (detail) Trophies section with the tier breakdown | same as above — display survives until story 11.3; `epic9-trophies.spec.ts` › the detail panel carries a Trophies section with the tier breakdown, and omits it without data |
 | 9.2c a trophy sync changes no play status, milestone, or lifecycle date | REMOVED by Epic 11 story 11.1 (`trophies.test.ts` deleted with the sync) |
-| 9.2d expired NPSSO or a degenerate 200 → stops, writes NOTHING, existing counts survive | REMOVED by Epic 11 story 11.1 — no trophy sync exists to fail |
+| 9.2d expired credential or a degenerate 200 → stops, writes NOTHING, existing counts survive | REMOVED by Epic 11 story 11.1 — no trophy sync exists to fail |
 | 9.2e the whole run is a BOUNDED number of subrequests (no per-game fan-out) | REMOVED by Epic 11 story 11.1 |
 | 9.2 FAB trigger + summary readout | REMOVED by Epic 11 story 11.1 — the FAB item, its mutation, and `TrophySyncModal` (+ suite) are deleted; the surviving drawer surface is pinned by `epic4-settings.spec.ts` › the FAB drawer offers exactly Check PS+ Extra and Export CSV + jsdom `Fab.test.tsx` › offers exactly Check PS+ Extra and Export CSV |
 
@@ -216,18 +216,18 @@ theirs (`backfill.test.ts`, the `SettingsPanel.test.tsx` loop rows, the
 |----|----------|
 | 9.3a–i + the Settings trigger/loop/summary | REMOVED by Epic 11 story 11.1 (see above) |
 
-Story 9.5 (post-retro hardening sweep). One AC has a real browser flow — the
-NPSSO paste field — and it ships with an e2e. The rest are either invisible to a
-user (a test double, a compile-time type promise) or need TWO concurrent PSN runs
-to observe, which the e2e Worker cannot produce: PSN is unstubbable here (the
-same constraint 4.2b/5.1b/9.2a record), so a "concurrent" run would have to make
-a real PSN call.
+Story 9.5 (post-retro hardening sweep). One AC had a real browser flow — the
+credential-token paste field, since REMOVED by Epic 11 story 11.2. The rest are
+either invisible to a user (a test double, a compile-time type promise) or need
+TWO concurrent PSN runs to observe, which the e2e Worker cannot produce: PSN is
+unstubbable here (the same constraint 4.2b/5.1b/9.2a record), so a "concurrent"
+run would have to make a real PSN call.
 
 | AC | Coverage |
 |----|----------|
-| 9.5a a second PSN op (library sync / trophy sync / platinum backfill) is refused with a 409 + a human message; no PSN call is made; another user is never blocked | the three credentialed routes are REMOVED by Epic 11 story 11.1, so their route-level refusal rows went with them; the lock itself survives for `catalog-refresh` and stays pinned in `psn-lock.test.ts` › two concurrent claims: exactly ONE wins + › is per USER + › refuses a second PS+ catalog op with a 409 + › a CURSOR is not a capability (genre-sweep) + › a VALID token for a DIFFERENT op cannot renew this one's lock; the UI half in jsdom `Fab.test.tsx` › a 409… toasts the SERVER message (the PS+ check path) |
+| 9.5a a second PSN op is refused with a 409 + a human message; no PSN call is made; another user is never blocked | the three credentialed routes are REMOVED by Epic 11 story 11.1 (and story 11.2 trimmed `PsnOp` to `catalog-refresh` alone — the cross-op steal row became moot and was dropped); the lock survives for `catalog-refresh` and stays pinned in `psn-lock.test.ts` › two concurrent claims: exactly ONE wins + › is per USER + › refuses a second PS+ catalog op with a 409 + › a CURSOR is not a capability (genre-sweep); the UI half in jsdom `Fab.test.tsx` › a 409… toasts the SERVER message (the PS+ check path) |
 | 9.5b the lock is RELEASED on every exit (success or failure) and expires if a run dies | `psn-lock.test.ts` › the PS+ refresh releases on the way out + › expires: a lock left behind by a crashed run is taken over after its TTL (re-vehicled onto `/api/ps-plus-check` when Epic 11 story 11.1 severed `/api/sync`) + › releases even when the run FAILS — a store 500 must not lock the user out + › a release only ever clears the caller's OWN lock |
-| 9.5c an npsso value carrying a codepoint above U+00FF is refused at SAVE with a 400 (the outbound `Cookie:` header is Latin1 and cannot carry it) | `epic4-settings.spec.ts` › a token carrying a character the Cookie header cannot hold is refused at SAVE (an emoji — a surrogate PAIR, which a BMP-only guard would wave through); the boundary itself in `settings.test.ts` › PSN NPSSO: PUT saves per-user… (the rejected set now includes `token✓`, `token😀`, `token’s`) |
+| 9.5c a credential-token value carrying a codepoint above U+00FF is refused at SAVE with a 400 | REMOVED by Epic 11 story 11.2 — the token save boundary (route, schema, cookie-octet allowlist) is deleted with the credential surface it guarded |
 | 9.5d a DISCARDED game's trophy title is matched and dropped SILENTLY — neither updated nor "unmatched" noise on every run | REMOVED by Epic 11 story 11.1 — the trophy sync (and `trophies.test.ts`) no longer exists |
 | 9.5e the seed script's proxy driver implements `batch()`, and a driver that stops satisfying `Db` fails at COMPILE time | no runtime flow — enforced by the type system: `scripts/` is now a `tsc` project (`tsconfig.scripts.json`, referenced from `tsconfig.json`), so `bun run typecheck` is the check. Remove the batch callback from `createHttpDb` and the build fails |
 | 9.5f `epic6.spec.ts` 6.4a no longer races the ownership write | `epic6.spec.ts` › owning a PS+ game prompts buy-vs-claim; "Claimed with PS+" writes owned_via=membership (6.4a) — it now awaits the owned toast (the mutation's onSuccess) before reading D1, as its "Purchased" sibling already did |
@@ -316,3 +316,17 @@ deleted. The rows above marked "REMOVED by Epic 11 story 11.1" record what went.
 | 11.1b the three severed routes answer 404 (hazard: credentialed routes no longer exist) | skipped e2e — no UI path can reach them anymore, which is the point; pinned as an AUTHENTICATED request through the real Worker in integration `severed-routes.test.ts` › POST … answers 404 (all three routes) |
 | 11.1c the anonymous PS+ catalog check, monthly cron, and CSV export pass unmodified | their existing suites are untouched and still green: `epic5-psplus.spec.ts`, `epic7-catalog.spec.ts`, `psplus*.test.ts` integration, `export.test.ts`, `epic6.spec.ts` › Export CSV |
 | 11.1d zero references to the severed service functions (library sync, trophy sync, platinum backfill) outside git history | no runtime flow — verified by grep over `src`/`web`/`test`/`playwright` (typecheck/lint/vitest/playwright all green) |
+
+Story 11.2 (strip PSN credential auth from the provider and settings). The
+provider collapses to its anonymous catalog methods; the token setting, its
+PUT route, the Settings token section, the expired-credential banner and the
+env plumbing are deleted; migration 0010 clears the dead rows. Rows above
+marked "REMOVED by Epic 11 story 11.2" record what went.
+
+| AC | Coverage |
+|----|----------|
+| 11.2a zero credentialed identifiers in `src/`, `web/`, `test/`, `playwright/` (grep-clean, pinned) | no UI flow — pinned permanently by the Vitest guard `src/no-credential-code.test.ts` (walks all four dirs, one identifier list, fails red on any reappearance) + `psn-encapsulation.test.ts` (deleted wire machinery allowed nowhere) |
+| 11.2b the settings page has no token field and no expired-credential banner; region-save feedback still announced via `role="status"` | `epic4-settings.spec.ts` › Settings renders NO credential surface (exact section-heading list + zero token text + zero banner) + › Settings names the PSN region, saves a normalized locale, and ANNOUNCES the save (the relocated live region); jsdom halves in `SettingsPanel.test.tsx` |
+| 11.2c migration 0010 deletes the dead setting rows + stale retired-op lock rows, survivors intact | no UI flow — pinned in integration `migration-0010.test.ts` › deletes the dead rows and ONLY the dead rows (seeded dead + survivor rows, two-sided assert) |
+| 11.2d catalog cron, PS+ check and genre sweep run unchanged under the `catalog-refresh` lock | their suites are re-pointed and green: `psn-lock.test.ts` (all hazards on `catalog-refresh`), `psplus-cron.test.ts` (foreign-lock skip now a concurrent refresh token), `psplus*.test.ts`, `epic5-psplus.spec.ts`, `epic7-catalog.spec.ts` |
+| 11.2e `GET /api/settings` carries no credential fields and the SPA renders settings without error | integration `settings.test.ts` › captures at first login… (exact full-payload assert, credential fields gone); the SPA render is every settings-driven e2e above |

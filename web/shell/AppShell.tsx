@@ -27,9 +27,8 @@ import './app-shell.css';
  *
  * Providers wrap the tree so surfaces can `useToast()` / `useAnnounce()` from
  * anywhere. The attention-banner slot under the header is fed by the settings
- * query: a PSN-rejected token surfaces the refresh path (4.1) — it survives
- * reloads until its condition self-resolves (NFR-4 — never one dismissed
- * modal away).
+ * query — each banner survives reloads until its condition self-resolves
+ * (NFR-4 — never one dismissed modal away).
  */
 /** The explicit not-found destination (review, M10) — never a shelf at /catlog. */
 function NotFound() {
@@ -89,16 +88,6 @@ export function AppShell({
 					search={<SearchBox />}
 					psPlusRefreshedAt={settings?.psPlusRefreshedAt ?? null}
 				/>
-				{settings?.psnAuthExpired && (
-					<AttentionBanner
-						variant="expired-token"
-						message="PlayStation rejected the NPSSO token — open Settings, follow the “Get / refresh token” link, and paste the fresh token."
-						action={{
-							label: 'Update token',
-							onClick: () => setSettingsOpen(true),
-						}}
-					/>
-				)}
 				{settings?.psPlusRefreshFailed && (
 					<AttentionBanner
 						variant="failed-refresh"

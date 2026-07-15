@@ -45,7 +45,6 @@ import {
 import type { Db } from '../repositories/db';
 import { holdsPsnLock } from './psn-lock';
 import {
-	getPsnNpsso,
 	getPsnRegion,
 	getPsPlusSweepState,
 	setPsPlusSweepState,
@@ -100,7 +99,7 @@ export type GenreSweepOutcome =
 export async function runGenreSweep(
 	db: Db,
 	userId: string,
-	env: { PSN_REGION?: string; PSN_NPSSO?: string },
+	env: { PSN_REGION?: string },
 	{
 		cursor,
 		generation,
@@ -137,9 +136,7 @@ export async function runGenreSweep(
 	}
 
 	const scope = { region, tier: PS_PLUS_TIER };
-	const provider = createPsnProvider({
-		getNpsso: () => getPsnNpsso(db, userId, env),
-	});
+	const provider = createPsnProvider();
 
 	// Discover ONCE per sweep, then freeze (M2). Continuations walk the frozen list.
 	let keys = state.keys;

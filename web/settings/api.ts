@@ -5,26 +5,14 @@ import { callApi } from '../shelf/api';
  * Client contract for `/api/settings` (Story 4.1). Mirrors the server shape
  * rather than importing across the SPA/Worker program boundary (same policy
  * as `web/shelf/api.ts`, whose `callApi` — status-carrying errors for the
- * query client's 401 routing — is reused here). The PSN NPSSO token itself
- * never appears in this contract — the API reports presence only.
+ * query client's 401 routing — is reused here).
  */
-
-export const syncAttentionItemSchema = z.object({
-	title: z.string(),
-	reason: z.string(),
-});
-
-export type SyncAttentionItem = z.infer<typeof syncAttentionItemSchema>;
 
 export const settingsSchema = z.object({
 	timezone: z.string().nullable(),
-	psnNpssoSet: z.boolean(),
-	psnAuthExpired: z.boolean(),
-	// Defaulted: a deploy-skewed/cached response without the field must not
-	// reject the whole settings payload (timezone + PSN banner ride on it).
-	syncAttention: z.array(syncAttentionItemSchema).default([]),
-	// Story 5.2: the last monthly PS+ Extra cron refresh failed. Defaulted for
-	// the same deploy-skew reason as syncAttention.
+	// Story 5.2: the last monthly PS+ Extra cron refresh failed. Defaulted: a
+	// deploy-skewed/cached response without the field must not reject the whole
+	// settings payload.
 	psPlusRefreshFailed: z.boolean().default(false),
 	// Story 5.3: date (YYYY-MM-DD, user zone) of the last successful refresh,
 	// null until the first one. Feeds the header "PS+ CATALOG AS OF" readout.
@@ -76,15 +64,6 @@ export async function savePsnRegion(region: string): Promise<void> {
 		method: 'PUT',
 		headers: { 'content-type': 'application/json' },
 		body: JSON.stringify({ region }),
-	});
-}
-
-/** Save a fresh PSN NPSSO token; the server clears the expired flag. */
-export async function savePsnNpsso(npsso: string): Promise<void> {
-	await callApi('/api/settings/psn-npsso', {
-		method: 'PUT',
-		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify({ npsso }),
 	});
 }
 

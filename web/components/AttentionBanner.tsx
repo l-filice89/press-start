@@ -6,16 +6,13 @@ import './attention-banner.css';
  * (that lifecycle is owned by later stories that feed it). This is NFR-4 made
  * visible. Reusable seam; rendered with no live data in this shell.
  *
- * Variants map to a tone (DESIGN.md): stragglers = amber, expired-token =
- * magenta, failed-refresh = steel. `enrich` (Story 6.2) is a second amber
- * source — games needing a games-DB match — kept distinct from `stragglers`
- * (sync conflicts) so the two attention sources address unambiguously.
+ * Variants map to a tone (DESIGN.md): stragglers = amber, failed-refresh =
+ * steel. `enrich` (Story 6.2) is a second amber source — games needing a
+ * games-DB match — kept distinct from `stragglers` (sync conflicts) so the two
+ * attention sources address unambiguously. (`expired-token` died with the PSN
+ * credential surface, Epic 11 story 11.2.)
  */
-export type AttentionVariant =
-	| 'stragglers'
-	| 'enrich'
-	| 'expired-token'
-	| 'failed-refresh';
+export type AttentionVariant = 'stragglers' | 'enrich' | 'failed-refresh';
 
 export function AttentionBanner({
 	variant,

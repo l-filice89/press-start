@@ -20,11 +20,10 @@ import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
  * very race being closed); a finished or failed run must RELEASE (a lock nobody
  * clears is a user who can never sync again); and a crashed run must expire.
  *
- * Epic 11 story 11.1 severed the credentialed routes (/api/sync,
- * /api/sync/trophies, /api/backfill/platinum-dates) — the route-level rows
- * that used them as vehicles are gone; the lock semantics stay pinned at the
- * service seam and through the surviving PS+ catalog routes. (Story 11.2 owns
- * trimming the PsnOp union itself.)
+ * Epic 11 severed the credentialed ops: 11.1 removed the routes, 11.2 trimmed
+ * `PsnOp` to `catalog-refresh` alone. Every hazard below is re-pointed at the
+ * surviving anonymous refresh — the semantics are op-agnostic and stay pinned
+ * at the service seam and through the PS+ catalog routes.
  */
 
 const db = () => createDb(env.DB);
@@ -55,9 +54,9 @@ afterEach(async () => {
 describe('PSN single-flight lock (integration, real workerd + local D1)', () => {
 	it('two concurrent claims: exactly ONE wins (hazard: a read-then-write acquire lets both through)', async () => {
 		const claims = await Promise.all([
-			acquirePsnLock(db(), userId, 'library-sync'),
-			acquirePsnLock(db(), userId, 'trophy-sync'),
-			acquirePsnLock(db(), userId, 'platinum-backfill'),
+			acquirePsnLock(db(), userId, 'catalog-refresh'),
+			acquirePsnLock(db(), userId, 'catalog-refresh'),
+			acquirePsnLock(db(), userId, 'catalog-refresh'),
 		]);
 		expect(claims.filter(Boolean)).toHaveLength(1);
 	});
@@ -75,43 +74,29 @@ describe('PSN single-flight lock (integration, real workerd + local D1)', () => 
 			})
 			.onConflictDoNothing();
 
-		expect(await acquirePsnLock(db(), userId, 'library-sync')).toBeTruthy();
+		expect(await acquirePsnLock(db(), userId, 'catalog-refresh')).toBeTruthy();
 		expect(
-			await acquirePsnLock(db(), 'other-user', 'library-sync'),
+			await acquirePsnLock(db(), 'other-user', 'catalog-refresh'),
 		).toBeTruthy();
 	});
 
-	/**
-	 * A TOKEN BELONGS TO ITS OP (review, H2). The sync and sweep routes hand their
-	 * LIVE token back to the browser, so a *valid* backfill token is in the page's
-	 * hands while the backfill is still chunking. Ownership used to be raw string
-	 * equality on the stored value — the `op` segment was decorative — so
-	 * presenting that live token to the catalog endpoint STOLE the lock, and the
-	 * backfill's next chunk 409'd and died mid-run. (Distinct from the forged-token
-	 * test above, which only proves that garbage fails.)
-	 */
-	it('a VALID token for a DIFFERENT op cannot renew this one’s lock (hazard: cross-op steal)', async () => {
-		stubStore(() => ({ body: catalogPagePayload(['Whatever']) }));
-		// A platinum backfill is mid-run and holds the lock; its token is live and
-		// the browser has it.
-		const live = await acquirePsnLock(db(), userId, 'platinum-backfill');
-		expect(live).toBeTruthy();
-
-		// At the service seam: the token is real, unexpired, and IS the stored value.
+	// The cross-op steal hazard (Story 7.1 review, H2) has no second live op to
+	// steal from since 11.2 trimmed `PsnOp` — but the op-segment authorization
+	// branch in acquirePsnLock still exists, and if an op ever returns it must
+	// already be guarded. Pin it at the seam with a forged retired-op token.
+	it('a token whose OP SEGMENT differs never renews the held lock (H2 guard survives the union trim)', async () => {
+		const held = await acquirePsnLock(db(), userId, 'catalog-refresh');
+		expect(held).toBeTruthy();
+		const expiry = Date.now() + 60_000;
 		expect(
-			await acquirePsnLock(db(), userId, 'catalog-refresh', live as string),
+			await acquirePsnLock(
+				db(),
+				userId,
+				'catalog-refresh',
+				`${expiry}:some-retired-op:${(held as string).split(':')[2]}`,
+			),
 		).toBeNull();
-
-		// And through the route the browser would actually call.
-		const stolen = await post(
-			`/api/ps-plus-catalog/genres?cursor=ACTION&generation=x&lockToken=${encodeURIComponent(live as string)}`,
-		);
-		expect(stolen.status).toBe(409);
-		expect(((await stolen.json()) as { error: string }).error).toMatch(
-			/already running/i,
-		);
-		// The backfill still holds its lock — its next chunk is not about to 409.
-		expect(await getSetting(db(), userId, PSN_LOCK_SETTING_KEY)).toBe(live);
+		expect(await getSetting(db(), userId, PSN_LOCK_SETTING_KEY)).toBe(held);
 	});
 
 	it('expires: a lock left behind by a crashed run is taken over after its TTL', async () => {
@@ -136,7 +121,7 @@ describe('PSN single-flight lock (integration, real workerd + local D1)', () => 
 		const storeCalls = stubStore(() => ({
 			body: catalogPagePayload(['Whatever']),
 		}));
-		expect(await acquirePsnLock(db(), userId, 'library-sync')).toBeTruthy();
+		expect(await acquirePsnLock(db(), userId, 'catalog-refresh')).toBeTruthy();
 
 		for (const path of ['/api/ps-plus-check', '/api/ps-plus-catalog/genres']) {
 			const res = await post(path);
@@ -218,10 +203,10 @@ describe('PSN single-flight lock (integration, real workerd + local D1)', () => 
 	});
 
 	it('a release only ever clears the caller’s OWN lock', async () => {
-		const mine = await acquirePsnLock(db(), userId, 'library-sync');
+		const mine = await acquirePsnLock(db(), userId, 'catalog-refresh');
 		expect(mine).toBeTruthy();
 		// Someone else's token (a run that timed out and came back late).
-		await releasePsnLock(db(), userId, '999:library-sync:not-mine');
+		await releasePsnLock(db(), userId, '999:catalog-refresh:not-mine');
 		expect(await getSetting(db(), userId, PSN_LOCK_SETTING_KEY)).toBe(mine);
 	});
 });

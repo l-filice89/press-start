@@ -9,7 +9,6 @@ import {
 	insertGame,
 	insertTrackingIfAbsent,
 	listExternalLinks,
-	listGamesWithPsnLinks,
 	listGenresForGame,
 	PS_PLUS_TIER,
 	setDiscarded,
@@ -694,11 +693,12 @@ describe('add a game FROM THE CATALOG (Story 7.3, AD-20)', () => {
 		).toHaveLength(0);
 	});
 
-	// HAZARD (review, H4): the add threw the catalog row's np_title_id away, so a
-	// later library sync had only the normalized title to match on — and when PSN
-	// reports a DIFFERENT title for the same game, the sync creates a second row:
-	// the user owns the duplicate and wishlists the original.
-	it('HAZARD: the catalog np_title_id is anchored as PSN, so a later sync MATCHES a diverged title', async () => {
+	// HAZARD (review, H4): the add threw the catalog row's np_title_id away,
+	// leaving only the normalized title as the game's PSN identity. The id is
+	// anchored in its own namespace now. (The sync-planner half of this pin went
+	// with `listGamesWithPsnLinks` — Epic 11 story 11.2; the anchoring itself is
+	// what future matching resolves through.)
+	it('HAZARD: the catalog np_title_id is anchored as PSN, in its own namespace', async () => {
 		await seedProduct('EP-NPTITLE-1', 'Stellar Blade', 'CUSA-STELLAR_00');
 		const res = await postGame(
 			{ title: 'Stellar Blade', psnProductId: 'EP-NPTITLE-1' },
@@ -715,38 +715,6 @@ describe('add a game FROM THE CATALOG (Story 7.3, AD-20)', () => {
 				{ source: 'PSN_PRODUCT', externalId: 'EP-NPTITLE-1' },
 			]),
 		);
-
-		// The sync's own matching index, on a PSN entry whose TITLE diverges: it
-		// resolves through the link, so nothing is created.
-		const { games, links } = await listGamesWithPsnLinks(db());
-		const index = {
-			linkedGameIdByExternalId: Object.fromEntries(
-				links.map((l) => [l.externalId, l.gameId]),
-			),
-			gamesByNormalizedTitle: Object.fromEntries(
-				games.map((g) => [
-					g.titleNormalized,
-					[{ gameId: g.id, psnExternalIds: [] as string[] }],
-				]),
-			),
-		};
-		const plan = planSync(
-			[
-				{
-					name: 'Stellar Blade™ Deluxe Edition',
-					platform: 'PS5',
-					membership: 'NONE',
-					titleId: 'CUSA-STELLAR_00',
-					productId: null,
-					entitlementId: null,
-					imageUrl: null,
-					storeUrl: null,
-				},
-			],
-			index,
-		);
-		expect(plan.creates).toEqual([]);
-		expect(plan.matches.map((m) => m.gameId)).toEqual([gameId]);
 	});
 
 	// (review, M2): every EXISTING-game branch anchored the link but never wrote the

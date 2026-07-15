@@ -1,13 +1,12 @@
 /**
- * PSN auth-encapsulation guard (Story 4.1, re-pointed at the NPSSO bearer in
- * 9.1b — AR-5/AD-5: "the auth mechanism lives entirely inside the adapter").
- * Scans every non-test source under `src/` and `web/` and asserts the PSN wire
- * mechanics — including the ca.account.sony.com authorize/token exchange —
- * appear ONLY in `src/providers/psn.ts`, so no route/service/UI ever hand-rolls
- * a PSN call or a second credential exchange. The token NAME is also allowed in
- * the Settings panel, whose user-facing instructions must tell the user which
- * value to copy, and in the settings route, which strips a pasted `npsso=`
- * prefix — copy and input hygiene, not mechanics.
+ * PSN encapsulation guard (Story 4.1, trimmed to the anonymous catalog surface
+ * by Epic 11 story 11.2 — AR-5/AD-5: "the wire mechanics live entirely inside
+ * the adapter"). Scans every non-test source under the app dirs and asserts the
+ * PSN store-browse mechanics appear ONLY in `src/providers/psn.ts` — and that
+ * the DELETED credentialed machinery (the purchased-list query, the trophy
+ * host, the Sony OAuth exchange, the legacy session cookie) appears nowhere at
+ * all. (The identifier-level sweep — the token name and friends, tests
+ * included — lives in `src/no-credential-code.test.ts`.)
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
@@ -18,7 +17,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SCAN_DIRS = ['src', 'web', 'worker', 'scripts', 'playwright'];
 const PROVIDER = 'src/providers/psn.ts';
 
-const PSN_AUTH_PATTERNS: {
+const PSN_WIRE_PATTERNS: {
 	label: string;
 	pattern: RegExp;
 	allowed: string[];
@@ -29,55 +28,33 @@ const PSN_AUTH_PATTERNS: {
 		allowed: [PROVIDER],
 	},
 	{
-		// Story 9.2: the trophy list rides a SECOND PSN host (m.np.playstation.com,
-		// not the GraphQL one) — the seam has to hold there too, or a service could
-		// hand-roll a trophy call with its own bearer.
-		label: 'the PSN trophy API host',
-		pattern: /m\.np\.playstation\.com|trophyTitles/,
-		allowed: [PROVIDER],
-	},
-	{
-		label: 'the persisted getPurchasedGameList query',
-		pattern: /getPurchasedGameList/,
-		allowed: [PROVIDER],
-	},
-	{
-		label: 'the pinned persisted-query hash',
-		pattern: /827a423f6a8ddca4/,
-		allowed: [PROVIDER],
-	},
-	{
 		label: 'the persisted categoryGridRetrieve query (PS+ catalog, 5.1)',
 		pattern: /categoryGridRetrieve|4ce7d410a4db2c8b/,
 		allowed: [PROVIDER],
 	},
+	// Everything below was DELETED by Epic 11 (stories 11.1/11.2): the
+	// credentialed surface is gone from every source file, the provider included.
 	{
-		label: 'the NPSSO authorize/token exchange host',
-		pattern: /ca\.account\.sony\.com\/api\/authz/,
-		allowed: [PROVIDER],
+		label: 'the deleted PSN trophy API host (credentialed, Epic 11)',
+		pattern: /m\.np\.playstation\.com|trophyTitles/,
+		allowed: [],
 	},
 	{
-		label: 'the OAuth client credentials of the exchange',
+		label: 'the deleted persisted getPurchasedGameList query (Epic 11)',
+		pattern: /getPurchasedGameList|827a423f6a8ddca4/,
+		allowed: [],
+	},
+	{
+		label: 'the deleted Sony OAuth exchange host (Epic 11)',
+		pattern: /ca\.account\.sony\.com/,
+		allowed: [],
+	},
+	{
+		label: 'the deleted OAuth client credentials of the exchange (Epic 11)',
 		pattern: /09515159-7237-4370-9b40-3806e67c0891|com\.scee\.psxandroid/,
-		allowed: [PROVIDER],
+		allowed: [],
 	},
 	{
-		// The wire form is allowed only where the paste is sanitized (the settings
-		// route strips a leading `npsso=`) — input hygiene, not mechanics. The
-		// Settings panel names the token in prose but never spells the pair, and
-		// must not start: if the UI ever hand-rolls the wire form, this bites.
-		//
-		// The pattern is the WIRE form (`npsso=` — the cookie pair the exchange
-		// sends), not the identifier: `getPsnNpsso`/`psn_npsso` are the seam's
-		// public names and are supposed to travel.
-		label: 'the npsso cookie pair',
-		pattern: /npsso=/,
-		allowed: [PROVIDER, 'src/routes/settings.ts'],
-	},
-	{
-		// Gone from every .ts/.tsx source — which is all this scan covers. The
-		// name still legitimately appears in the frozen legacy `export_ps_catalog.py`
-		// and in the README's legacy-scripts line; neither is a live code path.
 		label: 'the deleted pdccws_p session cookie (the cookie path is gone)',
 		pattern: /pdccws_p/,
 		allowed: [],
@@ -99,7 +76,7 @@ function listSourceFiles(dir: string): string[] {
 	return files;
 }
 
-describe('PSN auth encapsulation (AR-5)', () => {
+describe('PSN encapsulation (AR-5)', () => {
 	const files = SCAN_DIRS.flatMap((dir) => listSourceFiles(join(ROOT, dir)));
 
 	it('discovers the provider itself among the scanned files', () => {
@@ -110,7 +87,7 @@ describe('PSN auth encapsulation (AR-5)', () => {
 
 	for (const file of files) {
 		const relativePath = relative(ROOT, file).replaceAll('\\', '/');
-		for (const { label, pattern, allowed } of PSN_AUTH_PATTERNS) {
+		for (const { label, pattern, allowed } of PSN_WIRE_PATTERNS) {
 			if (allowed.includes(relativePath)) continue;
 			it(`${relativePath} does not reference ${label}`, () => {
 				expect(readFileSync(file, 'utf-8')).not.toMatch(pattern);

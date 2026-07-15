@@ -6,33 +6,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SettingsPanel } from './SettingsPanel';
 
 /**
- * Settings panel (Story 4.1, re-credentialed in 9.1b): the NPSSO field is never
- * prefilled with the stored secret, the instructions carry the ssocookie deep
- * link, and Save PUTs the pasted token. The no-echo guarantee is server-side
- * (integration tests); here we pin the client never even asks for the value.
+ * Settings panel (Story 4.1, stripped of the PSN credential surface by Epic 11
+ * story 11.2): region, FAB placement, PS+ claims, About/Help — and nothing
+ * credentialed renders at all.
  */
 
-function mockFetch(settings: {
-	psnNpssoSet: boolean;
-	psnAuthExpired: boolean;
-	region?: string;
-}) {
+function mockFetch(settings: { region?: string; psPlusClaimCount?: number }) {
 	const fetchMock = vi.fn(
-		async (url: string | URL | Request, _init?: RequestInit) => {
-			const href = String(url);
-			if (href.includes('/api/settings/psn-npsso')) {
-				return {
-					ok: true,
-					status: 200,
-					json: async () => ({ psnNpssoSet: true, psnAuthExpired: false }),
-				};
-			}
-			return {
-				ok: true,
-				status: 200,
-				json: async () => ({ timezone: null, syncAttention: [], ...settings }),
-			};
-		},
+		async (_url: string | URL | Request, _init?: RequestInit) => ({
+			ok: true,
+			status: 200,
+			json: async () => ({ timezone: null, ...settings }),
+		}),
 	);
 	vi.stubGlobal('fetch', fetchMock);
 	return fetchMock;
@@ -53,31 +38,25 @@ function renderPanel(onClose = vi.fn()) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('SettingsPanel', () => {
-	it('shows the ssocookie deep link and an always-empty token field', async () => {
-		mockFetch({ psnNpssoSet: true, psnAuthExpired: false });
+	it('renders NO credential surface — the PSN token section is gone (Epic 11, 11.2)', async () => {
+		mockFetch({ region: 'it-it' });
 		renderPanel();
 
 		expect(screen.getByRole('dialog')).toBeInTheDocument();
-		// The token cannot be read from Sony cross-origin — the control is a plain
-		// deep link the user copies the value from, opened in a new tab.
-		const link = screen.getByTestId('psn-npsso-link');
-		expect(link).toHaveAttribute(
-			'href',
-			'https://ca.account.sony.com/api/v1/ssocookie',
-		);
-		expect(link).toHaveAttribute('target', '_blank');
-		expect(link).toHaveAttribute('rel', 'noreferrer');
-		// Saved-token state is reported as presence only — the field stays empty.
-		await waitFor(() =>
-			expect(screen.getByTestId('psn-npsso-status')).toHaveTextContent(
-				/A token is saved/,
-			),
-		);
-		expect(screen.getByLabelText('PlayStation NPSSO token')).toHaveValue('');
+		// The whole section list, exactly: nothing token-shaped survives.
+		expect(
+			screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent),
+		).toEqual([
+			'PlayStation region',
+			'FAB placement',
+			'PlayStation Plus',
+			'About & Help',
+		]);
+		expect(screen.queryByText(/token/i)).toBeNull();
 	});
 
 	it('has no backfill panel — the credentialed surface is severed (Epic 11, 11.1)', async () => {
-		mockFetch({ psnNpssoSet: true, psnAuthExpired: false });
+		mockFetch({});
 		renderPanel();
 
 		expect(screen.getByRole('dialog')).toBeInTheDocument();
@@ -85,33 +64,10 @@ describe('SettingsPanel', () => {
 		expect(screen.queryByText(/backfill/i)).toBeNull();
 	});
 
-	it('saves the pasted token and never sends a GET for the stored value', async () => {
-		const fetchMock = mockFetch({ psnNpssoSet: false, psnAuthExpired: true });
-		renderPanel();
-
-		const input = screen.getByLabelText('PlayStation NPSSO token');
-		await userEvent.type(input, '  fresh-npsso  ');
-		await userEvent.click(screen.getByRole('button', { name: 'Save token' }));
-
-		await waitFor(() =>
-			expect(screen.getByRole('status')).toHaveTextContent('Token saved.'),
-		);
-		const put = fetchMock.mock.calls.find(([url]) =>
-			String(url).includes('/api/settings/psn-npsso'),
-		);
-		expect(put?.[1]).toMatchObject({ method: 'PUT' });
-		// Whitespace-trimmed before sending; field cleared after save.
-		expect(JSON.parse(put?.[1]?.body as string)).toEqual({
-			npsso: 'fresh-npsso',
-		});
-		expect(input).toHaveValue('');
-	});
-
-	it('disables Save while the field is blank and closes via the Close button', async () => {
-		mockFetch({ psnNpssoSet: false, psnAuthExpired: false });
+	it('closes via the Close button', async () => {
+		mockFetch({});
 		const { onClose } = renderPanel();
 
-		expect(screen.getByRole('button', { name: 'Save token' })).toBeDisabled();
 		await userEvent.click(screen.getByRole('button', { name: 'Close' }));
 		expect(onClose).toHaveBeenCalledTimes(1);
 	});
@@ -119,7 +75,7 @@ describe('SettingsPanel', () => {
 	// Sign-out lives in the header alone (deferred-work triage 2026-07-13): the
 	// panel offers About/Help and no second sign-out entry point.
 	it('offers About/Help and no sign-out of its own (Story 6.3, FR-47)', async () => {
-		mockFetch({ psnNpssoSet: false, psnAuthExpired: false });
+		mockFetch({});
 		renderPanel();
 
 		expect(screen.getByText(/About & Help/)).toBeInTheDocument();
@@ -127,7 +83,7 @@ describe('SettingsPanel', () => {
 	});
 
 	it('cancel PS+ is inert with no claims (Story 6.4 AC4)', async () => {
-		mockFetch({ psnNpssoSet: false, psnAuthExpired: false });
+		mockFetch({});
 		renderPanel();
 		await waitFor(() =>
 			expect(screen.getByTestId('cancel-ps-plus')).toBeDisabled(),
@@ -147,13 +103,7 @@ describe('SettingsPanel', () => {
 				return {
 					ok: true,
 					status: 200,
-					json: async () => ({
-						timezone: null,
-						syncAttention: [],
-						psnNpssoSet: false,
-						psnAuthExpired: false,
-						psPlusClaimCount: 3,
-					}),
+					json: async () => ({ timezone: null, psPlusClaimCount: 3 }),
 				};
 			},
 		);
@@ -194,7 +144,7 @@ describe('SettingsPanel', () => {
 	});
 
 	it('PSN region: names the current region, or says none is set', async () => {
-		mockFetch({ psnNpssoSet: false, psnAuthExpired: false, region: 'it-it' });
+		mockFetch({ region: 'it-it' });
 		renderPanel();
 		await waitFor(() =>
 			expect(screen.getByTestId('psn-region-status')).toHaveTextContent(
@@ -203,7 +153,7 @@ describe('SettingsPanel', () => {
 		);
 	});
 
-	it('PSN region: saves the normalized locale and guards a malformed one', async () => {
+	it('PSN region: saves the normalized locale, ANNOUNCES the save, and guards a malformed one', async () => {
 		// Region-aware mock: after the PUT, the refetched settings carry the saved
 		// value — so the test can assert the status line reflects it (the panel's
 		// authoritative confirmation, not just the transient "Region saved.").
@@ -225,9 +175,6 @@ describe('SettingsPanel', () => {
 					status: 200,
 					json: async () => ({
 						timezone: null,
-						syncAttention: [],
-						psnNpssoSet: false,
-						psnAuthExpired: false,
 						...(saved ? { region: saved } : {}),
 					}),
 				};
@@ -255,10 +202,11 @@ describe('SettingsPanel', () => {
 		await userEvent.type(input, 'EN-US');
 		await userEvent.click(screen.getByTestId('save-psn-region'));
 
+		// The save feedback is a LIVE REGION (Epic 11 story 11.2 moved the
+		// dialog's role="status" here when the token section died) — the a11y
+		// announcement path, not just visible text.
 		await waitFor(() =>
-			expect(screen.getByTestId('psn-region-feedback')).toHaveTextContent(
-				'Region saved.',
-			),
+			expect(screen.getByRole('status')).toHaveTextContent('Region saved.'),
 		);
 		const put = fetchMock.mock.calls.find(([url]) =>
 			String(url).includes('/api/settings/psn-region'),
@@ -276,7 +224,7 @@ describe('SettingsPanel', () => {
 	});
 
 	it('toggles FAB handedness, PUTting the chosen side (Story 6.3, UX-DR10)', async () => {
-		const fetchMock = mockFetch({ psnNpssoSet: false, psnAuthExpired: false });
+		const fetchMock = mockFetch({});
 		renderPanel();
 
 		// Default right is pressed; picking left PUTs left.

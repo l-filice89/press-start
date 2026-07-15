@@ -5,10 +5,12 @@ import { appFetch, establishSession } from './session';
 /**
  * Epic 11 story 11.1 hazard test — "credentialed routes no longer exist".
  * The three credentialed PSN operations (library sync, trophy sync, platinum
- * backfill) put the account's NPSSO credential on the wire and got the real
+ * backfill) put the account's credential token on the wire and got the real
  * account locked (2026-07-15). They are severed, not disabled: an
  * AUTHENTICATED request must fall through the API router to a 404, proving
- * no handler — and no PSN call — can ever answer them again.
+ * no handler — and no PSN call — can ever answer them again. (Story 11.2's
+ * settings token route died the same way; the identifier sweep in
+ * `src/no-credential-code.test.ts` pins its absence.)
  */
 
 let cookie: string;

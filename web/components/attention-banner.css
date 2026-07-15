@@ -44,15 +44,6 @@
 	color: var(--color-warn-amber);
 }
 
-/* Magenta — expired PSN NPSSO token. */
-.attention-banner--expired-token {
-	background: rgba(255, 46, 136, 0.14);
-	border-bottom-color: rgba(255, 46, 136, 0.4);
-}
-.attention-banner--expired-token .attention-banner__action {
-	color: var(--color-heat-magenta-ink);
-}
-
 /* Steel — failed refresh. */
 .attention-banner--failed-refresh {
 	background: rgba(143, 176, 196, 0.12);

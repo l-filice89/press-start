@@ -8,39 +8,25 @@ import {
 	cancelPsPlus,
 	fetchSettings,
 	saveFabHandedness,
-	savePsnNpsso,
 	savePsnRegion,
 } from './api';
 import './settings-panel.css';
 
 /**
- * The Settings surface (Story 4.1, re-credentialed in 9.1b, FR-36): a
- * focus-trapped modal editing the PlayStation NPSSO token. The stored value is
- * never shown — the field is always empty and saving replaces the token
- * wholesale. The token cannot be read from Sony cross-origin (CORS), so the
- * "Get / refresh token" control is a plain deep link the user copies from.
+ * The Settings surface (Story 4.1, stripped of the PSN credential surface by
+ * Epic 11 story 11.2): a focus-trapped modal editing the PS+ region, FAB
+ * placement and PS+ claim state.
  */
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
 	const dialogRef = useRef<HTMLDivElement>(null);
-	const inputRef = useRef<HTMLTextAreaElement>(null);
+	const inputRef = useRef<HTMLInputElement>(null);
 	const titleId = useId();
-	const instructionsId = useId();
-	const [npsso, setNpsso] = useState('');
 	const queryClient = useQueryClient();
 	const { toast } = useToast();
 
 	const { data: settings } = useQuery({
 		queryKey: ['settings'],
 		queryFn: ({ signal }) => fetchSettings(signal),
-	});
-
-	const save = useMutation({
-		mutationFn: savePsnNpsso,
-		// A failed token save already says so inline, below the button.
-		onSuccess: () => {
-			setNpsso('');
-			queryClient.invalidateQueries({ queryKey: ['settings'] });
-		},
 	});
 
 	// PSN store region (the PS+ catalog is per-region — the catalog's NO REGION
@@ -94,8 +80,6 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 		initialFocusRef: inputRef,
 	});
 
-	const trimmed = npsso.trim();
-
 	return createPortal(
 		// biome-ignore lint/a11y/noStaticElementInteractions: the backdrop is a dismiss surface, not a control — Escape and the Close button are the accessible paths; this only mirrors them for pointer users.
 		<div
@@ -120,62 +104,6 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 				</h2>
 
 				<section className="settings-panel__section">
-					<h3 className="settings-panel__heading">PlayStation NPSSO token</h3>
-					<p className="settings-panel__status" data-testid="psn-npsso-status">
-						{settings?.psnNpssoSet
-							? 'A token is saved. Pasting a new one replaces it.'
-							: 'No token saved yet.'}
-					</p>
-					<ol className="settings-panel__instructions" id={instructionsId}>
-						<li>
-							Sign in to PlayStation, then open{' '}
-							<a
-								href="https://ca.account.sony.com/api/v1/ssocookie"
-								target="_blank"
-								rel="noreferrer"
-								data-testid="psn-npsso-link"
-							>
-								Get / refresh token
-							</a>
-						</li>
-						<li>
-							Copy the <code>npsso</code> value from the page
-						</li>
-						<li>Paste it below and save — it lasts about 60 days</li>
-					</ol>
-					<textarea
-						ref={inputRef}
-						className="settings-panel__token-input"
-						aria-label="PlayStation NPSSO token"
-						aria-describedby={instructionsId}
-						placeholder="Paste the npsso token value"
-						rows={3}
-						maxLength={4096}
-						value={npsso}
-						onChange={(e) => {
-							setNpsso(e.target.value);
-							save.reset();
-						}}
-					/>
-					<button
-						type="button"
-						className="settings-panel__save tap-target"
-						disabled={!trimmed || save.isPending}
-						onClick={() => save.mutate(trimmed)}
-					>
-						{save.isPending ? 'Saving…' : 'Save token'}
-					</button>
-					<div
-						className="settings-panel__feedback"
-						role="status"
-						aria-live="polite"
-					>
-						{save.isSuccess && 'Token saved.'}
-						{save.isError && 'Saving failed — try again.'}
-					</div>
-				</section>
-
-				<section className="settings-panel__section">
 					<h3 className="settings-panel__heading">PlayStation region</h3>
 					<p className="settings-panel__status" data-testid="psn-region-status">
 						{settings?.region
@@ -185,8 +113,9 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 						UK, it-it for Italy.
 					</p>
 					<input
+						ref={inputRef}
 						type="text"
-						className="settings-panel__token-input"
+						className="settings-panel__text-input"
 						aria-label="PlayStation region"
 						placeholder="it-it"
 						value={region}
@@ -204,10 +133,9 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 					>
 						{saveRegion.isPending ? 'Saving…' : 'Save region'}
 					</button>
-					{/* aria-live WITHOUT role=status — the NPSSO feedback above owns that
-					    role in this dialog. */}
 					<div
 						className="settings-panel__feedback"
+						role="status"
 						aria-live="polite"
 						data-testid="psn-region-feedback"
 					>

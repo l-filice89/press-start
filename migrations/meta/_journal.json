@@ -71,6 +71,13 @@
       "when": 1784037011917,
       "tag": "0009_tiny_kabuki",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1784130000000,
+      "tag": "0010_drop_psn_credential_settings",
+      "breakpoints": true
     }
   ]
 }

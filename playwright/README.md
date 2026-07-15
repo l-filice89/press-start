@@ -65,7 +65,7 @@ Merged fixtures (from `@seontechnologies/playwright-utils`): `apiRequest`
 the UI looks fine. Testing an error path? Opt out:
 
 ```ts
-test('shows expired-token banner', { annotation: [{ type: 'skipNetworkMonitoring' }] }, async ({ page }) => { ... });
+test('shows failed-refresh banner', { annotation: [{ type: 'skipNetworkMonitoring' }] }, async ({ page }) => { ... });
 ```
 
 ## Practices
