@@ -14,6 +14,7 @@ import {
 	runPlatinumBackfill,
 	saveFabHandedness,
 	savePsnNpsso,
+	savePsnRegion,
 } from './api';
 import './settings-panel.css';
 
@@ -116,6 +117,23 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 			queryClient.invalidateQueries({ queryKey: ['settings'] });
 		},
 	});
+
+	// PSN store region (the PS+ catalog is per-region — the catalog's NO REGION
+	// empty state points here). Saving invalidates the catalog queries so the
+	// browse page re-renders into its "run the check" state for the new region.
+	const [region, setRegion] = useState('');
+	const saveRegion = useMutation({
+		mutationFn: savePsnRegion,
+		onSuccess: () => {
+			setRegion('');
+			queryClient.invalidateQueries({ queryKey: ['settings'] });
+			queryClient.invalidateQueries({ queryKey: ['catalog'] });
+			queryClient.invalidateQueries({ queryKey: ['catalog-genres'] });
+		},
+	});
+	const trimmedRegion = region.trim().toLowerCase();
+	// Mirrors the server guard — a disabled button beats a 400 round-trip.
+	const regionValid = /^[a-z]{2}(-[a-z]{2,4})?-[a-z]{2}$/.test(trimmedRegion);
 
 	const handedness = settings?.fabHandedness ?? 'right';
 	const setHandedness = useMutation({
@@ -318,6 +336,48 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 					>
 						{save.isSuccess && 'Token saved.'}
 						{save.isError && 'Saving failed — try again.'}
+					</div>
+				</section>
+
+				<section className="settings-panel__section">
+					<h3 className="settings-panel__heading">PlayStation region</h3>
+					<p className="settings-panel__status" data-testid="psn-region-status">
+						{settings?.region
+							? `Your PS+ catalog region is ${settings.region}.`
+							: 'No region set — the PS+ catalog needs one.'}
+					</p>
+					<input
+						type="text"
+						className="settings-panel__token-input"
+						aria-label="PlayStation region"
+						placeholder="it-it"
+						value={region}
+						onChange={(e) => {
+							setRegion(e.target.value);
+							saveRegion.reset();
+						}}
+					/>
+					<button
+						type="button"
+						className="settings-panel__save tap-target"
+						data-testid="save-psn-region"
+						disabled={!regionValid || saveRegion.isPending}
+						onClick={() => saveRegion.mutate(trimmedRegion)}
+					>
+						{saveRegion.isPending ? 'Saving…' : 'Save region'}
+					</button>
+					{/* aria-live WITHOUT role=status — the NPSSO feedback above owns that
+					    role in this dialog (same rule as the backfill summary below). */}
+					<div
+						className="settings-panel__feedback"
+						aria-live="polite"
+						data-testid="psn-region-feedback"
+					>
+						{saveRegion.isSuccess && 'Region saved.'}
+						{saveRegion.isError && 'Saving failed — try again.'}
+						{!regionValid &&
+							region.trim() !== '' &&
+							'Use a store locale like it-it or en-us.'}
 					</div>
 				</section>
 

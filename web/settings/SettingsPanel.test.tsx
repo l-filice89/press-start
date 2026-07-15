@@ -15,6 +15,7 @@ import { SettingsPanel } from './SettingsPanel';
 function mockFetch(settings: {
 	psnNpssoSet: boolean;
 	psnAuthExpired: boolean;
+	region?: string;
 }) {
 	const fetchMock = vi.fn(
 		async (url: string | URL | Request, _init?: RequestInit) => {
@@ -180,6 +181,88 @@ describe('SettingsPanel', () => {
 					String(u).includes('/api/settings/cancel-ps-plus'),
 				)?.[1],
 			).toMatchObject({ method: 'POST' }),
+		);
+	});
+
+	it('PSN region: names the current region, or says none is set', async () => {
+		mockFetch({ psnNpssoSet: false, psnAuthExpired: false, region: 'it-it' });
+		renderPanel();
+		await waitFor(() =>
+			expect(screen.getByTestId('psn-region-status')).toHaveTextContent(
+				'Your PS+ catalog region is it-it.',
+			),
+		);
+	});
+
+	it('PSN region: saves the normalized locale and guards a malformed one', async () => {
+		// Region-aware mock: after the PUT, the refetched settings carry the saved
+		// value — so the test can assert the status line reflects it (the panel's
+		// authoritative confirmation, not just the transient "Region saved.").
+		let saved: string | undefined;
+		const fetchMock = vi.fn(
+			async (url: string | URL | Request, init?: RequestInit) => {
+				const href = String(url);
+				if (href.includes('/api/settings/psn-region')) {
+					saved = (JSON.parse(init?.body as string) as { region: string })
+						.region;
+					return {
+						ok: true,
+						status: 200,
+						json: async () => ({ region: saved }),
+					};
+				}
+				return {
+					ok: true,
+					status: 200,
+					json: async () => ({
+						timezone: null,
+						syncAttention: [],
+						psnNpssoSet: false,
+						psnAuthExpired: false,
+						...(saved ? { region: saved } : {}),
+					}),
+				};
+			},
+		);
+		vi.stubGlobal('fetch', fetchMock);
+		renderPanel();
+
+		await waitFor(() =>
+			expect(screen.getByTestId('psn-region-status')).toHaveTextContent(
+				'No region set',
+			),
+		);
+
+		// A malformed locale keeps Save inert and explains the shape.
+		const input = screen.getByLabelText('PlayStation region');
+		await userEvent.type(input, 'italy');
+		expect(screen.getByTestId('save-psn-region')).toBeDisabled();
+		expect(screen.getByTestId('psn-region-feedback')).toHaveTextContent(
+			/Use a store locale like it-it/,
+		);
+
+		// A valid one is normalized (trim + lowercase) before the PUT.
+		await userEvent.clear(input);
+		await userEvent.type(input, 'EN-US');
+		await userEvent.click(screen.getByTestId('save-psn-region'));
+
+		await waitFor(() =>
+			expect(screen.getByTestId('psn-region-feedback')).toHaveTextContent(
+				'Region saved.',
+			),
+		);
+		const put = fetchMock.mock.calls.find(([url]) =>
+			String(url).includes('/api/settings/psn-region'),
+		);
+		expect(put?.[1]).toMatchObject({ method: 'PUT' });
+		expect(JSON.parse(put?.[1]?.body as string)).toEqual({ region: 'en-us' });
+		expect(input).toHaveValue('');
+		// The invalidated settings refetch is what updates the status line — the
+		// authoritative confirmation, beyond the mutation's own success text.
+		await waitFor(() =>
+			expect(screen.getByTestId('psn-region-status')).toHaveTextContent(
+				'Your PS+ catalog region is en-us.',
+			),
 		);
 	});
 

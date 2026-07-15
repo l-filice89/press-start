@@ -252,3 +252,31 @@ test('Settings carries the platinum-date backfill, and a run with no trophy data
 		/No trophy data yet — run the trophy sync first/,
 	);
 });
+
+test('Settings names the PSN region and saves a normalized locale', async ({
+	page,
+}) => {
+	// The e2e Worker seeds PSN_REGION=it-it, and epic5/epic7 files read the
+	// region in PARALLEL workers — so this journey saves the SAME locale
+	// (uppercased) to exercise the write path + normalization without ever
+	// flipping the effective region under another file's feet.
+	await page.goto('/');
+	await page.getByRole('button', { name: 'Settings' }).click();
+
+	await expect(page.getByTestId('psn-region-status')).toHaveText(
+		/Your PS\+ catalog region is it-it/,
+	);
+
+	const input = page.getByLabel('PlayStation region');
+	await input.fill('IT-IT');
+	await page.getByTestId('save-psn-region').click();
+
+	await expect(page.getByTestId('psn-region-feedback')).toHaveText(
+		'Region saved.',
+	);
+	// Normalized server-side, echoed back through the settings payload.
+	await expect(page.getByTestId('psn-region-status')).toHaveText(
+		/Your PS\+ catalog region is it-it/,
+	);
+	await expect(input).toHaveValue('');
+});

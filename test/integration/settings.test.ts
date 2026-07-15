@@ -13,8 +13,10 @@ import { createDb } from '../../src/repositories/db';
 import { user } from '../../src/schema';
 import {
 	getPsnNpsso,
+	getPsnRegion,
 	markPsnAuthExpired,
 	PSN_NPSSO_SETTING_KEY,
+	PSN_REGION_SETTING_KEY,
 } from '../../src/services/settings';
 import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
 
@@ -101,7 +103,114 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 			stragglerCount: 0,
 			fabHandedness: 'right',
 			psPlusClaimCount: 0,
+			// The GET above already read the region through `getPsnRegion`, which
+			// seeds (and persists) the test env's `PSN_REGION` var.
+			region: 'it-it',
 		});
+	});
+
+	it('PSN region: GET reports the effective value, PUT normalizes + persists, bad value 400', async () => {
+		// GET reports the effective value — the wrangler var seeds `it-it` in the
+		// test env (this GET, not a sibling test's, does the first read+persist).
+		expect(
+			await (await appFetch('/api/settings', { headers: { cookie } })).json(),
+		).toMatchObject({ region: 'it-it' });
+		expect(await getSetting(db(), userId, PSN_REGION_SETTING_KEY)).toBe(
+			'it-it',
+		);
+
+		// PUT trims + lowercases, echoes what it stored.
+		const put = await appFetch('/api/settings/psn-region', {
+			method: 'PUT',
+			headers: { 'content-type': 'application/json', cookie },
+			body: JSON.stringify({ region: ' EN-US ' }),
+		});
+		expect(put.status).toBe(200);
+		expect(await put.json()).toEqual({ region: 'en-us' });
+		expect(await getSetting(db(), userId, PSN_REGION_SETTING_KEY)).toBe(
+			'en-us',
+		);
+		expect(
+			await (await appFetch('/api/settings', { headers: { cookie } })).json(),
+		).toMatchObject({ region: 'en-us' });
+
+		// The saved setting now wins over the env seed (Story 5.1 precedence).
+		expect(await getPsnRegion(db(), userId, { PSN_REGION: 'it-it' })).toBe(
+			'en-us',
+		);
+
+		// Malformed locales rejected at the boundary, nothing written. (3-part
+		// locales like `zh-hans-hk` are VALID — Sony has script segments.)
+		for (const bad of [
+			'italy',
+			'',
+			'   ',
+			'it_IT',
+			'itit',
+			'i-t',
+			'zh-hans-hk-x',
+			42,
+		]) {
+			const rejected = await appFetch('/api/settings/psn-region', {
+				method: 'PUT',
+				headers: { 'content-type': 'application/json', cookie },
+				body: JSON.stringify({ region: bad }),
+			});
+			expect(rejected.status, `expected 400 for ${JSON.stringify(bad)}`).toBe(
+				400,
+			);
+		}
+		const noBody = await appFetch('/api/settings/psn-region', {
+			method: 'PUT',
+			headers: { 'content-type': 'application/json', cookie },
+		});
+		expect(noBody.status).toBe(400);
+		expect(await getSetting(db(), userId, PSN_REGION_SETTING_KEY)).toBe(
+			'en-us',
+		);
+
+		// A REAL region change clears the old region's refresh stamps (review
+		// 2026-07-15) — the header must not date a catalog this region never had.
+		// Re-saving the SAME region clears nothing.
+		const {
+			stampPsPlusRefreshedAt,
+			markPsPlusRefreshFailed,
+			isPsPlusRefreshFailed,
+			getPsPlusRefreshedAt,
+		} = await import('../../src/services/settings');
+		await stampPsPlusRefreshedAt(db(), userId);
+		await markPsPlusRefreshFailed(db(), userId);
+
+		const resaved = await appFetch('/api/settings/psn-region', {
+			method: 'PUT',
+			headers: { 'content-type': 'application/json', cookie },
+			body: JSON.stringify({ region: 'en-us' }),
+		});
+		expect(resaved.status).toBe(200);
+		expect(await getPsPlusRefreshedAt(db(), userId)).not.toBeNull();
+		expect(await isPsPlusRefreshFailed(db(), userId)).toBe(true);
+
+		// A 3-part Sony locale is accepted — and the change wipes both stamps.
+		const changed = await appFetch('/api/settings/psn-region', {
+			method: 'PUT',
+			headers: { 'content-type': 'application/json', cookie },
+			body: JSON.stringify({ region: 'ZH-HANS-HK' }),
+		});
+		expect(changed.status).toBe(200);
+		expect(await changed.json()).toEqual({ region: 'zh-hans-hk' });
+		expect(await getPsPlusRefreshedAt(db(), userId)).toBeNull();
+		expect(await isPsPlusRefreshFailed(db(), userId)).toBe(false);
+
+		// No setting and no seed reads as unset (the route reports null).
+		expect(await getPsnRegion(db(), 'user-with-no-region', {})).toBeUndefined();
+
+		// Auth is required on the write path.
+		const unauthed = await appFetch('/api/settings/psn-region', {
+			method: 'PUT',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ region: 'it-it' }),
+		});
+		expect(unauthed.status).toBe(401);
 	});
 
 	it('PSN NPSSO: PUT saves per-user, GET reports presence only and never echoes the value (hazard)', async () => {
