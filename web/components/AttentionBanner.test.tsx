@@ -21,7 +21,7 @@ describe('AttentionBanner', () => {
 
 	it.each([
 		['stragglers', 'attention-banner--stragglers'],
-		['expired-token', 'attention-banner--expired-token'],
+		['enrich', 'attention-banner--enrich'],
 		['failed-refresh', 'attention-banner--failed-refresh'],
 	] as const)('maps variant %s to its tone class', (variant, cls) => {
 		render(<AttentionBanner variant={variant} message="x" />);
@@ -32,8 +32,8 @@ describe('AttentionBanner', () => {
 		const onClick = vi.fn();
 		render(
 			<AttentionBanner
-				variant="expired-token"
-				message="PlayStation sync needs a new NPSSO token"
+				variant="enrich"
+				message="3 games need a games-DB match"
 				action={{ label: 'Open Settings', onClick }}
 			/>,
 		);

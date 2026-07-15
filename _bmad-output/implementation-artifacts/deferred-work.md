@@ -368,6 +368,7 @@ resolution: spike complete; the table above IS the deliverable. Firm: NPSSO gate
   summary: Trophy counts are never cleared or aged — a game whose trophy title stops matching PSN keeps its last-synced "62% · B" forever, and the UI never shows how old the numbers are (`trophy_synced_at` is stored but never read).
   evidence: Nothing writes NULL back to the trophy columns, and no view reads `trophy_synced_at`. Needs a product call (clear on vanish? show "synced 3 months ago"?) rather than a silent default, so it was not invented during the run.
   resolution: discarded (accepted permanently) 2026-07-14 — Epic 9 retro, Luca's product call: "It's historic data. Fine with it never clearing." Trophy counts are a record of what was earned, not a live gauge; staleness is acceptable and no aging UI is wanted. Recorded so it is not re-opened.
+  superseded: 2026-07-15 (Epic 11 story 11.3) — the trophy display and every `trophy_*` column (including the never-read `trophy_synced_at`) are deleted outright; the question can no longer arise.
 
 - source_spec: `spec-9-2-trophy-progress-on-every-game-vr-2.md`
   summary: `Db` now types a `batch` method, but the seed script's sqlite-proxy driver is built without a batch callback — any future repository function that batches and is reused by the seed path fails at RUNTIME, not compile time.
@@ -420,23 +421,28 @@ resolution: Wishlist reachable under NEITHER credential from the app's server-to
 - source_spec: `spec-fab-menu-trophy-icon-mobile-labels.md`
   summary: The card's platinum badge uses a fixed `data-testid="platinum-trophy"`, so a test doing `getByTestId('platinum-trophy')` in a render with 2+ platinum cards would throw on multiple matches.
   evidence: PRE-EXISTING (the card carried this id before the icon was extracted; behaviour unchanged). No code or test currently does a singular `getByTestId` in a multi-card context — `Card.test.tsx` renders one card — so it is latent, not a live failure. If a future full-app test needs it, key by game id or use `getAllByTestId`.
+  resolution: done 2026-07-15 (Epic 11 sweep, revisited on Luca's call) — the testid is now game-scoped (`platinum-trophy-${game.id}`, `web/shelf/Card.tsx`), so a multi-platinum render can never throw on a singular lookup; `Card.test.tsx` matches the prefix.
 
 - source_spec: `spec-9-5-post-retro-hardening-sweep.md`
   summary: An abandoned platinum-backfill loop (tab closed, or the client's 40-chunk brake trips) leaves the single-flight lock held until its 2-minute TTL, so the user's next sync is refused with the busy message.
   evidence: `src/routes/sync.ts` releases the lock only when the loop ENDS (last chunk or a failure); a client that simply stops looping has no release call and no `beforeunload` best-effort. Self-healing within the TTL, and the busy message says so — but a stopped-early run (600+ candidates) makes it deterministic. A `DELETE /api/backfill/platinum-dates/lock` presenting the token, called from the brake and on unmount, would close it.
+  resolution: superseded 2026-07-15 (Epic 11 story 11.1) — the platinum backfill (route, client loop, and its lock op) is deleted outright; the abandoned-lock scenario can no longer occur. The surviving `catalog-refresh` op releases in a `finally` and renews per chunk, so it does not inherit the hazard.
 
 - source_spec: `spec-9-5-post-retro-hardening-sweep.md`
   summary: `listDiscardedTitleKeys` is a second full user-scoped join per trophy sync, one row-set away from the `listLibraryForUser` scan that just ran.
   evidence: `src/repositories/games.ts` — both select the same user's `game_tracking ⋈ game`, differing only on the `discarded` flag. One query selecting `discarded` and partitioned in JS would be one D1 binding call instead of two, and binding calls count against the 50-subrequest budget the backfill's chunk size is busy defending. Not a hazard today (the trophy sync's budget has headroom); a cleanup when that file is next touched.
+  resolution: superseded 2026-07-15 (Epic 11 story 11.1) — the trophy sync (the only caller) and `listDiscardedTitleKeys` itself are deleted; there is no second query left to merge.
 
 
 - source_spec: `spec-catalog-detail-over-active-destination.md`
   summary: Typing in the header search while a game detail's pending/error overlay covers a destination writes `?q=` onto the `/game/:id` URL, not the destination behind it — the term is lost on Close.
   evidence: Only the resolved `DetailPanel` calls `useModalTrap`; the pending/404/error `DetailOverlay` in `web/shelf/GameRoute.tsx` does not, so the header `SearchBox` is keyboard-reachable during a slow `GET /api/games/:id`. `SearchBox.setSearchParams` targets the real URL (`/game/:id`), and the background rendered behind reads `background.search`, so the typed term never filters the visible grid and `navigate(-1)` discards it. Transient (pending is ~100-300ms) and low-severity; the proper fix is a design decision about what search-while-detail-open should do (dismiss the detail and filter, or ignore), not a mechanical patch.
+  resolution: done 2026-07-15 (Epic 11 sweep, revisited on Luca's call) — no new design decision was needed: the resolved DetailPanel's modal trap already IS the answer, the overlay just never adopted it. `DetailOverlay` (`web/shelf/GameRoute.tsx`) now runs the same `useModalTrap` as every other dialog, so the header SearchBox is unreachable through the pending/404/error states exactly as it is behind the resolved panel — the `?q=`-onto-`/game/:id` write can no longer happen.
 
 - source_spec: `spec-psn-region-setting.md`
   summary: The `PSN_REGION` env seed is persisted verbatim by `getPsnRegion` — no lowercase, no locale-format guard — so a malformed Wrangler var stores a value the new PUT validator would reject.
   evidence: `src/services/settings.ts:74-85` (pre-existing Story 5.1 code, untouched by this spec) persists `env.PSN_REGION?.trim()` on first read. Two write paths to `psn_region` now carry different invariants; catalog rows are keyed by the raw string, so a case-mismatched seed would orphan a snapshot. Harmless today (the var is pinned lowercase `it-it` in wrangler.jsonc) — normalize/validate the seed inside `getPsnRegion` when that file is next touched.
+  resolution: done 2026-07-15 (Epic 11 sweep) — `normalizePsnRegion` in `src/services/settings.ts` is now THE shape rule for both write paths: the env seed normalizes through it (a malformed var behaves as unset instead of persisting), and the PUT's zod schema pipes through the same function, so the two invariants can no longer drift.
 
 ### DW-11: Genre chip count can exceed the filtered grid count when the store carries duplicate-named products
 
@@ -461,3 +467,7 @@ location: src/repositories/psplus-catalog.ts (upsert)
 reason: The column means "first seen since the last prune", not "first ever seen" — a game that leaves PS+ and returns looks new. Matters only for Epic 10's "leaving soon"/history features; decide the intended semantics there before building on it.
 status: open
 decision: 2026-07-15 Homed in Story 10.2 ("Leaving PS+ Extra soon", VR-6), epics.md — carried as an AC: the story must decide and document what `first_seen_at` means for its diff (and fix or rename the column if "since last prune" is not it) before building on it. A semantics decision, not a patch — deciding it now, without 10.2's design in hand, would be guessing. Ledger closes when 10.2 ships.
+- source_spec: `_bmad-output/implementation-artifacts/spec-11-2-strip-psn-credential-auth-from-provider-and-settings.md`
+  summary: `src/core/sync-reconcile.ts` (planSync) and the psn-link anchor write are production-dead since Epic 11 removed library sync — no production caller feeds planSync, and the anchored `np_title_id` write in games service has no remaining reader; decide whether to delete both or keep the anchor for a future burner-account revival.
+  evidence: review finding on the 11.2 diff — `test/integration/games.test.ts` H4 pin now asserts a write nothing consumes; planSync is exercised only by tests; the sanctioned revival route (burner account, sprint-change-proposal-2026-07-15 §6) would want the anchor back.
+  resolution: done 2026-07-15 (Epic 11 sweep) — split verdict. planSync: DELETED (`core/sync-reconcile.ts` + test + the `core/index.ts` export); test-only code, git history keeps it for any revival. Anchor: KEPT, because the entry's "no remaining reader" claim was wrong — `findGameByExternalLink('PSN', …)` reads the link at `services/games.ts:237` (applyCatalogOrigin converge, Epic 7 H1) and `:316` (add-by-name dedup), and `applyCatalogOrigin:247` still writes it, so two catalog adds of the same game under diverged titles converge through it with no library sync involved. Live production loop, not a revival stash.

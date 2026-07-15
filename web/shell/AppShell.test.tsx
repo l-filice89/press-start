@@ -46,7 +46,6 @@ const GAME = {
 	ownedVia: null,
 	releaseDate: null,
 	genres: [],
-	trophy: null,
 };
 
 /** Every read the shell's destinations make: settings, shelf, catalog, by-id. */

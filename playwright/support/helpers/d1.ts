@@ -124,26 +124,14 @@ function cliExecute(sql: string): void {
 	}
 }
 
-/** SQL literal for a nullable integer count. */
-const num = (value: number | undefined): string =>
-	value === undefined ? 'NULL' : String(value);
-
 /** The two INSERTs for one game; tracking attaches to the single e2e user. */
 const seedSql = (game: SeedGame): string[] => {
 	const t = game.tracking;
-	// NULL trophy columns = no trophy data (the card/detail then show nothing).
-	const earned = t.trophyEarned ?? undefined;
-	const defined = t.trophyDefined ?? undefined;
 	return [
 		`INSERT INTO game (id, title, title_normalized, release_date, cover_url, store_url, ps_plus_extra, unenriched)
 		 VALUES (${sq(game.id)}, ${sq(game.title)}, ${sq(normalizeTitle(game.title))}, ${sq(game.releaseDate)}, ${sq(game.coverUrl)}, ${sq(game.storeUrl)}, ${game.psPlusExtra ? 1 : 0}, 0);`,
-		`INSERT INTO game_tracking (user_id, game_id, owned, owned_via, play_status, completed_on, platinum_on, wishlisted_on,
-		   trophy_earned_bronze, trophy_earned_silver, trophy_earned_gold, trophy_earned_platinum,
-		   trophy_defined_bronze, trophy_defined_silver, trophy_defined_gold, trophy_defined_platinum, trophy_synced_at)
-		 SELECT id, ${sq(game.id)}, ${t.owned ? 1 : 0}, ${sq(t.ownedVia)}, ${sq(t.playStatus)}, ${sq(t.completedOn)}, ${sq(t.platinumOn)}, ${sq(t.wishlistedOn)},
-		   ${num(earned?.bronze)}, ${num(earned?.silver)}, ${num(earned?.gold)}, ${num(earned?.platinum)},
-		   ${num(defined?.bronze)}, ${num(defined?.silver)}, ${num(defined?.gold)}, ${num(defined?.platinum)},
-		   ${defined ? sq('2026-07-13') : 'NULL'} FROM user LIMIT 1;`,
+		`INSERT INTO game_tracking (user_id, game_id, owned, owned_via, play_status, completed_on, platinum_on, wishlisted_on)
+		 SELECT id, ${sq(game.id)}, ${t.owned ? 1 : 0}, ${sq(t.ownedVia)}, ${sq(t.playStatus)}, ${sq(t.completedOn)}, ${sq(t.platinumOn)}, ${sq(t.wishlistedOn)} FROM user LIMIT 1;`,
 	];
 };
 

@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, inject, it } from 'vitest';
 import { todayInZone } from '../../src/core';
 import {
+	deleteSetting,
 	findGamesByNormalizedTitle,
 	getSetting,
 	getTracking,
@@ -12,10 +13,7 @@ import {
 import { createDb } from '../../src/repositories/db';
 import { user } from '../../src/schema';
 import {
-	getPsnNpsso,
 	getPsnRegion,
-	markPsnAuthExpired,
-	PSN_NPSSO_SETTING_KEY,
 	PSN_REGION_SETTING_KEY,
 } from '../../src/services/settings';
 import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
@@ -56,15 +54,6 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 	it('requires auth', async () => {
 		expect((await appFetch('/api/settings')).status).toBe(401);
 		expect((await putTimezone({ timezone: 'Europe/Rome' })).status).toBe(401);
-		expect(
-			(
-				await appFetch('/api/settings/psn-npsso', {
-					method: 'PUT',
-					headers: { 'content-type': 'application/json' },
-					body: JSON.stringify({ npsso: 'x' }),
-				})
-			).status,
-		).toBe(401);
 	});
 
 	it('rejects an unresolvable timezone', async () => {
@@ -95,9 +84,6 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 			await (await appFetch('/api/settings', { headers: { cookie } })).json(),
 		).toEqual({
 			timezone: 'Europe/Berlin',
-			psnNpssoSet: false,
-			psnAuthExpired: false,
-			syncAttention: [],
 			psPlusRefreshFailed: false,
 			psPlusRefreshedAt: null,
 			stragglerCount: 0,
@@ -204,6 +190,25 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 		// No setting and no seed reads as unset (the route reports null).
 		expect(await getPsnRegion(db(), 'user-with-no-region', {})).toBeUndefined();
 
+		// A MALFORMED env seed behaves as unset and persists NOTHING — both write
+		// paths share normalizePsnRegion, so a value the PUT would 400 can never
+		// enter through the wrangler var (Epic 11 sweep).
+		expect(
+			await getPsnRegion(db(), 'user-with-no-region', { PSN_REGION: 'IT_IT' }),
+		).toBeUndefined();
+		expect(
+			await getSetting(db(), 'user-with-no-region', PSN_REGION_SETTING_KEY),
+		).toBeUndefined();
+		// A well-formed but shouty seed is normalized before it persists (a real
+		// user row: the setting write is FK-bound to `user`).
+		await deleteSetting(db(), userId, PSN_REGION_SETTING_KEY);
+		expect(await getPsnRegion(db(), userId, { PSN_REGION: ' IT-IT ' })).toBe(
+			'it-it',
+		);
+		expect(await getSetting(db(), userId, PSN_REGION_SETTING_KEY)).toBe(
+			'it-it',
+		);
+
 		// Auth is required on the write path.
 		const unauthed = await appFetch('/api/settings/psn-region', {
 			method: 'PUT',
@@ -211,158 +216,6 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 			body: JSON.stringify({ region: 'it-it' }),
 		});
 		expect(unauthed.status).toBe(401);
-	});
-
-	it('PSN NPSSO: PUT saves per-user, GET reports presence only and never echoes the value (hazard)', async () => {
-		// The value lands in an outbound Cookie header (`npsso=<value>`) —
-		// whitespace-only, pair-smuggling and control characters are refused at
-		// the boundary. So is anything ABOVE Latin1 (Story 9.5): HTTP headers are
-		// Latin1-encoded, so an emoji or a smart quote pasted along with the token
-		// cannot be carried at all — it must fail HERE with a 400, not later as a
-		// 502 when the sync's fetch throws. (An emoji is a surrogate PAIR: a
-		// BMP-only guard would wave it through.)
-		for (const bad of [
-			'   ',
-			'a;b',
-			'a b',
-			'a,b',
-			'a\nb',
-			'npsso=',
-			'token✓',
-			'token😀',
-			'token’s',
-			// C1 control (NEL): Latin1-ENCODABLE, so a "nothing above U+00FF" bound
-			// waved it into the Cookie header. The cookie-octet allowlist does not.
-			'token\u0085x',
-			'token"x',
-			'token\\x',
-		]) {
-			const rejected = await appFetch('/api/settings/psn-npsso', {
-				method: 'PUT',
-				headers: { 'content-type': 'application/json', cookie },
-				body: JSON.stringify({ npsso: bad }),
-			});
-			expect(rejected.status, `expected 400 for ${JSON.stringify(bad)}`).toBe(
-				400,
-			);
-		}
-
-		// The paste shapes the deep link actually produces — the whole JSON blob
-		// rendered by `/api/v1/ssocookie`, a quoted value, the `name=value` pair —
-		// are unwrapped, not stored verbatim (they all pass the charset guard, so
-		// nothing else would catch them).
-		for (const [pasted, stored] of [
-			['{"npsso":"blob-pasted-value"}', 'blob-pasted-value'],
-			['  {"npsso": "spaced-blob-value"}  ', 'spaced-blob-value'],
-			['"quoted-pasted-value"', 'quoted-pasted-value'],
-			['npsso=pair-pasted-value', 'pair-pasted-value'],
-		]) {
-			const response = await appFetch('/api/settings/psn-npsso', {
-				method: 'PUT',
-				headers: { 'content-type': 'application/json', cookie },
-				body: JSON.stringify({ npsso: pasted }),
-			});
-			expect(response.status, `expected 200 for ${pasted}`).toBe(200);
-			expect(await getSetting(db(), userId, PSN_NPSSO_SETTING_KEY)).toBe(
-				stored,
-			);
-		}
-
-		const saved = await appFetch('/api/settings/psn-npsso', {
-			method: 'PUT',
-			headers: { 'content-type': 'application/json', cookie },
-			body: JSON.stringify({ npsso: '  psn-secret-value  ' }),
-		});
-		expect(saved.status).toBe(200);
-		expect(await saved.json()).toEqual({
-			psnNpssoSet: true,
-			psnAuthExpired: false,
-		});
-
-		// Stored trimmed; readable through the provider-facing service read.
-		expect(await getSetting(db(), userId, PSN_NPSSO_SETTING_KEY)).toBe(
-			'psn-secret-value',
-		);
-		expect(await getPsnNpsso(db(), userId, {})).toBe('psn-secret-value');
-
-		// The hazard: the secret must never ride back to the client.
-		const res = await appFetch('/api/settings', { headers: { cookie } });
-		const body = await res.text();
-		expect(body).not.toContain('psn-secret-value');
-		expect(JSON.parse(body)).toMatchObject({
-			psnNpssoSet: true,
-			psnAuthExpired: false,
-		});
-	});
-
-	it('PSN auth-expired flag: persists across requests, cleared only by a fresh token (hazard)', async () => {
-		await markPsnAuthExpired(db(), userId);
-
-		// Survives reloads — it is persisted state, not a dismissible toast.
-		const flagged = await (
-			await appFetch('/api/settings', { headers: { cookie } })
-		).json();
-		expect(flagged).toMatchObject({ psnAuthExpired: true });
-
-		// Saving a fresh token is the one exit.
-		await appFetch('/api/settings/psn-npsso', {
-			method: 'PUT',
-			headers: { 'content-type': 'application/json', cookie },
-			body: JSON.stringify({ npsso: 'fresh-npsso' }),
-		});
-		const cleared = await (
-			await appFetch('/api/settings', { headers: { cookie } })
-		).json();
-		expect(cleared).toMatchObject({ psnAuthExpired: false });
-	});
-
-	it('PSN NPSSO seed: the env secret is used only while no setting is saved', async () => {
-		// A saved setting always wins over the seed.
-		expect(await getPsnNpsso(db(), userId, { PSN_NPSSO: 'env-seed' })).toBe(
-			'fresh-npsso',
-		);
-
-		// A user with no saved token falls back to the env seed, then to none.
-		const other = 'user-with-no-npsso';
-		expect(await getPsnNpsso(db(), other, { PSN_NPSSO: 'env-seed' })).toBe(
-			'env-seed',
-		);
-		expect(await getPsnNpsso(db(), other, {})).toBeUndefined();
-		// A whitespace-only secret (trailing-newline paste) is no seed at all.
-		expect(
-			await getPsnNpsso(db(), other, { PSN_NPSSO: ' \n' }),
-		).toBeUndefined();
-	});
-
-	it('sync needs-attention: GET surfaces persisted items; corrupt JSON reads as empty (hazard)', async () => {
-		const { writeSyncAttention, SYNC_ATTENTION_SETTING_KEY } = await import(
-			'../../src/services/settings'
-		);
-		const { setSetting: rawSet } = await import('../../src/repositories');
-
-		await writeSyncAttention(db(), userId, [
-			{ title: 'Doppelganger', reason: 'ambiguous match' },
-		]);
-		const withItems = await (
-			await appFetch('/api/settings', { headers: { cookie } })
-		).json();
-		expect(withItems).toMatchObject({
-			syncAttention: [{ title: 'Doppelganger', reason: 'ambiguous match' }],
-		});
-
-		// Corrupt persisted JSON must degrade to "nothing needs attention",
-		// never a 500 — the next completed sync overwrites it.
-		await rawSet(db(), userId, SYNC_ATTENTION_SETTING_KEY, '{not json');
-		const corrupt = await (
-			await appFetch('/api/settings', { headers: { cookie } })
-		).json();
-		expect(corrupt).toMatchObject({ syncAttention: [] });
-
-		// Empty write deletes the row (self-resolution).
-		await writeSyncAttention(db(), userId, []);
-		expect(
-			await getSetting(db(), userId, SYNC_ATTENTION_SETTING_KEY),
-		).toBeUndefined();
 	});
 
 	it('PS+ refresh failure (5.2): GET exposes psPlusRefreshFailed, cleared on resolve', async () => {

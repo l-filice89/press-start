@@ -5,15 +5,10 @@
  * primitives only; the completion-invariant and append-only-date guards
  * (AD-10/11/12/21) are wired at their edit/ingest boundaries in later epics.
  */
-import { and, eq, gt, isNotNull, isNull, or, type SQL, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, or, type SQL, sql } from 'drizzle-orm';
 import type { SQLiteUpdateSetSource } from 'drizzle-orm/sqlite-core';
-import type {
-	DateEdits,
-	OwnershipType,
-	PlayStatus,
-	TrophyTierCounts,
-} from '../core';
-import { game, gameTracking } from '../schema/catalog';
+import type { DateEdits, OwnershipType, PlayStatus } from '../core';
+import { gameTracking } from '../schema/catalog';
 import type { Db } from './db';
 
 /** Columns a caller may set on a tracking row (never `user_id`/`game_id` — those are the key). */
@@ -240,153 +235,6 @@ export async function setDiscarded(
 	discarded: boolean,
 ) {
 	return updateTrackingWhere(db, userId, gameId, { discarded });
-}
-
-/** One game's trophy counts, as the sync hands them over (Story 9.2). */
-export type TrophyCountsWrite = {
-	gameId: string;
-	npCommId: string;
-	/** PSN's per-title trophy service (`trophy`/`trophy2`) — 9.3's detail call
-	 * 404s on the wrong one, so it is stored, not guessed. */
-	npServiceName: string;
-	earned: TrophyTierCounts;
-	defined: TrophyTierCounts;
-	syncedAt: string;
-};
-
-/**
- * D1 statements per `batch` call. A per-title UPDATE would be one BINDING call
- * each (~137 on a real account) and binding calls count against the Workers
- * subrequest limit (50 on the free tier) — batching keeps the whole write at
- * ceil(n/50) calls.
- */
-const TROPHY_BATCH_SIZE = 50;
-
-/**
- * Trophy counts write (Story 9.2), CHUNK-BATCHED. UPDATE-only through the same
- * conditional write seam as every other tracking mutation: the trophy sync
- * writes counts onto games the user ALREADY tracks — an untracked match mints
- * no row. The SET list is trophy columns ONLY: no play status, no milestone, no
- * lifecycle date can be reached from here (the invariant the integration test
- * snapshots across a run), and every statement is user-scoped (AD-13).
- *
- * Returns the game ids that ACTUALLY persisted — a row deleted underneath us
- * updates nothing, and the caller must not report it as written.
- */
-export async function setTrophyCountsBatch(
-	db: Db,
-	userId: string,
-	writes: TrophyCountsWrite[],
-): Promise<Set<string>> {
-	const written = new Set<string>();
-	for (let i = 0; i < writes.length; i += TROPHY_BATCH_SIZE) {
-		const chunk = writes.slice(i, i + TROPHY_BATCH_SIZE);
-		const statements = chunk.map((counts) =>
-			db
-				.update(gameTracking)
-				.set({
-					trophyNpCommId: counts.npCommId,
-					trophyNpServiceName: counts.npServiceName,
-					trophyEarnedBronze: counts.earned.bronze,
-					trophyEarnedSilver: counts.earned.silver,
-					trophyEarnedGold: counts.earned.gold,
-					trophyEarnedPlatinum: counts.earned.platinum,
-					trophyDefinedBronze: counts.defined.bronze,
-					trophyDefinedSilver: counts.defined.silver,
-					trophyDefinedGold: counts.defined.gold,
-					trophyDefinedPlatinum: counts.defined.platinum,
-					trophySyncedAt: counts.syncedAt,
-				})
-				.where(
-					and(
-						eq(gameTracking.userId, userId),
-						eq(gameTracking.gameId, counts.gameId),
-					),
-				)
-				.returning({ gameId: gameTracking.gameId }),
-		);
-		const results = await db.batch(
-			statements as [(typeof statements)[number], ...typeof statements],
-		);
-		results.forEach((rows, index) => {
-			if (rows.length > 0) written.add(chunk[index].gameId);
-		});
-	}
-	return written;
-}
-
-/** One game the platinum-date backfill (Story 9.3) may still fill. */
-export interface PlatinumBackfillCandidate {
-	gameId: string;
-	title: string;
-	npCommId: string;
-	/** NULL on rows the trophy sync wrote before this column existed — the
-	 * detail call then defaults, and a wrong default 404s (a reported skip). */
-	npServiceName: string | null;
-}
-
-/**
- * The backfill's candidate page (Story 9.3): games PSN says carry an earned
- * platinum (9.2 wrote the counts) whose `platinum_on` is still NULL — the ONLY
- * rows the backfill may write, which is what makes it idempotent and write-once
- * by construction. Ordered by `game_id` and paged on a `after` cursor: a title
- * that can never be filled (a 404, no date on record) stays a candidate
- * forever, so a "next unfilled chunk" loop would spin on it — the cursor steps
- * past it instead.
- *
- * DISCARDED rows are excluded DELIBERATELY: a discarded game is one the user
- * has thrown out of the library, and spending a PSN call (and a permanent,
- * write-once date) on it is exactly the work this run should not do. Un-discard
- * it and re-run to fill it.
- */
-export async function listPlatinumBackfillCandidates(
-	db: Db,
-	userId: string,
-	{ after, limit }: { after?: string; limit: number },
-): Promise<PlatinumBackfillCandidate[]> {
-	return db
-		.select({
-			gameId: gameTracking.gameId,
-			title: game.title,
-			npCommId: gameTracking.trophyNpCommId,
-			npServiceName: gameTracking.trophyNpServiceName,
-		})
-		.from(gameTracking)
-		.innerJoin(game, eq(gameTracking.gameId, game.id))
-		.where(
-			and(
-				eq(gameTracking.userId, userId),
-				eq(gameTracking.discarded, false),
-				gt(gameTracking.trophyEarnedPlatinum, 0),
-				isNull(gameTracking.platinumOn),
-				isNotNull(gameTracking.trophyNpCommId),
-				after ? gt(gameTracking.gameId, after) : undefined,
-			),
-		)
-		.orderBy(gameTracking.gameId)
-		.limit(limit) as Promise<PlatinumBackfillCandidate[]>;
-}
-
-/**
- * Has the trophy sync (9.2) ever written a row for this user? Only asked when
- * the backfill finds NO candidates, to tell "nothing left to recover" apart
- * from "no trophy data exists yet" (Story 9.3).
- */
-export async function hasAnyTrophyData(
-	db: Db,
-	userId: string,
-): Promise<boolean> {
-	const rows = await db
-		.select({ gameId: gameTracking.gameId })
-		.from(gameTracking)
-		.where(
-			and(
-				eq(gameTracking.userId, userId),
-				isNotNull(gameTracking.trophyNpCommId),
-			),
-		)
-		.limit(1);
-	return rows.length > 0;
 }
 
 /** Every tracking row for a user (AD-13 scope). */

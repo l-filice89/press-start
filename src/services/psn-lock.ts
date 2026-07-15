@@ -1,12 +1,12 @@
 /**
- * Single-flight for the PSN long-ops (Story 9.5; deferred since Epic 4).
+ * Single-flight for the PSN long-ops (Story 9.5; deferred since Epic 4;
+ * trimmed to the anonymous catalog refresh by Epic 11 story 11.2).
  *
- * The library sync, the trophy sync and the platinum backfill all fan out to
- * PSN under the SAME credential and all write the same user's rows. Run two at
- * once (two tabs, a double-click, a re-opened tab) and the account takes double
- * the PSN traffic while both runs report the same rows as written. So: ONE lock
- * per user, covering all three — a second run is refused with a message, never
- * raced.
+ * The PS+ membership refresh and the genre sweep fan out to the same store
+ * host and write the same user's snapshot. Run two at once (two tabs, a
+ * double-click, the cron beside a button press) and the store takes double the
+ * traffic while both runs write the same rows. So: ONE lock per user — a
+ * second run is refused with a message, never raced.
  *
  * The lock is a `setting` row (the per-user KV store this app already has — no
  * Durable Object, no new table). Its value is `<expiry-epoch-ms>:<op>:<uuid>`:
@@ -19,15 +19,12 @@
  * minutes is comfortably longer than a sync/chunk and short enough that a user
  * whose tab crashed is not left waiting.
  *
- * ponytail: the TTL is preemption, not just cleanup — there is no fence. A run
- * still alive after two minutes (PSN throttling hard) can have its lock taken
- * over, and neither run notices. Acceptable here: the ops are bounded by
- * construction (a library sync is a paged loop over one library; a backfill
- * chunk is 15 titles and renews the TTL every chunk), and the worst case is a
- * doubled
- * fan-out — not corruption, since every write is COALESCE/idempotent. If PSN
- * ever gets slow enough that this bites, add a fence: stamp the token on the
- * write path and refuse a write whose token no longer holds the lock.
+ * ponytail: the TTL is preemption, not just cleanup — the destructive write
+ * phases fence with `holdsPsnLock` below. A run still alive after two minutes
+ * (the store throttling hard) can have its lock taken over. Acceptable here:
+ * the ops are bounded by construction (a refresh is a paged walk of one
+ * catalog; a sweep chunk renews the TTL every chunk), and the fence stops a
+ * stale run from pruning the winner's snapshot.
  */
 import { acquireLock, getSetting, releaseLock } from '../repositories';
 import type { Db } from '../repositories/db';
@@ -42,12 +39,10 @@ const LOCK_TTL_MS = 2 * 60 * 1000;
  * write the same snapshot, so they must not run beside each other — a sweep
  * tagging products a concurrent refresh is pruning is the corruption AD-28's
  * generation stamp exists to catch, and one lock is cheaper than catching it.
+ * The credentialed ops (`library-sync`, `trophy-sync`, `platinum-backfill`)
+ * were retired by Epic 11; migration 0010 cleared their stale lock rows.
  */
-export type PsnOp =
-	| 'library-sync'
-	| 'trophy-sync'
-	| 'platinum-backfill'
-	| 'catalog-refresh';
+export type PsnOp = 'catalog-refresh';
 
 /** What the refused caller is told (shown verbatim by the UI). */
 export const PSN_BUSY_MESSAGE =
@@ -76,12 +71,12 @@ export async function acquirePsnLock(
 	op: PsnOp,
 	heldToken?: string,
 ): Promise<string | null> {
-	// A token belongs to the OP that minted it (Story 7.1 review, H2). The
-	// sync/backfill routes hand their LIVE token to the browser, so without this
-	// a running `platinum-backfill` token presented to the catalog endpoint would
-	// pass the raw string-equality renewal check, STEAL the lock, and 409 the
-	// backfill's next chunk to death. The `op` segment is authorization, not a
-	// label for `wrangler tail`.
+	// A token belongs to the OP that minted it (Story 7.1 review, H2): the op
+	// segment is checked before the raw string-equality renewal, so a live token
+	// handed to the browser can only ever renew the op that minted it. With one
+	// surviving op this is belt-and-braces, but it is what keeps a future second
+	// op from stealing a running refresh's lock. Authorization, not a label for
+	// `wrangler tail`.
 	if (heldToken && heldToken.split(':')[1] !== op) return null;
 	const token = mintToken(op);
 	const won = await acquireLock(

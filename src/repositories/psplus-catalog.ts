@@ -7,7 +7,7 @@
  *
  * Every write here is BATCHED. A per-row loop over ~490 products would be ~490
  * D1 BINDING calls, and binding calls count against the Workers subrequest cap
- * (50 on the free tier, AD-15) — the same reason `setTrophyCountsBatch` exists.
+ * (50 on the free tier, AD-15).
  */
 
 import { and, count, eq, inArray, ne, sql } from 'drizzle-orm';

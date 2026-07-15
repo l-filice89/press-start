@@ -6,33 +6,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SettingsPanel } from './SettingsPanel';
 
 /**
- * Settings panel (Story 4.1, re-credentialed in 9.1b): the NPSSO field is never
- * prefilled with the stored secret, the instructions carry the ssocookie deep
- * link, and Save PUTs the pasted token. The no-echo guarantee is server-side
- * (integration tests); here we pin the client never even asks for the value.
+ * Settings panel (Story 4.1, stripped of the PSN credential surface by Epic 11
+ * story 11.2): region, FAB placement, PS+ claims, About/Help — and nothing
+ * credentialed renders at all.
  */
 
-function mockFetch(settings: {
-	psnNpssoSet: boolean;
-	psnAuthExpired: boolean;
-	region?: string;
-}) {
+function mockFetch(settings: { region?: string; psPlusClaimCount?: number }) {
 	const fetchMock = vi.fn(
-		async (url: string | URL | Request, _init?: RequestInit) => {
-			const href = String(url);
-			if (href.includes('/api/settings/psn-npsso')) {
-				return {
-					ok: true,
-					status: 200,
-					json: async () => ({ psnNpssoSet: true, psnAuthExpired: false }),
-				};
-			}
-			return {
-				ok: true,
-				status: 200,
-				json: async () => ({ timezone: null, syncAttention: [], ...settings }),
-			};
-		},
+		async (_url: string | URL | Request, _init?: RequestInit) => ({
+			ok: true,
+			status: 200,
+			json: async () => ({ timezone: null, ...settings }),
+		}),
 	);
 	vi.stubGlobal('fetch', fetchMock);
 	return fetchMock;
@@ -53,56 +38,36 @@ function renderPanel(onClose = vi.fn()) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('SettingsPanel', () => {
-	it('shows the ssocookie deep link and an always-empty token field', async () => {
-		mockFetch({ psnNpssoSet: true, psnAuthExpired: false });
+	it('renders NO credential surface — the PSN token section is gone (Epic 11, 11.2)', async () => {
+		mockFetch({ region: 'it-it' });
 		renderPanel();
 
 		expect(screen.getByRole('dialog')).toBeInTheDocument();
-		// The token cannot be read from Sony cross-origin — the control is a plain
-		// deep link the user copies the value from, opened in a new tab.
-		const link = screen.getByTestId('psn-npsso-link');
-		expect(link).toHaveAttribute(
-			'href',
-			'https://ca.account.sony.com/api/v1/ssocookie',
-		);
-		expect(link).toHaveAttribute('target', '_blank');
-		expect(link).toHaveAttribute('rel', 'noreferrer');
-		// Saved-token state is reported as presence only — the field stays empty.
-		await waitFor(() =>
-			expect(screen.getByTestId('psn-npsso-status')).toHaveTextContent(
-				/A token is saved/,
-			),
-		);
-		expect(screen.getByLabelText('PlayStation NPSSO token')).toHaveValue('');
+		// The whole section list, exactly: nothing token-shaped survives.
+		expect(
+			screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent),
+		).toEqual([
+			'PlayStation region',
+			'FAB placement',
+			'PlayStation Plus',
+			'About & Help',
+		]);
+		expect(screen.queryByText(/token/i)).toBeNull();
 	});
 
-	it('saves the pasted token and never sends a GET for the stored value', async () => {
-		const fetchMock = mockFetch({ psnNpssoSet: false, psnAuthExpired: true });
+	it('has no backfill panel — the credentialed surface is severed (Epic 11, 11.1)', async () => {
+		mockFetch({});
 		renderPanel();
 
-		const input = screen.getByLabelText('PlayStation NPSSO token');
-		await userEvent.type(input, '  fresh-npsso  ');
-		await userEvent.click(screen.getByRole('button', { name: 'Save token' }));
-
-		await waitFor(() =>
-			expect(screen.getByRole('status')).toHaveTextContent('Token saved.'),
-		);
-		const put = fetchMock.mock.calls.find(([url]) =>
-			String(url).includes('/api/settings/psn-npsso'),
-		);
-		expect(put?.[1]).toMatchObject({ method: 'PUT' });
-		// Whitespace-trimmed before sending; field cleared after save.
-		expect(JSON.parse(put?.[1]?.body as string)).toEqual({
-			npsso: 'fresh-npsso',
-		});
-		expect(input).toHaveValue('');
+		expect(screen.getByRole('dialog')).toBeInTheDocument();
+		expect(screen.queryByTestId('backfill-platinum-dates')).toBeNull();
+		expect(screen.queryByText(/backfill/i)).toBeNull();
 	});
 
-	it('disables Save while the field is blank and closes via the Close button', async () => {
-		mockFetch({ psnNpssoSet: false, psnAuthExpired: false });
+	it('closes via the Close button', async () => {
+		mockFetch({});
 		const { onClose } = renderPanel();
 
-		expect(screen.getByRole('button', { name: 'Save token' })).toBeDisabled();
 		await userEvent.click(screen.getByRole('button', { name: 'Close' }));
 		expect(onClose).toHaveBeenCalledTimes(1);
 	});
@@ -110,7 +75,7 @@ describe('SettingsPanel', () => {
 	// Sign-out lives in the header alone (deferred-work triage 2026-07-13): the
 	// panel offers About/Help and no second sign-out entry point.
 	it('offers About/Help and no sign-out of its own (Story 6.3, FR-47)', async () => {
-		mockFetch({ psnNpssoSet: false, psnAuthExpired: false });
+		mockFetch({});
 		renderPanel();
 
 		expect(screen.getByText(/About & Help/)).toBeInTheDocument();
@@ -118,7 +83,7 @@ describe('SettingsPanel', () => {
 	});
 
 	it('cancel PS+ is inert with no claims (Story 6.4 AC4)', async () => {
-		mockFetch({ psnNpssoSet: false, psnAuthExpired: false });
+		mockFetch({});
 		renderPanel();
 		await waitFor(() =>
 			expect(screen.getByTestId('cancel-ps-plus')).toBeDisabled(),
@@ -138,13 +103,7 @@ describe('SettingsPanel', () => {
 				return {
 					ok: true,
 					status: 200,
-					json: async () => ({
-						timezone: null,
-						syncAttention: [],
-						psnNpssoSet: false,
-						psnAuthExpired: false,
-						psPlusClaimCount: 3,
-					}),
+					json: async () => ({ timezone: null, psPlusClaimCount: 3 }),
 				};
 			},
 		);
@@ -185,7 +144,7 @@ describe('SettingsPanel', () => {
 	});
 
 	it('PSN region: names the current region, or says none is set', async () => {
-		mockFetch({ psnNpssoSet: false, psnAuthExpired: false, region: 'it-it' });
+		mockFetch({ region: 'it-it' });
 		renderPanel();
 		await waitFor(() =>
 			expect(screen.getByTestId('psn-region-status')).toHaveTextContent(
@@ -194,7 +153,7 @@ describe('SettingsPanel', () => {
 		);
 	});
 
-	it('PSN region: saves the normalized locale and guards a malformed one', async () => {
+	it('PSN region: saves the normalized locale, ANNOUNCES the save, and guards a malformed one', async () => {
 		// Region-aware mock: after the PUT, the refetched settings carry the saved
 		// value — so the test can assert the status line reflects it (the panel's
 		// authoritative confirmation, not just the transient "Region saved.").
@@ -216,9 +175,6 @@ describe('SettingsPanel', () => {
 					status: 200,
 					json: async () => ({
 						timezone: null,
-						syncAttention: [],
-						psnNpssoSet: false,
-						psnAuthExpired: false,
 						...(saved ? { region: saved } : {}),
 					}),
 				};
@@ -246,10 +202,11 @@ describe('SettingsPanel', () => {
 		await userEvent.type(input, 'EN-US');
 		await userEvent.click(screen.getByTestId('save-psn-region'));
 
+		// The save feedback is a LIVE REGION (Epic 11 story 11.2 moved the
+		// dialog's role="status" here when the token section died) — the a11y
+		// announcement path, not just visible text.
 		await waitFor(() =>
-			expect(screen.getByTestId('psn-region-feedback')).toHaveTextContent(
-				'Region saved.',
-			),
+			expect(screen.getByRole('status')).toHaveTextContent('Region saved.'),
 		);
 		const put = fetchMock.mock.calls.find(([url]) =>
 			String(url).includes('/api/settings/psn-region'),
@@ -267,7 +224,7 @@ describe('SettingsPanel', () => {
 	});
 
 	it('toggles FAB handedness, PUTting the chosen side (Story 6.3, UX-DR10)', async () => {
-		const fetchMock = mockFetch({ psnNpssoSet: false, psnAuthExpired: false });
+		const fetchMock = mockFetch({});
 		renderPanel();
 
 		// Default right is pressed; picking left PUTs left.
@@ -284,276 +241,5 @@ describe('SettingsPanel', () => {
 				expect.objectContaining({ method: 'PUT' }),
 			),
 		);
-	});
-
-	/**
-	 * The platinum-date backfill trigger (Story 9.3). The fan-out is one PSN call
-	 * per platinum title, so the endpoint is CHUNKED and the client is what loops
-	 * it — the hazards live here: the loop must follow the cursor to the end, and
-	 * it must STOP (never spin) whether or not every title could be dated.
-	 */
-	/**
-	 * `chunks` are answered in order; an entry with a `status` FAILS that chunk
-	 * (its `body` is the error body — a failed chunk still carries the `partial`
-	 * report of what it wrote before it died).
-	 */
-	type Chunk = { status?: number; body: unknown };
-	function mockBackfill(chunks: (Chunk | unknown)[], status = 200) {
-		const queue = chunks.map((chunk) =>
-			chunk && typeof chunk === 'object' && 'body' in chunk
-				? (chunk as Chunk)
-				: { status, body: chunk },
-		);
-		const fetchMock = vi.fn(async (url: string | URL) => {
-			const href = String(url);
-			if (href.includes('/api/backfill/platinum-dates')) {
-				const next = queue.shift() ?? { status, body: { error: 'expired' } };
-				const chunkStatus = next.status ?? 200;
-				return {
-					ok: chunkStatus === 200,
-					status: chunkStatus,
-					json: async () => next.body,
-				};
-			}
-			return {
-				ok: true,
-				status: 200,
-				json: async () => ({
-					timezone: null,
-					syncAttention: [],
-					psnNpssoSet: true,
-					psnAuthExpired: false,
-				}),
-			};
-		});
-		vi.stubGlobal('fetch', fetchMock);
-		return fetchMock;
-	}
-
-	it('LOOPS the backfill on its cursor to the end and summarizes what was filled and skipped (hazard: one request cannot hold the fan-out)', async () => {
-		const fetchMock = mockBackfill([
-			{
-				filled: [{ gameId: 'g1', title: 'Hades', date: '2026-07-07' }],
-				skipped: [],
-				nextCursor: 'game-20',
-				hasTrophyData: true,
-			},
-			{
-				filled: [{ gameId: 'g2', title: 'Tearaway', date: '2024-02-02' }],
-				skipped: [
-					{ title: 'Gone Title', reason: 'no trophy data', code: 'not-found' },
-				],
-				nextCursor: null,
-				hasTrophyData: true,
-			},
-		]);
-		renderPanel();
-
-		await userEvent.click(screen.getByTestId('backfill-platinum-dates'));
-
-		await waitFor(() =>
-			expect(screen.getByTestId('backfill-summary')).toHaveTextContent(
-				/Recovered 2 platinum dates; skipped 1 \(Gone Title — no trophy data\)/,
-			),
-		);
-		// The second call carried the cursor the first one handed back — and the
-		// loop stopped on the null cursor rather than re-asking forever.
-		const calls = fetchMock.mock.calls.filter(([url]) =>
-			String(url).includes('/api/backfill/platinum-dates'),
-		);
-		expect(calls).toHaveLength(2);
-		expect(String(calls[0][0])).not.toContain('cursor=');
-		expect(String(calls[1][0])).toContain('cursor=game-20');
-		// The recovered dates land on the shelf.
-		expect(screen.getByTestId('backfill-filled')).toHaveTextContent(
-			'Hades — 2026-07-07',
-		);
-	});
-
-	it('says so when there is nothing to recover (hazard: zero candidates must not read as a failure)', async () => {
-		mockBackfill([
-			{ filled: [], skipped: [], nextCursor: null, hasTrophyData: true },
-		]);
-		renderPanel();
-
-		await userEvent.click(screen.getByTestId('backfill-platinum-dates'));
-		await waitFor(() =>
-			expect(screen.getByTestId('backfill-summary')).toHaveTextContent(
-				/Nothing to recover/,
-			),
-		);
-	});
-
-	it('with NO trophy data at all, points at the trophy sync instead of claiming every platinum is dated (hazard: zero candidates has two very different meanings)', async () => {
-		mockBackfill([
-			{ filled: [], skipped: [], nextCursor: null, hasTrophyData: false },
-		]);
-		renderPanel();
-
-		await userEvent.click(screen.getByTestId('backfill-platinum-dates'));
-		await waitFor(() =>
-			expect(screen.getByTestId('backfill-summary')).toHaveTextContent(
-				/No trophy data yet — run the trophy sync first/,
-			),
-		);
-	});
-
-	it('an ALL-SKIP run says PlayStation had no record for any of them (hazard: a run that filled nothing must not read as a successful backfill)', async () => {
-		mockBackfill([
-			{
-				filled: [],
-				skipped: [
-					{ title: 'A', reason: 'no trophy data', code: 'not-found' },
-					{ title: 'B', reason: 'no trophy data', code: 'not-found' },
-				],
-				nextCursor: null,
-				hasTrophyData: true,
-			},
-		]);
-		renderPanel();
-
-		await userEvent.click(screen.getByTestId('backfill-platinum-dates'));
-		await waitFor(() =>
-			expect(screen.getByTestId('backfill-summary')).toHaveTextContent(
-				/PlayStation returned no trophy record for any of these 2 — the trophy sync may need re-running/,
-			),
-		);
-	});
-
-	it('a rejected token stops the loop and says to refresh it (hazard: never auto-retry an expired NPSSO)', async () => {
-		const fetchMock = mockBackfill([], 401);
-		renderPanel();
-
-		await userEvent.click(screen.getByTestId('backfill-platinum-dates'));
-		await waitFor(() =>
-			expect(screen.getByTestId('backfill-summary')).toHaveTextContent(
-				/PlayStation rejected the token/,
-			),
-		);
-		expect(
-			fetchMock.mock.calls.filter(([url]) =>
-				String(url).includes('/api/backfill/platinum-dates'),
-			),
-		).toHaveLength(1);
-		// The server persisted the expired flag — settings must be REFETCHED (the
-		// initial load + one invalidation) or the banner stays dark until a reload.
-		await waitFor(() =>
-			expect(
-				fetchMock.mock.calls.filter(([url]) => String(url) === '/api/settings')
-					.length,
-			).toBeGreaterThan(1),
-		);
-	});
-
-	it('a token that expires MID-RUN still reports what was already recovered (hazard: 40 dates written and the summary says only "token rejected")', async () => {
-		mockBackfill([
-			{
-				body: {
-					filled: [{ gameId: 'g1', title: 'Hades', date: '2026-07-07' }],
-					skipped: [],
-					nextCursor: 'game-15',
-					hasTrophyData: true,
-				},
-			},
-			{
-				status: 401,
-				body: {
-					error: 'expired',
-					// The failed chunk wrote a row before it died — platinum_on is
-					// write-once, so it stands and must be reported.
-					partial: {
-						filled: [{ gameId: 'g2', title: 'Tearaway', date: '2024-02-02' }],
-						skipped: [],
-						nextCursor: 'game-16',
-						hasTrophyData: true,
-					},
-				},
-			},
-		]);
-		renderPanel();
-
-		await userEvent.click(screen.getByTestId('backfill-platinum-dates'));
-		await waitFor(() =>
-			expect(screen.getByTestId('backfill-summary')).toHaveTextContent(
-				/PlayStation rejected the token.*already recovered 2 platinum dates \(kept\)/,
-			),
-		);
-		// And they are named, not just counted.
-		expect(screen.getByTestId('backfill-filled')).toHaveTextContent(
-			'Hades — 2026-07-07',
-		);
-		expect(screen.getByTestId('backfill-filled')).toHaveTextContent(
-			'Tearaway — 2024-02-02',
-		);
-	});
-
-	it('refuses the run without a timezone and says to set one (hazard: a UTC-guessed date is permanent)', async () => {
-		// The 409 body carries the server's own copy — shown verbatim, because the
-		// server knows WHICH refusal this is (no timezone, or the 9.5 lock).
-		mockBackfill([
-			{
-				status: 409,
-				body: {
-					error:
-						'Set your timezone before recovering platinum dates — a recovered date is permanent, and without your zone every evening platinum would be dated a day off. Reload Press Start to capture it, then try again.',
-				},
-			},
-		]);
-		renderPanel();
-
-		await userEvent.click(screen.getByTestId('backfill-platinum-dates'));
-		await waitFor(() =>
-			expect(screen.getByTestId('backfill-summary')).toHaveTextContent(
-				/Set your timezone before recovering platinum dates/,
-			),
-		);
-	});
-
-	it('surfaces the single-flight refusal (Story 9.5) — not a generic failure', async () => {
-		mockBackfill([
-			{
-				status: 409,
-				body: {
-					error:
-						'A PlayStation sync is already running for your account — let it finish, then try again.',
-				},
-			},
-		]);
-		renderPanel();
-
-		await userEvent.click(screen.getByTestId('backfill-platinum-dates'));
-		await waitFor(() =>
-			expect(screen.getByTestId('backfill-summary')).toHaveTextContent(
-				/already running/,
-			),
-		);
-	});
-
-	it('says the run STOPPED EARLY when the chunk brake trips (hazard: a truncated run must not read as a complete one)', async () => {
-		// Every chunk hands back a cursor — the brake is the only thing that stops
-		// the loop, and the summary has to admit it.
-		const fetchMock = mockBackfill(
-			Array.from({ length: 45 }, (_, index) => ({
-				filled: [
-					{ gameId: `g${index}`, title: `Game ${index}`, date: '2026-01-01' },
-				],
-				skipped: [],
-				nextCursor: `cursor-${index}`,
-				hasTrophyData: true,
-			})),
-		);
-		renderPanel();
-
-		await userEvent.click(screen.getByTestId('backfill-platinum-dates'));
-		await waitFor(() =>
-			expect(screen.getByTestId('backfill-summary')).toHaveTextContent(
-				/Stopped early — run it again to continue/,
-			),
-		);
-		expect(
-			fetchMock.mock.calls.filter(([url]) =>
-				String(url).includes('/api/backfill/platinum-dates'),
-			),
-		).toHaveLength(40);
 	});
 });

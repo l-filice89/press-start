@@ -35,7 +35,6 @@ function game(overrides: Partial<ShelfGame> & { id: string }): ShelfGame {
 		ownedVia: null,
 		releaseDate: null,
 		genres: [],
-		trophy: null,
 		...overrides,
 	};
 }
@@ -65,7 +64,6 @@ const SHELF: ShelfGame[] = [
 		released: false,
 		playableNow: false,
 		genres: [],
-		trophy: null,
 	}),
 	game({ id: 'e', effectiveState: 'Not started', genres: ['Racing'] }),
 	game({ id: 'f', effectiveState: 'Story completed', genres: ['RPG'] }),

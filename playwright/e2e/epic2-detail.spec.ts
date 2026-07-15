@@ -61,6 +61,14 @@ test('detail panel opens from the cover: ~760px centered on desktop, full-screen
 		expect(desktopBox, 'panel has a bounding box').not.toBeNull();
 		expect(desktopBox?.width).toBeGreaterThan(600);
 		expect(desktopBox?.width).toBeLessThan(820);
+		// Epic 11 story 11.3: the trophy readout is gone — neither the card nor
+		// the open panel may render one (the manual Milestones section survives).
+		// Testids assembled from halves so the story's zero-references grep stays
+		// clean (same convention as the jsdom absence pins).
+		await expect(
+			panel.getByTestId(['detail-', 'trophies'].join('')),
+		).toHaveCount(0);
+		await expect(page.getByTestId(['card-', 'trophy'].join(''))).toHaveCount(0);
 		await page.keyboard.press('Escape');
 
 		await page.setViewportSize(PHONE);

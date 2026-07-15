@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
-import { type ReactNode, useCallback } from 'react';
+import { type ReactNode, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation, useMatch, useNavigate } from 'react-router';
 import { EmptyState } from '../components/EmptyState';
+import { useModalTrap } from '../components/useModalTrap';
 import { fetchGame } from './api';
 import { DetailPanel } from './DetailPanel';
 import './detail-panel.css';
@@ -44,6 +45,12 @@ function DetailOverlay({
 	onClose: () => void;
 	children: ReactNode;
 }) {
+	// The SAME trap the resolved DetailPanel runs (Story 3.5 scaffold). Without
+	// it the header SearchBox stayed keyboard-reachable through the pending/
+	// error states, and a term typed there wrote `?q=` onto `/game/:id` — lost
+	// on Close (deferred-work sweep, 2026-07-15).
+	const dialogRef = useRef<HTMLDivElement>(null);
+	const onKeyDown = useModalTrap(dialogRef, onClose);
 	return createPortal(
 		// biome-ignore lint/a11y/noStaticElementInteractions: the backdrop is a dismiss surface, not a control — Escape and the action buttons are the accessible paths; this only mirrors them for pointer users.
 		<div
@@ -54,14 +61,13 @@ function DetailOverlay({
 			}}
 		>
 			<div
+				ref={dialogRef}
 				role="dialog"
 				aria-modal="true"
 				aria-label={label}
 				tabIndex={-1}
 				className="detail-panel detail-panel--fade"
-				onKeyDown={(e) => {
-					if (e.key === 'Escape') onClose();
-				}}
+				onKeyDown={onKeyDown}
 			>
 				{children}
 			</div>

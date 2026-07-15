@@ -1,7 +1,7 @@
 import { applyD1Migrations, env } from 'cloudflare:test';
 import { eq, sql } from 'drizzle-orm';
 import { beforeAll, describe, expect, inject, it, vi } from 'vitest';
-import { normalizeTitle, planSync } from '../../src/core';
+import { normalizeTitle } from '../../src/core';
 import {
 	addExternalLink,
 	findCatalogProduct,
@@ -9,7 +9,6 @@ import {
 	insertGame,
 	insertTrackingIfAbsent,
 	listExternalLinks,
-	listGamesWithPsnLinks,
 	listGenresForGame,
 	PS_PLUS_TIER,
 	setDiscarded,
@@ -548,7 +547,7 @@ describe('add a game FROM THE CATALOG (Story 7.3, AD-20)', () => {
 	});
 
 	it('HAZARD AD-20: an already-SYNCED game (PSN np_title_id linked) added from the catalog matches — no duplicate', async () => {
-		// The exact construction the namespace exists to prevent: sync-reconcile
+		// The exact construction the namespace exists to prevent: something
 		// wrote EXTERNAL_LINK('PSN', np_title_id); the catalog knows a store
 		// product_id. If the product id were written as source 'PSN', this add would
 		// MISS on link, MATCH on normalized title, and AD-18 would force a 2nd row.
@@ -694,11 +693,12 @@ describe('add a game FROM THE CATALOG (Story 7.3, AD-20)', () => {
 		).toHaveLength(0);
 	});
 
-	// HAZARD (review, H4): the add threw the catalog row's np_title_id away, so a
-	// later library sync had only the normalized title to match on — and when PSN
-	// reports a DIFFERENT title for the same game, the sync creates a second row:
-	// the user owns the duplicate and wishlists the original.
-	it('HAZARD: the catalog np_title_id is anchored as PSN, so a later sync MATCHES a diverged title', async () => {
+	// HAZARD (review, H4): the add threw the catalog row's np_title_id away,
+	// leaving only the normalized title as the game's PSN identity. The id is
+	// anchored in its own namespace now. (The sync-planner half of this pin went
+	// with `listGamesWithPsnLinks` — Epic 11 story 11.2; the anchoring itself is
+	// what future matching resolves through.)
+	it('HAZARD: the catalog np_title_id is anchored as PSN, in its own namespace', async () => {
 		await seedProduct('EP-NPTITLE-1', 'Stellar Blade', 'CUSA-STELLAR_00');
 		const res = await postGame(
 			{ title: 'Stellar Blade', psnProductId: 'EP-NPTITLE-1' },
@@ -715,38 +715,6 @@ describe('add a game FROM THE CATALOG (Story 7.3, AD-20)', () => {
 				{ source: 'PSN_PRODUCT', externalId: 'EP-NPTITLE-1' },
 			]),
 		);
-
-		// The sync's own matching index, on a PSN entry whose TITLE diverges: it
-		// resolves through the link, so nothing is created.
-		const { games, links } = await listGamesWithPsnLinks(db());
-		const index = {
-			linkedGameIdByExternalId: Object.fromEntries(
-				links.map((l) => [l.externalId, l.gameId]),
-			),
-			gamesByNormalizedTitle: Object.fromEntries(
-				games.map((g) => [
-					g.titleNormalized,
-					[{ gameId: g.id, psnExternalIds: [] as string[] }],
-				]),
-			),
-		};
-		const plan = planSync(
-			[
-				{
-					name: 'Stellar Blade™ Deluxe Edition',
-					platform: 'PS5',
-					membership: 'NONE',
-					titleId: 'CUSA-STELLAR_00',
-					productId: null,
-					entitlementId: null,
-					imageUrl: null,
-					storeUrl: null,
-				},
-			],
-			index,
-		);
-		expect(plan.creates).toEqual([]);
-		expect(plan.matches.map((m) => m.gameId)).toEqual([gameId]);
 	});
 
 	// (review, M2): every EXISTING-game branch anchored the link but never wrote the
@@ -862,49 +830,31 @@ describe('add a game FROM THE CATALOG (Story 7.3, AD-20)', () => {
 
 	/**
 	 * HAZARD (Epic 7 cross-story review, H1) — the seam no per-story review could
-	 * see. SYNC creates the game from PSN's title ("…Ragnarök Edition"); the
-	 * CATALOG carries the same np_title_id under the store's ("…Valhalla"). The two
-	 * do NOT normalize alike, so the add missed on the product link AND on the
-	 * title, minted a second, un-owned row — and the grid then read that stub as
-	 * `In library` for a game the user OWNS, forever.
+	 * see. A game exists under PSN's own title ("…Ragnarök Edition") with an
+	 * `EXTERNAL_LINK('PSN', np_title_id)`; the CATALOG carries the same
+	 * np_title_id under the store's title ("…Valhalla"). The two do NOT
+	 * normalize alike, so the add missed on the product link AND on the title,
+	 * minted a second, un-owned row — and the grid then read that stub as
+	 * `In library` for a game the user OWNS, forever. (The row shape here was
+	 * historically written by the Epic 4 library sync, deleted in Epic 11; the
+	 * catalog add itself anchors the same link, so the seam is still live.)
 	 */
-	it('HAZARD H1: a SYNCED owned game whose PSN title diverges is not duplicated by a catalog add — and its card reads Owned', async () => {
+	it('HAZARD H1: a PSN-linked owned game whose stored title diverges is not duplicated by a catalog add — and its card reads Owned', async () => {
 		const PSN_TITLE = 'Assassin’s Creed Valhalla Ragnarök Edition';
 		const STORE_NAME = 'Assassin’s Creed Valhalla';
 		const NP_TITLE_ID = 'PPSA01667_00';
 
-		// The REAL sync planner, on a PS+ claim PSN reports under its own title.
-		const plan = planSync(
-			[
-				{
-					name: PSN_TITLE,
-					platform: 'PS5',
-					membership: 'PS_PLUS',
-					titleId: NP_TITLE_ID,
-					productId: null,
-					entitlementId: null,
-					imageUrl: null,
-					storeUrl: null,
-				},
-			],
-			{ linkedGameIdByExternalId: {}, gamesByNormalizedTitle: {} },
-		);
-		expect(plan.creates).toHaveLength(1);
-		const create = plan.creates[0];
-		expect(create.viaMembership).toBe(true);
 		const synced = await insertGame(db(), {
-			title: create.title,
-			titleNormalized: create.titleNormalized,
+			title: PSN_TITLE,
+			titleNormalized: normalizeTitle(PSN_TITLE),
 			unenriched: true,
 		});
-		for (const externalId of create.externalIds) {
-			await addExternalLink(db(), {
-				gameId: synced.id,
-				source: 'PSN',
-				externalId,
-			});
-		}
-		// A sync OBSERVED the entitlement: owned via membership (Story 6.4).
+		await addExternalLink(db(), {
+			gameId: synced.id,
+			source: 'PSN',
+			externalId: NP_TITLE_ID,
+		});
+		// The entitlement was OBSERVED: owned via membership (Story 6.4).
 		await insertTrackingIfAbsent(db(), sessionUser, synced.id, {
 			owned: true,
 			ownershipType: 'digital',
@@ -913,7 +863,7 @@ describe('add a game FROM THE CATALOG (Story 7.3, AD-20)', () => {
 		});
 		// The REAL normalizer: the two titles are NOT the same key — that is the whole
 		// premise of the defect, so it is asserted, not assumed.
-		expect(normalizeTitle(create.title)).not.toBe(normalizeTitle(STORE_NAME));
+		expect(normalizeTitle(PSN_TITLE)).not.toBe(normalizeTitle(STORE_NAME));
 
 		await seedProduct('EP-H1-VALHALLA', STORE_NAME, NP_TITLE_ID);
 		const res = await postGame(

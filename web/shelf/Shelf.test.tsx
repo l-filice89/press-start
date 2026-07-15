@@ -38,7 +38,6 @@ function card(
 		ownedVia: null,
 		releaseDate: null,
 		genres: [],
-		trophy: null,
 		...over,
 	};
 }

@@ -22,7 +22,7 @@ export function createDb(d1: D1Database) {
 /**
  * Common async-SQLite surface shared by the D1 and D1-HTTP-proxy drivers.
  * `batch` is declared here because BOTH drivers ship it while the shared base
- * type does not: a bulk write (the trophy sync) is one binding call for many
+ * type does not: a bulk write (the PS+ catalog persistence) is one binding call for many
  * statements, and binding calls count against the Workers subrequest limit.
  */
 export type Db = BaseSQLiteDatabase<'async', unknown, typeof schema> & {
