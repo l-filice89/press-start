@@ -339,7 +339,7 @@ action_items:
   - epic: 11
     action: "Critical path: merge feat/epic-11/psn-account-safety to main via PR + CI gate, human-approving the destructive migrations (0010/0011), watching the documented deploy window"
     owner: "Luca"
-    status: open
+    status: done # 2026-07-16: PR #25 merged, v2.0.0 released, deploy run 29456646352 green (migrations applied + health verified). NOTE: the production environment gate is NOT configured as protected in GitHub — no approval pause fired (Luca authorized in-session)
   - epic: 11
     action: "Epic 10 kickoff after the epic-11 merge: 10.1 -> 10.2 -> 10.3; 10.1/10.3 specs are the first mandatory EXTERNAL-RISK-FLAG applications (new score/HLTB providers); fold in sprint-change-proposal-2026-07-13-hltb.md"
     owner: "Luca + Amelia"
