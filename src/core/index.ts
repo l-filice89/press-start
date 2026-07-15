@@ -14,5 +14,4 @@ export * from './straggler-title';
 export * from './sync-reconcile';
 export * from './title-normalizer';
 export * from './today';
-export * from './trophy';
 export * from './types';

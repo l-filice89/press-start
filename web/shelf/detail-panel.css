@@ -428,37 +428,6 @@
 	text-decoration: none;
 }
 
-/* Trophies (Story 9.2): the derived headline + the raw tier breakdown. The
-   whole section is absent when the game carries no trophy data. */
-.detail-panel__trophy-headline {
-	font-family: var(--font-mono);
-	font-size: 20px;
-	color: var(--state-milestone);
-}
-
-.detail-panel__trophy-tiers {
-	display: grid;
-	gap: var(--space-1);
-	margin-top: var(--space-2);
-	max-width: 20rem;
-	list-style: none;
-}
-
-.detail-panel__trophy-tier {
-	display: flex;
-	justify-content: space-between;
-	gap: var(--space-3);
-	font-family: var(--font-ui);
-	font-size: 13px;
-	color: var(--color-text-secondary);
-}
-
-.detail-panel__trophy-count {
-	font-family: var(--font-mono);
-	font-size: 12px;
-	color: var(--color-text-muted);
-}
-
 /* The detail's pending state (review, H4) — a dialog like every other state of
    /game/:id, never loose text floating under a live shelf grid. */
 .detail-panel__pending {

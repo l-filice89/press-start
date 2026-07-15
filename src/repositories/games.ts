@@ -257,19 +257,6 @@ export type LibraryRow = {
 	/** Tombstone (DW-12): only surfaced when `includeDiscarded` asked for it —
 	 * the PS+ flag pass writes through tombstones but must not REPORT them. */
 	discarded: boolean;
-	// Raw trophy counts (Story 9.2). `trophySyncedAt` is the "this row has trophy
-	// data" column — a NULL there means the trophy sync never wrote this game,
-	// which is what makes the card/detail show NOTHING (never a fake 0%). The %
-	// and the grade are derived from the counts in `core/trophy.ts`, never stored.
-	trophySyncedAt: string | null;
-	trophyEarnedBronze: number | null;
-	trophyEarnedSilver: number | null;
-	trophyEarnedGold: number | null;
-	trophyEarnedPlatinum: number | null;
-	trophyDefinedBronze: number | null;
-	trophyDefinedSilver: number | null;
-	trophyDefinedGold: number | null;
-	trophyDefinedPlatinum: number | null;
 };
 
 /**
@@ -311,15 +298,6 @@ export async function listLibraryForUser(
 			ownershipType: gameTracking.ownershipType,
 			ownedVia: gameTracking.ownedVia,
 			discarded: gameTracking.discarded,
-			trophySyncedAt: gameTracking.trophySyncedAt,
-			trophyEarnedBronze: gameTracking.trophyEarnedBronze,
-			trophyEarnedSilver: gameTracking.trophyEarnedSilver,
-			trophyEarnedGold: gameTracking.trophyEarnedGold,
-			trophyEarnedPlatinum: gameTracking.trophyEarnedPlatinum,
-			trophyDefinedBronze: gameTracking.trophyDefinedBronze,
-			trophyDefinedSilver: gameTracking.trophyDefinedSilver,
-			trophyDefinedGold: gameTracking.trophyDefinedGold,
-			trophyDefinedPlatinum: gameTracking.trophyDefinedPlatinum,
 		})
 		.from(gameTracking)
 		.innerJoin(game, eq(gameTracking.gameId, game.id))

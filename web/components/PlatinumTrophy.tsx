@@ -4,9 +4,9 @@ import type { SVGProps } from 'react';
  * The platinum trophy mark: a stroke-only trophy in the app's neon outline
  * style (the emoji renders full-color gold and a grayscale filter reads flat
  * against the glow language). `currentColor` strokes so the caller's colour +
- * glow apply; the small diamond in the cup echoes the owned ◆. Shared by the
- * card's platinum badge and the FAB trophy-sync item — one source, two call
- * sites. Spread props onto the `<svg>` so a caller can add its own `data-testid`.
+ * glow apply; the small diamond in the cup echoes the owned ◆. Renders the
+ * card's platinum badge (its FAB trophy-sync sibling died with Epic 11).
+ * Spread props onto the `<svg>` so a caller can add its own `data-testid`.
  */
 export function PlatinumTrophy(props: SVGProps<SVGSVGElement>) {
 	return (

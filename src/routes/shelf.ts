@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { EFFECTIVE_STATES, PLAY_STATUSES, TROPHY_GRADES } from '../core';
+import { EFFECTIVE_STATES, PLAY_STATUSES } from '../core';
 import { createDb } from '../repositories/db';
 import { OWNERSHIP_TYPES } from '../schema/catalog';
 import { getShelf } from '../services';
@@ -13,13 +13,6 @@ import { type AuthVariables, requireAuth } from './auth';
  * out (AR-26). No third-party fetch happens here — the service reads only
  * persisted rows (NFR-3).
  */
-
-const trophyTiersSchema = z.object({
-	bronze: z.number(),
-	silver: z.number(),
-	gold: z.number(),
-	platinum: z.number(),
-});
 
 export const shelfGameSchema = z.object({
 	id: z.string(),
@@ -45,18 +38,6 @@ export const shelfGameSchema = z.object({
 	ownedVia: z.enum(['purchase', 'membership']).nullable(),
 	releaseDate: z.string().nullable(),
 	genres: z.array(z.string()),
-	// Trophy progress (Story 9.2), derived in `core/` from the counts the trophy
-	// sync persisted. This schema STRIPS unknown keys, so a field missing here
-	// never reaches the SPA no matter what `bakeCard` returns — the field has to
-	// be declared, not merely produced. `null` = no trophy data.
-	trophy: z
-		.object({
-			percent: z.number(),
-			grade: z.enum(TROPHY_GRADES),
-			earned: trophyTiersSchema,
-			defined: trophyTiersSchema,
-		})
-		.nullable(),
 });
 
 const shelfResponseSchema = z.object({

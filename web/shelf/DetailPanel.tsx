@@ -16,14 +16,6 @@ import { RematchDialog } from './RematchDialog';
 import { MILESTONE_LABELS, useTrackingMutations } from './useTrackingMutations';
 import './detail-panel.css';
 
-/** The tier breakdown rows (Story 9.2), in PSN's own order. */
-const TROPHY_TIERS = [
-	{ key: 'platinum', label: 'Platinum' },
-	{ key: 'gold', label: 'Gold' },
-	{ key: 'silver', label: 'Silver' },
-	{ key: 'bronze', label: 'Bronze' },
-] as const;
-
 /** FR-16 fallback: a store search by title when no product URL is persisted. */
 function storeHref(game: ShelfGame): string {
 	return (
@@ -322,31 +314,6 @@ export function DetailPanel({
 							</button>
 						))}
 					</section>
-
-					{/* Story 9.2 — absent entirely when the game has no trophy data
-					    (never a 0% placeholder). The %/grade are derived server-side
-					    from the persisted counts; the tiers are the raw fact. */}
-					{game.trophy && (
-						<section
-							className="detail-panel__section"
-							data-testid="detail-trophies"
-						>
-							<h3 className="detail-panel__heading">Trophies</h3>
-							<p className="detail-panel__trophy-headline">
-								{game.trophy.percent}% · {game.trophy.grade}
-							</p>
-							<ul className="detail-panel__trophy-tiers">
-								{TROPHY_TIERS.map(({ key, label }) => (
-									<li key={key} className="detail-panel__trophy-tier">
-										<span>{label}</span>
-										<span className="detail-panel__trophy-count">
-											{game.trophy?.earned[key]} / {game.trophy?.defined[key]}
-										</span>
-									</li>
-								))}
-							</ul>
-						</section>
-					)}
 
 					<section className="detail-panel__section">
 						<h3 className="detail-panel__heading">Dates</h3>

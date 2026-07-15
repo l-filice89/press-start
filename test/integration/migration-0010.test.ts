@@ -43,11 +43,14 @@ const LIVE_LOCK = { key: 'psn_op_lock', value: '999:catalog-refresh:live-run' };
 describe('migration 0010 (drop PSN credential settings)', () => {
 	it('deletes the dead rows and ONLY the dead rows — survivors intact', async () => {
 		const migrations = inject('migrations');
-		const last = migrations[migrations.length - 1];
-		expect(last.name).toContain('0010_drop_psn_credential_settings');
+		// Position-independent: later migrations may exist; seed just before 0010.
+		const target = migrations.findIndex((m) =>
+			m.name.includes('0010_drop_psn_credential_settings'),
+		);
+		expect(target).toBeGreaterThan(-1);
 
 		// Bring the DB to the 0009 state, then seed the world 0010 will meet.
-		await applyD1Migrations(env.DB, migrations.slice(0, -1));
+		await applyD1Migrations(env.DB, migrations.slice(0, target));
 		const db = createDb(env.DB);
 		await db.insert(user).values([
 			{
@@ -73,8 +76,9 @@ describe('migration 0010 (drop PSN credential settings)', () => {
 				{ userId: 'mig-user-2', ...LIVE_LOCK },
 			]);
 
-		// Apply 0010 (the only unapplied migration left).
-		await applyD1Migrations(env.DB, migrations);
+		// Apply ONLY the migration under test — a later 0012 rebuilding the
+		// table must not be able to mask (or cause) a failure here.
+		await applyD1Migrations(env.DB, migrations.slice(0, target + 1));
 
 		const rows = await db
 			.select({

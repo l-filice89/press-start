@@ -368,6 +368,7 @@ resolution: spike complete; the table above IS the deliverable. Firm: NPSSO gate
   summary: Trophy counts are never cleared or aged — a game whose trophy title stops matching PSN keeps its last-synced "62% · B" forever, and the UI never shows how old the numbers are (`trophy_synced_at` is stored but never read).
   evidence: Nothing writes NULL back to the trophy columns, and no view reads `trophy_synced_at`. Needs a product call (clear on vanish? show "synced 3 months ago"?) rather than a silent default, so it was not invented during the run.
   resolution: discarded (accepted permanently) 2026-07-14 — Epic 9 retro, Luca's product call: "It's historic data. Fine with it never clearing." Trophy counts are a record of what was earned, not a live gauge; staleness is acceptable and no aging UI is wanted. Recorded so it is not re-opened.
+  superseded: 2026-07-15 (Epic 11 story 11.3) — the trophy display and every `trophy_*` column (including the never-read `trophy_synced_at`) are deleted outright; the question can no longer arise.
 
 - source_spec: `spec-9-2-trophy-progress-on-every-game-vr-2.md`
   summary: `Db` now types a `batch` method, but the seed script's sqlite-proxy driver is built without a batch callback — any future repository function that batches and is reused by the seed path fails at RUNTIME, not compile time.

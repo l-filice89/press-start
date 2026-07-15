@@ -199,8 +199,8 @@ drives what the persisted counts do to the UI.
 | AC | Coverage |
 |----|----------|
 | 9.2a counts fetched through `PsnProvider` and persisted; no PSN call on render | REMOVED by Epic 11 story 11.1 — the trophy sync (route + service + `trophies.test.ts`) is severed; the provider's trophy-list rows went with story 11.2 |
-| 9.2b % + grade derived in `core/` from the stored counts; no trophy data → NOTHING, never `0%` | the SYNC that fed the counts is removed by Epic 11 story 11.1; the display of already-persisted counts survives until story 11.3 and stays pinned by `epic9-trophies.spec.ts` › a game with trophy counts shows % · grade on its card… + `trophy.test.ts` + jsdom `Card.test.tsx`/`DetailPanel.test.tsx` |
-| 9.2b (detail) Trophies section with the tier breakdown | same as above — display survives until story 11.3; `epic9-trophies.spec.ts` › the detail panel carries a Trophies section with the tier breakdown, and omits it without data |
+| 9.2b % + grade derived in `core/` from the stored counts; no trophy data → NOTHING, never `0%` | REMOVED by Epic 11 story 11.3 — the display (`core/trophy.ts`, the card/detail readouts, `epic9-trophies.spec.ts`) is deleted and migration 0011 drops the columns; the readout's ABSENCE is pinned by `epic2-detail.spec.ts` › detail panel opens from the cover (card-trophy + detail-trophies count 0) |
+| 9.2b (detail) Trophies section with the tier breakdown | REMOVED by Epic 11 story 11.3 — same as above |
 | 9.2c a trophy sync changes no play status, milestone, or lifecycle date | REMOVED by Epic 11 story 11.1 (`trophies.test.ts` deleted with the sync) |
 | 9.2d expired credential or a degenerate 200 → stops, writes NOTHING, existing counts survive | REMOVED by Epic 11 story 11.1 — no trophy sync exists to fail |
 | 9.2e the whole run is a BOUNDED number of subrequests (no per-game fan-out) | REMOVED by Epic 11 story 11.1 |
@@ -330,3 +330,15 @@ marked "REMOVED by Epic 11 story 11.2" record what went.
 | 11.2c migration 0010 deletes the dead setting rows + stale retired-op lock rows, survivors intact | no UI flow — pinned in integration `migration-0010.test.ts` › deletes the dead rows and ONLY the dead rows (seeded dead + survivor rows, two-sided assert) |
 | 11.2d catalog cron, PS+ check and genre sweep run unchanged under the `catalog-refresh` lock | their suites are re-pointed and green: `psn-lock.test.ts` (all hazards on `catalog-refresh`), `psplus-cron.test.ts` (foreign-lock skip now a concurrent refresh token), `psplus*.test.ts`, `epic5-psplus.spec.ts`, `epic7-catalog.spec.ts` |
 | 11.2e `GET /api/settings` carries no credential fields and the SPA renders settings without error | integration `settings.test.ts` › captures at first login… (exact full-payload assert, credential fields gone); the SPA render is every settings-driven e2e above |
+
+Story 11.3 (remove the trophy display and schema). The trophy readout
+(card + detail), `core/trophy.ts`, the DTO/zod chain, the orphaned repository
+functions and the 11 `trophy_*` columns are deleted; `epic9-trophies.spec.ts`
+went with them. Rows above marked "REMOVED by Epic 11 story 11.3" record what
+went.
+
+| AC | Coverage |
+|----|----------|
+| 11.3a no trophy %/grade/tier readout renders on the card or in detail | `epic2-detail.spec.ts` › detail panel opens from the cover (`card-trophy` and `detail-trophies` both count 0 in the live app); jsdom absence pinned in `Card.test.tsx` and `DetailPanel.test.tsx` |
+| 11.3b migration 0011 drops every `trophy_*` column while `platinum_on`/`completed_on`/`owned_via`/`bought_on` survive with values byte-identical | no UI flow — pinned in integration `migration-0011.test.ts` › drops every trophy_* column and ONLY those (PRAGMA + seeded-row two-sided assert) |
+| 11.3c the manual platinum/story-completion milestone flow records and displays exactly as before | Epic 2 suites untouched and green: `epic2-tracking.spec.ts` › milestones are confirm-gated + › platinum clears the play status; the platinum badge stays pinned by `Card.test.tsx` › platinum-trophy |

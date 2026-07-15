@@ -40,7 +40,6 @@ function game(over: Partial<ShelfGame> = {}): ShelfGame {
 		ownedVia: null,
 		releaseDate: null,
 		genres: [],
-		trophy: null,
 		...over,
 	};
 }

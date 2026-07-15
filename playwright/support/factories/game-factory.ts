@@ -27,21 +27,7 @@ export interface SeedGame {
 		completedOn: string | null;
 		platinumOn: string | null;
 		wishlistedOn: string | null;
-		/**
-		 * Trophy counts (Story 9.2), written by the trophy sync. `null` = no
-		 * trophy data, which is what makes the card/detail show NOTHING — seed a
-		 * game WITH and one WITHOUT to drive both halves of that rule.
-		 */
-		trophyEarned: TrophyTiers | null;
-		trophyDefined: TrophyTiers | null;
 	};
-}
-
-export interface TrophyTiers {
-	bronze: number;
-	silver: number;
-	gold: number;
-	platinum: number;
 }
 
 export function createGame(
@@ -65,8 +51,6 @@ export function createGame(
 			completedOn: null,
 			platinumOn: null,
 			wishlistedOn: null,
-			trophyEarned: null,
-			trophyDefined: null,
 			...overrides.tracking,
 		},
 	};

@@ -41,25 +41,6 @@ export type DateEdits = Partial<
 	>
 >;
 
-export const TROPHY_GRADES = ['S', 'A', 'B', 'C', 'D'] as const;
-export type TrophyGrade = (typeof TROPHY_GRADES)[number];
-
-const trophyTiersSchema = z.object({
-	bronze: z.number(),
-	silver: z.number(),
-	gold: z.number(),
-	platinum: z.number(),
-});
-
-const trophySchema = z.object({
-	percent: z.number(),
-	grade: z.enum(TROPHY_GRADES),
-	earned: trophyTiersSchema,
-	defined: trophyTiersSchema,
-});
-
-export type Trophy = z.infer<typeof trophySchema>;
-
 export const shelfGameSchema = z.object({
 	id: z.string(),
 	title: z.string(),
@@ -84,11 +65,6 @@ export const shelfGameSchema = z.object({
 	ownedVia: z.enum(['purchase', 'membership']).nullable(),
 	releaseDate: z.string().nullable(),
 	genres: z.array(z.string()),
-	// Trophy progress (Story 9.2), derived server-side from the counts the
-	// trophy sync persisted. `null` = no trophy data → the UI renders NOTHING
-	// (never a fake 0%). Defaulted so a deploy-skewed response can't reject the
-	// whole shelf payload.
-	trophy: trophySchema.nullable().default(null),
 });
 
 export type ShelfGame = z.infer<typeof shelfGameSchema>;

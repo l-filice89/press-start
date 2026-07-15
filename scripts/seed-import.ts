@@ -60,7 +60,8 @@ function findNotionCsv(): string {
  * SELECT column order).
  *
  * The BATCH callback is not optional decoration (Story 9.5): `Db` promises
- * `batch()` because the Worker's D1 driver has it and the trophy sync uses it —
+ * `batch()` because the Worker's D1 driver has it and the PS+ catalog
+ * persistence uses it —
  * a driver built without one throws at RUNTIME the first time a batching
  * repository function is reused by the seed path. This file is in
  * `tsconfig.scripts.json` precisely so that promise is checked at COMPILE time.
