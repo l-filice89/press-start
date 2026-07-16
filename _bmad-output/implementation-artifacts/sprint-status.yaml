@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-06
-last_updated: 2026-07-16 # epic-10 retro: epic + retrospective done, action items appended, epic-11 item 3 closed
+last_updated: 2026-07-17 # epic-12 retro: retrospective done, action items appended (1-2 shipped in-session)
 project: ps-game-catalog
 project_key: NOKEY
 tracking_system: file-system
@@ -156,6 +156,12 @@ development_status:
   11-2-strip-psn-credential-auth-from-provider-and-settings: done # 2026-07-15 (dev-auto): provider collapsed to anonymous catalog, NPSSO/auth/sync_attention plumbing + migration 0010, grep-clean CI guard; 6 review patches; followup_review_recommended:false
   11-3-remove-the-trophy-display-and-schema: done # 2026-07-15 (dev-auto): readout/core/DTO/orphan-fns deleted, migration 0011 drops 11 trophy_* columns (hazard test: survivors byte-identical); 6 review patches; followup_review_recommended:false
   epic-11-retrospective: done # 2026-07-16 — epic-11-retro-2026-07-16.md; EXTERNAL-RISK-FLAG rule shipped; merge = critical path
+
+  # Epic 12: Fit the Time I Have — the Time-to-beat Filter — v1.x, after Epic 10
+  # Added 2026-07-16 via correct-course (sprint-change-proposal-2026-07-16-ttb-filter.md)
+  epic-12: in-progress # 1/1 stories dev-complete 2026-07-16 (dev-auto); merge gate pending independent follow-up review
+  12-1-filter-the-shelf-by-time-to-beat-bands: done # 2026-07-16 (dev-auto): Time filter group — 5 half-open bands + Unknown, story/100% toggle, single-predicate clause, summary+sheet, hazard tests + epic12-ttb e2e; 5 review patches; followup_review_recommended:true (shared dropdown focus rework)
+  epic-12-retrospective: done # 2026-07-17 — epic-12-retro-2026-07-17.md; WCAG nudge + summary-metric copy shipped at the retro; merge + v2.2.0 = critical path
 
 action_items:
   - epic: 1
@@ -366,3 +372,15 @@ action_items:
     action: "Critical path: merge feat/epic-10/know-before-you-play to main via PR + CI gate at v2.1.0 (bumped at the retro; all migrations additive), deploy, verify the widened cron is live"
     owner: "Luca"
     status: done # 2026-07-16: PR #26 merged (6bef048), v2.1.0 released, deploy run 29521430537 green (migrations 0012-0015 applied, health 200, cron 0 9,21 15-28 * * live in deployed ref)
+  - epic: 12
+    action: "WCAG-COMPLIANCE NUDGE persistent fact in _bmad/custom/bmad-dev-auto.toml: interactive widgets name their ARIA pattern in the spec; app remains WCAG compliant"
+    owner: "Winston + Murat"
+    status: done # 2026-07-17: fact added at the retro
+  - epic: 12
+    action: "Summary sentence names the active TTB metric (story completion / 100% completion); close the deferred-work entry"
+    owner: "Amelia"
+    status: done # 2026-07-17: shipped via quick-dev one-shot at the retro; unit + e2e asserts updated
+  - epic: 12
+    action: "Critical path: merge epic/12-ttb-filter to main via PR + CI gate, bump v2.2.0, release + deploy"
+    owner: "Luca"
+    status: open

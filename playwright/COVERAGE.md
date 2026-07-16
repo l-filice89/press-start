@@ -409,3 +409,17 @@ warns "LEAVING {date}" while the game is still in the catalog.
 | 10.4c sweep both directions, chunked, budget-honest, fail-closed per game, never the FR-40 banner | no UI flow — integration `psplus-leaving.test.ts` (date lands / stale date clears / concept-cache single-call budget claim / poison game stepped past / whole-chunk outage keeps cursor / two-sweep convergence past chunk size / rotation drives a chunk); ledger comments in `src/services/psplus-leaving.ts` + `psplus.ts` |
 | 10.4d no warning on owned games (FR-38) while the fact persists | `epic10-leaving-soon.spec.ts` › an OWNED leaving game shows no warning; integration › an OWNED game gets the fact too; jsdom `Card.test.tsx` › never warns on an owned game |
 | 10.4e the shipped `ps_plus_left_on` persists exactly as before but renders nowhere | integration `psplus-departure.test.ts` unchanged (stamp/clear/idempotency); departure ALSO clears the leaving date atomically (integration `psplus-leaving.test.ts` › DEPARTURE clears); `Card.test.tsx` pins the retired pill renders for no input shape |
+
+## Epic 12
+
+Story 12.1 (filter the shelf by time-to-beat bands, VR-9). Pure client-side
+predicate over the already-shipped 10.3 payload fields — no schema, no API,
+no cron. Bands are half-open; a null selected metric matches only Unknown
+(NFR-4 extended into filtering).
+
+| AC | Coverage |
+|----|----------|
+| 12.1a the Time group offers ≤25h, 25–50h, 50–75h, 75–100h, >100h and Unknown — OR within the group, AND across groups (VR-9, FR-20) | `epic12-ttb.spec.ts` › a Time band filters the shelf; a game at exactly 50h sits in 25–50h, never 50–75h (band + OR-within + boundary exactness); AND-across + null-never-numeric in › a game missing the selected metric matches only Unknown (the Owned flag joining the Time group re-asserts the VISIBLE CARD SET — a band-matching un-owned game drops — not just the summary text); the full six-row menu pinned in jsdom `FilterRow.test.tsx` › Time opens six band rows; every I/O-matrix row (boundaries at 50/75/100h, 0-seconds-is-a-value, cross-metric absence, empty-bands-imposes-nothing) hazard-pinned in `filters.test.ts` |
+| 12.1b the story/100% toggle re-evaluates every selected band against the chosen metric (default story); the toggle is filter state, not a global setting (VR-9) | `epic12-ttb.spec.ts` › the story/100% toggle re-evaluates the selected bands against the chosen metric; jsdom `FilterRow.test.tsx` › the metric toggle flips the metric in filter state, preserving bands; predicate half + metric-alone-never-activates in `filters.test.ts` |
+| 12.1c active Time selections narrate in the live summary with literal or/and words, and the mobile sheet carries the group with its count badge (FR-20, UX-DR23, UX-DR26) | `epic12-ttb.spec.ts` › …matches only Unknown (summary sentence + tinted connector words) + › phone: the sheet carries the Time group with its toggle, and bands count in the badge; jsdom sheet-group + trigger-badge pins in `FilterRow.test.tsx`; sentence tokens in `filters.test.ts` › narrates in the summary via literal or/and words |
+| 12.1d any Time-group state survives without color — words and pressed/checked state, never color alone (UX-DR23) | `epic12-ttb.spec.ts` asserts the metric toggle's machine-readable state (`aria-checked` on the desktop menu's `menuitemradio` rows, `aria-pressed` in the sheet) and literal connector WORDS in the summary; jsdom `FilterRow.test.tsx` pins `aria-checked` band rows + toggle state in both surfaces, and the menu's ONE roving focus list over radios + bands |

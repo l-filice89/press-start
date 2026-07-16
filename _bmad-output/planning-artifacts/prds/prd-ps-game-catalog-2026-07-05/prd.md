@@ -92,6 +92,7 @@ One screen answers "what's my gaming life right now?" — the landing page is th
 | State reveals | Individual pills, **own group** (amended 2026-07-10; was: extended the state group additively) | `Story completed`, `Platinum achieved`, `Dropped` — OR among themselves; any selection **replaces the State group entirely** (state selections clear) and shows only the matching hidden games; Genre and Flags still AND |
 | Genre | Multiselect dropdown | All genres in the vocabulary |
 | Flags | Individual pills, **each its own group (AND)** | `Owned`, `Wishlisted`, `Released`, `Playable now` |
+| Time to beat *(v1.x, VR-9 — added 2026-07-16)* | Band pills + story/100% toggle | `≤25h`, `25–50h`, `50–75h`, `75–100h`, `>100h`, `Unknown` — OR among themselves; a game missing the selected metric matches only `Unknown` |
 
 **FR-21** — Selection rules (amended 2026-07-10): with nothing selected in State or Reveals, the shelf shows the default visible set (all live statuses, FR-17). A State-dropdown selection shows **exactly** the selected live states. A reveal-pill selection is an **exclusive view**: only games in the selected hidden state(s), the State group cleared — "Completed games only" is a one-pill view that hides everything else. State dropdown and reveal pills are mutually exclusive; activating one clears the other.
 
@@ -175,7 +176,7 @@ Three doors into the library. All of them record lifecycle dates silently (§4.5
 
 - ~~Trophy sync from PSN: completion % and a PSNProfiles-style letter grade (computable client-side once counts are synced).~~ **Removed 2026-07-15 (Epic 11):** trophy sync withdrawn (account-ban risk); completion/platinum tracked manually via milestones (§2). Safe revival only via the PSNProfiles model — a burner account reading the public profile, never the main credential.
 - Critic and user scores from games-DB sources, stored and refreshed on a schedule.
-- **Time to beat** — hours to finish the story and hours to 100%, shown next to the scores. Source: IGDB `/game_time_to_beats`, keyed by the `igdbId` already stored (open-q #6); HowLongToBeat is the fallback only if IGDB coverage is thin. Same stored-and-scheduled-refresh discipline as the scores. *(Not personal playtime tracking — that stays Future.)*
+- **Time to beat** — hours to finish the story and hours to 100%, shown next to the scores. Source: IGDB `/game_time_to_beats`, keyed by the `igdbId` already stored (open-q #6); HowLongToBeat is the fallback only if IGDB coverage is thin. Same stored-and-scheduled-refresh discipline as the scores. *(Not personal playtime tracking — that stays Future.)* A **shelf filter over these hours** (five bands + `Unknown`, story/100% toggle — see the §3 filters table) is VR-9 / Epic 12, added 2026-07-16.
 - "Leaving PS+ Extra soon" warnings for backlog games.
 - Google sign-in.
 

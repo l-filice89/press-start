@@ -11,7 +11,10 @@ import {
 	REVEAL_STATES,
 	type ShelfFilter,
 	summarizeFilter,
+	TTB_BANDS,
+	type TtbMetric,
 	toggleSelection,
+	ttbBandLabel,
 } from './filters';
 import './filter-row.css';
 
@@ -82,7 +85,9 @@ export function FilterRow({
 		filter.states.length +
 		filter.genres.length +
 		filter.reveals.length +
-		filter.flags.length;
+		filter.flags.length +
+		// Bands only — the metric toggle alone imposes no filter (Story 12.1).
+		filter.ttb.bands.length;
 
 	const closeSheet = useCallback(() => {
 		setSheetOpen(false);
@@ -165,6 +170,33 @@ export function FilterRow({
 						})
 					}
 				/>
+				<FilterDropdown
+					label="Time"
+					testid="filter-ttb"
+					options={TTB_BAND_KEYS}
+					selected={filter.ttb.bands}
+					getOptionLabel={ttbBandLabel}
+					getOptionTestId={(key) => `filter-ttb-${key}`}
+					// The story/100% metric toggle is pinned at the menu top (signed-off
+					// mock) as menuitemradio rows in the SAME roving focus list as the
+					// bands: it re-aims every selected band, it is not a band itself.
+					menuRadios={{
+						testid: 'filter-ttb-metric',
+						items: TTB_METRIC_OPTIONS,
+						selected: filter.ttb.metric,
+						onSelect: (metric) =>
+							onChange({ ...filter, ttb: { ...filter.ttb, metric } }),
+					}}
+					onToggle={(key) =>
+						onChange({
+							...filter,
+							ttb: {
+								...filter.ttb,
+								bands: toggleSelection(filter.ttb.bands, key),
+							},
+						})
+					}
+				/>
 				{flags.map(({ key, label }) => (
 					<button
 						key={key}
@@ -207,6 +239,58 @@ export function FilterRow({
 				))}
 			</div>
 			<FilterSummary filter={filter} />
+		</div>
+	);
+}
+
+/** Stable option list for the Time dropdown (a fresh array would re-render). */
+const TTB_BAND_KEYS = TTB_BANDS.map((b) => b.key);
+
+/** The two metric options, with explicit accessible names — "Story"/"100%"
+ *  alone don't say what they aim at (Story 12.1). */
+const TTB_METRIC_OPTIONS = [
+	{ value: 'story', label: 'Story', ariaLabel: 'Story hours' },
+	{ value: 'complete', label: '100%', ariaLabel: '100% hours' },
+] as const satisfies readonly {
+	value: TtbMetric;
+	label: string;
+	ariaLabel: string;
+}[];
+
+/**
+ * The story/100% metric toggle for the PHONE SHEET (Story 12.1): a two-option
+ * segmented control, `aria-pressed` carrying the state (never color alone).
+ * It lives in filter state, not a global setting; with no bands selected it
+ * imposes nothing. The desktop Time MENU does not use this — there the same
+ * options render as `menuitemradio` rows inside the menu's roving focus list
+ * (see `menuRadios` on FilterDropdown), because a menu may not own plain
+ * `aria-pressed` buttons.
+ */
+function TtbMetricToggle({
+	metric,
+	onChange,
+}: {
+	metric: TtbMetric;
+	onChange: (metric: TtbMetric) => void;
+}) {
+	return (
+		// Biome's useSemanticElements wants <fieldset> for role="group"; fieldset
+		// chrome fights the menu/pill styling — the two aria-pressed buttons carry
+		// the state machine-readably on their own.
+		<div className="filter-ttb__metric" data-testid="filter-ttb-metric">
+			{TTB_METRIC_OPTIONS.map(({ value, label, ariaLabel }) => (
+				<button
+					key={value}
+					type="button"
+					className="filter-ttb__metric-option tap-target"
+					aria-label={ariaLabel}
+					aria-pressed={metric === value}
+					data-active={metric === value || undefined}
+					onClick={() => onChange(value)}
+				>
+					{label}
+				</button>
+			))}
 		</div>
 	);
 }
@@ -360,6 +444,32 @@ function FilterSheet({
 					)}
 				</div>
 				<div className="filter-sheet__group">
+					<p className="filter-sheet__group-label">
+						Time to beat — any of (or)
+					</p>
+					{/* The metric toggle sits above the bands (signed-off mock) — its
+					    own row, not a band option. */}
+					<div className="filter-sheet__metric">
+						<TtbMetricToggle
+							metric={filter.ttb.metric}
+							onChange={(metric) =>
+								onChange({ ...filter, ttb: { ...filter.ttb, metric } })
+							}
+						/>
+					</div>
+					{TTB_BANDS.map(({ key, label }) =>
+						toggleRow(label, filter.ttb.bands.includes(key), () =>
+							onChange({
+								...filter,
+								ttb: {
+									...filter.ttb,
+									bands: toggleSelection(filter.ttb.bands, key),
+								},
+							}),
+						),
+					)}
+				</div>
+				<div className="filter-sheet__group">
 					<p className="filter-sheet__group-label">Flags — all of (and)</p>
 					{flags.map(({ key, label }) =>
 						toggleRow(label, filter.flags.includes(key), () =>
@@ -415,13 +525,16 @@ function FilterSheet({
 }
 
 /** One multiselect dropdown: trigger button + checkbox menu. */
-function FilterDropdown<T extends string>({
+function FilterDropdown<T extends string, R extends string = never>({
 	label,
 	options,
 	selected,
 	onToggle,
 	testid,
 	emptyText = 'No options',
+	menuRadios,
+	getOptionLabel,
+	getOptionTestId,
 }: {
 	label: string;
 	options: readonly T[];
@@ -429,6 +542,22 @@ function FilterDropdown<T extends string>({
 	onToggle: (value: T) => void;
 	testid: string;
 	emptyText?: string;
+	/**
+	 * Radio rows pinned above the option rows (Story 12.1: the Time metric
+	 * toggle). Rendered as `menuitemradio` items in the SAME roving focus list
+	 * as the checkbox rows — arrows/Home/End traverse radios + options as one
+	 * list, and selecting a radio (click/Enter/Space) keeps the menu open,
+	 * exactly like the checkbox rows.
+	 */
+	menuRadios?: {
+		testid: string;
+		items: readonly { value: R; label: string; ariaLabel: string }[];
+		selected: R;
+		onSelect: (value: R) => void;
+	};
+	/** Rendered row text when options are keys, not display labels. */
+	getOptionLabel?: (value: T) => string;
+	getOptionTestId?: (value: T) => string;
 }) {
 	const [open, setOpen] = useState(false);
 	const triggerRef = useRef<HTMLButtonElement>(null);
@@ -490,8 +619,12 @@ function FilterDropdown<T extends string>({
 		}
 	};
 
+	// Radios and option rows share ONE roving focus list: radios first, then
+	// the options, each row's index offset accordingly.
+	const radioCount = menuRadios?.items.length ?? 0;
+
 	const onMenuKeyDown = (e: React.KeyboardEvent, index: number) => {
-		const last = options.length - 1;
+		const last = radioCount + options.length - 1;
 		let target: number | null = null;
 		switch (e.key) {
 			case 'ArrowDown':
@@ -556,6 +689,32 @@ function FilterDropdown<T extends string>({
 					aria-label={`${label} filters`}
 					data-testid={`${testid}-menu`}
 				>
+					{menuRadios && (
+						// Presentational wrapper only (no role — Biome's
+						// useSemanticElements rejects role="group" on a div): the
+						// menuitemradio children are the menu's own items.
+						<div className="filter-ttb__metric" data-testid={menuRadios.testid}>
+							{menuRadios.items.map((item, index) => (
+								<button
+									key={item.value}
+									ref={(el) => {
+										itemRefs.current[index] = el;
+									}}
+									type="button"
+									role="menuitemradio"
+									aria-checked={menuRadios.selected === item.value}
+									aria-label={item.ariaLabel}
+									tabIndex={-1}
+									className="filter-ttb__metric-option tap-target"
+									data-active={menuRadios.selected === item.value || undefined}
+									onClick={() => menuRadios.onSelect(item.value)}
+									onKeyDown={(e) => onMenuKeyDown(e, index)}
+								>
+									{item.label}
+								</button>
+							))}
+						</div>
+					)}
 					{options.length === 0 && (
 						// A menu must own menuitems — the placeholder is an inert one.
 						<button
@@ -572,17 +731,18 @@ function FilterDropdown<T extends string>({
 						<button
 							key={option}
 							ref={(el) => {
-								itemRefs.current[index] = el;
+								itemRefs.current[radioCount + index] = el;
 							}}
 							type="button"
 							role="menuitemcheckbox"
 							aria-checked={selected.includes(option)}
 							tabIndex={-1}
 							className="filter-row__item tap-target"
+							data-testid={getOptionTestId?.(option)}
 							onClick={() => onToggle(option)}
-							onKeyDown={(e) => onMenuKeyDown(e, index)}
+							onKeyDown={(e) => onMenuKeyDown(e, radioCount + index)}
 						>
-							{option}
+							{getOptionLabel?.(option) ?? option}
 						</button>
 					))}
 				</div>
