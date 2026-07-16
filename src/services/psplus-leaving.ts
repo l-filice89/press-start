@@ -37,8 +37,8 @@
  *   total ≈ 30 + 13 = 43 of 50 worst case; steady state (concepts cached) ≈ 28.
  *   The score refresh NEVER stacks on a sweep invocation (worker/index.ts
  *   skips it whenever the rotation spent fan-out).
- * 39 flagged games = 3 chunks; the cron fires 14× a month
- * (`0 9,21 15-21 * *`), so membership + a ~5-chunk genre sweep + leaving
+ * 39 flagged games = 3 chunks; the cron fires 28× a month
+ * (`0 9,21 15-28 * *`), so membership + a ~5-chunk genre sweep + leaving
  * chunks + retries all converge inside one window.
  */
 import { normalizeTitle } from '../core';

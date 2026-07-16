@@ -140,7 +140,7 @@ export async function getPsPlusRefreshedAt(
 /**
  * IGDB score refresh bookkeeping (Story 10.1, FR-40/AR-14 posture — the exact
  * shape of the PS+ pair above). `scores_refreshed_at` is stamped on every
- * successful refresh and gates the once-a-window cadence (the cron fires 7×
+ * successful refresh and gates the once-a-window cadence (the cron fires 28×
  * a month; the refresh runs when the stamp is stale). `scores_refresh_failed`
  * lights the attention banner; any successful refresh clears it.
  */
@@ -201,7 +201,7 @@ export async function getScoresRefreshedAt(
  *   every chunk walks a SHIFTING list: a key that appears mid-sweep and sorts
  *   before the cursor would never be swept at all.
  * - `cursor` is the sweep's resume point, kept SERVER-side so the CRON can drive
- *   the next chunk without a client. The cron fires 7× a month (`0 21 15-21 * *`),
+ *   the next chunk without a client. The cron fires 28× a month (`0 9,21 15-28 * *`),
  *   so a ~5-chunk sweep converges within days and self-heals after a failure.
  *   The HTTP endpoint still accepts a cursor for 7.2's client-driven loop.
  */

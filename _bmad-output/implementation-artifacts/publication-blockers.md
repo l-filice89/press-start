@@ -26,3 +26,5 @@ Status: none resolved — B1b–B6 are latent by design; B1a is a v1.x feature n
 | B6 | **`owned_via = NULL` legacy dev rows** — pre-FR-9 rows have no acquisition source. Data hygiene, not a correctness gate. | `game_tracking.owned_via` | Backfill or accept NULL as "unknown"; low priority. |
 
 **Order:** B1b first (nothing else matters until real users exist), then B2+B3 together (the global-fact-must-be-per-user pair), then B4/B5, then B6. **B1a sits outside this ordering** — it is a v1.x feature that happens to live in this epic, not a blocker for anything below it. B2/B3 are also in `deferred-work.md`.
+
+**Epic 10 additions to B2's inventory (2026-07-16 retro):** the global-game-fact set B2/B3 must move grew — `game.ps_plus_left_on` (10.2) and `game.ps_plus_leaving_on` + `psn_concept_id` (10.4) are written by the leaving sweep from ONE user's region, exactly the `ps_plus_extra` shape. `critic_score`/`user_score`/`ttb_*` (10.1/10.3) are region-independent shared facts and stay on `game`. Story 8.0's design gate must scope all three departure columns alongside the flag.

@@ -222,7 +222,7 @@ export async function runPsPlusCheck(
 	//
 	// The cursor RESETS only when the catalog actually MOVED (a product arrived or
 	// left) — those products need tagging, so the frozen key list and the cursor
-	// are dead. When the catalog is UNCHANGED (the common case: the cron fires 7×
+	// are dead. When the catalog is UNCHANGED (the common case: the cron fires 28×
 	// a month over the same catalog) the cursor SURVIVES, which is the whole
 	// reason the cron-driven sweep converges at all — resetting it every run would
 	// re-sweep chunk 1 forever and never reach key 20.
@@ -346,8 +346,8 @@ export async function runPsPlusCheck(
  * the rest of the month re-swept the same first keys, died in the same place, and
  * left most genre chips at 0 permanently. So a cron run with a sweep still
  * pending drives ONLY the sweep chunk; the membership pass runs when the sweep is
- * done (or when it cannot run at all). The cron fires 7× a month
- * (`0 21 15-21 * *`) and a 20-key region is 5 chunks, so a refresh + a full sweep
+ * done (or when it cannot run at all). The cron fires 28× a month
+ * (`0 9,21 15-28 * *`) and a 20-key region is 5 chunks, so a refresh + a full sweep
  * still converge inside one monthly window.
  *
  * A sweep failure is NOT a refresh failure — the membership snapshot is valid and
