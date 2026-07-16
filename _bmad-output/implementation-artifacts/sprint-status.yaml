@@ -140,10 +140,10 @@ development_status:
   epic-9-retrospective: done # 2026-07-14 — epic-9-retro-2026-07-14.md; epic marker stays in-progress until Story 9.5 + the main merge (Luca's gate)
 
   # Epic 10: Know Before You Play — Scores & Expiry Warnings — v1.x, after Epic 7
-  epic-10: in-progress # 10.1 done 2026-07-16 (dev-auto)
+  epic-10: in-progress # all 3 stories done 2026-07-16 (dev-auto); merge gated on the independent follow-up review pass (10.1 + 10.3 flagged)
   10-1-critic-user-scores-on-every-game-vr-5: done # 2026-07-16 (dev-auto, 291a588): IGDB scores on same call, migration 0012, cron refresh, 96.9% coverage probe; 13 review patches; followup_review_recommended:true
   10-2-leaving-ps-extra-soon-vr-6: done # 2026-07-16 (dev-auto, 0171cfb): ps_plus_left_on stamped atomically in the flag pass, LEFT PS+ pill, DW-13 closed by decision; 9 review patches; followup_review_recommended:false
-  10-3-time-to-beat-the-story-and-100-vr-8: backlog # rides 10.1's refresh job — follows 10.1
+  10-3-time-to-beat-the-story-and-100-vr-8: done # 2026-07-16 (dev-auto, 024b4eb): IGDB game_time_to_beats on the same cron pass, migration 0014, 95.4% either-value probe, HLTB never needed; 11 review patches; followup_review_recommended:true
   epic-10-retrospective: optional
 
   # Epic 11: PSN Account Safety — Sanitize the Credentialed Surface — HIGH PRIORITY, sequenced first

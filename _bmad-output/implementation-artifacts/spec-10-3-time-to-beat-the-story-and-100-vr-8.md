@@ -2,10 +2,12 @@
 title: 'Story 10.3: Time to beat — the story, and 100% (VR-8)'
 type: 'feature'
 created: '2026-07-16'
-status: 'in-review'
-review_loop_iteration: 0
+status: 'done'
+review_loop_iteration: 1
 baseline_revision: '1a354cb50f7757e426ae63cf65034edd35bf42e5'
-followup_review_recommended: false
+final_revision: '024b4eb2f1059b2459761ac11888e63c26a0a9b1'
+followup_review_recommended: true
+followup_review_reason: '11 review patches incl. 2 medium behavior fixes (a fail-mode inversion in the cron write path and an AC display miss) — same files as story 10.1''s flagged change, so one independent pass can cover both before the epic merge'
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-10-context.md'
   - '{project-root}/_bmad-output/implementation-artifacts/igdb-score-coverage-2026-07-16.md'
@@ -115,3 +117,12 @@ Two independent hunters over the full 10.3 diff. 16 findings → 11 patch / 0 in
 - `bun run test` -- expected: green incl. new TTB hazard tests
 - `bunx playwright test epic10` -- expected: green
 - `bun scripts/probe-igdb-ttb-coverage.ts` -- expected: coverage artifact written
+
+## Auto Run Result
+
+- **Outcome:** done — all 9 tasks complete, dual review triaged (11 patched / 5 rejected), all patches verified green.
+- **Baseline → final:** 1a354cb → 024b4eb.
+- **Verification:** `bun run typecheck` clean; `bunx biome check .` clean; `bun run test` 1859/1859 (72 files); `bunx playwright test epic10` 8/8.
+- **Live probe (production D1 + IGDB):** 61/65 story (93.8%), 55/65 complete (84.6%), 62/65 either (95.4%) — >=50% gate PASS. HLTB never built; no EXTERNAL-RISK-FLAG needed beyond the IGDB sign-off already recorded (user directive 2026-07-16).
+- **Budget:** TTB adds ceil(links/500)=1 external call to the score pass — pass total ≈10 of 50, combined worst-case with PS+ ≈44 of 50 once per monthly window.
+- **Follow-up:** followup_review_recommended: true (see frontmatter reason); shares the independent pass 10.1 already requires.
