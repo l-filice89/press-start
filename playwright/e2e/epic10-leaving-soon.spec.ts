@@ -27,7 +27,7 @@ function uniqueGame(
 	});
 }
 
-test('an un-owned leaving game warns with the date, ALONGSIDE the PS+ pill (10.4b)', async ({
+test('an un-owned leaving game warns with the date on its own row, PS+ pill still shown (10.4b)', async ({
 	page,
 }) => {
 	const leaving = uniqueGame('Leaving Warn', {
@@ -45,7 +45,23 @@ test('an un-owned leaving game warns with the date, ALONGSIDE the PS+ pill (10.4
 		await expect(flag).toBeVisible();
 		await expect(flag).toHaveText(/LEAVING 21 JUL/);
 		// Still in the catalog: the steady-state pill renders TOO.
-		await expect(card.getByText('PS+', { exact: true })).toBeVisible();
+		const psPlus = card.getByText('PS+', { exact: true });
+		await expect(psPlus).toBeVisible();
+		// Geometry pins (review, the two motivating bugs): the warning sits on
+		// its OWN row below the PS+ pill, and never under the owned toggle.
+		const flagBox = await flag.boundingBox();
+		const psPlusBox = await psPlus.boundingBox();
+		const toggleBox = await card.getByTestId('card-owned-toggle').boundingBox();
+		expect(flagBox && psPlusBox && toggleBox).toBeTruthy();
+		if (flagBox && psPlusBox && toggleBox) {
+			expect(flagBox.y).toBeGreaterThanOrEqual(psPlusBox.y + psPlusBox.height);
+			const overlapsToggle =
+				flagBox.x < toggleBox.x + toggleBox.width &&
+				toggleBox.x < flagBox.x + flagBox.width &&
+				flagBox.y < toggleBox.y + toggleBox.height &&
+				toggleBox.y < flagBox.y + flagBox.height;
+			expect(overlapsToggle).toBe(false);
+		}
 		// The retired LEFT PS+ pill is gone from the DOM entirely.
 		await expect(card.getByTestId('card-flag-ps-left')).toHaveCount(0);
 	} finally {

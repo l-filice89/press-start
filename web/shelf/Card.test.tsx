@@ -295,7 +295,7 @@ describe('Card', () => {
 	});
 
 	describe('LEAVING PS+ warning (Story 10.4, VR-6 rework)', () => {
-		it('warns on an un-owned game with a departure date — beside the PS+ pill, not instead of it', () => {
+		it('warns on an un-owned game with a departure date — on its own row BELOW the flags, never instead of them', () => {
 			renderCard(
 				game({
 					owned: false,
@@ -309,10 +309,14 @@ describe('Card', () => {
 			expect(flag).toHaveTextContent(
 				'Leaving the PlayStation Plus Extra catalog on 2099-07-21',
 			);
-			// STILL in the catalog — the steady-state pill renders alongside.
+			// STILL in the catalog — the steady-state pill renders too.
 			expect(
 				screen.getByText('In the PlayStation Plus Extra catalog'),
 			).toBeInTheDocument();
+			// Structural pin (review): the pill lives INSIDE the flag cluster —
+			// its own-row placement is the flex break in card.css, so a "tidy"
+			// that moves it out (or back to a magic offset) fails here.
+			expect(flag.parentElement).toHaveClass('card__flags');
 		});
 
 		it('never warns on an owned game (FR-38 — ownership makes membership irrelevant)', () => {

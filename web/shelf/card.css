@@ -120,6 +120,9 @@
 	position: absolute;
 	top: var(--space-2);
 	left: var(--space-2);
+	/* Stop short of the top-right owned toggle (22px chip + 11px inset + gap)
+	   so no flag — wrapped or wide — can ever slide under it (review). */
+	right: calc((var(--hit-target) - 22px) / 2 + 22px + var(--space-1));
 	display: flex;
 	flex-wrap: wrap;
 	gap: var(--space-1);
@@ -151,9 +154,16 @@
 	letter-spacing: 0.04em;
 }
 
-/* Story 10.2: the game LEFT the PS+ catalog — warn amber (the SOON/TBA
-   family), deliberately NOT the accent glow of the steady-state PS+ pill. */
+/* Story 10.4: the game is LEAVING the PS+ catalog — warn amber (the SOON/TBA
+   family), deliberately NOT the accent glow of the steady-state PS+ pill.
+   Always its OWN row in the cluster (Luca 2026-07-16): flex-basis 100% forces
+   the wrap break, max-width shrinks the pill back to its content — no magic
+   pixel offset, and a wrapped multi-flag row above just pushes it down
+   (review: an absolute offset collided with wrapped rows). The catalog card's
+   sibling flag stacks by offset instead (one flag there, see catalog.css). */
 .card__flag--leaving {
+	flex-basis: 100%;
+	max-width: fit-content;
 	color: var(--color-warn-amber);
 	font-weight: 600;
 	letter-spacing: 0.04em;

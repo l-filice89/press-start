@@ -115,12 +115,20 @@
 	border: 1px solid var(--color-border-soft);
 }
 
-.detail-panel__title {
+.detail-panel__heading-block {
+	/* Title + leaving banner share the header's stretchy middle column. */
 	flex: 1;
+	min-width: 0;
+}
+
+.detail-panel__title {
 	margin: 0;
 	font-family: var(--font-display);
 	font-size: 18px;
 	color: var(--color-text-primary);
+	/* The heading block is min-width:0 — an unbroken long title must wrap
+	   inside it, not paint under the header buttons (review). */
+	overflow-wrap: anywhere;
 }
 
 .detail-panel__close {
@@ -469,14 +477,18 @@
 }
 
 /* Leaving warning (Story 10.4 follow-on) — the card pill's full-sentence
-   sibling, same warn-amber family, derived borders like the pill. */
+   sibling, same warn-amber family, derived borders like the pill. Lives under
+   the title in the header (Luca 2026-07-16) so it never reflows the body. */
 .detail-panel__leaving {
-	margin: 0 0 var(--space-3);
-	padding: var(--space-2) var(--space-3);
+	width: fit-content;
+	margin: var(--space-1) 0 0;
+	padding: 2px var(--space-2);
 	font-family: var(--font-ui);
-	font-size: 13px;
+	font-size: 12px;
 	letter-spacing: 0.04em;
 	color: var(--color-warn-amber);
 	border: 1px solid color-mix(in srgb, var(--color-warn-amber) 40%, transparent);
+	/* sm, not pill: the sentence wraps to two lines in the narrow mobile
+	   header column, and a stadium radius on wrapped text clips ugly (review). */
 	border-radius: var(--radius-sm);
 }

@@ -233,9 +233,23 @@ export function DetailPanel({
 								decoding="async"
 							/>
 						)}
-						<h2 id={titleId} className="detail-panel__title">
-							{game.title}
-						</h2>
+						<div className="detail-panel__heading-block">
+							<h2 id={titleId} className="detail-panel__title">
+								{game.title}
+							</h2>
+							{/* Story 10.4 follow-on: the departure date in full — under the
+							    title, beside the cover (Luca 2026-07-16), so the banner
+							    never reflows the two-column body below. Same gates as the
+							    card pill (un-owned, future date). */}
+							{showLeaving(game.psPlusLeavingOn, game.owned) && (
+								<p
+									className="detail-panel__leaving"
+									data-testid="detail-leaving"
+								>
+									Leaving PS+ Extra on {game.psPlusLeavingOn}
+								</p>
+							)}
+						</div>
 						{/* Close stays FIRST in the DOM so it remains the focus-trap's
 						    first tab stop (and initial focus); CSS `order` puts the ✕
 						    back top-right and the rematch button to its left. */}
@@ -258,16 +272,6 @@ export function DetailPanel({
 							Wrong match?
 						</button>
 					</header>
-
-					{/* Story 10.4 follow-on: the departure date in full — the card
-					    pill's big sibling, same gates (un-owned, future date). Above
-					    everything else: "play it before {date}" is exactly the
-					    decision this panel is opened to make. */}
-					{showLeaving(game.psPlusLeavingOn, game.owned) && (
-						<p className="detail-panel__leaving" data-testid="detail-leaving">
-							Leaving PS+ Extra on {game.psPlusLeavingOn}
-						</p>
-					)}
 
 					<section className="detail-panel__section">
 						<h3 className="detail-panel__heading">Play status</h3>

@@ -166,12 +166,11 @@ export function Card({
 							</span>
 						)}
 						{/* Story 10.4 (VR-6 rework): the game is LEAVING the catalog —
-					    the store's own departure date, warned while playing or
-					    buying is still possible (it REPLACED 10.2's post-departure
-					    LEFT PS+ pill per Luca's directive; `ps_plus_left_on` lives
-					    on as a quiet internal fact). Amber (warn family), shown
-					    BESIDE the PS+ pill — still being in the catalog is the
-					    point. Owned games never warn (FR-38). */}
+						    the store's own departure date, warned while playing or
+						    buying is still possible (it replaced 10.2's LEFT PS+ pill).
+						    ALWAYS its own full-width row (flex break in card.css, Luca
+						    2026-07-16) so neither the owned toggle nor a wrapped flag
+						    row can ever obscure it. Owned games never warn (FR-38). */}
 						{showLeaving(game.psPlusLeavingOn, game.owned) && (
 							<span
 								className="card__flag card__flag--leaving"

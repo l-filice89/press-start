@@ -159,7 +159,7 @@ describe('DetailPanel', () => {
 	});
 
 	describe('Leaving line (Story 10.4 follow-on)', () => {
-		it('shows the full departure date for an un-owned game with a future date', async () => {
+		it('shows the full departure date IN THE HEADER for an un-owned game with a future date', async () => {
 			await openPanel(
 				game({
 					owned: false,
@@ -167,9 +167,12 @@ describe('DetailPanel', () => {
 					psPlusLeavingOn: '2099-07-21',
 				}),
 			);
-			expect(screen.getByTestId('detail-leaving')).toHaveTextContent(
-				'Leaving PS+ Extra on 2099-07-21',
-			);
+			const banner = screen.getByTestId('detail-leaving');
+			expect(banner).toHaveTextContent('Leaving PS+ Extra on 2099-07-21');
+			// Structural pin (review): the banner lives beside the cover, under
+			// the title — moving it back above the two-column body (which it
+			// used to reflow) fails here.
+			expect(banner.closest('header')).not.toBeNull();
 		});
 
 		it('never shows for an owned game (FR-38)', async () => {
