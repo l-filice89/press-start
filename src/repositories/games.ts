@@ -21,6 +21,30 @@ export type GameFacts = {
 	storeUrl?: string | null;
 	psPlusExtra?: boolean;
 	unenriched?: boolean;
+	criticScore?: number | null;
+	criticScoreCount?: number | null;
+	userScore?: number | null;
+	userScoreCount?: number | null;
+};
+
+/** The four IGDB reception facts (Story 10.1) — always written as a unit. */
+export type GameScores = {
+	criticScore: number | null;
+	criticScoreCount: number | null;
+	userScore: number | null;
+	userScoreCount: number | null;
+};
+
+/**
+ * The scheduled refresh's per-game write (Stories 10.1 + 10.3): every key is
+ * optional so the batch sets exactly what the IGDB reply carried — a game
+ * with a score row but no time-to-beat record updates its scores and KEEPS
+ * its stored hours (absence of fresh data never erases standing data).
+ */
+export type GameIgdbFacts = Partial<GameScores> & {
+	ttbStorySeconds?: number | null;
+	ttbCompleteSeconds?: number | null;
+	ttbCount?: number | null;
 };
 
 export type ExternalLinkSource = (typeof EXTERNAL_LINK_SOURCES)[number];
@@ -180,13 +204,24 @@ export async function backfillGameFacts(
  * `D1_ERROR: too many SQL variables`, which failed the whole PS+ check). The
  * `value` bind takes one slot, so the id slice is 99, and the chunks go through
  * one `db.batch` so the write still costs a single binding call (AD-15).
+ * 96, not 99: the clear branch binds THREE values beside the ids since Story
+ * 10.4 (flag + leaving-date clear + departure stamp) — 96 + 3 = 99 ≤ 100.
  */
-const PS_PLUS_FLAG_CHUNK_SIZE = 99;
+const PS_PLUS_FLAG_CHUNK_SIZE = 96;
 
+/**
+ * Story 10.2 (review hardening): the departure date rides IN the flag write —
+ * one atomic statement per chunk, so a partially-failed run can never leave a
+ * cleared flag without its stamp (departure silently lost) or a re-set flag
+ * with a stale stamp (contradictory PS+ + LEFT PS+ pills). Setting the flag
+ * NULLs the stamp (the DW-13 returning-game rule); clearing it stamps
+ * `departedOn` (the run's user-zone today).
+ */
 export async function setPsPlusExtraFlags(
 	db: Db,
 	gameIds: string[],
 	value: boolean,
+	departedOn: string | null = null,
 ) {
 	if (gameIds.length === 0) return;
 	const statements = [];
@@ -194,10 +229,92 @@ export async function setPsPlusExtraFlags(
 		statements.push(
 			db
 				.update(game)
-				.set({ psPlusExtra: value })
+				// Setting always NULLs the stamp; clearing stamps only when a date
+				// was given (a dateless clear leaves any existing stamp standing
+				// rather than silently wiping a recorded departure).
+				.set(
+					value
+						? { psPlusExtra: true, psPlusLeftOn: null }
+						: {
+								psPlusExtra: false,
+								// A departed game must not keep a future-dated LEAVING
+								// warning (Story 10.4) — cleared in the same atomic statement;
+								// the sweep owns re-setting it.
+								psPlusLeavingOn: null,
+								...(departedOn ? { psPlusLeftOn: departedOn } : {}),
+							},
+				)
 				.where(inArray(game.id, gameIds.slice(i, i + PS_PLUS_FLAG_CHUNK_SIZE))),
 		);
 	}
+	await db.batch(statements as [(typeof statements)[0], ...typeof statements]);
+}
+
+/**
+ * Persist one leaving-sweep chunk's answers (Story 10.4). One `db.batch` = one
+ * D1 subrequest (Epic 9 budget lesson). Values differ per row (date OR null —
+ * BOTH directions are writes: a null clears a reprieved game), so per-row
+ * statements like `updateGameIgdbFacts`, each binding 3 params. The caller
+ * passes ONLY games whose pricing reply was well-formed — a failed fetch keeps
+ * its stored value (per-game fail-closed).
+ */
+export async function setPsPlusLeaving(
+	db: Db,
+	updates: {
+		gameId: string;
+		leavingOn: string | null;
+		psnConceptId: string;
+	}[],
+) {
+	if (updates.length === 0) return;
+	const statements = updates.map(({ gameId, leavingOn, psnConceptId }) =>
+		db
+			.update(game)
+			.set({ psPlusLeavingOn: leavingOn, psnConceptId })
+			.where(eq(game.id, gameId)),
+	);
+	await db.batch(statements as [(typeof statements)[0], ...typeof statements]);
+}
+
+/**
+ * Drop cached store concept ids (Story 10.4 review) — a cached id that failed
+ * a pricing query may be remapped/delisted; clearing it makes the next sweep
+ * re-resolve from the product id instead of failing identically forever.
+ * Leaves `ps_plus_leaving_on` untouched (fail-closed keeps the stored date).
+ */
+export async function clearPsnConceptIds(db: Db, gameIds: string[]) {
+	if (gameIds.length === 0) return;
+	await db
+		.update(game)
+		.set({ psnConceptId: null })
+		.where(inArray(game.id, gameIds));
+}
+
+/**
+ * Persist refreshed reception scores on a batch of games (Story 10.1). One
+ * `db.batch` call — one D1 subrequest however many rows (the Epic 9
+ * BUDGET-COUNTS-EVERY-SUBREQUEST lesson: a per-row loop of UPDATEs is N
+ * subrequests the mock can't see). Values differ per row so this can't be the
+ * `inArray` shape `setPsPlusExtraFlags` uses; each statement binds 5 params,
+ * far under D1's 100-param cap. Caller passes ONLY rows present in the IGDB
+ * response — a game absent from the reply keeps its stored scores (VR-5:
+ * absence of fresh data never erases standing data).
+ *
+ * ponytail: one unchunked batch — fine at the ~65-row library; D1 also caps
+ * statements-per-batch, so slice into multiple db.batch calls (each is one
+ * subrequest) if the linked library ever grows past a few hundred rows.
+ */
+export async function updateGameIgdbFacts(
+	db: Db,
+	updates: { gameId: string; facts: GameIgdbFacts }[],
+) {
+	// An empty facts object would make Drizzle throw "No values to set" and
+	// fail the whole batch — filter defensively (the caller already guards).
+	const nonEmpty = updates.filter(({ facts }) => Object.keys(facts).length > 0);
+	if (nonEmpty.length === 0) return;
+	const statements = nonEmpty.map(({ gameId, facts }) =>
+		db.update(game).set(facts).where(eq(game.id, gameId)),
+	);
 	await db.batch(statements as [(typeof statements)[0], ...typeof statements]);
 }
 
@@ -216,6 +333,17 @@ export async function enrichGame(
 		/** Correct the name-only title to the chosen IGDB match, when given. */
 		title?: string;
 		titleNormalized?: string;
+		/** Reception scores from the chosen match (Story 10.1) — written as a
+		 * unit when given, so a rematch onto an unscored game clears the old
+		 * match's scores rather than keeping the wrong game's numbers. */
+		scores?: GameScores;
+		/** Null the stored time-to-beat columns (Story 10.3). Set on a rematch
+		 * that changes the IGDB identity: the hours belong to the OLD match, and
+		 * the cron's partial-reply rule would otherwise preserve them forever
+		 * (follow-up review). Clients never send TTB, so unlike scores this
+		 * clears on identity change alone — the new match's hours arrive with
+		 * the next refresh pass. */
+		clearTimeToBeat?: boolean;
 	},
 ) {
 	await db
@@ -226,6 +354,10 @@ export async function enrichGame(
 			unenriched: false,
 			...(facts.title
 				? { title: facts.title, titleNormalized: facts.titleNormalized }
+				: {}),
+			...(facts.scores ?? {}),
+			...(facts.clearTimeToBeat
+				? { ttbStorySeconds: null, ttbCompleteSeconds: null, ttbCount: null }
 				: {}),
 		})
 		.where(eq(game.id, gameId));
@@ -245,6 +377,20 @@ export type LibraryRow = {
 	storeUrl: string | null;
 	psPlusExtra: boolean;
 	unenriched: boolean;
+	criticScore: number | null;
+	criticScoreCount: number | null;
+	userScore: number | null;
+	userScoreCount: number | null;
+	/** Date the game left the PS+ Extra catalog; null = in catalog or never was. */
+	psPlusLeftOn: string | null;
+	/** Date the game LEAVES PS+ (Story 10.4, store `endTime`); null = staying. */
+	psPlusLeavingOn: string | null;
+	/** Cached store concept id (Story 10.4) — sweep resolves once, reuses after. */
+	psnConceptId: string | null;
+	/** Time-to-beat in seconds (Story 10.3): story / 100% / submission count. */
+	ttbStorySeconds: number | null;
+	ttbCompleteSeconds: number | null;
+	ttbCount: number | null;
 	playStatus: (typeof gameTracking.$inferSelect)['playStatus'];
 	completedOn: string | null;
 	platinumOn: string | null;
@@ -288,6 +434,16 @@ export async function listLibraryForUser(
 			storeUrl: game.storeUrl,
 			psPlusExtra: game.psPlusExtra,
 			unenriched: game.unenriched,
+			criticScore: game.criticScore,
+			criticScoreCount: game.criticScoreCount,
+			userScore: game.userScore,
+			userScoreCount: game.userScoreCount,
+			psPlusLeftOn: game.psPlusLeftOn,
+			psPlusLeavingOn: game.psPlusLeavingOn,
+			psnConceptId: game.psnConceptId,
+			ttbStorySeconds: game.ttbStorySeconds,
+			ttbCompleteSeconds: game.ttbCompleteSeconds,
+			ttbCount: game.ttbCount,
 			playStatus: gameTracking.playStatus,
 			completedOn: gameTracking.completedOn,
 			platinumOn: gameTracking.platinumOn,

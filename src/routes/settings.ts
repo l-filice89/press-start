@@ -9,6 +9,7 @@ import {
 	getPsnRegion,
 	getPsPlusRefreshedAt,
 	isPsPlusRefreshFailed,
+	isScoresRefreshFailed,
 	normalizePsnRegion,
 	PSN_REGION_SETTING_KEY,
 	PSPLUS_REFRESHED_AT_SETTING_KEY,
@@ -46,6 +47,7 @@ settingsRoute.get('/settings', requireAuth, async (c) => {
 		fabHandedness,
 		psPlusClaimCount,
 		region,
+		scoresRefreshFailed,
 	] = await Promise.all([
 		getSetting(db, userId, TIMEZONE_SETTING_KEY),
 		isPsPlusRefreshFailed(db, userId),
@@ -56,12 +58,15 @@ settingsRoute.get('/settings', requireAuth, async (c) => {
 		// Effective region (saved setting or the PSN_REGION seed) — presence of
 		// the working value, not just the stored row.
 		getPsnRegion(db, userId, c.env),
+		isScoresRefreshFailed(db, userId),
 	]);
 	return c.json(
 		{
 			timezone: timezone ?? null,
 			psPlusRefreshFailed,
 			psPlusRefreshedAt,
+			// Story 10.1: lights the score-refresh attention banner (FR-40).
+			scoresRefreshFailed,
 			// Drives the amber "needs a match" banner (Story 6.2, AR-22).
 			stragglerCount,
 			// FAB placement (Story 6.3, UX-DR10).

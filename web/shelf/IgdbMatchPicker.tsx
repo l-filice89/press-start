@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { type IgdbCandidate, searchIgdb } from './api';
+import { ScoreBadges } from './ScoreBadges';
 import './stragglers-dialog.css';
 
 /**
@@ -96,6 +97,14 @@ export function IgdbMatchPicker({
 							{c.name}
 							{c.releaseDate ? ` (${c.releaseDate.slice(0, 4)})` : ''}
 						</span>
+						{/* Candidate reception (Story 10.5): the scores are already in
+						    the search response (10.1) — render, never refetch. */}
+						<ScoreBadges
+							critic={c.criticScore}
+							criticCount={c.criticScoreCount}
+							user={c.userScore}
+							userCount={c.userScoreCount}
+						/>
 						<button
 							type="button"
 							className="stragglers__use tap-target"

@@ -40,11 +40,14 @@ import {
 import type { Db } from '../repositories/db';
 import { holdsPsnLock, withPsnLock } from './psn-lock';
 import { runGenreSweep } from './psplus-genres';
+import { runLeavingSweep } from './psplus-leaving';
 import {
 	clearPsPlusRefreshFailed,
 	getPsnRegion,
+	getPsPlusLeavingState,
 	getPsPlusSweepState,
 	markPsPlusRefreshFailed,
+	setPsPlusLeavingState,
 	setPsPlusSweepState,
 	stampPsPlusRefreshedAt,
 	todayForUser,
@@ -94,14 +97,22 @@ const CATALOG_DRIFT_TOLERANCE = 2;
  *             findUserByEmail 1 · lock claim 1 · region read 1 · fence
  *             (holdsPsnLock) 1 · timezone read (todayForUser) 1 · pre-run product
  *             ids 1 · snapshot upsert ceil(490/50) = 10 · prune 1 · stale-region
- *             delete 1 · sweep-state read 1 + write 1 · title keys 1 · library
- *             read 1 · flag set + clear 2 · bookkeeping (failed-flag clear 1 +
- *             stamp, which re-reads the timezone, 2) 3 · post-pass sweep-state
- *             read 1 · lock release 1
- *           = 29
- *   total (cron) = 5 external + 29 D1 = 34 of 50.
+ *             delete 1 · sweep-state read 1 + write 1 · leaving-state re-arm
+ *             write 1 (Story 10.4) · title keys 1 · library
+ *             read 1 · flag set + clear 2 (the Story 10.2 departure stamp AND
+ *             the 10.4 leaving-date clear ride IN these statements — no extra
+ *             call) · bookkeeping
+ *             (failed-flag clear 1 + stamp, which re-reads the timezone, 2) 3
+ *             · post-pass sweep-state read 1 · lock release 1
+ *           = 30 (+ the rotation's genre-state and leaving-state reads that
+ *           precede every CRON membership pass: 32)
+ *   total (cron) = 5 external + 32 D1 = 37 of 50 (+ the Story 10.1/10.3 score+TTB
+ *   refresh ≈10 once per window: worst case ≈47). The 10.4 leaving sweep never
+ *   shares an invocation with the membership pass OR the score refresh
+ *   (worker/index.ts skips scores on any sweep invocation; sweep ledger:
+ *   psplus-leaving.ts, ≤43).
  *   The HTTP button pays the auth middleware (3) on top instead of
- *   findUserByEmail (1): 36 of 50.
+ *   findUserByEmail (1), and none of the rotation reads: 36 of 50.
  * A GENRE-SWEEP CHUNK NO LONGER RIDES ALONG (H3): 34 + a chunk (~25) busts the
  * budget, and the resulting mid-sweep "Too many subrequests" throw was
  * self-perpetuating — see `runScheduledPsPlusCheck`.
@@ -211,7 +222,7 @@ export async function runPsPlusCheck(
 	//
 	// The cursor RESETS only when the catalog actually MOVED (a product arrived or
 	// left) — those products need tagging, so the frozen key list and the cursor
-	// are dead. When the catalog is UNCHANGED (the common case: the cron fires 7×
+	// are dead. When the catalog is UNCHANGED (the common case: the cron fires 28×
 	// a month over the same catalog) the cursor SURVIVES, which is the whole
 	// reason the cron-driven sweep converges at all — resetting it every run would
 	// re-sweep chunk 1 forever and never reach key 20.
@@ -226,6 +237,17 @@ export async function runPsPlusCheck(
 		cursor: sweep?.cursor ?? null,
 		skipped: sweep?.skipped ?? [],
 		done: sweep?.done ?? false,
+	});
+	// The LEAVING sweep (Story 10.4) re-arms on EVERY membership pass — unlike
+	// the genre cursor above, departure dates move with the store's monthly
+	// announcements even while the catalog membership is perfectly still, so
+	// "reset only when moved" would refresh dates exactly when they matter least.
+	await setPsPlusLeavingState(db, userId, {
+		region,
+		generation,
+		cursor: null,
+		attempts: 0,
+		done: false,
 	});
 
 	// The flag pass reads the TABLE, not the fetch (AD-27) — one source of truth,
@@ -254,6 +276,12 @@ export async function runPsPlusCheck(
 		(row) => row.psPlusExtra && !catalog.has(normalizeTitle(row.title)),
 	);
 
+	// Story 10.2 (VR-6): the flag transition IS the departure diff, and the
+	// stamp rides IN the flag statement (atomic per chunk — review): a set
+	// NULLs `ps_plus_left_on` so a pruned-then-readded title can never read as
+	// a fresh departure (DW-13); a clear stamps the run's user-zone date. Runs
+	// strictly after the wipe guard above — a degenerate response never
+	// mass-stamps.
 	await setPsPlusExtraFlags(
 		db,
 		toFlag.map((row) => row.id),
@@ -263,6 +291,7 @@ export async function runPsPlusCheck(
 		db,
 		toClear.map((row) => row.id),
 		false,
+		today,
 	);
 
 	// Post-write bookkeeping (5.2 failed-flag clear + 5.3 freshness stamp) is
@@ -317,8 +346,8 @@ export async function runPsPlusCheck(
  * the rest of the month re-swept the same first keys, died in the same place, and
  * left most genre chips at 0 permanently. So a cron run with a sweep still
  * pending drives ONLY the sweep chunk; the membership pass runs when the sweep is
- * done (or when it cannot run at all). The cron fires 7× a month
- * (`0 21 15-21 * *`) and a 20-key region is 5 chunks, so a refresh + a full sweep
+ * done (or when it cannot run at all). The cron fires 28× a month
+ * (`0 9,21 15-28 * *`) and a 20-key region is 5 chunks, so a refresh + a full sweep
  * still converge inside one monthly window.
  *
  * A sweep failure is NOT a refresh failure — the membership snapshot is valid and
@@ -330,11 +359,15 @@ export async function runScheduledPsPlusCheck(
 		AUTH_ALLOWED_EMAIL: string;
 		PSN_REGION?: string;
 	},
-): Promise<void> {
+	// `spentFanOut` = this invocation already paid a sweep chunk's external
+	// fan-out (or died mid-chunk) — the caller must NOT stack the score refresh
+	// on top (review, H3 sibling: a leaving chunk ≈42 + scores ≈10 busts 50).
+): Promise<{ spentFanOut: boolean }> {
 	// ponytail: single-tenant — resolve THE user by the allowlist email. Loop
 	// over users here if AUTH_ALLOWED_EMAIL ever becomes multi-value.
 	const user = await findUserByEmail(db, env.AUTH_ALLOWED_EMAIL);
-	if (!user) return;
+	if (!user) return { spentFanOut: false };
+	let spentFanOut = false;
 
 	try {
 		const held = await withPsnLock(
@@ -352,22 +385,73 @@ export async function runScheduledPsPlusCheck(
 						console.error('ps+ scheduled genre sweep threw', error);
 						return null;
 					});
-					if (sweep?.ok) return null;
+					if (sweep?.ok) {
+						spentFanOut = true;
+						return null;
+					}
+					spentFanOut = true; // a failed chunk still fanned out
 					// A sweep that cannot run AT ALL (no catalog, a stale/steamrolled
 					// state, a dead facet probe) must not starve the membership pass
 					// forever — it fails within a handful of calls, so the pass still
 					// fits. A per-KEY failure is not this: that is an `ok` chunk.
 					console.warn('ps+ scheduled genre sweep did not complete a chunk');
 				}
+				// Third in the rotation (Story 10.4): a pending LEAVING sweep owns
+				// the invocation once the genre sweep is done — same H3 rule, a
+				// chunk (≤41 subrequests) cannot share the invocation with the
+				// membership pass (34). Fall-through discipline differs from the
+				// genre sweep's: a `provider`/`conflict` failure (or a throw) has
+				// already BURNED up to a chunk's worth of subrequests, so running
+				// the membership pass on top would bust the 50 cap mid-write —
+				// the invocation ends and the next fire retries. Only the cheap,
+				// immediate refusals (`no-state`, `no-region` — a couple of D1
+				// reads, no fan-out) fall through to the membership pass.
+				const leaving = await getPsPlusLeavingState(db, user.id);
+				if (leaving && !leaving.done) {
+					const chunk = await runLeavingSweep(db, user.id, env, {
+						lockToken: token,
+					}).catch((error: unknown) => {
+						console.error('ps+ scheduled leaving sweep threw', error);
+						return null;
+					});
+					// An EMPTY chunk (no game was actually queried — zero external
+					// fan-out, whatever the cursor did) hands the invocation on to
+					// the membership pass instead of burning a cron fire on
+					// bookkeeping (review: a chunk of all-unmatched titles is empty
+					// too, not only the final no-pending one).
+					if (
+						chunk?.ok &&
+						!(chunk.result.swept === 0 && chunk.result.failed === 0)
+					) {
+						spentFanOut = true;
+						return null;
+					}
+					if (
+						!chunk ||
+						(!chunk.ok &&
+							(chunk.reason === 'provider' || chunk.reason === 'conflict'))
+					) {
+						console.warn(
+							'ps+ scheduled leaving sweep failed mid-chunk — ending the invocation (budget spent)',
+						);
+						spentFanOut = true;
+						return null;
+					}
+					if (!chunk.ok)
+						console.warn(
+							'ps+ scheduled leaving sweep could not run — falling through',
+						);
+				}
 				return await runPsPlusCheck(db, user.id, env, token);
 			},
 		);
 		if (held.busy) {
 			console.warn('ps+ scheduled refresh skipped — a PSN op holds the lock');
-			return;
+			return { spentFanOut };
 		}
 		const outcome = held.result;
-		if (!outcome) return; // a sweep invocation — no membership verdict to act on
+		// A sweep invocation — no membership verdict to act on.
+		if (!outcome) return { spentFanOut };
 		// Only a genuine provider failure (a retry may fix) lights the banner.
 		// `no-region` and `bad-region` are config gaps, not transient refresh
 		// failures: the banner tells the user to run the button, but the button
@@ -379,4 +463,5 @@ export async function runScheduledPsPlusCheck(
 		console.error('ps+ scheduled refresh threw', error);
 		await markPsPlusRefreshFailed(db, user.id);
 	}
+	return { spentFanOut };
 }

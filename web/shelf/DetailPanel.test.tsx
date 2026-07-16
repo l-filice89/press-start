@@ -49,6 +49,14 @@ function game(over: Partial<ShelfGame> = {}): ShelfGame {
 		ownedVia: null,
 		releaseDate: null,
 		genres: [],
+		criticScore: null,
+		criticScoreCount: null,
+		userScore: null,
+		userScoreCount: null,
+		psPlusLeavingOn: null,
+		ttbStorySeconds: null,
+		ttbCompleteSeconds: null,
+		ttbCount: null,
 		...over,
 	};
 }
@@ -148,6 +156,137 @@ describe('DetailPanel', () => {
 		expect(
 			within(panel()).queryByRole('heading', { name: 'Trophies' }),
 		).not.toBeInTheDocument();
+	});
+
+	describe('Leaving line (Story 10.4 follow-on)', () => {
+		it('shows the full departure date IN THE HEADER for an un-owned game with a future date', async () => {
+			await openPanel(
+				game({
+					owned: false,
+					psPlusExtra: true,
+					psPlusLeavingOn: '2099-07-21',
+				}),
+			);
+			const banner = screen.getByTestId('detail-leaving');
+			expect(banner).toHaveTextContent('Leaving PS+ Extra on 2099-07-21');
+			// Structural pin (review): the banner lives beside the cover, under
+			// the title — moving it back above the two-column body (which it
+			// used to reflow) fails here.
+			expect(banner.closest('header')).not.toBeNull();
+		});
+
+		it('never shows for an owned game (FR-38)', async () => {
+			await openPanel(
+				game({ owned: true, psPlusExtra: true, psPlusLeavingOn: '2099-07-21' }),
+			);
+			expect(screen.queryByTestId('detail-leaving')).not.toBeInTheDocument();
+		});
+
+		it('a PAST date is suppressed like the card pill', async () => {
+			await openPanel(
+				game({
+					owned: false,
+					psPlusExtra: true,
+					psPlusLeavingOn: '2020-01-05',
+				}),
+			);
+			expect(screen.queryByTestId('detail-leaving')).not.toBeInTheDocument();
+		});
+	});
+
+	describe('Scores section (Story 10.1, VR-5)', () => {
+		it('shows rounded scores labelled Critics/Players with their sample counts', async () => {
+			await openPanel(
+				game({
+					criticScore: 93.52941176470588,
+					criticScoreCount: 17,
+					userScore: 89.47202036710553,
+					userScoreCount: 1699,
+				}),
+			);
+			const section = screen.getByTestId('detail-scores');
+			expect(section).toHaveTextContent('94');
+			expect(section).toHaveTextContent('Critics (17 reviews)');
+			expect(section).toHaveTextContent('89');
+			expect(section).toHaveTextContent('Players (1699 ratings)');
+		});
+
+		it('omits a null score line, and the WHOLE section when no score exists', async () => {
+			await openPanel(game({ userScore: 61.2, userScoreCount: 1 }));
+			const section = screen.getByTestId('detail-scores');
+			expect(section).not.toHaveTextContent('Critics');
+			expect(section).toHaveTextContent('Players (1 rating)');
+		});
+
+		it('color-grades critic/user values but never the TTB hours (Story 10.5)', async () => {
+			await openPanel(
+				game({
+					criticScore: 55, // red
+					userScore: 74.6, // rounds to 75 → green
+					ttbStorySeconds: 54000,
+					ttbCount: 8,
+				}),
+			);
+			const section = screen.getByTestId('detail-scores');
+			// Select by MEANING, not list position — a fixture/order change must
+			// not silently shift which node the ungraded-hours assert checks.
+			const critic = within(section)
+				.getByText('Critics', { exact: false })
+				.querySelector('.detail-panel__score-value');
+			const user = within(section)
+				.getByText('Players', { exact: false })
+				.querySelector('.detail-panel__score-value');
+			const hours = within(section)
+				.getByText('Story', { exact: false })
+				.querySelector('.detail-panel__score-value');
+			expect(critic).toHaveClass('score-grade--low');
+			expect(user).toHaveClass('score-grade--high');
+			// The hours value carries NO grade — grading is for reception scores.
+			expect(hours?.className).not.toMatch(/score-grade/);
+		});
+
+		it('renders no Scores section for an unscored game (never a zero)', async () => {
+			await openPanel();
+			expect(screen.queryByTestId('detail-scores')).not.toBeInTheDocument();
+		});
+
+		it('shows time-to-beat hours with the submission count, story vs 100% labelled (Story 10.3)', async () => {
+			await openPanel(
+				game({
+					ttbStorySeconds: 54000,
+					ttbCompleteSeconds: 95400,
+					ttbCount: 8,
+				}),
+			);
+			const section = screen.getByTestId('detail-scores');
+			expect(section).toHaveTextContent('15h');
+			expect(section).toHaveTextContent('Story (8 submissions)');
+			expect(section).toHaveTextContent('27h');
+			expect(section).toHaveTextContent('100%');
+		});
+
+		it('a complete-only game still shows its submission count (review: 4 must not read like 400)', async () => {
+			await openPanel(
+				game({
+					ttbStorySeconds: null,
+					ttbCompleteSeconds: 95400,
+					ttbCount: 4,
+				}),
+			);
+			const section = screen.getByTestId('detail-scores');
+			expect(section).toHaveTextContent('27h');
+			expect(section).toHaveTextContent('100% (4 submissions)');
+			expect(section).not.toHaveTextContent('Story');
+		});
+
+		it('a TTB-only game still gets the section; a missing figure stays absent', async () => {
+			await openPanel(game({ ttbStorySeconds: 7200, ttbCount: 3 }));
+			const section = screen.getByTestId('detail-scores');
+			expect(section).toHaveTextContent('2h');
+			expect(section).toHaveTextContent('Story (3 submissions)');
+			expect(section).not.toHaveTextContent('100%');
+			expect(section).not.toHaveTextContent('Critics');
+		});
 	});
 
 	it('has an accessibly named cover trigger, out of the tab order', () => {

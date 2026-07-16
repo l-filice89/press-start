@@ -49,7 +49,7 @@ const GAME = {
 };
 
 /** Every read the shell's destinations make: settings, shelf, catalog, by-id. */
-function mockApi() {
+function mockApi(settings: Record<string, unknown> = {}) {
 	vi.stubGlobal(
 		'fetch',
 		vi.fn(async (url: string) => {
@@ -80,7 +80,7 @@ function mockApi() {
 					],
 				});
 			if (/\/api\/games\/[^/?]+$/.test(url)) return json({ game: GAME });
-			if (url.includes('/api/settings')) return json({});
+			if (url.includes('/api/settings')) return json(settings);
 			return json({ games: [GAME] });
 		}),
 	);
@@ -125,6 +125,28 @@ function detailOver(pathname: string): InitialEntry {
 }
 
 afterEach(() => vi.unstubAllGlobals());
+
+describe('AppShell attention banners (Story 10.1, FR-40)', () => {
+	it('renders the failed-score-refresh banner when settings carry the flag', async () => {
+		// `timezone` has no zod default — a partial payload without it would
+		// reject the whole settings parse and silently prove nothing.
+		mockApi({ timezone: null, scoresRefreshFailed: true });
+		renderShell(['/']);
+		const banner = await screen.findByTestId(
+			'attention-banner-failed-score-refresh',
+		);
+		expect(banner).toHaveTextContent(/game-score refresh/);
+	});
+
+	it('renders NO score banner when the flag is absent', async () => {
+		mockApi();
+		renderShell(['/']);
+		await screen.findByTestId('shelf-grid');
+		expect(
+			screen.queryByTestId('attention-banner-failed-score-refresh'),
+		).not.toBeInTheDocument();
+	});
+});
 
 describe('AppShell destinations', () => {
 	it('renders the CATALOG behind a detail opened from the catalog — never the shelf', async () => {

@@ -3,7 +3,7 @@ import { useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useToast } from '../components/Toast';
 import { useModalTrap } from '../components/useModalTrap';
-import { type IgdbCandidate, rematchGame } from './api';
+import { candidateScores, type IgdbCandidate, rematchGame } from './api';
 import { IgdbMatchPicker } from './IgdbMatchPicker';
 import './stragglers-dialog.css';
 
@@ -38,6 +38,7 @@ export function RematchDialog({
 				coverUrl: candidate.coverUrl,
 				releaseDate: candidate.releaseDate,
 				genres: candidate.genres,
+				...candidateScores(candidate),
 			}),
 		onSuccess: onRematched,
 		// A 409 means the pick already anchors another library game (AD-20) — say

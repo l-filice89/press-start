@@ -50,6 +50,15 @@ async function runBatch<T extends BatchItem<'sqlite'>>(
  * once (the insert) and never touched again — a game that has sat in the
  * catalog since March keeps its March date; `last_seen_at` and `generation`
  * move every run.
+ *
+ * DW-13 (decided, Story 10.2): `first_seen_at` means "first seen since the
+ * LAST PRUNE", not "first ever seen" — a pruned-then-readded title comes back
+ * as a fresh INSERT, so the date restamps. That is accepted and documented,
+ * not fixed: nothing reads the column, and the 10.2 departure warning
+ * deliberately derives from the game-level flag transition instead (re-entry
+ * NULLs `game.ps_plus_left_on`), so a returning game can never misread as a
+ * new arrival. Any future consumer of catalog HISTORY must not treat this
+ * column as "first ever seen".
  */
 export async function upsertCatalogProducts(
 	db: Db,
@@ -130,6 +139,24 @@ export async function listCatalogTitleKeys(
 		.from(psPlusCatalog)
 		.where(and(eq(psPlusCatalog.region, region), eq(psPlusCatalog.tier, tier)));
 	return rows.map((row) => row.titleNormalized);
+}
+
+/**
+ * Title-key → product-id pairs for the whole snapshot (Story 10.4) — the
+ * leaving sweep joins flagged games to their store products on the SAME
+ * normalized key the flag pass matches on, so the two can never disagree.
+ */
+export async function listCatalogTitleProducts(
+	db: Db,
+	{ region, tier = PS_PLUS_TIER }: Scope,
+): Promise<{ titleNormalized: string; productId: string }[]> {
+	return db
+		.select({
+			titleNormalized: psPlusCatalog.titleNormalized,
+			productId: psPlusCatalog.productId,
+		})
+		.from(psPlusCatalog)
+		.where(and(eq(psPlusCatalog.region, region), eq(psPlusCatalog.tier, tier)));
 }
 
 /**

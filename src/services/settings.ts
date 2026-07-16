@@ -138,6 +138,59 @@ export async function getPsPlusRefreshedAt(
 }
 
 /**
+ * IGDB score refresh bookkeeping (Story 10.1, FR-40/AR-14 posture — the exact
+ * shape of the PS+ pair above). `scores_refreshed_at` is stamped on every
+ * successful refresh and gates the once-a-window cadence (the cron fires 28×
+ * a month; the refresh runs when the stamp is stale). `scores_refresh_failed`
+ * lights the attention banner; any successful refresh clears it.
+ */
+export const SCORES_REFRESH_FAILED_SETTING_KEY = 'scores_refresh_failed';
+const SCORES_REFRESH_FAILED = 'failed';
+
+export async function markScoresRefreshFailed(db: Db, userId: string) {
+	await setSetting(
+		db,
+		userId,
+		SCORES_REFRESH_FAILED_SETTING_KEY,
+		SCORES_REFRESH_FAILED,
+	);
+}
+
+export async function clearScoresRefreshFailed(db: Db, userId: string) {
+	await deleteSetting(db, userId, SCORES_REFRESH_FAILED_SETTING_KEY);
+}
+
+export async function isScoresRefreshFailed(
+	db: Db,
+	userId: string,
+): Promise<boolean> {
+	return (
+		(await getSetting(db, userId, SCORES_REFRESH_FAILED_SETTING_KEY)) ===
+		SCORES_REFRESH_FAILED
+	);
+}
+
+export const SCORES_REFRESHED_AT_SETTING_KEY = 'scores_refreshed_at';
+
+export async function stampScoresRefreshedAt(db: Db, userId: string) {
+	await setSetting(
+		db,
+		userId,
+		SCORES_REFRESHED_AT_SETTING_KEY,
+		await todayForUser(db, userId),
+	);
+}
+
+export async function getScoresRefreshedAt(
+	db: Db,
+	userId: string,
+): Promise<string | null> {
+	return (
+		(await getSetting(db, userId, SCORES_REFRESHED_AT_SETTING_KEY)) ?? null
+	);
+}
+
+/**
  * PS+ CATALOG SWEEP STATE (Story 7.1 review, M1/M2/M5) — one `setting` row, the
  * whole state machine of the catalog ingest:
  *
@@ -148,7 +201,7 @@ export async function getPsPlusRefreshedAt(
  *   every chunk walks a SHIFTING list: a key that appears mid-sweep and sorts
  *   before the cursor would never be swept at all.
  * - `cursor` is the sweep's resume point, kept SERVER-side so the CRON can drive
- *   the next chunk without a client. The cron fires 7× a month (`0 21 15-21 * *`),
+ *   the next chunk without a client. The cron fires 28× a month (`0 9,21 15-28 * *`),
  *   so a ~5-chunk sweep converges within days and self-heals after a failure.
  *   The HTTP endpoint still accepts a cursor for 7.2's client-driven loop.
  */
@@ -191,6 +244,54 @@ export async function setPsPlusSweepState(
 		db,
 		userId,
 		PSPLUS_SWEEP_STATE_SETTING_KEY,
+		JSON.stringify(state),
+	);
+}
+
+/**
+ * Leaving-sweep resume state (Story 10.4) — the genre sweep's shape adapted to
+ * a GAME-id cursor: generation-keyed so a fresh membership snapshot restarts
+ * it, cursor kept server-side so the cron drives chunks without a client. A
+ * corrupt row parses to null and the next refresh rewrites it, same as above.
+ */
+export const PSPLUS_LEAVING_STATE_SETTING_KEY = 'psplus_leaving_state';
+
+export interface PsPlusLeavingState {
+	region: string;
+	generation: string;
+	/** Last game id finished; null = start from the beginning. */
+	cursor: string | null;
+	/**
+	 * Wholesale failures of the CURRENT chunk (review: livelock guard). The
+	 * second consecutive one steps the cursor PAST the chunk — a poison product
+	 * must not pin the rotation forever; its games retry next re-arm.
+	 */
+	attempts: number;
+	done: boolean;
+}
+
+export async function getPsPlusLeavingState(
+	db: Db,
+	userId: string,
+): Promise<PsPlusLeavingState | null> {
+	const raw = await getSetting(db, userId, PSPLUS_LEAVING_STATE_SETTING_KEY);
+	if (!raw) return null;
+	try {
+		return JSON.parse(raw) as PsPlusLeavingState;
+	} catch {
+		return null;
+	}
+}
+
+export async function setPsPlusLeavingState(
+	db: Db,
+	userId: string,
+	state: PsPlusLeavingState,
+) {
+	await setSetting(
+		db,
+		userId,
+		PSPLUS_LEAVING_STATE_SETTING_KEY,
 		JSON.stringify(state),
 	);
 }

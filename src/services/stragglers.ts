@@ -126,6 +126,34 @@ export interface ResolveInput {
 	coverUrl?: string | null;
 	releaseDate?: string | null;
 	genres?: string[];
+	// Reception scores from the chosen candidate (Story 10.1).
+	criticScore?: number | null;
+	criticScoreCount?: number | null;
+	userScore?: number | null;
+	userScoreCount?: number | null;
+}
+
+/** Same rules as the add path (review): a count never rides without its
+ * score, and a payload with NO score fields means "unknown" — preserve. */
+function scoresFromInput(input: ResolveInput) {
+	const criticScore = input.criticScore ?? null;
+	const userScore = input.userScore ?? null;
+	return {
+		criticScore,
+		criticScoreCount:
+			criticScore !== null ? (input.criticScoreCount ?? null) : null,
+		userScore,
+		userScoreCount: userScore !== null ? (input.userScoreCount ?? null) : null,
+	};
+}
+
+function hasScoreFields(input: ResolveInput): boolean {
+	return (
+		input.criticScore !== undefined ||
+		input.criticScoreCount !== undefined ||
+		input.userScore !== undefined ||
+		input.userScoreCount !== undefined
+	);
 }
 
 export type ResolveOutcome =
@@ -182,6 +210,7 @@ export async function resolveStraggler(
 			releaseDate: input.releaseDate ?? null,
 			// Picking a match also corrects a name-only typo ("Caleste" → "Celeste").
 			...rename,
+			...(hasScoreFields(input) ? { scores: scoresFromInput(input) } : {}),
 		});
 		await ensureGenres(db, input.id, input.genres);
 		return { kind: 'resolved', gameId: input.id };
@@ -208,6 +237,7 @@ export async function resolveStraggler(
 			coverUrl: input.coverUrl ?? null,
 			releaseDate: input.releaseDate ?? null,
 			unenriched: false,
+			...scoresFromInput(input),
 		}));
 
 	await anchorIgdb(db, gameRow.id, input.igdbId);
@@ -218,6 +248,7 @@ export async function resolveStraggler(
 		await enrichGame(db, gameRow.id, {
 			coverUrl: input.coverUrl ?? null,
 			releaseDate: input.releaseDate ?? null,
+			...(hasScoreFields(input) ? { scores: scoresFromInput(input) } : {}),
 		});
 	}
 	await ensureGenres(db, gameRow.id, input.genres);

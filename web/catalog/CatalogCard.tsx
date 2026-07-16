@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { AddGameDialog } from '../shelf/AddGameDialog';
+import { formatLeavingDate, showLeaving } from '../shelf/leaving';
 import type { CatalogGame } from './api';
 
 /**
@@ -64,6 +65,23 @@ export function CatalogCard({ game }: { game: CatalogGame }) {
 					<span aria-hidden="true">◈ PS+</span>
 					<span className="sr-only">In the PlayStation Plus Extra catalog</span>
 				</span>
+				{/* Story 10.4 follow-on: the TRACKED match's departure date — same
+				    gates as the shelf pill (un-owned, future). Untracked products
+				    carry no date (the sweep covers tracked games only), so absence
+				    here is absence of data, never "staying". */}
+				{showLeaving(game.leavingOn, game.owned) && (
+					<span
+						className="catalog-card__flag catalog-card__flag--leaving"
+						data-testid="catalog-flag-leaving"
+					>
+						<span aria-hidden="true">
+							LEAVING {formatLeavingDate(game.leavingOn)}
+						</span>
+						<span className="sr-only">
+							Leaving the PlayStation Plus Extra catalog on {game.leavingOn}
+						</span>
+					</span>
+				)}
 			</div>
 
 			<div className="catalog-card__info">

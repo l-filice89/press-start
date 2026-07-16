@@ -44,11 +44,13 @@
 	color: var(--color-warn-amber);
 }
 
-/* Steel — failed refresh. */
-.attention-banner--failed-refresh {
+/* Steel — failed refresh (PS+ catalog, and the Story 10.1 score refresh). */
+.attention-banner--failed-refresh,
+.attention-banner--failed-score-refresh {
 	background: rgba(143, 176, 196, 0.12);
 	border-bottom-color: rgba(143, 176, 196, 0.35);
 }
-.attention-banner--failed-refresh .attention-banner__action {
+.attention-banner--failed-refresh .attention-banner__action,
+.attention-banner--failed-score-refresh .attention-banner__action {
 	color: var(--color-text-secondary);
 }

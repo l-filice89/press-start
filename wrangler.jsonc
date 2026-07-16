@@ -30,9 +30,21 @@
 	 * wipes). ~7 cheap runs/month, well inside the free-tier subrequest budget.
 	 * ponytail: window-scan, not a 3rd-Tuesday guard — trades 6 redundant
 	 * idempotent runs for zero date-gate code. Not mirrored into env.e2e.
+	 *
+	 * Twice daily since Story 10.4: one invocation runs ONE rotation slot
+	 * (genre-sweep chunk OR leaving-sweep chunk OR membership pass — see
+	 * runScheduledPsPlusCheck), and 7 fires no longer cover membership + a
+	 * ~5-chunk genre sweep + ~3 leaving chunks + retries. 14 fires do.
+	 *
+	 * Window widened 15-21 → 15-28 at the Epic 10 retro: Sony announces
+	 * departures mid-month (~15th-16th) but ALSO late-month (the Aug 2026 list
+	 * surfaced Jun 25) and has moved dates after announcing (part of the
+	 * Jul 21 group slipped to Aug 18) — a 15-21-only sweep sees none of that
+	 * until the next month, possibly days before (or after) the departure.
+	 * Per-invocation budget is untouched; extra days are just extra fires.
 	 */
 	"triggers": {
-		"crons": ["0 21 15-21 * *"]
+		"crons": ["0 9,21 15-28 * *"]
 	},
 	"upload_source_maps": true,
 	"compatibility_flags": ["nodejs_compat"],

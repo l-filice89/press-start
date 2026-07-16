@@ -33,6 +33,14 @@ function game(overrides: Partial<ShelfGame> = {}): ShelfGame {
 		ownedVia: null,
 		releaseDate: '2015-03-24',
 		genres: ['Action', 'RPG'],
+		criticScore: null,
+		criticScoreCount: null,
+		userScore: null,
+		userScoreCount: null,
+		psPlusLeavingOn: null,
+		ttbStorySeconds: null,
+		ttbCompleteSeconds: null,
+		ttbCount: null,
 		...overrides,
 	};
 }
@@ -74,6 +82,138 @@ describe('Card', () => {
 		expect(
 			screen.queryByTestId(['card-', 'trophy'].join('')),
 		).not.toBeInTheDocument();
+	});
+
+	describe('reception scores (Story 10.1, VR-5)', () => {
+		it('renders rounded critic and user scores with counts in the a11y text', () => {
+			renderCard(
+				game({
+					criticScore: 93.52941176470588,
+					criticScoreCount: 17,
+					userScore: 89.47202036710553,
+					userScoreCount: 1699,
+				}),
+			);
+			const row = screen.getByTestId('card-scores');
+			expect(row).toHaveTextContent('◎ 94');
+			expect(row).toHaveTextContent('★ 89');
+			expect(row).toHaveTextContent('from 17 reviews');
+			expect(row).toHaveTextContent('from 1699 ratings');
+		});
+
+		it('renders NOTHING in a null slot — never a zero', () => {
+			renderCard(
+				game({ criticScore: null, userScore: 42.4, userScoreCount: 3 }),
+			);
+			const row = screen.getByTestId('card-scores');
+			// No critic glyph and no fabricated zero — the slot is simply absent.
+			expect(row).not.toHaveTextContent('◎');
+			expect(row).toHaveTextContent('★ 42');
+			expect(row.querySelector('.card__score--critic')).toBeNull();
+		});
+
+		it('renders NO scores block at all when the game has no facts — compaction, not a blank line', () => {
+			renderCard(game());
+			expect(screen.queryByTestId('card-scores')).not.toBeInTheDocument();
+		});
+
+		it('color-grades each score by its rounded value (Story 10.5) with sr-only text untouched', () => {
+			renderCard(
+				game({
+					criticScore: 88.5, // rounds to 89 → green
+					criticScoreCount: 17,
+					userScore: 60.4, // rounds to 60 → red
+					userScoreCount: 3,
+				}),
+			);
+			const row = screen.getByTestId('card-scores');
+			expect(row.querySelector('.card__score--critic')).toHaveClass(
+				'score-grade--high',
+			);
+			expect(row.querySelector('.card__score--user')).toHaveClass(
+				'score-grade--low',
+			);
+			// Grading is presentation-only — the a11y string is byte-identical to
+			// the pre-10.5 shape (exact compare on the sr-only node, not substring).
+			expect(
+				row.querySelector('.card__score--critic .sr-only')?.textContent,
+			).toBe('Critic score 89 out of 100 from 17 reviews');
+		});
+
+		it('grades the mid bucket amber (61–74)', () => {
+			renderCard(game({ userScore: 71 }));
+			expect(
+				screen.getByTestId('card-scores').querySelector('.card__score--user'),
+			).toHaveClass('score-grade--mid');
+		});
+
+		it('renders a 0 score as a real red value — never treated as absent (I/O matrix)', () => {
+			renderCard(game({ userScore: 0 }));
+			const slot = screen
+				.getByTestId('card-scores')
+				.querySelector('.card__score--user');
+			expect(slot).toHaveTextContent('★ 0');
+			expect(slot).toHaveClass('score-grade--low');
+		});
+
+		it('stacks reviews, story, and 100% as separate lines (Luca 2026-07-16)', () => {
+			renderCard(
+				game({
+					criticScore: 78,
+					userScore: 75,
+					ttbStorySeconds: 160800,
+					ttbCompleteSeconds: 216000,
+				}),
+			);
+			const lines = screen
+				.getByTestId('card-scores')
+				.querySelectorAll('.card__scores-line');
+			expect(lines).toHaveLength(3);
+			expect(lines[0]).toHaveTextContent('◎ 78');
+			expect(lines[0]).toHaveTextContent('★ 75');
+			expect(lines[1]).toHaveTextContent('45h story');
+			expect(lines[2]).toHaveTextContent('60h 100%');
+		});
+	});
+
+	describe('info-strip compaction (Luca 2026-07-16)', () => {
+		it('drops the genres row entirely when a game has none', () => {
+			const { container } = renderCard(game({ genres: [] }));
+			expect(container.querySelector('.card__genres')).toBeNull();
+		});
+
+		it('renders no OWNED chip at all when un-owned — absence, not visibility:hidden', () => {
+			const { container } = renderCard(game({ owned: false }));
+			expect(screen.queryByText('OWNED')).not.toBeInTheDocument();
+			expect(container.querySelector('.card__owned-line')).toBeNull();
+		});
+	});
+
+	describe('time to beat (Story 10.3, VR-8)', () => {
+		it('renders labelled story and 100% hours from stored seconds', () => {
+			renderCard(
+				game({
+					ttbStorySeconds: 54000,
+					ttbCompleteSeconds: 95400,
+					ttbCount: 8,
+				}),
+			);
+			const row = screen.getByTestId('card-scores');
+			expect(row).toHaveTextContent('15h story');
+			expect(row).toHaveTextContent('27h 100%');
+		});
+
+		it('a missing figure is ABSENT — the completionist figure never stands in for story', () => {
+			renderCard(game({ ttbStorySeconds: null, ttbCompleteSeconds: 95400 }));
+			const row = screen.getByTestId('card-scores');
+			expect(row).not.toHaveTextContent('story');
+			expect(row).toHaveTextContent('27h 100%');
+		});
+
+		it('an under-an-hour figure says <1h, never a zero', () => {
+			renderCard(game({ ttbStorySeconds: 1800 }));
+			expect(screen.getByTestId('card-scores')).toHaveTextContent('<1h story');
+		});
 	});
 
 	it('shows a non-network cover fallback when no cover URL', () => {
@@ -152,6 +292,62 @@ describe('Card', () => {
 		expect(
 			screen.queryByTestId('card-owned-via-membership'),
 		).not.toBeInTheDocument();
+	});
+
+	describe('LEAVING PS+ warning (Story 10.4, VR-6 rework)', () => {
+		it('warns on an un-owned game with a departure date — on its own row BELOW the flags, never instead of them', () => {
+			renderCard(
+				game({
+					owned: false,
+					psPlusExtra: true,
+					psPlusLeavingOn: '2099-07-21',
+				}),
+			);
+			const flag = screen.getByTestId('card-flag-leaving');
+			expect(flag).toHaveTextContent('LEAVING 21 JUL');
+			expect(flag).toHaveClass('card__flag--leaving');
+			expect(flag).toHaveTextContent(
+				'Leaving the PlayStation Plus Extra catalog on 2099-07-21',
+			);
+			// STILL in the catalog — the steady-state pill renders too.
+			expect(
+				screen.getByText('In the PlayStation Plus Extra catalog'),
+			).toBeInTheDocument();
+			// Structural pin (review): the pill lives INSIDE the flag cluster —
+			// its own-row placement is the flex break in card.css, so a "tidy"
+			// that moves it out (or back to a magic offset) fails here.
+			expect(flag.parentElement).toHaveClass('card__flags');
+		});
+
+		it('never warns on an owned game (FR-38 — ownership makes membership irrelevant)', () => {
+			renderCard(
+				game({ owned: true, psPlusExtra: true, psPlusLeavingOn: '2099-07-21' }),
+			);
+			expect(screen.queryByTestId('card-flag-leaving')).not.toBeInTheDocument();
+		});
+
+		it('a PAST leaving date is suppressed — the game departed inside the cron blind window (review)', () => {
+			renderCard(
+				game({
+					owned: false,
+					psPlusExtra: true,
+					psPlusLeavingOn: '2020-01-05',
+				}),
+			);
+			expect(screen.queryByTestId('card-flag-leaving')).not.toBeInTheDocument();
+		});
+
+		it('no warning without a leaving date', () => {
+			renderCard(
+				game({ owned: false, psPlusExtra: true, psPlusLeavingOn: null }),
+			);
+			expect(screen.queryByTestId('card-flag-leaving')).not.toBeInTheDocument();
+		});
+
+		it('the retired LEFT PS+ pill renders for no input shape (Story 10.4 directive)', () => {
+			renderCard(game({ owned: false, psPlusExtra: false }));
+			expect(screen.queryByTestId('card-flag-ps-left')).not.toBeInTheDocument();
+		});
 	});
 
 	it('shows the PS+ Extra badge only for an unowned in-catalog game', () => {

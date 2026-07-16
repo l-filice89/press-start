@@ -8,7 +8,10 @@ import { ToastHost } from '../components/Toast';
 import { AddGameDialog } from './AddGameDialog';
 import * as api from './api';
 
-vi.mock('./api', () => ({
+// importOriginal keeps the pure helpers (candidateScores) real — only the
+// network calls are mocked.
+vi.mock('./api', async (importOriginal) => ({
+	...(await importOriginal<typeof api>()),
 	fetchAddPreview: vi.fn(),
 	searchIgdb: vi.fn(),
 	addGame: vi.fn(),
@@ -22,6 +25,10 @@ const AUTO = {
 	coverUrl: 'https://img/tie-in.jpg',
 	releaseDate: '2004-06-28',
 	genres: ['Platform'],
+	criticScore: null,
+	criticScoreCount: null,
+	userScore: null,
+	userScoreCount: null,
 };
 const RIGHT = {
 	igdbId: '99',
@@ -29,6 +36,10 @@ const RIGHT = {
 	coverUrl: 'https://img/marvel.jpg',
 	releaseDate: '2023-10-20',
 	genres: ['Adventure', 'Shooter'],
+	criticScore: 88.5,
+	criticScoreCount: 40,
+	userScore: 92.1,
+	userScoreCount: 300,
 };
 
 function renderDialog(prefill?: {
@@ -144,6 +155,52 @@ describe('AddGameDialog — correct the match before saving (Story 6.6 / PV-6)',
 		await user.click(screen.getByRole('button', { name: 'Back' }));
 
 		await waitFor(() => expect(affordance).toHaveFocus());
+	});
+
+	it('shows graded candidate scores from the response — and NO slot for an unscored candidate (Story 10.5)', async () => {
+		const user = userEvent.setup();
+		renderDialog();
+		await user.click(await rematchButton());
+		const picker = await screen.findByTestId('add-game-picker');
+
+		const rows = await within(picker).findAllByRole('listitem');
+		const rightRow = rows.find((li) => li.textContent?.includes(RIGHT.name));
+		const autoRow = rows.find((li) => li !== rightRow);
+
+		// RIGHT carries scores in the search response — rendered, rounded, graded.
+		expect(rightRow).toHaveTextContent('◎ 89');
+		expect(rightRow).toHaveTextContent('★ 92');
+		expect(rightRow?.querySelectorAll('.score-grade--high')).toHaveLength(2);
+		expect(rightRow).toHaveTextContent('Critic score 89 out of 100');
+
+		// AUTO is unscored: the slot is ABSENT — never a zero or gray pill.
+		expect(autoRow?.querySelector('.score-badges')).toBeNull();
+	});
+
+	it('shows the ACTIVE candidate’s scores on the preview itself — the add decision happens on the primary path (Story 10.5)', async () => {
+		const user = userEvent.setup();
+		renderDialog();
+		await waitFor(() =>
+			expect(screen.getByLabelText('Title')).toHaveValue('Spider-Man 2'),
+		);
+		// The unscored auto-match renders no preview slot.
+		expect(screen.queryByTestId('add-game-preview-scores')).toBeNull();
+
+		// Correct to the scored candidate → its reception shows before Save.
+		await user.click(await rematchButton());
+		const picker = await screen.findByTestId('add-game-picker');
+		const rightRow = (await within(picker).findAllByRole('listitem')).find(
+			(li) => li.textContent?.includes(RIGHT.name),
+		);
+		await user.click(
+			within(rightRow as HTMLElement).getByRole('button', {
+				name: 'Use this match',
+			}),
+		);
+		await waitFor(() => expect(picker).not.toBeInTheDocument());
+		const preview = screen.getByTestId('add-game-preview-scores');
+		expect(preview).toHaveTextContent('◎ 89');
+		expect(preview).toHaveTextContent('★ 92');
 	});
 
 	it('hides the affordance when the games DB is unavailable — never an empty picker', async () => {

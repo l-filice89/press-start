@@ -125,11 +125,18 @@ function cliExecute(sql: string): void {
 }
 
 /** The two INSERTs for one game; tracking attaches to the single e2e user. */
+const sqNum = (value: number | null): string =>
+	value === null || !Number.isFinite(value) ? 'NULL' : String(value);
+
 const seedSql = (game: SeedGame): string[] => {
 	const t = game.tracking;
 	return [
-		`INSERT INTO game (id, title, title_normalized, release_date, cover_url, store_url, ps_plus_extra, unenriched)
-		 VALUES (${sq(game.id)}, ${sq(game.title)}, ${sq(normalizeTitle(game.title))}, ${sq(game.releaseDate)}, ${sq(game.coverUrl)}, ${sq(game.storeUrl)}, ${game.psPlusExtra ? 1 : 0}, 0);`,
+		`INSERT INTO game (id, title, title_normalized, release_date, cover_url, store_url, ps_plus_extra, unenriched,
+		   critic_score, critic_score_count, user_score, user_score_count, ps_plus_leaving_on,
+		   ttb_story_seconds, ttb_complete_seconds, ttb_count)
+		 VALUES (${sq(game.id)}, ${sq(game.title)}, ${sq(normalizeTitle(game.title))}, ${sq(game.releaseDate)}, ${sq(game.coverUrl)}, ${sq(game.storeUrl)}, ${game.psPlusExtra ? 1 : 0}, 0,
+		   ${sqNum(game.criticScore)}, ${sqNum(game.criticScoreCount)}, ${sqNum(game.userScore)}, ${sqNum(game.userScoreCount)}, ${sq(game.psPlusLeavingOn)},
+		   ${sqNum(game.ttbStorySeconds)}, ${sqNum(game.ttbCompleteSeconds)}, ${sqNum(game.ttbCount)});`,
 		`INSERT INTO game_tracking (user_id, game_id, owned, owned_via, play_status, completed_on, platinum_on, wishlisted_on)
 		 SELECT id, ${sq(game.id)}, ${t.owned ? 1 : 0}, ${sq(t.ownedVia)}, ${sq(t.playStatus)}, ${sq(t.completedOn)}, ${sq(t.platinumOn)}, ${sq(t.wishlistedOn)} FROM user LIMIT 1;`,
 	];

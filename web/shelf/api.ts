@@ -65,6 +65,21 @@ export const shelfGameSchema = z.object({
 	ownedVia: z.enum(['purchase', 'membership']).nullable(),
 	releaseDate: z.string().nullable(),
 	genres: z.array(z.string()),
+	// IGDB reception scores (Story 10.1): 0–100 or null = absent (render
+	// nothing). Defaulted so a deploy-skewed payload without the fields
+	// doesn't reject the whole shelf.
+	criticScore: z.number().nullable().default(null),
+	criticScoreCount: z.number().nullable().default(null),
+	userScore: z.number().nullable().default(null),
+	userScoreCount: z.number().nullable().default(null),
+	// Story 10.2: date the game left the PS+ Extra catalog. Defaulted for
+	// deploy skew like the score fields above.
+	psPlusLeavingOn: z.string().nullable().default(null),
+	// Story 10.3: time-to-beat seconds (story / 100% / submissions), rounded
+	// to hours at render. Defaulted for deploy skew.
+	ttbStorySeconds: z.number().nullable().default(null),
+	ttbCompleteSeconds: z.number().nullable().default(null),
+	ttbCount: z.number().nullable().default(null),
 });
 
 export type ShelfGame = z.infer<typeof shelfGameSchema>;
@@ -293,6 +308,35 @@ export async function fetchGame(
 
 /* ---- Add a game by name (Story 6.1) ---- */
 
+// Candidate score fields (Story 10.1): the IGDB preview carries them and the
+// write payloads echo them back. Defaulted so an older cached response
+// without the fields still parses.
+const candidateScoreFields = {
+	criticScore: z.number().nullable().default(null),
+	criticScoreCount: z.number().nullable().default(null),
+	userScore: z.number().nullable().default(null),
+	userScoreCount: z.number().nullable().default(null),
+};
+
+export interface CandidateScorePayload {
+	criticScore?: number | null;
+	criticScoreCount?: number | null;
+	userScore?: number | null;
+	userScoreCount?: number | null;
+}
+
+/** The score fields of a candidate, ready to spread into a write payload. */
+export function candidateScores(
+	candidate: CandidateScorePayload,
+): CandidateScorePayload {
+	return {
+		criticScore: candidate.criticScore ?? null,
+		criticScoreCount: candidate.criticScoreCount ?? null,
+		userScore: candidate.userScore ?? null,
+		userScoreCount: candidate.userScoreCount ?? null,
+	};
+}
+
 const addPreviewSchema = z.object({
 	available: z.boolean(),
 	candidate: z
@@ -302,6 +346,7 @@ const addPreviewSchema = z.object({
 			coverUrl: z.string().nullable(),
 			releaseDate: z.string().nullable(),
 			genres: z.array(z.string()),
+			...candidateScoreFields,
 		})
 		.nullable(),
 });
@@ -320,7 +365,7 @@ export async function fetchAddPreview(
 	return addPreviewSchema.parse(body);
 }
 
-export interface AddGamePayload {
+export interface AddGamePayload extends CandidateScorePayload {
 	title: string;
 	igdbId?: string;
 	coverUrl?: string | null;
@@ -392,6 +437,7 @@ const igdbCandidateSchema = z.object({
 	coverUrl: z.string().nullable(),
 	releaseDate: z.string().nullable(),
 	genres: z.array(z.string()),
+	...candidateScoreFields,
 });
 
 export type IgdbCandidate = z.infer<typeof igdbCandidateSchema>;
@@ -410,7 +456,7 @@ export async function searchIgdb(
 	return searchSchema.parse(body).candidates;
 }
 
-export interface ResolveStragglerPayload {
+export interface ResolveStragglerPayload extends CandidateScorePayload {
 	id: string;
 	kind: 'import' | 'unenriched';
 	igdbId: string;
@@ -447,7 +493,7 @@ export async function ignoreStraggler(id: string): Promise<void> {
 
 /* ---- Rematch an already-added game (PV-4) ---- */
 
-export interface RematchPayload {
+export interface RematchPayload extends CandidateScorePayload {
 	igdbId: string;
 	name?: string;
 	coverUrl?: string | null;

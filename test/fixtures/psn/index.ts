@@ -23,6 +23,9 @@ import facetsEnUs from './catalog-facets-en-us.json';
 import genrePageMusicRhythm from './catalog-genre-page-music-rhythm.json';
 import pageDeDe from './catalog-page-de-de.json';
 import pastEnd from './catalog-page-past-end.json';
+import leavingPricing from './leaving-pricing.json';
+import leavingProduct from './leaving-product.json';
+import stayingPricing from './staying-pricing.json';
 
 export {
 	badCategory as BAD_CATEGORY_PAYLOAD,
@@ -125,5 +128,63 @@ export function parseCatalogQuery(url: string) {
 		genreKey: filter.startsWith('productGenres:')
 			? filter.slice('productGenres:'.length)
 			: null,
+	};
+}
+
+/**
+ * Story 10.4 (leaving sweep) — CAPTURED payloads, probed live 2026-07-16 with
+ * `scripts/probe-psn-leaving.ts`: `leaving-product.json` / `leaving-pricing.json`
+ * are Risk of Rain 2 (announced to leave PS+ 2026-07-21 — its PS_PLUS offer
+ * carries `endTime: "1784620800000"`, epoch MS as a STRING); `staying-pricing.json`
+ * is Returnal (every PS_PLUS offer's `endTime` is null). The builders below
+ * derive minimal same-shape payloads for multi-game integration runs.
+ */
+export {
+	leavingPricing as LEAVING_PRICING_PAYLOAD,
+	leavingProduct as LEAVING_PRODUCT_PAYLOAD,
+	stayingPricing as STAYING_PRICING_PAYLOAD,
+};
+
+/** A `metGetProductById` reply naming one concept (captured shape). */
+export function productPayload(conceptId: string) {
+	return {
+		data: {
+			productRetrieve: {
+				__typename: 'Product',
+				id: 'STUB-PRODUCT',
+				concept: { __typename: 'Concept', id: conceptId },
+			},
+		},
+	};
+}
+
+/**
+ * A `metGetPricingDataByConceptId` reply whose PS_PLUS offer carries the given
+ * `endTime` (epoch-ms string, or null while staying) — captured shape: the
+ * offer node nests under mobilectas, `serviceBranding: ["PS_PLUS"]`.
+ */
+export function pricingPayload(endTime: string | null) {
+	return {
+		data: {
+			conceptRetrieve: {
+				__typename: 'Concept',
+				defaultProduct: {
+					__typename: 'Product',
+					id: 'STUB-PRODUCT',
+					mobilectas: [
+						{
+							__typename: 'MobileCta',
+							price: {
+								__typename: 'Price',
+								serviceBranding: ['PS_PLUS'],
+								endTime,
+								isFree: true,
+								isTiedToSubscription: true,
+							},
+						},
+					],
+				},
+			},
+		},
 	};
 }

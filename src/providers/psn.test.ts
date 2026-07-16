@@ -9,8 +9,13 @@ import {
 	DE_DE_GENRE_KEYS,
 	EN_US_GENRE_KEYS,
 	GENRE_PAGE_MUSIC_RHYTHM_PAYLOAD,
+	LEAVING_PRICING_PAYLOAD,
+	LEAVING_PRODUCT_PAYLOAD,
 	PAST_END_PAYLOAD,
+	pricingPayload,
 	productId,
+	productPayload,
+	STAYING_PRICING_PAYLOAD,
 } from '../../test/fixtures/psn';
 import { createPsnProvider, PsnStoreRejectionError } from './psn';
 
@@ -314,5 +319,201 @@ describe('fetchPsPlusCatalogGenreKeys / fetchPsPlusExtraCatalogByGenre (Story 7.
 			'"filterBy":["productGenres:MUSIC/RHYTHM"]',
 		);
 		expect(catalogNames(products)).toEqual(['Entwined™']);
+	});
+});
+
+describe('fetchPsPlusOfferEnd (Story 10.4)', () => {
+	const provider = () => createPsnProvider();
+
+	it('resolves the concept then reads the PS_PLUS endTime from the CAPTURED leaving payloads', async () => {
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(jsonResponse(LEAVING_PRODUCT_PAYLOAD))
+			.mockResolvedValueOnce(jsonResponse(LEAVING_PRICING_PAYLOAD));
+		vi.stubGlobal('fetch', fetchMock);
+
+		const answer = await provider().fetchPsPlusOfferEnd(
+			'it-it',
+			'EP0290-PPSA06517_00-RISKOFRAIN2SIEE0',
+		);
+
+		// Risk of Rain 2, captured 2026-07-16: endTime "1784620800000" = 21 Jul.
+		expect(answer).toEqual({ conceptId: '234386', leavingOn: '2026-07-21' });
+		const [productUrl] = fetchMock.mock.calls[0];
+		expect(productUrl).toContain('operationName=metGetProductById');
+		const [pricingUrl, init] = fetchMock.mock.calls[1];
+		expect(pricingUrl).toContain('operationName=metGetPricingDataByConceptId');
+		expect(decodeURIComponent(String(pricingUrl))).toContain('234386');
+		// Anonymous surface: no credential header of any kind.
+		expect(
+			new Headers((init as RequestInit).headers).get('authorization'),
+		).toBeNull();
+	});
+
+	it('a cached conceptId skips the product resolve — ONE subrequest (budget)', async () => {
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValue(jsonResponse(STAYING_PRICING_PAYLOAD));
+		vi.stubGlobal('fetch', fetchMock);
+
+		const answer = await provider().fetchPsPlusOfferEnd(
+			'it-it',
+			'EP9000-PPSA01285_00-RETURNALGAME0001',
+			'10000176',
+		);
+
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+		expect(answer).toEqual({ conceptId: '10000176', leavingOn: null });
+	});
+
+	it('a STAYING game (captured: every PS_PLUS endTime null) answers leavingOn null — legitimate, not an error', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi
+				.fn()
+				.mockResolvedValueOnce(jsonResponse(productPayload('10000176')))
+				.mockResolvedValueOnce(jsonResponse(STAYING_PRICING_PAYLOAD)),
+		);
+		const answer = await provider().fetchPsPlusOfferEnd('it-it', 'ANY');
+		expect(answer.leavingOn).toBeNull();
+	});
+
+	it('offers present but none PS_PLUS-branded is "staying"', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi
+				.fn()
+				.mockResolvedValueOnce(jsonResponse(productPayload('1')))
+				.mockResolvedValueOnce(
+					jsonResponse({
+						data: {
+							conceptRetrieve: {
+								price: { serviceBranding: ['NONE'], endTime: '1784620800000' },
+							},
+						},
+					}),
+				),
+		);
+		expect(
+			(await provider().fetchPsPlusOfferEnd('it-it', 'ANY')).leavingOn,
+		).toBeNull();
+	});
+
+	it('a PS+-EXCLUSIVE DISCOUNT (PS_PLUS-branded, not the inclusion offer) never becomes a leaving date (review H1)', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi
+				.fn()
+				.mockResolvedValueOnce(jsonResponse(productPayload('1')))
+				.mockResolvedValueOnce(
+					jsonResponse({
+						data: {
+							conceptRetrieve: {
+								prices: [
+									// The member-sale node: branded PS_PLUS but a PAID price —
+									// its endTime is the promo end, not a departure.
+									{
+										serviceBranding: ['PS_PLUS'],
+										endTime: '1784620800000',
+										isFree: false,
+										isTiedToSubscription: false,
+									},
+									// The actual catalog-inclusion offer says staying.
+									{
+										serviceBranding: ['PS_PLUS'],
+										endTime: null,
+										isFree: true,
+										isTiedToSubscription: true,
+									},
+								],
+							},
+						},
+					}),
+				),
+		);
+		expect(
+			(await provider().fetchPsPlusOfferEnd('it-it', 'ANY')).leavingOn,
+		).toBeNull();
+	});
+
+	it('a HOLLOW 200 (null conceptRetrieve / zero offer nodes) throws — never "staying" (DEGENERATE-RESPONSE GUARD)', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi
+				.fn()
+				.mockResolvedValueOnce(jsonResponse(productPayload('1')))
+				.mockResolvedValueOnce(
+					jsonResponse({ data: { conceptRetrieve: null } }),
+				),
+		);
+		await expect(
+			provider().fetchPsPlusOfferEnd('it-it', 'ANY'),
+		).rejects.toBeInstanceOf(PsnStoreRejectionError);
+
+		vi.unstubAllGlobals();
+		vi.stubGlobal(
+			'fetch',
+			vi
+				.fn()
+				.mockResolvedValueOnce(jsonResponse(productPayload('1')))
+				.mockResolvedValueOnce(
+					jsonResponse({ data: { conceptRetrieve: { mobilectas: [] } } }),
+				),
+		);
+		await expect(
+			provider().fetchPsPlusOfferEnd('it-it', 'ANY'),
+		).rejects.toBeInstanceOf(PsnStoreRejectionError);
+	});
+
+	it('an epoch-SECONDS-scale endTime throws — never writes 1970 (review)', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi
+				.fn()
+				.mockResolvedValueOnce(jsonResponse(productPayload('1')))
+				.mockResolvedValueOnce(jsonResponse(pricingPayload('1784620800'))),
+		);
+		await expect(
+			provider().fetchPsPlusOfferEnd('it-it', 'ANY'),
+		).rejects.toBeInstanceOf(PsnStoreRejectionError);
+	});
+
+	it('a GraphQL errors[] reply throws typed — the caller keeps its stored date', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi
+				.fn()
+				.mockResolvedValue(
+					jsonResponse({ errors: [{ message: 'PersistedQueryNotFound' }] }),
+				),
+		);
+		await expect(
+			provider().fetchPsPlusOfferEnd('it-it', 'ANY'),
+		).rejects.toBeInstanceOf(PsnStoreRejectionError);
+	});
+
+	it('a product without a concept id throws typed — never silently "staying"', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi
+				.fn()
+				.mockResolvedValue(jsonResponse({ data: { productRetrieve: {} } })),
+		);
+		await expect(
+			provider().fetchPsPlusOfferEnd('it-it', 'ANY'),
+		).rejects.toBeInstanceOf(PsnStoreRejectionError);
+	});
+
+	it('a present-but-unreadable endTime throws typed — a garbage date must not CLEAR a real one', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi
+				.fn()
+				.mockResolvedValueOnce(jsonResponse(productPayload('1')))
+				.mockResolvedValueOnce(jsonResponse(pricingPayload('not-a-number'))),
+		);
+		await expect(
+			provider().fetchPsPlusOfferEnd('it-it', 'ANY'),
+		).rejects.toBeInstanceOf(PsnStoreRejectionError);
 	});
 });

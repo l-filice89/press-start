@@ -17,6 +17,7 @@ import {
 	index,
 	integer,
 	primaryKey,
+	real,
 	sqliteTable,
 	text,
 	uniqueIndex,
@@ -64,6 +65,51 @@ export const game = sqliteTable(
 		unenriched: integer('unenriched', { mode: 'boolean' })
 			.notNull()
 			.default(false),
+		/**
+		 * IGDB reception scores (Story 10.1, VR-5) — shared fetched facts, written
+		 * only by ingest (enrichment paths + the scheduled refresh). All four are
+		 * nullable and stay NULL when IGDB has no value: a missing score renders as
+		 * ABSENT, never 0 (VR-5 — no fabrication). Scores are IGDB's 0–100 scale
+		 * stored VERBATIM (real, e.g. 87.33) — rounding is a render concern; counts
+		 * ride along so 3 reviews never reads like 300.
+		 */
+		criticScore: real('critic_score'),
+		criticScoreCount: integer('critic_score_count'),
+		userScore: real('user_score'),
+		userScoreCount: integer('user_score_count'),
+		/**
+		 * Date this game LEFT the PS+ Extra catalog (Story 10.2, VR-6) — stamped
+		 * by the flag pass when it clears `ps_plus_extra` on a previously-flagged
+		 * game, NULLed when the game re-enters (so a pruned-then-readded title can
+		 * never read as a fresh departure — DW-13). A shared game fact like the
+		 * flag itself: owned/discarded games carry it too; the UI gates display
+		 * on `!owned` (FR-38).
+		 */
+		psPlusLeftOn: text('ps_plus_left_on'),
+		/**
+		 * Date this game LEAVES the PS+ Extra catalog (Story 10.4, VR-6 rework) —
+		 * the store's own PS_PLUS offer `endTime`, written BOTH directions by the
+		 * chunked leaving sweep (a null endTime clears it) and NULLed atomically
+		 * when the flag pass clears `ps_plus_extra`. Shared game fact; UI gates
+		 * display on `!owned` (FR-38).
+		 */
+		psPlusLeavingOn: text('ps_plus_leaving_on'),
+		/**
+		 * The store concept id behind this game's catalog product (Story 10.4) —
+		 * resolved once via `metGetProductById` and cached so the steady-state
+		 * sweep pays one pricing call per game instead of two.
+		 */
+		psnConceptId: text('psn_concept_id'),
+		/**
+		 * IGDB time-to-beat (Story 10.3, VR-8) — `/game_time_to_beats` values in
+		 * SECONDS, verbatim (rendering rounds to hours): `normally` = the story,
+		 * `completely` = 100%, plus the submission count. Nullable like the
+		 * scores: a missing value renders ABSENT, and the completionist figure
+		 * never stands in for the story figure.
+		 */
+		ttbStorySeconds: integer('ttb_story_seconds'),
+		ttbCompleteSeconds: integer('ttb_complete_seconds'),
+		ttbCount: integer('ttb_count'),
 	},
 	(table) => [
 		// Non-unique — the first-pass match key (AD-18), used by every ingest path.

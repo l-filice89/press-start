@@ -8,6 +8,7 @@ import {
 	matchesTitleQuery,
 	type ShelfFilter,
 	summarizeFilter,
+	summarizeFilterText,
 	toggleSelection,
 } from './filters';
 
@@ -35,6 +36,14 @@ function game(overrides: Partial<ShelfGame> & { id: string }): ShelfGame {
 		ownedVia: null,
 		releaseDate: null,
 		genres: [],
+		criticScore: null,
+		criticScoreCount: null,
+		userScore: null,
+		userScoreCount: null,
+		psPlusLeavingOn: null,
+		ttbStorySeconds: null,
+		ttbCompleteSeconds: null,
+		ttbCount: null,
 		...overrides,
 	};
 }
@@ -354,5 +363,27 @@ describe('toggleSelection', () => {
 	it('adds a missing value and removes a present one', () => {
 		expect(toggleSelection(['a'], 'b')).toEqual(['a', 'b']);
 		expect(toggleSelection(['a', 'b'], 'a')).toEqual(['b']);
+	});
+});
+
+describe('Leaving soon flag (Story 10.4 follow-on)', () => {
+	it('matches exactly the pill set: un-owned with a FUTURE date', () => {
+		const games = [
+			game({ id: 'l1', psPlusLeavingOn: '2099-07-21', owned: false }),
+			game({ id: 'l2', psPlusLeavingOn: '2099-07-21', owned: true }),
+			game({ id: 'l3', psPlusLeavingOn: '2020-01-05', owned: false }),
+			game({ id: 'l4', psPlusLeavingOn: null, owned: false }),
+		];
+		const shown = applyShelfFilter(games, {
+			...EMPTY_FILTER,
+			flags: ['leavingSoon'],
+		});
+		expect(shown.map((g) => g.id)).toEqual(['l1']);
+	});
+
+	it('narrates in the summary', () => {
+		expect(
+			summarizeFilterText({ ...EMPTY_FILTER, flags: ['leavingSoon'] }),
+		).toBe('Showing Leaving soon games.');
 	});
 });

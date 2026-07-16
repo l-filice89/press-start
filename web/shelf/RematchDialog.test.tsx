@@ -7,7 +7,10 @@ import { ToastHost } from '../components/Toast';
 import * as api from './api';
 import { RematchDialog } from './RematchDialog';
 
-vi.mock('./api', () => ({
+// importOriginal keeps the pure helpers (candidateScores) real — only the
+// network calls are mocked.
+vi.mock('./api', async (importOriginal) => ({
+	...(await importOriginal<typeof api>()),
 	searchIgdb: vi.fn(),
 	rematchGame: vi.fn(),
 }));
@@ -18,6 +21,10 @@ const CANDIDATE = {
 	coverUrl: null,
 	releaseDate: '2023-10-20',
 	genres: ['Adventure'],
+	criticScore: null,
+	criticScoreCount: null,
+	userScore: null,
+	userScoreCount: null,
 };
 
 function renderDialog(over: Partial<Parameters<typeof RematchDialog>[0]> = {}) {
@@ -58,6 +65,22 @@ describe('RematchDialog (PV-4)', () => {
 		);
 	});
 
+	it('renders graded candidate scores through the shared picker (Story 10.5 — pins THIS caller keeps using it)', async () => {
+		vi.mocked(api.searchIgdb).mockResolvedValue([
+			{ ...CANDIDATE, criticScore: 88.5, userScore: 55 },
+		]);
+		renderDialog();
+		const row = (await screen.findByText(/Spider-Man 2 \(2023\)/)).closest(
+			'li',
+		) as HTMLElement;
+		expect(
+			row.querySelector('.score-badge.score-grade--high'),
+		).toHaveTextContent('◎ 89');
+		expect(
+			row.querySelector('.score-badge.score-grade--low'),
+		).toHaveTextContent('★ 55');
+	});
+
 	it('picking a candidate calls rematchGame with the game id + candidate, then onRematched', async () => {
 		const user = userEvent.setup();
 		const { onRematched } = renderDialog();
@@ -73,6 +96,12 @@ describe('RematchDialog (PV-4)', () => {
 				coverUrl: null,
 				releaseDate: '2023-10-20',
 				genres: ['Adventure'],
+				// Story 10.1: candidate scores ride the rematch payload (nulls
+				// clear the old — wrong — match's numbers).
+				criticScore: null,
+				criticScoreCount: null,
+				userScore: null,
+				userScoreCount: null,
 			}),
 		);
 		await waitFor(() => expect(onRematched).toHaveBeenCalled());

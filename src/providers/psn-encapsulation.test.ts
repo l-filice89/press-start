@@ -22,15 +22,25 @@ const PSN_WIRE_PATTERNS: {
 	pattern: RegExp;
 	allowed: string[];
 }[] = [
+	// Story 10.4's discovery probe is allowlisted for the ANONYMOUS surface
+	// only: it must call the grid with arbitrary candidate category ids, which
+	// the provider deliberately does not expose. Not spent — the 10.4 unblock
+	// path (probe artifact: run `--id <uuid>` once Luca supplies the category)
+	// still needs it. The credentialed patterns below apply to it unweakened,
+	// so the probe can never grow an auth path unnoticed.
 	{
 		label: 'the PSN API endpoint',
 		pattern: /web\.np\.playstation\.com/,
-		allowed: [PROVIDER],
+		allowed: [
+			PROVIDER,
+			'scripts/probe-psn-last-chance.ts',
+			'scripts/probe-psn-leaving.ts',
+		],
 	},
 	{
 		label: 'the persisted categoryGridRetrieve query (PS+ catalog, 5.1)',
 		pattern: /categoryGridRetrieve|4ce7d410a4db2c8b/,
-		allowed: [PROVIDER],
+		allowed: [PROVIDER, 'scripts/probe-psn-last-chance.ts'],
 	},
 	// Everything below was DELETED by Epic 11 (stories 11.1/11.2): the
 	// credentialed surface is gone from every source file, the provider included.

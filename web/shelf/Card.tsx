@@ -1,8 +1,11 @@
 import { type KeyboardEvent, useRef, useState } from 'react';
 import { PlatinumTrophy } from '../components/PlatinumTrophy';
 import type { ShelfGame } from './api';
+import { formatLeavingDate, showLeaving } from './leaving';
 import { OwnershipSourceDialog } from './OwnershipSourceDialog';
 import { StatusPopover } from './StatusPopover';
+import { scoreGrade } from './score-grade';
+import { formatTtbHours } from './ttb';
 import { useTrackingMutations } from './useTrackingMutations';
 import './card.css';
 
@@ -162,6 +165,26 @@ export function Card({
 								</span>
 							</span>
 						)}
+						{/* Story 10.4 (VR-6 rework): the game is LEAVING the catalog —
+						    the store's own departure date, warned while playing or
+						    buying is still possible (it replaced 10.2's LEFT PS+ pill).
+						    ALWAYS its own full-width row (flex break in card.css, Luca
+						    2026-07-16) so neither the owned toggle nor a wrapped flag
+						    row can ever obscure it. Owned games never warn (FR-38). */}
+						{showLeaving(game.psPlusLeavingOn, game.owned) && (
+							<span
+								className="card__flag card__flag--leaving"
+								data-testid="card-flag-leaving"
+							>
+								<span aria-hidden="true">
+									LEAVING {formatLeavingDate(game.psPlusLeavingOn)}
+								</span>
+								<span className="sr-only">
+									Leaving the PlayStation Plus Extra catalog on{' '}
+									{game.psPlusLeavingOn}
+								</span>
+							</span>
+						)}
 						{releaseFlag && (
 							<span className="card__flag card__flag--release">
 								<span aria-hidden="true">{releaseFlag.label}</span>
@@ -181,16 +204,92 @@ export function Card({
 					</div>
 				</div>
 
-				{/* Info strip stacks one row per line — title, genres, status, owned —
-			    and every row is always rendered (hidden/empty rows reserve their
-			    line) so all cards are the same height regardless of content.
-			    (Below 600px the genres row is display:none for every card, so
-			    uniformity holds per breakpoint, not via reservation there.) */}
+				{/* Info strip: title, genres, fact lines, status, owned. A row with
+			    nothing to show is ABSENT — remaining rows sit flush at the top and
+			    slack pools at the bottom (Luca 2026-07-16, supersedes per-row
+			    reservation). Uniform card height holds at the STRIP level: a fixed
+			    min-height in card.css sized for the fullest stack. */}
 				<div className="card__info">
 					<p className="card__title" title={game.title}>
 						{game.title}
 					</p>
-					<p className="card__genres">{game.genres.join(' · ')}</p>
+					{game.genres.length > 0 && (
+						<p className="card__genres">{game.genres.join(' · ')}</p>
+					)}
+					{/* Reception facts (Stories 10.1/10.3): stored IGDB facts only —
+				    a null renders NOTHING (never a zero), and each family gets its
+				    own stacked line — reviews, story hours, 100% hours — so the
+				    100% figure can't be ellipsized away. Counts live in the sr-only
+				    text here and visibly in the detail panel. */}
+					{(game.criticScore != null ||
+						game.userScore != null ||
+						game.ttbStorySeconds != null ||
+						game.ttbCompleteSeconds != null) && (
+						<div className="card__scores" data-testid="card-scores">
+							{(game.criticScore != null || game.userScore != null) && (
+								<p className="card__scores-line">
+									{game.criticScore != null && (
+										<span
+											className={`card__score card__score--critic score-grade--${scoreGrade(game.criticScore)}`}
+										>
+											<span aria-hidden="true">
+												◎ {Math.round(game.criticScore)}
+											</span>
+											<span className="sr-only">
+												Critic score {Math.round(game.criticScore)} out of 100
+												{game.criticScoreCount != null
+													? ` from ${game.criticScoreCount} ${game.criticScoreCount === 1 ? 'review' : 'reviews'}`
+													: ''}
+											</span>
+										</span>
+									)}
+									{game.userScore != null && (
+										<span
+											className={`card__score card__score--user score-grade--${scoreGrade(game.userScore)}`}
+										>
+											<span aria-hidden="true">
+												★ {Math.round(game.userScore)}
+											</span>
+											<span className="sr-only">
+												User score {Math.round(game.userScore)} out of 100
+												{game.userScoreCount != null
+													? ` from ${game.userScoreCount} ${game.userScoreCount === 1 ? 'rating' : 'ratings'}`
+													: ''}
+											</span>
+										</span>
+									)}
+								</p>
+							)}
+							{/* Story 10.3 (VR-8): story vs 100% unmistakable; a missing
+						    figure is ABSENT — the other never stands in for it. */}
+							{game.ttbStorySeconds != null && (
+								<p className="card__scores-line">
+									<span className="card__score card__score--ttb">
+										<span aria-hidden="true">
+											{formatTtbHours(game.ttbStorySeconds)} story
+										</span>
+										<span className="sr-only">
+											About {formatTtbHours(game.ttbStorySeconds)} to beat the
+											story
+										</span>
+									</span>
+								</p>
+							)}
+							{game.ttbCompleteSeconds != null && (
+								<p className="card__scores-line">
+									<span className="card__score card__score--ttb">
+										<span aria-hidden="true">
+											{formatTtbHours(game.ttbCompleteSeconds)} 100%
+										</span>
+										<span className="sr-only">
+											About {formatTtbHours(game.ttbCompleteSeconds)} to
+											complete 100%
+										</span>
+									</span>
+								</p>
+							)}
+						</div>
+					)}
 					<div className="card__meta">
 						<StatusPopover
 							game={game}
@@ -198,24 +297,24 @@ export function Card({
 							onOpenChange={onStatusMenuOpenChange}
 						/>
 					</div>
-					<p className="card__owned-line">
-						{/* visibility-hidden (CSS, via data-owned) when un-owned — keeps
-					    the row height and drops the chip from the a11y tree. */}
-						<span className="card__owned" data-owned={game.owned || undefined}>
-							OWNED
-							{/* FR-9 amended: a PS+ claim is owned but subscription-bound —
-						    worth knowing at a glance (it vanishes if PS+ lapses). */}
-							{game.ownedVia === 'membership' && (
-								<span
-									className="card__owned-via"
-									data-testid="card-owned-via-membership"
-								>
-									<span aria-hidden="true"> · PS+</span>
-									<span className="sr-only"> via PS Plus claim</span>
-								</span>
-							)}
-						</span>
-					</p>
+					{game.owned && (
+						<p className="card__owned-line">
+							<span className="card__owned">
+								OWNED
+								{/* FR-9 amended: a PS+ claim is owned but subscription-bound —
+							    worth knowing at a glance (it vanishes if PS+ lapses). */}
+								{game.ownedVia === 'membership' && (
+									<span
+										className="card__owned-via"
+										data-testid="card-owned-via-membership"
+									>
+										<span aria-hidden="true"> · PS+</span>
+										<span className="sr-only"> via PS Plus claim</span>
+									</span>
+								)}
+							</span>
+						</p>
+					)}
 				</div>
 			</div>
 

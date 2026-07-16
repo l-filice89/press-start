@@ -342,3 +342,70 @@ went.
 | 11.3a no trophy %/grade/tier readout renders on the card or in detail | `epic2-detail.spec.ts` › detail panel opens from the cover (`card-trophy` and `detail-trophies` both count 0 in the live app); jsdom absence pinned in `Card.test.tsx` and `DetailPanel.test.tsx` |
 | 11.3b migration 0011 drops every `trophy_*` column while `platinum_on`/`completed_on`/`owned_via`/`bought_on` survive with values byte-identical | no UI flow — pinned in integration `migration-0011.test.ts` › drops every trophy_* column and ONLY those (PRAGMA + seeded-row two-sided assert) |
 | 11.3c the manual platinum/story-completion milestone flow records and displays exactly as before | Epic 2 suites untouched and green: `epic2-tracking.spec.ts` › milestones are confirm-gated + › platinum clears the play status; the platinum badge stays pinned by `Card.test.tsx` › platinum-trophy |
+
+## Epic 10
+
+Story 10.1 (critic & user scores on every game, VR-5). Scores are stored
+IGDB facts (four columns on `game`) rendered from the shelf payload; the
+refresh is a cron job with no UI trigger.
+
+| AC | Coverage |
+|----|----------|
+| 10.1a the four score fields ride the SAME `/games` call — no second adapter, no new credentials | no UI flow — pinned at the wire in `src/providers/igdb.test.ts` › requests the four score fields on the SAME games call + captured-payload mapping asserts (`fetchScoresByIds`) |
+| 10.1b coverage verified against the real library first, result recorded | no UI flow — live probe artifact `_bmad-output/implementation-artifacts/igdb-score-coverage-2026-07-16.md` (96.9% either-score, gate PASS, OpenCritic not built) |
+| 10.1c card and detail show critic + user scores from stored data, sample counts available | `epic10-scores.spec.ts` › a scored game shows rounded critic + user scores on its card + › the detail view shows both scores WITH their sample counts; jsdom halves in `Card.test.tsx` and `DetailPanel.test.tsx` |
+| 10.1d a game with no IGDB score renders NO score area — never a zero or placeholder (compaction 2026-07-16: the block is ABSENT, not blank; uniform card height held at the strip level) | `epic10-scores.spec.ts` › an unscored game renders NO score + › a critic-only game shows the critic slot alone + › cards keep a uniform height; jsdom compaction asserts in `Card.test.tsx`; null-slot/absent-section asserts in `DetailPanel.test.tsx` |
+| 10.1e scheduled refresh updates stored scores within the free-tier budget (batched by id, one shared cron) | no UI flow — integration `scores.test.ts` (happy path, partial reply, degenerate `[]` keeps scores, stale gate) + provider batch assert (2 ids → ONE subrequest); budget arithmetic in `src/services/scores.ts` |
+| 10.1f a failed refresh surfaces on next app open (FR-40 banner), stale scores never silently pass | integration `scores.test.ts` › a provider throw persists the FR-40 failure flag + `settings.test.ts` full-payload assert (`scoresRefreshFailed`); banner render is the same `AttentionBanner` seam pinned by the Epic 5 rows above — no dedicated e2e (no UI path can force a cron failure) |
+
+Story 10.2 ("Leaving PS+ Extra soon", VR-6). Shipped as the observable
+"LEFT PS+" warning; **Story 10.4 then retired the pill** (the stamp lives on
+as a quiet internal fact) — 10.2's write-path rows below still hold, its
+UI rows were superseded by the 10.4 rows further down.
+
+| AC | Coverage |
+|----|----------|
+| 10.2a the previous snapshot is retained long enough to diff (present-before, absent-now = left) | no UI flow — the game-level flag transition IS the diff; pinned in integration `psplus-departure.test.ts` › stamps ps_plus_left_on and clears the flag (two-run) |
+| 10.2b a tracked, non-owned departed game carries a warning visually distinct from the PS+ pill | SUPERSEDED by 10.4 (the LEFT PS+ pill is retired; `Card.test.tsx` pins it renders for NO input shape). The stamp write path stays pinned by 10.2a |
+| 10.2c the warning never guesses — grounded in observed departure | the re-audit condition this row named FIRED: Story 10.4 found the store DOES publish an end date (PS_PLUS offer `endTime`, probe artifact 2026-07-16) — the 10.4 warning is grounded in that observable, still never a heuristic |
+| 10.2d the departed game's PS+ pill clears and it stops counting Playable-now | pre-existing both-directions discipline, still pinned by `psplus.test.ts` flag-pass rows + `derived-state.test.ts`; exclusivity (warning ⇒ no pill) asserted in `Card.test.tsx` |
+| 10.2e no warning on owned games | carried into 10.4 (10.4d row below); the FACT still stamps (integration `psplus-departure.test.ts` › an OWNED game departing carries the fact) |
+| 10.2f DW-13: first_seen_at semantics decided + documented; a returning game never misreads | no UI flow — integration `psplus-departure.test.ts` › DW-13 HAZARD (return NULLs the stamp); decision documented at `src/repositories/psplus-catalog.ts` upsert comment |
+
+Story 10.3 (time to beat — the story, and 100%, VR-8). IGDB's
+`/game_time_to_beats` (seconds, by game_id) rides the SAME scheduled pass as
+the 10.1 score refresh; HLTB was never built (coverage gate passed at 93.8%).
+
+| AC | Coverage |
+|----|----------|
+| 10.3a fetched from IGDB by stored id, no fuzzy matching, no new adapter/credentials/cron | no UI flow — provider wire pins in `src/providers/igdb.test.ts` › fetchTimeToBeatByIds (by-game_id body, one subrequest, captured fixture); same-pass persistence in integration `scores.test.ts` |
+| 10.3b coverage verified against real titles first, recorded next to the 10.1 finding | no UI flow — `_bmad-output/implementation-artifacts/igdb-ttb-coverage-2026-07-16.md` (93.8% story, gate PASS, HLTB not built) |
+| 10.3c both numbers on card + detail, story vs 100% unmistakable, count available (2026-07-16: card facts stacked as three lines — reviews / story / 100%, all visible) | `epic10-scores.spec.ts` › time-to-beat hours show on card and detail (3-line pin); jsdom stacked-lines pin in `Card.test.tsx`, labels in `DetailPanel.test.tsx` |
+| 10.3d a missing value is absent — never zero, never the completionist figure standing in | `epic10-scores.spec.ts` › a story-only figure renders alone; jsdom one-value + <1h pins; integration › one-value-only persists null |
+| 10.3e refreshed in the same scheduled pass — one cron, one walk | no UI flow — integration `scores.test.ts` › persists story/100%/count in the same refresh (+ degenerate-[]-keeps-hours, TTB-throw-fails-closed, partial-reply-keeps-hours); budget ledger in `src/services/scores.ts` |
+| 10.3f a failed refresh surfaces (FR-40) | same banner chain as 10.1f (one flag for the whole pass): integration TTB degenerate/throw rows above + `AppShell.test.tsx` banner pins |
+
+Story 10.5 (scores in the add-game modal, color-graded everywhere, VR-5
+follow-on). Candidate scores were ALREADY on the wire (10.1); this story
+renders them in the one shared picker and grades every rendered score:
+rounded ≤60 red / 61–74 amber / ≥75 green, presentation-only.
+
+| AC | Coverage |
+| --- | --- |
+| 10.5a add/rematch/straggler candidate rows show critic + user scores from the response — no new fetch, no TTB (review widened: the add PREVIEW pane shows the active candidate's scores too — the decision screen on the primary path) | `epic10-scores.spec.ts` › add-modal candidate rows show graded scores (route-stubbed search, per the 6.6 precedent — e2e carries no IGDB creds; also pins the preview badges after a pick); jsdom row + preview renders in `AddGameDialog.test.tsx`; per-caller pins that rematch/straggler keep using the shared picker in `RematchDialog.test.tsx`/`StragglersDialog.test.tsx` |
+| 10.5b every rendered score is color-graded with AA contrast, number always present, sr-only unchanged | `epic10-scores.spec.ts` › scores are color-graded on card AND detail (computed-color asserts — pins the cascade, incl. the detail-panel override hazard); bucket boundaries in `score-grade.test.ts` (60/61/74/75 + round-then-grade); class + sr-only pins in `Card.test.tsx`/`DetailPanel.test.tsx` |
+| 10.5c no score → slot absent, never a zero or gray pill | `epic10-scores.spec.ts` › …an unscored candidate has no slot (same test); jsdom absent-slot asserts in `AddGameDialog.test.tsx`; card/detail absence already pinned by 10.1d rows |
+
+Story 10.4 (leaving PS+ soon — per-game departure dates, VR-6 rework).
+`metGetProductById` → conceptId → `metGetPricingDataByConceptId` → PS_PLUS
+offer `endTime` (anonymous persisted queries; captured fixtures probed live
+2026-07-16). A chunked cron sweep persists `ps_plus_leaving_on`; the card
+warns "LEAVING {date}" while the game is still in the catalog.
+
+| AC | Coverage |
+| --- | --- |
+| 10.4a the endTime contract is probed, distribution recorded, fixtures captured | no UI flow — `_bmad-output/implementation-artifacts/psn-leaving-endtime-probe-2026-07-16.md` (1 leaving / 10 staying); `scripts/probe-psn-leaving.ts` re-runs it; provider pins over the CAPTURED payloads in `src/providers/psn.test.ts` › fetchPsPlusOfferEnd |
+| 10.4b a flagged, un-owned game with a departure date warns with the date, beside the PS+ pill (follow-on widened: full date in the detail panel, LEAVING flag on catalog cards for tracked matches, shelf "Leaving soon" filter pill) | `epic10-leaving-soon.spec.ts` › an un-owned leaving game warns … + › the detail panel shows the full departure date + › the shelf "Leaving soon" pill filters; jsdom gating in `Card.test.tsx`/`DetailPanel.test.tsx`/`Catalog.test.tsx`; predicate + summary in `filters.test.ts`; browse join in integration `psplus-browse.test.ts` › carries the tracked match leavingOn (untracked = null, never fabricated) |
+| 10.4c sweep both directions, chunked, budget-honest, fail-closed per game, never the FR-40 banner | no UI flow — integration `psplus-leaving.test.ts` (date lands / stale date clears / concept-cache single-call budget claim / poison game stepped past / whole-chunk outage keeps cursor / two-sweep convergence past chunk size / rotation drives a chunk); ledger comments in `src/services/psplus-leaving.ts` + `psplus.ts` |
+| 10.4d no warning on owned games (FR-38) while the fact persists | `epic10-leaving-soon.spec.ts` › an OWNED leaving game shows no warning; integration › an OWNED game gets the fact too; jsdom `Card.test.tsx` › never warns on an owned game |
+| 10.4e the shipped `ps_plus_left_on` persists exactly as before but renders nowhere | integration `psplus-departure.test.ts` unchanged (stamp/clear/idempotency); departure ALSO clears the leaving date atomically (integration `psplus-leaving.test.ts` › DEPARTURE clears); `Card.test.tsx` pins the retired pill renders for no input shape |

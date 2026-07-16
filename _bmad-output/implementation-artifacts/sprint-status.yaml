@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-06
-last_updated: 2026-07-16
+last_updated: 2026-07-16 # epic-10 retro: epic + retrospective done, action items appended, epic-11 item 3 closed
 project: ps-game-catalog
 project_key: NOKEY
 tracking_system: file-system
@@ -140,11 +140,13 @@ development_status:
   epic-9-retrospective: done # 2026-07-14 — epic-9-retro-2026-07-14.md; epic marker stays in-progress until Story 9.5 + the main merge (Luca's gate)
 
   # Epic 10: Know Before You Play — Scores & Expiry Warnings — v1.x, after Epic 7
-  epic-10: backlog
-  10-1-critic-user-scores-on-every-game-vr-5: backlog
-  10-2-leaving-ps-extra-soon-vr-6: backlog # diffs the ps_plus_catalog snapshot from Story 7.1 — needs Epic 7
-  10-3-time-to-beat-the-story-and-100-vr-8: backlog # rides 10.1's refresh job — follows 10.1
-  epic-10-retrospective: optional
+  epic-10: done # 2026-07-16 — 5/5 stories; 10.4 landed via the endTime pivot after the Last Chance category proved undiscoverable
+  10-1-critic-user-scores-on-every-game-vr-5: done # 2026-07-16 (dev-auto, 291a588): IGDB scores on same call, migration 0012, cron refresh, 96.9% coverage probe; 13 review patches; followup_review_recommended:true
+  10-2-leaving-ps-extra-soon-vr-6: done # 2026-07-16 (dev-auto, 0171cfb): ps_plus_left_on stamped atomically in the flag pass, LEFT PS+ pill, DW-13 closed by decision; 9 review patches; followup_review_recommended:false
+  10-3-time-to-beat-the-story-and-100-vr-8: done # 2026-07-16 (dev-auto, 024b4eb): IGDB game_time_to_beats on the same cron pass, migration 0014, 95.4% either-value probe, HLTB never needed; 11 review patches; followup_review_recommended:true
+  10-4-leaving-ps-soon-last-chance-category-vr-6: done # 2026-07-16 quick-dev + follow-on (leaving date in detail, catalog cards, shelf Leaving-soon filter pill — spec-leaving-date-detail-catalog.md, 10 review patches); Luca verified the leaving date at the retro (RoR2 anchor exact, inclusion-offer predicate, fail-closed bounds)
+  10-5-scores-in-add-modal-color-graded-vr-5: done # 2026-07-16 dev-auto: ScoreBadges in picker + add preview, scoreGrade color-grading everywhere (review: 10 patched incl. preview-pane medium, 1 deferred, 4 rejected); vitest 1894, e2e green
+  epic-10-retrospective: done # 2026-07-16 — epic-10-retro-2026-07-16.md; UI-MOCK-GATE rule shipped, cron window widened, v2.1.0 bumped; merge = critical path
 
   # Epic 11: PSN Account Safety — Sanitize the Credentialed Surface — HIGH PRIORITY, sequenced first
   # Added 2026-07-15 via correct-course (sprint-change-proposal-2026-07-15.md): account locked;
@@ -339,8 +341,28 @@ action_items:
   - epic: 11
     action: "Critical path: merge feat/epic-11/psn-account-safety to main via PR + CI gate, human-approving the destructive migrations (0010/0011), watching the documented deploy window"
     owner: "Luca"
-    status: open
+    status: done # 2026-07-16: PR #25 merged, v2.0.0 released, deploy run 29456646352 green (migrations applied + health verified). NOTE: the production environment gate is NOT configured as protected in GitHub — no approval pause fired (Luca authorized in-session)
   - epic: 11
     action: "Epic 10 kickoff after the epic-11 merge: 10.1 -> 10.2 -> 10.3; 10.1/10.3 specs are the first mandatory EXTERNAL-RISK-FLAG applications (new score/HLTB providers); fold in sprint-change-proposal-2026-07-13-hltb.md"
     owner: "Luca + Amelia"
+    status: done # 2026-07-16: epic 10 ran and completed (5/5); risk flags fired on 10.1/10.3/10.4 with recorded sign-offs; HLTB never built (95.4% IGDB TTB coverage) — closed at epic-10 retro housekeeping
+  - epic: 10
+    action: "UI-MOCK-GATE rule: any UI-touching spec carries a placement-level mock with Luca's recorded sign-off before implementation; unmocked = BLOCK. Persistent fact in _bmad/custom/bmad-dev-auto.toml"
+    owner: "Winston + Murat"
+    status: done # 2026-07-16: fact added at the retro
+  - epic: 10
+    action: "Widen the leaving-sweep cron window to 0 9,21 15-28 * * per the researched Sony announcement cadence; update stale cadence comments; resolve the DW cron-window entry"
+    owner: "Amelia"
+    status: done # 2026-07-16: wrangler.jsonc + 4 comment sites + deferred-work.md resolved at the retro; lint clean
+  - epic: 10
+    action: "PRESERVE-VS-CLEAR rule (candidate): partial-update write paths state per-field absent-vs-clear semantics and external 200-[] paths state empty-vs-failure, each with an absent/empty hazard test; draft the persistent fact, Luca approves wording before it lands"
+    owner: "Winston + Murat"
+    status: done # 2026-07-16: wording approved by Luca, persistent fact added to _bmad/custom/bmad-dev-auto.toml
+  - epic: 10
+    action: "Record Epic 10's new game-level globals (ps_plus_left_on, ps_plus_leaving_on, psn_concept_id) in publication-blockers.md B2 inventory for Story 8.0's design gate"
+    owner: "Amelia"
+    status: done # 2026-07-16: added at the retro
+  - epic: 10
+    action: "Critical path: merge feat/epic-10/know-before-you-play to main via PR + CI gate at v2.1.0 (bumped at the retro; all migrations additive), deploy, verify the widened cron is live"
+    owner: "Luca"
     status: open

@@ -6,6 +6,7 @@
 export * from './auth';
 export * from './games';
 export * from './genres';
+export * from './scores';
 export * from './seed-import';
 export * from './settings';
 export * from './shelf';

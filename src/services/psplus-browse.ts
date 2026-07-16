@@ -42,6 +42,9 @@ export interface CatalogGame {
 	storeUrl: string | null;
 	/** This user already tracks it (the `In library` / `Owned` marker). */
 	inLibrary: boolean;
+	/** Departure date of the TRACKED match (Story 10.4 follow-on) — null for
+	 * untracked products (the sweep never fans out to the whole catalog). */
+	leavingOn: string | null;
 	/** …and owns it — bought, or a PS+ claim a sync observed (no actions). */
 	owned: boolean;
 	/** The tracked game's id, so a marker can route to `/game/:id` later. */
@@ -183,12 +186,26 @@ export async function browseCatalog(
 	// with '' in the map every other ''-keyed row reads as In library / Owned and
 	// links to a WRONG gameId. Same reason `psplus.ts` filters its title keys.
 	const library = await listLibraryForUser(db, userId);
-	const tracked = new Map<string, { gameId: string; owned: boolean }>();
+	const tracked = new Map<
+		string,
+		{ gameId: string; owned: boolean; leavingOn: string | null }
+	>();
 	for (const row of library) {
 		if (!row.titleNormalized) continue;
 		const existing = tracked.get(row.titleNormalized);
-		if (!existing || (row.owned && !existing.owned)) {
-			tracked.set(row.titleNormalized, { gameId: row.id, owned: row.owned });
+		// Owned wins (unchanged); among UN-OWNED duplicates the dated row wins
+		// (review) — first-inserted-wins silently dropped a leaving warning when
+		// a date-less duplicate landed first.
+		if (
+			!existing ||
+			(row.owned && !existing.owned) ||
+			(!existing.owned && !existing.leavingOn && row.psPlusLeavingOn)
+		) {
+			tracked.set(row.titleNormalized, {
+				gameId: row.id,
+				owned: row.owned,
+				leavingOn: row.psPlusLeavingOn,
+			});
 		}
 	}
 
@@ -207,13 +224,26 @@ export async function browseCatalog(
 	// it is a third exact key.
 	const byId = new Map(library.map((row) => [row.id, row]));
 	const byLink = async (source: 'PSN_PRODUCT' | 'PSN') => {
-		const map = new Map<string, { gameId: string; owned: boolean }>();
+		const map = new Map<
+			string,
+			{ gameId: string; owned: boolean; leavingOn: string | null }
+		>();
 		for (const link of await listExternalLinksBySource(db, source)) {
 			const row = byId.get(link.gameId);
 			if (!row) continue; // linked, but not in THIS user's library
 			const existing = map.get(link.externalId);
-			if (!existing || (row.owned && !existing.owned)) {
-				map.set(link.externalId, { gameId: row.id, owned: row.owned });
+			// Same merge rule as the tracked map: owned wins; else a dated row
+			// beats a date-less one.
+			if (
+				!existing ||
+				(row.owned && !existing.owned) ||
+				(!existing.owned && !existing.leavingOn && row.psPlusLeavingOn)
+			) {
+				map.set(link.externalId, {
+					gameId: row.id,
+					owned: row.owned,
+					leavingOn: row.psPlusLeavingOn,
+				});
 			}
 		}
 		return map;
@@ -258,6 +288,11 @@ export async function browseCatalog(
 				inLibrary: match !== undefined,
 				owned: match?.owned ?? false,
 				gameId: match?.gameId ?? null,
+				// A title-key collision (L6 above) would hand an untracked product a
+				// tracked game's date — a stronger false claim than the In-library
+				// marker. Accepted with the same rationale: both sides share one
+				// normalizer, and the exact-link keys are checked first.
+				leavingOn: match?.leavingOn ?? null,
 			};
 		}),
 	};

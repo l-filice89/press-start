@@ -40,6 +40,14 @@ function game(over: Partial<ShelfGame> = {}): ShelfGame {
 		ownedVia: null,
 		releaseDate: null,
 		genres: [],
+		criticScore: null,
+		criticScoreCount: null,
+		userScore: null,
+		userScoreCount: null,
+		psPlusLeavingOn: null,
+		ttbStorySeconds: null,
+		ttbCompleteSeconds: null,
+		ttbCount: null,
 		...over,
 	};
 }

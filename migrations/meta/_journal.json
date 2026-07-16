@@ -85,6 +85,34 @@
       "when": 1784142916157,
       "tag": "0011_drop_trophy_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1784158015491,
+      "tag": "0012_game_score_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1784161114143,
+      "tag": "0013_game_ps_plus_left_on",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1784175843179,
+      "tag": "0014_game_time_to_beat",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1784208217899,
+      "tag": "0015_game_ps_plus_leaving",
+      "breakpoints": true
     }
   ]
 }

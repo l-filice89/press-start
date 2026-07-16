@@ -24,6 +24,7 @@ type Game = {
 	inLibrary: boolean;
 	owned: boolean;
 	gameId: string | null;
+	leavingOn: string | null;
 };
 
 type Page = {
@@ -43,6 +44,7 @@ const game = (name: string, over: Partial<Game> = {}): Game => ({
 	inLibrary: false,
 	owned: false,
 	gameId: null,
+	leavingOn: null,
 	...over,
 });
 
@@ -317,5 +319,59 @@ describe('genreLabel', () => {
 		expect(genreLabel('ACTION')).toBe('Action');
 		expect(genreLabel('ROLE_PLAYING_GAMES')).toBe('Role Playing Games');
 		expect(genreLabel('MUSIC/RHYTHM')).toBe('Music / Rhythm');
+	});
+});
+
+describe('Catalog leaving flag (Story 10.4 follow-on)', () => {
+	it('a tracked, un-owned product with a future date carries the LEAVING flag', async () => {
+		mockCatalog(
+			page({
+				total: 2,
+				snapshotTotal: 2,
+				games: [
+					game('Leaving Tracked', {
+						inLibrary: true,
+						gameId: 'g1',
+						leavingOn: '2099-07-21',
+					}),
+					game('Plain Product'),
+				],
+			}),
+		);
+		renderCatalog();
+		const flag = await screen.findByTestId('catalog-flag-leaving');
+		expect(flag).toHaveTextContent('LEAVING 21 JUL');
+		expect(flag).toHaveTextContent(
+			'Leaving the PlayStation Plus Extra catalog on 2099-07-21',
+		);
+		// (The untracked-products-answer-null guarantee is server-side — pinned
+		// in integration psplus-browse.test.ts, not here.)
+	});
+
+	it('an OWNED product never warns (FR-38), a PAST date is suppressed', async () => {
+		mockCatalog(
+			page({
+				total: 2,
+				snapshotTotal: 2,
+				games: [
+					game('Leaving Owned', {
+						inLibrary: true,
+						owned: true,
+						gameId: 'g1',
+						leavingOn: '2099-07-21',
+					}),
+					game('Left Already', {
+						inLibrary: true,
+						gameId: 'g2',
+						leavingOn: '2020-01-05',
+					}),
+				],
+			}),
+		);
+		renderCatalog();
+		await screen.findAllByTestId('catalog-card');
+		expect(
+			screen.queryByTestId('catalog-flag-leaving'),
+		).not.toBeInTheDocument();
 	});
 });

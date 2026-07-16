@@ -38,6 +38,17 @@ export const shelfGameSchema = z.object({
 	ownedVia: z.enum(['purchase', 'membership']).nullable(),
 	releaseDate: z.string().nullable(),
 	genres: z.array(z.string()),
+	// IGDB reception scores (Story 10.1) — null = absent, the UI renders nothing.
+	criticScore: z.number().nullable(),
+	criticScoreCount: z.number().nullable(),
+	userScore: z.number().nullable(),
+	userScoreCount: z.number().nullable(),
+	// Story 10.2: date the game left the PS+ Extra catalog (warning pill).
+	psPlusLeavingOn: z.string().nullable(),
+	// Story 10.3: time-to-beat seconds (story / 100% / submissions).
+	ttbStorySeconds: z.number().nullable(),
+	ttbCompleteSeconds: z.number().nullable(),
+	ttbCount: z.number().nullable(),
 });
 
 const shelfResponseSchema = z.object({

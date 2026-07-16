@@ -7,6 +7,7 @@ import {
 	resolveStraggler,
 } from '../services';
 import { type AuthVariables, requireAuth } from './auth';
+import { scoreBodyFields } from './games';
 
 /**
  * The straggler-resolution boundary (Story 6.2, FR-28/29). GET lists both
@@ -45,6 +46,7 @@ const resolveBodySchema = z.object({
 		})
 		.nullish(),
 	genres: z.array(z.string().max(64)).max(20).optional(),
+	...scoreBodyFields,
 });
 
 const ignoreBodySchema = z.object({ id: z.string().min(1) });

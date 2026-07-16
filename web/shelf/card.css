@@ -120,6 +120,9 @@
 	position: absolute;
 	top: var(--space-2);
 	left: var(--space-2);
+	/* Stop short of the top-right owned toggle (22px chip + 11px inset + gap)
+	   so no flag — wrapped or wide — can ever slide under it (review). */
+	right: calc((var(--hit-target) - 22px) / 2 + 22px + var(--space-1));
 	display: flex;
 	flex-wrap: wrap;
 	gap: var(--space-1);
@@ -151,6 +154,23 @@
 	letter-spacing: 0.04em;
 }
 
+/* Story 10.4: the game is LEAVING the PS+ catalog — warn amber (the SOON/TBA
+   family), deliberately NOT the accent glow of the steady-state PS+ pill.
+   Always its OWN row in the cluster (Luca 2026-07-16): flex-basis 100% forces
+   the wrap break, max-width shrinks the pill back to its content — no magic
+   pixel offset, and a wrapped multi-flag row above just pushes it down
+   (review: an absolute offset collided with wrapped rows). The catalog card's
+   sibling flag stacks by offset instead (one flag there, see catalog.css). */
+.card__flag--leaving {
+	flex-basis: 100%;
+	max-width: fit-content;
+	color: var(--color-warn-amber);
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	/* Derived from the token, not a hardcoded rgba twin of it (review). */
+	border: 1px solid color-mix(in srgb, var(--color-warn-amber) 40%, transparent);
+}
+
 .card__flag--milestone {
 	color: var(--color-milestone-silver);
 }
@@ -170,6 +190,25 @@
 	flex-direction: column;
 	gap: var(--space-1);
 	padding: var(--space-2) var(--space-3) var(--space-3);
+	/* Uniform card height at the STRIP level (Luca 2026-07-16, supersedes the
+	   old per-row reservations): rows render only when they have content and
+	   top-align; this min-height is sized for the fullest stack (measured
+	   2026-07-16: title 18.8 + genres 15.4 + three fact lines 46.2 + status
+	   pill 16.8 + owned chip 14.8 + four 4px gaps = 128, +4px headroom for
+	   font-metric drift — fallback fonts and OS rasterization must not push
+	   the fullest stack past the floor, review) so every card ends the same
+	   height with slack at the BOTTOM, never between rows. Re-measure if a
+	   row's typography, the row count, or --space-1 changes. */
+	min-height: 132px;
+	justify-content: flex-start;
+}
+
+/* Genres are hidden below 600px for every card, so the fullest stack there
+   is one line (+gap) shorter. */
+@media (max-width: 600px) {
+	.card__info {
+		min-height: 112px;
+	}
 }
 
 .card__title {
@@ -189,13 +228,8 @@
 }
 
 .card__owned-line {
-	/* The chip is always in the DOM; hiding via visibility (not display)
-	   keeps the line's height, so owned and un-owned cards stay uniform. */
+	/* Rendered only when owned — uniformity lives on .card__info now. */
 	line-height: 1;
-}
-
-.card__owned:not([data-owned]) {
-	visibility: hidden;
 }
 
 .card__owned {
@@ -219,8 +253,6 @@
 	font-family: var(--font-body);
 	font-size: 11px;
 	line-height: 1.4;
-	/* Reserve the line even when a game has no genres — uniform card height. */
-	min-height: 1.4em;
 	color: var(--color-text-muted);
 	white-space: nowrap;
 	overflow: hidden;
@@ -233,3 +265,29 @@
 		display: none;
 	}
 }
+
+/* Reception facts (Stories 10.1/10.3): quiet stacked lines under the genres —
+   reviews, story hours, 100% hours (Luca 2026-07-16). The block and each line
+   render only when they have content; an absent fact renders nothing, never a
+   zero (VR-5/VR-8). */
+.card__scores {
+	font-family: var(--font-body);
+	font-size: 11px;
+	line-height: 1.4;
+	color: var(--color-text-muted);
+}
+
+.card__scores-line {
+	margin: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	/* Ellipsize, never clip mid-number — "★ 8…" must not read as a score of 8. */
+	text-overflow: ellipsis;
+}
+
+.card__score + .card__score {
+	margin-left: var(--space-2);
+}
+
+/* Score color: bucket-graded per value (Story 10.5, score-grade.css) — the
+   old always-electric critic tint died with the grading. */

@@ -17,6 +17,10 @@ export const settingsSchema = z.object({
 	// Story 5.3: date (YYYY-MM-DD, user zone) of the last successful refresh,
 	// null until the first one. Feeds the header "PS+ CATALOG AS OF" readout.
 	psPlusRefreshedAt: z.string().nullable().default(null),
+	// Story 10.1: the scheduled IGDB score refresh failed — stale scores must
+	// not silently pass as current (FR-40 posture). Defaulted like its PS+
+	// sibling above.
+	scoresRefreshFailed: z.boolean().default(false),
 	// Games needing a games-DB match (import stragglers + name-only adds) —
 	// feeds the amber "enrich" banner (Story 6.2). Defaulted for the same reason.
 	stragglerCount: z.number().default(0),

@@ -1,0 +1,378 @@
+{
+	"data": {
+		"productRetrieve": {
+			"__typename": "Product",
+			"concept": {
+				"__typename": "Concept",
+				"combinedLocalizedGenres": [
+					{ "__typename": "LocalizedGenreSubGenre", "value": "Azione" },
+					{ "__typename": "LocalizedGenreSubGenre", "value": "Azione" },
+					{ "__typename": "LocalizedGenreSubGenre", "value": "Combattimento" }
+				],
+				"compatibilityNotices": [
+					{
+						"__typename": "CompatibilityNotice",
+						"type": "NO_OF_PLAYERS",
+						"value": "1"
+					},
+					{
+						"__typename": "CompatibilityNotice",
+						"type": "NO_OF_NETWORK_PLAYERS_PS_PLUS",
+						"value": "4"
+					},
+					{
+						"__typename": "CompatibilityNotice",
+						"type": "DUALSHOCK4_VIBRATION",
+						"value": "true"
+					},
+					{
+						"__typename": "CompatibilityNotice",
+						"type": "ONLINE_PLAY_MODE",
+						"value": "OPTIONAL"
+					},
+					{
+						"__typename": "CompatibilityNotice",
+						"type": "PS_PLUS_REQUIRED",
+						"value": "true"
+					}
+				],
+				"descriptions": [
+					{
+						"__typename": "Description",
+						"type": "LONG",
+						"value": "Fuggi da un caotico pianeta alieno combattendo orde di mostri infuriati - con i tuoi amici o da solo.<br/><br/>Combina il bottino in maniere sorprendenti e padroneggia ogni personaggio finché non diventerai quel che ti faceva tremare quando sei atterrato per la prima volta.<br/><br/><br/>1 giocatore<br/>Giocatori in rete 2-4 - Per accedere alle sessioni multigiocatore online del gioco completo è necessario essere iscritti a PlayStation®Plus<br/>2GB minimo<br/>PAL HD 720p,1080i,1080p<br/><br/>Il download del presente prodotto è soggetto ai Termini di servizio e alle Condizioni d'uso del software di PlayStation Network e a qualsiasi altra condizione supplementare specifica applicabile a questo articolo. Se non si desidera accettare questi Termini, non scaricare questo articolo. Per maggiori dettagli, consultare i Termini di Servizio.<br/> Una tantum applicabile per scaricare su più sistemi PS4. Si può utilizzare su PS4 principale senza effettuare l'accesso a PlayStation Network; l'accesso va effettuato per l'uso su altri sistemi PS4.<br/>Prima di usare questo prodotto, leggere attentamente le Avvertenze per la salute.<br/>Library programs ©Sony Interactive Entertainment Inc. concesso in licenza esclusivamente a Sony Interactive Entertainment Europe. Si applicano i Termini d'uso del software. Si consiglia di visitare eu.playstation.com/legal per i diritti di utilizzo completi.<br/><br/>© 2012 – 2019 Hopoo Games, LLC. All rights reserved. Published by Gearbox Publishing. Gearbox, Gearbox Publishing, and the Gearbox logos are trademarks and used courtesy of Gearbox Software, LLC."
+					},
+					{
+						"__typename": "Description",
+						"type": "COMPATIBILITY_NOTICE",
+						"value": "Abbonamento a PS Plus richiesto per giocare online<br/>Supporta fino a 4 giocatori online con PS Plus<br/>Gioco online facoltativo<br/>1 giocatori<br/>Vibrazione DUALSHOCK 4"
+					},
+					{
+						"__typename": "Description",
+						"type": "LEGAL",
+						"value": "© 2023 Gearbox. Published and distributed by Gearbox Publishing. Gearbox and Risk of Rain, and the Gearbox Publishing logo, are registered trademarks of Gearbox. Developed by Hopoo Games, LLC."
+					}
+				],
+				"id": "234386",
+				"invariantName": "Risk of Rain 2",
+				"media": [
+					{
+						"__typename": "Media",
+						"media": null,
+						"role": "FOUR_BY_THREE_BANNER",
+						"type": "IMAGE",
+						"url": "https://image.api.playstation.com/vulcan/ap/rnd/202010/2220/imzFGFr7zSXk9YwQE0aBwKoT.jpg"
+					},
+					{
+						"__typename": "Media",
+						"media": null,
+						"role": "GAMEHUB_COVER_ART",
+						"type": "IMAGE",
+						"url": "https://image.api.playstation.com/vulcan/ap/rnd/202204/0816/kssUl8XMS7rNA7pkqzZZNl6h.jpg"
+					},
+					{
+						"__typename": "Media",
+						"media": null,
+						"role": "LOGO",
+						"type": "IMAGE",
+						"url": "https://image.api.playstation.com/vulcan/ap/rnd/202204/0522/Go9W1rjvYFPB75azxOM8ceD1.png"
+					},
+					{
+						"__typename": "Media",
+						"media": null,
+						"role": "PORTRAIT_BANNER",
+						"type": "IMAGE",
+						"url": "https://image.api.playstation.com/vulcan/ap/rnd/202010/2220/9aeJN575U8zzypnANohrtxHi.jpg"
+					},
+					{
+						"__typename": "Media",
+						"media": null,
+						"role": "SCREENSHOT",
+						"type": "IMAGE",
+						"url": "https://image.api.playstation.com/vulcan/ap/rnd/202010/2220/Sekcse7RaPOPo8LtCsNSlo4k.jpg"
+					},
+					{
+						"__typename": "Media",
+						"media": null,
+						"role": "SCREENSHOT",
+						"type": "IMAGE",
+						"url": "https://image.api.playstation.com/vulcan/ap/rnd/202010/2220/yflQqoU4Zaewx8E7k00XwtJ3.jpg"
+					},
+					{
+						"__typename": "Media",
+						"media": null,
+						"role": "SCREENSHOT",
+						"type": "IMAGE",
+						"url": "https://image.api.playstation.com/vulcan/ap/rnd/202010/2220/YwoJhcWqKWLrWlHSZ126pBIJ.jpg"
+					},
+					{
+						"__typename": "Media",
+						"media": null,
+						"role": "SCREENSHOT",
+						"type": "IMAGE",
+						"url": "https://image.api.playstation.com/vulcan/ap/rnd/202010/2220/s42j6S4qUTxO7hj5N0rUwOlH.jpg"
+					},
+					{
+						"__typename": "Media",
+						"media": null,
+						"role": "SCREENSHOT",
+						"type": "IMAGE",
+						"url": "https://image.api.playstation.com/vulcan/ap/rnd/202010/2220/QAHM802LHGoe9ALgn4PSX0kN.jpg"
+					},
+					{
+						"__typename": "Media",
+						"media": null,
+						"role": "SCREENSHOT",
+						"type": "IMAGE",
+						"url": "https://image.api.playstation.com/vulcan/ap/rnd/202010/2220/UrTaEwu5MNuvSxLY7x9G2b9G.jpg"
+					},
+					{
+						"__typename": "Media",
+						"media": null,
+						"role": "MASTER",
+						"type": "IMAGE",
+						"url": "https://image.api.playstation.com/vulcan/ap/rnd/202010/2220/RfRnyMuPPdQraj09cluhX5yZ.png"
+					}
+				],
+				"name": "Risk of Rain 2",
+				"privacyPolicy": "https://www.gearboxpublishing.com",
+				"publisherName": "GEARBOX",
+				"releaseDate": {
+					"__typename": "ReleaseDate",
+					"type": "DAY_MONTH_YEAR",
+					"value": "2019-08-29T00:00:00Z"
+				}
+			},
+			"backwardsCompatibilityCategory": null,
+			"combinedLocalizedGenres": [
+				{ "__typename": "LocalizedGenreSubGenre", "value": "Azione" },
+				{ "__typename": "LocalizedGenreSubGenre", "value": "Azione" },
+				{ "__typename": "LocalizedGenreSubGenre", "value": "Combattimento" }
+			],
+			"compatibilityNotices": [
+				{
+					"__typename": "CompatibilityNotice",
+					"type": "NO_OF_PLAYERS",
+					"value": "1"
+				},
+				{
+					"__typename": "CompatibilityNotice",
+					"type": "NO_OF_NETWORK_PLAYERS_PS_PLUS",
+					"value": "4"
+				},
+				{
+					"__typename": "CompatibilityNotice",
+					"type": "REMOTE_PLAY_SUPPORTED",
+					"value": "true"
+				},
+				{
+					"__typename": "CompatibilityNotice",
+					"type": "ONLINE_PLAY_MODE",
+					"value": "OPTIONAL"
+				},
+				{
+					"__typename": "CompatibilityNotice",
+					"type": "STREAMING_SUPPORTED",
+					"value": "ENABLED"
+				},
+				{
+					"__typename": "CompatibilityNotice",
+					"type": "PS_PLUS_REQUIRED",
+					"value": "true"
+				}
+			],
+			"contentRating": {
+				"__typename": "ProductContentRating",
+				"authority": "PEGI",
+				"description": "PEGI 12",
+				"descriptors": [
+					{
+						"__typename": "ProductContentRatingDescriptor",
+						"description": "Linguaggio",
+						"name": "PEGI_LANGUAGE",
+						"url": "https://image.api.playstation.com/grc/images/descriptors/4k/pegi/language.png"
+					},
+					{
+						"__typename": "ProductContentRatingDescriptor",
+						"description": "Violenza",
+						"name": "PEGI_VIOLENCE",
+						"url": "https://image.api.playstation.com/grc/images/descriptors/4k/pegi/violence.png"
+					}
+				],
+				"interactiveElements": [],
+				"name": "PEGI_12",
+				"url": "https://image.api.playstation.com/grc/images/ratings/4k/pegi/12.png"
+			},
+			"descriptions": [
+				{
+					"__typename": "Description",
+					"type": "LEGAL",
+					"value": "Per giocare a questo gioco su PS5, è possibile che tu debba aggiornare il software di sistema alla versione più recente. Anche se questo gioco è utilizzabile su PS5, alcune funzioni disponibili su PS4 potrebbero non risultare disponibili. Per ulteriori informazioni, consulta la pagina PlayStation.com/bc."
+				},
+				{
+					"__typename": "Description",
+					"type": "LONG",
+					"value": "Risk of Rain 2 dà diritto all'acquisto di entrambe le versioni del gioco, PS4® e PS5®, sullo stesso account PlayStation™ Network. Se si possiede la versione PS4®, è possibile effettuare l'aggiornamento alla versione PS5® senza costi aggiuntivi. L'acquisto della versione PS5® garantisce anche l'accesso alla versione PS4®. Goditi Risk of Rain 2 su entrambe le console con un unico acquisto.*<br/><br/>Fuggi da un caotico pianeta alieno combattendo orde di mostri infuriati - con i tuoi amici o da solo. Combina il bottino in maniere sorprendenti e padroneggia ogni personaggio finché non diventerai quel che ti faceva tremare quando sei atterrato per la prima volta.<br/><br/>SOPRAVVIVI SU UN PIANETA ALIENO<br/>Ti aspettano più di una dozzina di location create a mano, ciascuna piena di mostri difficili da sconfiggere e boss enormi che cercheranno di porre fine alla tua esistenza. Combatti fino all'ultimo boss e fuggi o continua la partita all'infinito per vedere quanto a lungo riesci a sopravvivere. Un sistema di scaling unico fa sì che sia tu che i tuoi avversari possiate aumentare di forza senza alcun limite nel corso di una partita.<br/><br/>SCOPRI POTENTI NUOVI OGGETTI<br/>Più di 110 oggetti rendono ogni partita unica e piena di nuove sfide. Più oggetti raccogli, più si combinano i loro effetti e più sorprendenti saranno alcune di quelle combinazioni. Trovando gli oggetti, scoprirai più storia (e strategia) nei diari.<br/><br/>SBLOCCA NUOVI MODI DI GIOCARE <br/>Sblocca una ciurma di dieci sopravvissuti, ciascuno con il proprio stile unico di combattimento e abilità alternative da padroneggiare. Impara i segreti degli Artefatti per attivare modificatori di gioco come il fuoco amico, generazione di sopravvissuti casuali, selezione oggetti e tanti altri. Con livelli, nemici e oggetti casuali, due partite non saranno mai uguali.<br/><br/>GIOCA DA SOLO O IN COOPERATIVA<br/>Affronta l'avventura in solitaria o con fino a tre amici nel co-op online, o competi nelle Sfide prismatiche. Sopravvissuti nuovi come il Capitano e MUL-T si uniscono a classici come l'Ingegnere, la Cacciatrice e, ovviamente, il Commando.<br/>"
+				},
+				{
+					"__typename": "Description",
+					"type": "COMPATIBILITY_NOTICE",
+					"value": "Abbonamento a PS Plus richiesto per giocare online<br/>Supporta fino a 4 giocatori online con PS Plus<br/>Gioco online facoltativo<br/>1 giocatori<br/>Gioco in remoto supportato"
+				},
+				{
+					"__typename": "Description",
+					"type": "LEGAL",
+					"value": "<br><br>Il download del presente prodotto è soggetto ai Termini di servizio e alle Condizioni d'uso del software di PlayStation e a qualsiasi altra condizione supplementare specifica applicabile a questo articolo. Se non si desidera accettare questi Termini, non scaricare questo articolo. Per maggiori dettagli, consultare i Termini di Servizio.<br>"
+				},
+				{
+					"__typename": "Description",
+					"type": "LEGAL",
+					"value": "<br>Puoi scaricare ed eseguire questo contenuto sulla console PS5 principale associata al tuo account (tramite l'impostazione “Condivisione console e riproduzione offline”) e su qualsiasi altra console PS5 quando effettui il login con lo stesso account.<br>"
+				},
+				{
+					"__typename": "Description",
+					"type": "LEGAL",
+					"value": "<br>Prima di usare questo prodotto, leggere attentamente le <a href=\"https://www.playstation.com/legal/health-warning/\">Avvertenze per la salute</a>.<br>"
+				},
+				{
+					"__typename": "Description",
+					"type": "LEGAL",
+					"value": "<br>Library programs ©Sony Interactive Entertainment Inc. concesso in licenza esclusivamente a Sony Interactive Entertainment Europe. Si applicano i Termini d'uso del software. Si consiglia di visitare eu.playstation.com/legal per i diritti di utilizzo completi.<br>"
+				},
+				{
+					"__typename": "Description",
+					"type": "LEGAL",
+					"value": "<br/>© 2023 Gearbox. Published and distributed by Gearbox Publishing. Gearbox and Risk of Rain, and the Gearbox Publishing logo, are registered trademarks of Gearbox. Developed by Hopoo Games, LLC.<br/>"
+				}
+			],
+			"edition": {
+				"__typename": "ProductEdition",
+				"features": [],
+				"invariantName": "",
+				"name": "",
+				"ordering": null,
+				"type": "OTHER"
+			},
+			"id": "EP0290-PPSA06517_00-RISKOFRAIN2SIEE0",
+			"invariantName": "Risk of Rain 2",
+			"localizedStoreDisplayClassification": "Gioco completo",
+			"media": [
+				{
+					"__typename": "Media",
+					"media": null,
+					"role": "BACKGROUND",
+					"type": "IMAGE",
+					"url": "https://image.api.playstation.com/vulcan/ap/rnd/202010/2220/LM0jJfTqQ9Jy6lajETTZMLKR.png"
+				},
+				{
+					"__typename": "Media",
+					"media": null,
+					"role": "FOUR_BY_THREE_BANNER",
+					"type": "IMAGE",
+					"url": "https://image.api.playstation.com/vulcan/ap/rnd/202010/2220/imzFGFr7zSXk9YwQE0aBwKoT.jpg"
+				},
+				{
+					"__typename": "Media",
+					"media": null,
+					"role": "GAMEHUB_COVER_ART",
+					"type": "IMAGE",
+					"url": "https://image.api.playstation.com/vulcan/ap/rnd/202204/0816/kssUl8XMS7rNA7pkqzZZNl6h.jpg"
+				},
+				{
+					"__typename": "Media",
+					"media": null,
+					"role": "LOGO",
+					"type": "IMAGE",
+					"url": "https://image.api.playstation.com/vulcan/ap/rnd/202204/0522/Go9W1rjvYFPB75azxOM8ceD1.png"
+				},
+				{
+					"__typename": "Media",
+					"media": null,
+					"role": "PORTRAIT_BANNER",
+					"type": "IMAGE",
+					"url": "https://image.api.playstation.com/vulcan/ap/rnd/202010/2220/9aeJN575U8zzypnANohrtxHi.jpg"
+				},
+				{
+					"__typename": "Media",
+					"media": null,
+					"role": "SCREENSHOT",
+					"type": "IMAGE",
+					"url": "https://image.api.playstation.com/vulcan/ap/rnd/202010/2220/Sekcse7RaPOPo8LtCsNSlo4k.jpg"
+				},
+				{
+					"__typename": "Media",
+					"media": null,
+					"role": "SCREENSHOT",
+					"type": "IMAGE",
+					"url": "https://image.api.playstation.com/vulcan/ap/rnd/202010/2220/yflQqoU4Zaewx8E7k00XwtJ3.jpg"
+				},
+				{
+					"__typename": "Media",
+					"media": null,
+					"role": "SCREENSHOT",
+					"type": "IMAGE",
+					"url": "https://image.api.playstation.com/vulcan/ap/rnd/202010/2220/YwoJhcWqKWLrWlHSZ126pBIJ.jpg"
+				},
+				{
+					"__typename": "Media",
+					"media": null,
+					"role": "SCREENSHOT",
+					"type": "IMAGE",
+					"url": "https://image.api.playstation.com/vulcan/ap/rnd/202010/2220/s42j6S4qUTxO7hj5N0rUwOlH.jpg"
+				},
+				{
+					"__typename": "Media",
+					"media": null,
+					"role": "SCREENSHOT",
+					"type": "IMAGE",
+					"url": "https://image.api.playstation.com/vulcan/ap/rnd/202010/2220/QAHM802LHGoe9ALgn4PSX0kN.jpg"
+				},
+				{
+					"__typename": "Media",
+					"media": null,
+					"role": "SCREENSHOT",
+					"type": "IMAGE",
+					"url": "https://image.api.playstation.com/vulcan/ap/rnd/202010/2220/UrTaEwu5MNuvSxLY7x9G2b9G.jpg"
+				},
+				{
+					"__typename": "Media",
+					"media": null,
+					"role": "SCREENSHOT",
+					"type": "IMAGE",
+					"url": "https://image.api.playstation.com/vulcan/ap/rnd/202010/2220/6IEAkyT8xORFDYFkXKlgWsKn.jpg"
+				},
+				{
+					"__typename": "Media",
+					"media": null,
+					"role": "MASTER",
+					"type": "IMAGE",
+					"url": "https://image.api.playstation.com/vulcan/ap/rnd/202010/2220/RfRnyMuPPdQraj09cluhX5yZ.png"
+				}
+			],
+			"name": "Risk of Rain 2",
+			"npTitleId": "PPSA06517_00",
+			"platforms": ["PS4", "PS5"],
+			"privacyPolicy": "https://www.gearboxpublishing.com",
+			"publisherName": "GEARBOX",
+			"releaseDate": "2024-08-27T17:00:00Z",
+			"screenLanguages": [
+				"de",
+				"en",
+				"es",
+				"fr",
+				"it",
+				"tr",
+				"ru",
+				"ja",
+				"zh",
+				"ko",
+				"pt_BR"
+			],
+			"spokenLanguages": [],
+			"storeDisplayClassification": "FULL_GAME",
+			"subType": "FULL_GAME",
+			"topCategory": "GAME",
+			"type": "GAME"
+		}
+	}
+}

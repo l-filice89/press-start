@@ -67,7 +67,7 @@ import {
  *   total (cron) ≈ 10 external + 24 D1 = 34 of 50, worst case; a typical chunk of
  *   small keys is ~20. The HTTP path swaps findUserByEmail for the auth
  *   middleware (3) and pays one more lock call: ~37.
- * A 20-key region is 5 chunks; the cron fires 7× a month, so a refresh + a full
+ * A 20-key region is 5 chunks; the cron fires 28× a month, so a refresh + a full
  * sweep converge inside one monthly window.
  */
 const CHUNK_SIZE = 4;

@@ -58,6 +58,24 @@ export interface ShelfGame {
 	ownedVia: 'purchase' | 'membership' | null;
 	releaseDate: string | null;
 	genres: string[];
+	/** IGDB reception scores (Story 10.1, VR-5): 0–100 verbatim, null = IGDB
+	 * has none and the UI renders NO score area (never a zero). Counts ride
+	 * along so the UI can show sample size (3 reviews ≠ 300). */
+	criticScore: number | null;
+	criticScoreCount: number | null;
+	userScore: number | null;
+	userScoreCount: number | null;
+	/** Date the game LEFT the PS+ Extra catalog (Story 10.2, VR-6) — drives
+	 * the amber warning pill; null = in catalog or never was. The card gates
+	 * display on `!owned` (FR-38), same as the PS+ pill. */
+	/** Date the game LEAVES PS+ (Story 10.4, store endTime); null = staying. */
+	psPlusLeavingOn: string | null;
+	/** Time-to-beat in SECONDS (Story 10.3, VR-8) — story / 100% / submission
+	 * count; the UI rounds to hours. Null = absent (never a zero, and the
+	 * completionist figure never stands in for the story figure). */
+	ttbStorySeconds: number | null;
+	ttbCompleteSeconds: number | null;
+	ttbCount: number | null;
 }
 
 function bakeCard(row: LibraryRow, genres: string[]): ShelfGame {
@@ -96,6 +114,14 @@ function bakeCard(row: LibraryRow, genres: string[]): ShelfGame {
 		ownedVia: row.ownedVia,
 		releaseDate: row.releaseDate,
 		genres,
+		criticScore: row.criticScore,
+		criticScoreCount: row.criticScoreCount,
+		userScore: row.userScore,
+		userScoreCount: row.userScoreCount,
+		psPlusLeavingOn: row.psPlusLeavingOn,
+		ttbStorySeconds: row.ttbStorySeconds,
+		ttbCompleteSeconds: row.ttbCompleteSeconds,
+		ttbCount: row.ttbCount,
 	};
 }
 
