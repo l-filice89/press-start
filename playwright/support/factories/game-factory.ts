@@ -19,7 +19,7 @@ export interface SeedGame {
 	userScore: number | null;
 	userScoreCount: number | null;
 	/** Story 10.2: date the game left the PS+ catalog (warning pill). */
-	psPlusLeftOn: string | null;
+	psPlusLeavingOn: string | null;
 	/** Story 10.3: time-to-beat seconds (story / 100% / submissions). */
 	ttbStorySeconds: number | null;
 	ttbCompleteSeconds: number | null;
@@ -58,7 +58,7 @@ export function createGame(
 		criticScoreCount: null,
 		userScore: null,
 		userScoreCount: null,
-		psPlusLeftOn: null,
+		psPlusLeavingOn: null,
 		ttbStorySeconds: null,
 		ttbCompleteSeconds: null,
 		ttbCount: null,

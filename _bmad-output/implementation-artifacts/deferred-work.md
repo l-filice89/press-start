@@ -478,6 +478,7 @@ resolution: done 2026-07-16 (Story 10.2) — DECIDED: `first_seen_at` keeps its 
 - source_spec: `_bmad-output/implementation-artifacts/spec-10-2-leaving-ps-extra-soon-vr-6.md`
   summary: The LEFT PS+ warning never expires — a game that departed years ago still renders the amber pill, decaying from signal into noise.
   evidence: `ps_plus_left_on` only clears on catalog re-entry or (display-wise) on owning the game; no staleness policy exists. Fine for a fresh feature on a monthly-refresh catalog; revisit when the first genuinely stale warning annoys (candidate: hide after N months, or a per-game dismiss).
+  resolution: done 2026-07-16 (Story 10.4) — the LEFT PS+ pill was retired outright (Luca's directive: departure no longer deserves a warning); `ps_plus_left_on` survives as a quiet internal fact and renders nowhere, so there is no pill left to go stale. The replacement LEAVING warning self-expires: its date clears when the game departs (atomic with the flag clear) or is reprieved (next sweep writes null).
 
 ### DW-14: Seed-imported games persist import-day scores but have no IGDB anchor — they never refresh
 - source_spec: `_bmad-output/implementation-artifacts/spec-10-3-time-to-beat-the-story-and-100-vr-8.md` (found by the 2026-07-16 independent follow-up review)
@@ -487,3 +488,7 @@ resolution: done 2026-07-16 (Story 10.2) — DECIDED: `first_seen_at` keeps its 
 - source_spec: `_bmad-output/implementation-artifacts/spec-10-5-scores-in-add-modal-color-graded.md`
   summary: `.sr-only` is defined only in `web/shelf/card.css` yet consumed app-wide (catalog/Catalog.tsx, CatalogCard.tsx, IgdbMatchPicker/ScoreBadges) — it works solely because the app ships one CSS bundle; code splitting or reuse outside the bundle would render every sr-only string visibly inline.
   evidence: `grep -rln 'sr-only' web --include='*.tsx'` hits files in web/catalog that import no shelf css; the only definition is card.css:7. Pre-existing pattern (predates 10.5); fix is a one-rule global sheet when anyone touches bundling.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-10-4-leaving-ps-soon-last-chance-category.md`
+  summary: The 15th–21st cron window can miss a departure entirely — a date announced after the 21st for a departure effective before the next 15th is never observed, so the game gets no "leaving" warning at all.
+  evidence: Review finding on the 10.4 diff. The cron (`0 9,21 15-21 * *`) only sweeps inside the monthly window; Sony sometimes announces month-boundary rotations after the 21st. Candidate fixes: a second short window (e.g. 1st–3rd), or riding the leaving sweep on the "Check PS+ Extra" button. Cadence/product decision, not a code defect.

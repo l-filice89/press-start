@@ -1,0 +1,966 @@
+{
+	"data": {
+		"conceptRetrieve": {
+			"__typename": "Concept",
+			"defaultProduct": {
+				"__typename": "Product",
+				"id": "EP9000-PPSA01285_00-RETURNALGAME0001",
+				"mobilectas": [
+					{
+						"__typename": "GameCTA",
+						"action": {
+							"__typename": "Action",
+							"param": [
+								{
+									"__typename": "ActionParam",
+									"name": "skuId",
+									"values": ["EP9000-PPSA01285_00-RETURNALGAME0001-E002"]
+								},
+								{
+									"__typename": "ActionParam",
+									"name": "prologueEmsAlias",
+									"values": ["plus--gamehub_upsell_cta--game_catalog"]
+								},
+								{
+									"__typename": "ActionParam",
+									"name": "componentId",
+									"values": ["DA9EC4B7-B133-4584-B702-90D180A6339E"]
+								},
+								{
+									"__typename": "ActionParam",
+									"name": "tierLabel",
+									"values": ["TIER_20"]
+								},
+								{
+									"__typename": "ActionParam",
+									"name": "membershipType",
+									"values": ["PS_PLUS"]
+								},
+								{
+									"__typename": "ActionParam",
+									"name": "tierNumber",
+									"values": ["2"]
+								},
+								{
+									"__typename": "ActionParam",
+									"name": "rewardId",
+									"values": ["SUB001-SUBC00002_00-TJ4KZ94GWFC3NYB0"]
+								},
+								{
+									"__typename": "ActionParam",
+									"name": "rewardId",
+									"values": ["SUB001-SUBC00002_00-TJ4KZ94GWFC3NYB0"]
+								}
+							],
+							"type": "ADD_TO_CART"
+						},
+						"meta": {
+							"__typename": "CTAMeta",
+							"exclusive": false,
+							"ineligibilityReasons": [],
+							"preOrder": false,
+							"upSellService": "PS_PLUS"
+						},
+						"price": {
+							"__typename": "Price",
+							"basePrice": "€79,99",
+							"basePriceValue": 7999,
+							"campaignId": null,
+							"currencyCode": "EUR",
+							"discountText": "Inclusi",
+							"discountedPrice": "Inclusi",
+							"discountedValue": 0,
+							"endTime": null,
+							"isExclusive": false,
+							"isFree": true,
+							"isTiedToSubscription": true,
+							"qualifications": [
+								{
+									"__typename": "Qualification",
+									"type": "ENTITLEMENT_IN_CART",
+									"value": "SUB001-SUBC00002_00-TJ4KZ94GWFC3NYB0"
+								}
+							],
+							"rewardId": "SUB001-SUBC00002_00-TJ4KZ94GWFC3NYB0",
+							"serviceBranding": ["PS_PLUS"],
+							"upsellText": "Abbonati a PlayStation Plus Extra per accedere a questo e a centinaia di altri giochi nel Catalogo dei giochi"
+						},
+						"type": "UPSELL_PS_PLUS_GAME_CATALOG"
+					},
+					{
+						"__typename": "GameCTA",
+						"action": {
+							"__typename": "Action",
+							"param": [
+								{
+									"__typename": "ActionParam",
+									"name": "skuId",
+									"values": ["EP9000-PPSA01285_00-RETURNALGAME0001-E002"]
+								},
+								{
+									"__typename": "ActionParam",
+									"name": "rewardId",
+									"values": ["OUTRIGHT"]
+								},
+								{
+									"__typename": "ActionParam",
+									"name": "conceptId",
+									"values": ["10000176"]
+								}
+							],
+							"type": "ADD_TO_CART"
+						},
+						"meta": {
+							"__typename": "CTAMeta",
+							"exclusive": false,
+							"ineligibilityReasons": [],
+							"preOrder": false,
+							"upSellService": "NONE"
+						},
+						"price": {
+							"__typename": "Price",
+							"basePrice": "€79,99",
+							"basePriceValue": 7999,
+							"campaignId": null,
+							"currencyCode": "EUR",
+							"discountText": null,
+							"discountedPrice": "€79,99",
+							"discountedValue": 7999,
+							"endTime": null,
+							"isExclusive": false,
+							"isFree": false,
+							"isTiedToSubscription": false,
+							"qualifications": [],
+							"rewardId": "",
+							"serviceBranding": ["NONE"],
+							"upsellText": null
+						},
+						"type": "ADD_TO_CART"
+					}
+				],
+				"price": {
+					"__typename": "SkuPrice",
+					"basePrice": "€79,99",
+					"basePriceValue": 7999,
+					"campaignId": null,
+					"currencyCode": "EUR",
+					"discountText": null,
+					"discountedPrice": "€79,99",
+					"discountedValue": 7999,
+					"endTime": null,
+					"isExclusive": false,
+					"isFree": false,
+					"isTiedToSubscription": false,
+					"qualifications": null,
+					"rewardId": "",
+					"serviceBranding": ["NONE"],
+					"skuId": "EP9000-PPSA01285_00-RETURNALGAME0001-E002",
+					"upsellText": "Extra"
+				}
+			},
+			"id": "10000176",
+			"isInWishlist": false,
+			"isWishlistable": false,
+			"ownedTitles": [],
+			"selectableProducts": {
+				"__typename": "SelectableProducts",
+				"purchasableProducts": [
+					{
+						"__typename": "Product",
+						"isInWishlist": false,
+						"isWishlistable": true,
+						"mobilectas": [
+							{
+								"__typename": "GameCTA",
+								"action": {
+									"__typename": "Action",
+									"param": [
+										{
+											"__typename": "ActionParam",
+											"name": "skuId",
+											"values": ["EP9000-PPSA01285_00-RETURNALGAME0001-E002"]
+										},
+										{
+											"__typename": "ActionParam",
+											"name": "prologueEmsAlias",
+											"values": ["plus--gamehub_upsell_cta--game_catalog"]
+										},
+										{
+											"__typename": "ActionParam",
+											"name": "componentId",
+											"values": ["DA9EC4B7-B133-4584-B702-90D180A6339E"]
+										},
+										{
+											"__typename": "ActionParam",
+											"name": "tierLabel",
+											"values": ["TIER_20"]
+										},
+										{
+											"__typename": "ActionParam",
+											"name": "membershipType",
+											"values": ["PS_PLUS"]
+										},
+										{
+											"__typename": "ActionParam",
+											"name": "tierNumber",
+											"values": ["2"]
+										},
+										{
+											"__typename": "ActionParam",
+											"name": "rewardId",
+											"values": ["SUB001-SUBC00002_00-TJ4KZ94GWFC3NYB0"]
+										},
+										{
+											"__typename": "ActionParam",
+											"name": "rewardId",
+											"values": ["SUB001-SUBC00002_00-TJ4KZ94GWFC3NYB0"]
+										}
+									],
+									"type": "ADD_TO_CART"
+								},
+								"meta": {
+									"__typename": "CTAMeta",
+									"exclusive": false,
+									"ineligibilityReasons": [],
+									"preOrder": false,
+									"upSellService": "PS_PLUS"
+								},
+								"price": {
+									"__typename": "Price",
+									"basePrice": "€79,99",
+									"basePriceValue": 7999,
+									"campaignId": null,
+									"currencyCode": "EUR",
+									"discountText": "Inclusi",
+									"discountedPrice": "Inclusi",
+									"discountedValue": 0,
+									"endTime": null,
+									"isExclusive": false,
+									"isFree": true,
+									"isTiedToSubscription": true,
+									"qualifications": [
+										{
+											"__typename": "Qualification",
+											"type": "ENTITLEMENT_IN_CART",
+											"value": "SUB001-SUBC00002_00-TJ4KZ94GWFC3NYB0"
+										}
+									],
+									"rewardId": "SUB001-SUBC00002_00-TJ4KZ94GWFC3NYB0",
+									"serviceBranding": ["PS_PLUS"],
+									"upsellText": "Abbonati a PlayStation Plus Extra per accedere a questo e a centinaia di altri giochi nel Catalogo dei giochi"
+								},
+								"type": "UPSELL_PS_PLUS_GAME_CATALOG"
+							},
+							{
+								"__typename": "GameCTA",
+								"action": {
+									"__typename": "Action",
+									"param": [
+										{
+											"__typename": "ActionParam",
+											"name": "skuId",
+											"values": ["EP9000-PPSA01285_00-RETURNALGAME0001-E002"]
+										},
+										{
+											"__typename": "ActionParam",
+											"name": "rewardId",
+											"values": ["OUTRIGHT"]
+										},
+										{
+											"__typename": "ActionParam",
+											"name": "conceptId",
+											"values": ["10000176"]
+										}
+									],
+									"type": "ADD_TO_CART"
+								},
+								"meta": {
+									"__typename": "CTAMeta",
+									"exclusive": false,
+									"ineligibilityReasons": [],
+									"preOrder": false,
+									"upSellService": "NONE"
+								},
+								"price": {
+									"__typename": "Price",
+									"basePrice": "€79,99",
+									"basePriceValue": 7999,
+									"campaignId": null,
+									"currencyCode": "EUR",
+									"discountText": null,
+									"discountedPrice": "€79,99",
+									"discountedValue": 7999,
+									"endTime": null,
+									"isExclusive": false,
+									"isFree": false,
+									"isTiedToSubscription": false,
+									"qualifications": [],
+									"rewardId": "",
+									"serviceBranding": ["NONE"],
+									"upsellText": null
+								},
+								"type": "ADD_TO_CART"
+							}
+						],
+						"price": {
+							"__typename": "SkuPrice",
+							"basePrice": "€79,99",
+							"basePriceValue": 7999,
+							"campaignId": null,
+							"currencyCode": "EUR",
+							"discountText": null,
+							"discountedPrice": "€79,99",
+							"discountedValue": 7999,
+							"endTime": null,
+							"isExclusive": false,
+							"isFree": false,
+							"isTiedToSubscription": false,
+							"qualifications": null,
+							"rewardId": "",
+							"serviceBranding": ["NONE"],
+							"skuId": "EP9000-PPSA01285_00-RETURNALGAME0001-E002",
+							"upsellText": "Extra"
+						},
+						"backwardsCompatibilityCategory": null,
+						"combinedLocalizedGenres": [
+							{
+								"__typename": "LocalizedGenreSubGenre",
+								"value": "Sparatutto in terza persona"
+							}
+						],
+						"compatibilityNotices": [
+							{
+								"__typename": "CompatibilityNotice",
+								"type": "NO_OF_PLAYERS",
+								"value": "1"
+							},
+							{
+								"__typename": "CompatibilityNotice",
+								"type": "NO_OF_NETWORK_PLAYERS_PS_PLUS",
+								"value": "2"
+							},
+							{
+								"__typename": "CompatibilityNotice",
+								"type": "PS5_VIBRATION",
+								"value": "OPTIONAL"
+							},
+							{
+								"__typename": "CompatibilityNotice",
+								"type": "PS5_TRIGGER_EFFECT",
+								"value": "OPTIONAL"
+							},
+							{
+								"__typename": "CompatibilityNotice",
+								"type": "ONLINE_PLAY_MODE",
+								"value": "OPTIONAL"
+							},
+							{
+								"__typename": "CompatibilityNotice",
+								"type": "GRAPHICS_ENHANCED",
+								"value": "true"
+							},
+							{
+								"__typename": "CompatibilityNotice",
+								"type": "PS_PLUS_REQUIRED",
+								"value": "true"
+							}
+						],
+						"contentRating": {
+							"__typename": "ProductContentRating",
+							"authority": "PEGI",
+							"description": "PEGI 16",
+							"descriptors": [
+								{
+									"__typename": "ProductContentRatingDescriptor",
+									"description": "Violenza",
+									"name": "PEGI_VIOLENCE",
+									"url": "https://image.api.playstation.com/grc/images/descriptors/4k/pegi/violence.png"
+								}
+							],
+							"interactiveElements": [],
+							"name": "PEGI_16",
+							"url": "https://image.api.playstation.com/grc/images/ratings/4k/pegi/16.png"
+						},
+						"descriptions": [
+							{
+								"__typename": "Description",
+								"type": "SHORT",
+								"value": "Rompi il cerchio in un pianeta alieno in continuo mutamento."
+							},
+							{
+								"__typename": "Description",
+								"type": "LONG",
+								"value": "ROMPI IL CERCHIO<br/><br/>Dopo un atterraggio d'emergenza su un pianeta alieno in continuo mutamento, Selene deve combattere con ogni energia per sopravvivere. Ripetutamente sconfitta, ogni volta è costretta a ricominciare il suo viaggio dal principio.<br/><br/>In questo sparatutto roguelike, il pianeta e il tuo equipaggiamento cambiano a ogni nuovo ciclo, costringendoti ad adattare lo stile di gioco e ad affrontare sfide sempre diverse.<br/><br/>Affronta il labirinto di Atropo da solo o condividi l'intero viaggio con un altro giocatore nella modalità co-op online.¹ Poi, quando ti senti pronto, cimentati nella Torre di Sisifo, una sfida di ascesa con fasi progressivamente più pericolose, che metteranno alla prova la tua abilità di combattimento.²<br/><br/>Affronta i nemici in battaglie all'ultimo proiettile.<br/>Sfrutta le tecnologie aliene per migliorare le tue abilità.<br/>Crea un legame con il pianeta e ricostruisci la storia di Selene.<br/><br/>FUNZIONALITÀ IN-GAME PS5™:<br/>- Caricamento veloce: la velocità di caricamento quasi istantanea della console PS5 permette di rientrare subito in azione.<br/>- Tempest 3D AudioTech: i suoni provengono da ogni direzione, tra proiettili schivati e nemici in aria o alle tue spalle.<br/>- Grilletti adattivi: cambia modalità di fuoco con un solo grilletto adattivo, passando dalla mira con il mirino al fuoco alternativo dell'arma.<br/>- Feedback aptico: percepisci le azioni di gioco, mentre esplori i ricordi di Selene o fai fuoco con cruente armi aliene.<br/>"
+							},
+							{
+								"__typename": "Description",
+								"type": "COMPATIBILITY_NOTICE",
+								"value": "Abbonamento a PS Plus richiesto per giocare online<br/>Supporta fino a 2 giocatori online con PS Plus<br/>Gioco online facoltativo<br/>Funzione di vibrazione ed effetto grilletto supportati (controller wireless DualSense)<br/>1 giocatori<br/>Ottimizzato per PS5 Pro"
+							},
+							{
+								"__typename": "Description",
+								"type": "LEGAL",
+								"value": "<br><br>Il download del presente prodotto è soggetto ai Termini di servizio e alle Condizioni d'uso del software di PlayStation e a qualsiasi altra condizione supplementare specifica applicabile a questo articolo. Se non si desidera accettare questi Termini, non scaricare questo articolo. Per maggiori dettagli, consultare i Termini di Servizio.<br>"
+							},
+							{
+								"__typename": "Description",
+								"type": "LEGAL",
+								"value": "<br>Puoi scaricare ed eseguire questo contenuto sulla console PS5 principale associata al tuo account (tramite l'impostazione “Condivisione console e riproduzione offline”) e su qualsiasi altra console PS5 quando effettui il login con lo stesso account.<br>"
+							},
+							{
+								"__typename": "Description",
+								"type": "LEGAL",
+								"value": "<br>Prima di usare questo prodotto, leggere attentamente le <a href=\"https://www.playstation.com/legal/health-warning/\">Avvertenze per la salute</a>.<br>"
+							},
+							{
+								"__typename": "Description",
+								"type": "LEGAL",
+								"value": "<br>Library programs ©Sony Interactive Entertainment Inc. concesso in licenza esclusivamente a Sony Interactive Entertainment Europe. Si applicano i Termini d'uso del software. Si consiglia di visitare eu.playstation.com/legal per i diritti di utilizzo completi.<br>"
+							},
+							{
+								"__typename": "Description",
+								"type": "LEGAL",
+								"value": "<br/>¹ Per scaricare e giocare la modalità co-op sono richiesti una connessione a Internet e un abbonamento PlayStation®Plus. PlayStation Plus è un abbonamento continuo a pagamento, il cui importo periodico verrà addebitato automaticamente in base a una frequenza scelta dall'utente al momento dell'acquisto.<br/><br/>² La Torre di Sisifo, le sequenze nella casa e la modalità sfida non sono disponibili in modalità co-op.<br/><br/>Returnal™ ©2021-2022 Sony Interactive Entertainment Europe. Pubblicato da Sony Interactive Entertainment Europe Ltd. Sviluppato da Housemarque Oy. \"Returnal\" è un marchio di Sony Interactive Entertainment Europe. Tutti i diritti riservati.<br/>"
+							}
+						],
+						"edition": {
+							"__typename": "ProductEdition",
+							"features": ["Returnal™"],
+							"invariantName": "Standard Edition",
+							"name": "Standard Edition",
+							"ordering": 2,
+							"type": "STANDARD"
+						},
+						"id": "EP9000-PPSA01285_00-RETURNALGAME0001",
+						"invariantName": "Returnal",
+						"localizedStoreDisplayClassification": "Gioco completo",
+						"media": [
+							{
+								"__typename": "Media",
+								"media": [
+									{
+										"__typename": "Media",
+										"role": null,
+										"type": "IMAGE",
+										"url": "https://image.api.playstation.com/vulcan/img/rnd/202102/1518/Fx0wsiZvF2dHmLf2qyIOahvL.png"
+									}
+								],
+								"role": "PREVIEW",
+								"type": "VIDEO",
+								"url": "https://vulcan.dl.playstation.net/img/rnd/202102/1518/UvciPqmaakRucBoT3UnP6dZW.mp4"
+							},
+							{
+								"__typename": "Media",
+								"media": null,
+								"role": "EDITION_KEY_ART",
+								"type": "IMAGE",
+								"url": "https://image.api.playstation.com/vulcan/ap/rnd/202011/1621/nnvaURoYxPIoqqF7hO5JIatg.jpg"
+							},
+							{
+								"__typename": "Media",
+								"media": null,
+								"role": "FOUR_BY_THREE_BANNER",
+								"type": "IMAGE",
+								"url": "https://image.api.playstation.com/vulcan/ap/rnd/202011/1621/X2Qex2nMaLxX6M1z4jyeHcwD.png"
+							},
+							{
+								"__typename": "Media",
+								"media": null,
+								"role": "GAMEHUB_COVER_ART",
+								"type": "IMAGE",
+								"url": "https://image.api.playstation.com/vulcan/ap/rnd/202011/1621/oE5NHcrITZnKa1kYSCQtsoRE.png"
+							},
+							{
+								"__typename": "Media",
+								"media": null,
+								"role": "LOGO",
+								"type": "IMAGE",
+								"url": "https://image.api.playstation.com/vulcan/ap/rnd/202011/1621/ngkpmi0VL456XMDciBRU58qF.png"
+							},
+							{
+								"__typename": "Media",
+								"media": null,
+								"role": "PORTRAIT_BANNER",
+								"type": "IMAGE",
+								"url": "https://image.api.playstation.com/vulcan/ap/rnd/202011/1621/4ItSbqJE88H019Ua3WBQKLF8.png"
+							},
+							{
+								"__typename": "Media",
+								"media": null,
+								"role": "SCREENSHOT",
+								"type": "IMAGE",
+								"url": "https://image.api.playstation.com/vulcan/ap/rnd/202006/1218/eEACljs1JuVv8hlNJ85Whwhm.jpg"
+							},
+							{
+								"__typename": "Media",
+								"media": null,
+								"role": "SCREENSHOT",
+								"type": "IMAGE",
+								"url": "https://image.api.playstation.com/vulcan/img/rnd/202104/1314/prtwcbqxp4C9heF8ocG1n2VT.jpg"
+							},
+							{
+								"__typename": "Media",
+								"media": null,
+								"role": "SCREENSHOT",
+								"type": "IMAGE",
+								"url": "https://image.api.playstation.com/vulcan/img/rnd/202104/1210/4otJ9EBu1EAkZCzyDvCikFSE.jpg"
+							},
+							{
+								"__typename": "Media",
+								"media": null,
+								"role": "SCREENSHOT",
+								"type": "IMAGE",
+								"url": "https://image.api.playstation.com/vulcan/img/rnd/202104/1210/HLSCld96fbtaJAtqnhDbM1eA.jpg"
+							},
+							{
+								"__typename": "Media",
+								"media": null,
+								"role": "SCREENSHOT",
+								"type": "IMAGE",
+								"url": "https://image.api.playstation.com/vulcan/img/rnd/202104/3012/axwLhzHWST2d5joCSrpWFTJW.jpg"
+							},
+							{
+								"__typename": "Media",
+								"media": null,
+								"role": "SCREENSHOT",
+								"type": "IMAGE",
+								"url": "https://image.api.playstation.com/vulcan/img/rnd/202104/3012/LRXB5NhSReYY4WGrggrRrfHu.jpg"
+							},
+							{
+								"__typename": "Media",
+								"media": null,
+								"role": "SCREENSHOT",
+								"type": "IMAGE",
+								"url": "https://image.api.playstation.com/vulcan/img/rnd/202104/3012/U4qJLnElqq4WDA4a1r21lgjb.jpg"
+							},
+							{
+								"__typename": "Media",
+								"media": null,
+								"role": "SCREENSHOT",
+								"type": "IMAGE",
+								"url": "https://image.api.playstation.com/vulcan/img/rnd/202104/3012/xLnUAoc3q9IxsKRK31SZ2DLA.jpg"
+							},
+							{
+								"__typename": "Media",
+								"media": null,
+								"role": "SCREENSHOT",
+								"type": "IMAGE",
+								"url": "https://image.api.playstation.com/vulcan/img/rnd/202104/3012/Qu5pIXv6ZaMKJds1VoRGI9Bg.jpg"
+							},
+							{
+								"__typename": "Media",
+								"media": null,
+								"role": "SCREENSHOT",
+								"type": "IMAGE",
+								"url": "https://image.api.playstation.com/vulcan/img/rnd/202104/3012/GnrGsDHH12ep4mvoPqWItZ1d.jpg"
+							},
+							{
+								"__typename": "Media",
+								"media": null,
+								"role": "MASTER",
+								"type": "IMAGE",
+								"url": "https://image.api.playstation.com/vulcan/ap/rnd/202011/1621/fYZQHZ42eXXUt7c6D5YjLrq5.png"
+							}
+						],
+						"name": "Returnal",
+						"npTitleId": "PPSA01285_00",
+						"platforms": ["PS5"],
+						"privacyPolicy": null,
+						"publisherName": "Sony Interactive Entertainment",
+						"releaseDate": "2021-04-29T22:00:00Z",
+						"screenLanguages": [
+							"ar",
+							"es",
+							"fr",
+							"fi",
+							"ru",
+							"sv",
+							"de",
+							"no",
+							"nl",
+							"pl",
+							"da",
+							"it",
+							"en",
+							"pt"
+						],
+						"spokenLanguages": [
+							"en",
+							"fr",
+							"it",
+							"ar",
+							"es",
+							"pl",
+							"de",
+							"pt",
+							"ru"
+						],
+						"storeDisplayClassification": "FULL_GAME",
+						"subType": "FULL_GAME",
+						"topCategory": "GAME",
+						"type": "GAME"
+					},
+					{
+						"__typename": "Product",
+						"isInWishlist": false,
+						"isWishlistable": true,
+						"mobilectas": [
+							{
+								"__typename": "GameCTA",
+								"action": {
+									"__typename": "Action",
+									"param": [
+										{
+											"__typename": "ActionParam",
+											"name": "skuId",
+											"values": ["EP9000-PPSA01285_00-RETURNALDDE00001-E002"]
+										},
+										{
+											"__typename": "ActionParam",
+											"name": "rewardId",
+											"values": ["OUTRIGHT"]
+										}
+									],
+									"type": "ADD_TO_CART"
+								},
+								"meta": {
+									"__typename": "CTAMeta",
+									"exclusive": false,
+									"ineligibilityReasons": [],
+									"preOrder": false,
+									"upSellService": "NONE"
+								},
+								"price": {
+									"__typename": "Price",
+									"basePrice": "€89,99",
+									"basePriceValue": 8999,
+									"campaignId": "PROMO-PROD-00018497",
+									"currencyCode": "EUR",
+									"discountText": "-45%",
+									"discountedPrice": "€49,49",
+									"discountedValue": 4949,
+									"endTime": "1785365940000",
+									"isExclusive": false,
+									"isFree": false,
+									"isTiedToSubscription": false,
+									"qualifications": [],
+									"rewardId": "OFFER-PROD-18497_45",
+									"serviceBranding": ["NONE"],
+									"upsellText": "Risparmio del 45%"
+								},
+								"type": "ADD_TO_CART"
+							}
+						],
+						"price": {
+							"__typename": "SkuPrice",
+							"basePrice": "€89,99",
+							"basePriceValue": 8999,
+							"campaignId": "PROMO-PROD-00018497",
+							"currencyCode": "EUR",
+							"discountText": "-45%",
+							"discountedPrice": "€49,49",
+							"discountedValue": 4949,
+							"endTime": "1785365940000",
+							"isExclusive": false,
+							"isFree": false,
+							"isTiedToSubscription": false,
+							"qualifications": null,
+							"rewardId": "OFFER-PROD-18497_45",
+							"serviceBranding": ["NONE"],
+							"skuId": "EP9000-PPSA01285_00-RETURNALDDE00001-E002",
+							"upsellText": null
+						},
+						"backwardsCompatibilityCategory": null,
+						"combinedLocalizedGenres": [
+							{
+								"__typename": "LocalizedGenreSubGenre",
+								"value": "Sparatutto in terza persona"
+							}
+						],
+						"compatibilityNotices": [
+							{
+								"__typename": "CompatibilityNotice",
+								"type": "NO_OF_PLAYERS",
+								"value": "1"
+							},
+							{
+								"__typename": "CompatibilityNotice",
+								"type": "NO_OF_NETWORK_PLAYERS_PS_PLUS",
+								"value": "2"
+							},
+							{
+								"__typename": "CompatibilityNotice",
+								"type": "PS5_VIBRATION",
+								"value": "OPTIONAL"
+							},
+							{
+								"__typename": "CompatibilityNotice",
+								"type": "PS5_TRIGGER_EFFECT",
+								"value": "OPTIONAL"
+							},
+							{
+								"__typename": "CompatibilityNotice",
+								"type": "ONLINE_PLAY_MODE",
+								"value": "OPTIONAL"
+							},
+							{
+								"__typename": "CompatibilityNotice",
+								"type": "GRAPHICS_ENHANCED",
+								"value": "true"
+							},
+							{
+								"__typename": "CompatibilityNotice",
+								"type": "PS_PLUS_REQUIRED",
+								"value": "true"
+							}
+						],
+						"contentRating": {
+							"__typename": "ProductContentRating",
+							"authority": "PEGI",
+							"description": "PEGI 16",
+							"descriptors": [
+								{
+									"__typename": "ProductContentRatingDescriptor",
+									"description": "Violenza",
+									"name": "PEGI_VIOLENCE",
+									"url": "https://image.api.playstation.com/grc/images/descriptors/4k/pegi/violence.png"
+								}
+							],
+							"interactiveElements": [],
+							"name": "PEGI_16",
+							"url": "https://image.api.playstation.com/grc/images/ratings/4k/pegi/16.png"
+						},
+						"descriptions": [
+							{
+								"__typename": "Description",
+								"type": "SHORT",
+								"value": "Rompi il cerchio in un pianeta alieno in continuo mutamento."
+							},
+							{
+								"__typename": "Description",
+								"type": "LONG",
+								"value": "Il prezzo in offerta speciale precedente valido dal 07-12-2023 al 11-12-2023 era di €49.49.<br/><br/>La Digital Deluxe Edition include l'accesso a contenuti altrimenti sbloccabili progredendo nella storia:¹<br/>- Arma Fulminatore.¹<br/>- Arma Vuoto implacabile.¹<br/>- Uno stimolante per riflessi.¹<br/>- Un booster adrenalina.¹<br/>- Un manufatto Massa pulsante.¹<br/>- Avatar PSN per PS5™.<br/>- Colonna sonora digitale.<br/><br/>ROMPI IL CERCHIO<br/><br/>Dopo un atterraggio d'emergenza su un pianeta alieno in continuo mutamento, Selene deve combattere con ogni energia per sopravvivere. Ripetutamente sconfitta, ogni volta è costretta a ricominciare il suo viaggio dal principio.<br/><br/>In questo sparatutto roguelike, il pianeta e il tuo equipaggiamento cambiano a ogni nuovo ciclo, costringendoti ad adattare lo stile di gioco e ad affrontare sfide sempre diverse.<br/><br/>Affronta il labirinto di Atropo da solo o condividi l'intero viaggio con un altro giocatore nella modalità co-op online.² Poi, quando ti senti pronto, cimentati nella Torre di Sisifo, una sfida di ascesa con fasi progressivamente più pericolose, che metteranno alla prova la tua abilità di combattimento.³<br/><br/>Affronta i nemici in battaglie all'ultimo proiettile.<br/>Sfrutta le tecnologie aliene per migliorare le tue abilità.<br/>Crea un legame con il pianeta e ricostruisci la storia di Selene.<br/><br/>FUNZIONALITÀ IN-GAME PS5™:<br/>- Caricamento veloce: la velocità di caricamento quasi istantanea della console PS5 permette di rientrare subito in azione.<br/>- Tempest 3D AudioTech: i suoni provengono da ogni direzione, tra proiettili schivati e nemici in aria o alle tue spalle.<br/>- Grilletti adattivi: cambia modalità di fuoco con un solo grilletto adattivo, passando dalla mira con il mirino al fuoco alternativo dell'arma.<br/>- Feedback aptico: percepisci le azioni di gioco, mentre esplori i ricordi di Selene o fai fuoco con cruente armi aliene.<br/>"
+							},
+							{
+								"__typename": "Description",
+								"type": "COMPATIBILITY_NOTICE",
+								"value": "Abbonamento a PS Plus richiesto per giocare online<br/>Supporta fino a 2 giocatori online con PS Plus<br/>Gioco online facoltativo<br/>Funzione di vibrazione ed effetto grilletto supportati (controller wireless DualSense)<br/>1 giocatori<br/>Ottimizzato per PS5 Pro"
+							},
+							{
+								"__typename": "Description",
+								"type": "LEGAL",
+								"value": "<br><br>Il download del presente prodotto è soggetto ai Termini di servizio e alle Condizioni d'uso del software di PlayStation Network e a qualsiasi altra condizione supplementare specifica applicabile a questo articolo. Se non si desidera accettare questi Termini, non scaricare questo articolo. Per maggiori dettagli, consultare i Termini di Servizio.<br>"
+							},
+							{
+								"__typename": "Description",
+								"type": "LEGAL",
+								"value": "<br>Puoi scaricare ed eseguire questo contenuto sulla console PS5 principale associata al tuo account (tramite l'impostazione “Condivisione console e riproduzione offline”) e su qualsiasi altra console PS5 quando effettui il login con lo stesso account.<br>"
+							},
+							{
+								"__typename": "Description",
+								"type": "LEGAL",
+								"value": "<br>Prima di usare questo prodotto, leggere attentamente le <a href=\"https://www.playstation.com/legal/health-warning/\">Avvertenze per la salute</a>.<br>"
+							},
+							{
+								"__typename": "Description",
+								"type": "LEGAL",
+								"value": "<br>Library programs ©Sony Interactive Entertainment Inc. concesso in licenza esclusivamente a Sony Interactive Entertainment Europe. Si applicano i Termini d'uso del software. Si consiglia di visitare eu.playstation.com/legal per i diritti di utilizzo completi.<br>"
+							},
+							{
+								"__typename": "Description",
+								"type": "LEGAL",
+								"value": "<br/>¹ Accedi in anticipo a questi oggetti, altrimenti ottenibili progredendo nel gioco.<br/><br/>² Per scaricare e giocare la modalità co-op sono richiesti una connessione a Internet e un abbonamento PlayStation®Plus. PlayStation Plus è un abbonamento continuo a pagamento, il cui importo periodico verrà addebitato automaticamente in base a una frequenza scelta dall'utente al momento dell'acquisto.<br/><br/>³ La Torre di Sisifo, le sequenze nella casa e la modalità sfida non sono disponibili in modalità co-op. <br/><br/>Returnal™ ©2021-2022 Sony Interactive Entertainment Europe. Pubblicato da Sony Interactive Entertainment Europe Ltd. Sviluppato da Housemarque Oy. \"Returnal\" è un marchio di Sony Interactive Entertainment Europe. Tutti i diritti riservati.<br/>"
+							}
+						],
+						"edition": {
+							"__typename": "ProductEdition",
+							"features": [
+								"Returnal™",
+								"Arma Fulminatore.¹",
+								"Arma Vuoto implacabile.¹",
+								"Uno stimolante per riflessi.¹",
+								"Un booster adrenalina.¹",
+								"Un manufatto Massa pulsante.¹",
+								"Avatar PSN per PS5™.",
+								"Colonna sonora digitale."
+							],
+							"invariantName": "Digital Deluxe Edition",
+							"name": "Digital Deluxe Edition",
+							"ordering": 1,
+							"type": "PREMIUM"
+						},
+						"id": "EP9000-PPSA01285_00-RETURNALDDE00001",
+						"invariantName": "Returnal Digital Deluxe Edition",
+						"localizedStoreDisplayClassification": "Pacchetto di giochi",
+						"media": [
+							{
+								"__typename": "Media",
+								"media": [
+									{
+										"__typename": "Media",
+										"role": null,
+										"type": "IMAGE",
+										"url": "https://image.api.playstation.com/vulcan/img/rnd/202102/1518/Fx0wsiZvF2dHmLf2qyIOahvL.png"
+									}
+								],
+								"role": "PREVIEW",
+								"type": "VIDEO",
+								"url": "https://vulcan.dl.playstation.net/img/rnd/202102/1518/UvciPqmaakRucBoT3UnP6dZW.mp4"
+							},
+							{
+								"__typename": "Media",
+								"media": null,
+								"role": "EDITION_KEY_ART",
+								"type": "IMAGE",
+								"url": "https://image.api.playstation.com/vulcan/ap/rnd/202011/3009/8okRQC2MfZ66CpjaPWDSNQjX.jpg"
+							},
+							{
+								"__typename": "Media",
+								"media": null,
+								"role": "FOUR_BY_THREE_BANNER",
+								"type": "IMAGE",
+								"url": "https://image.api.playstation.com/vulcan/ap/rnd/202011/3009/M0fNdymTxe4TQQgS9365wXma.jpg"
+							},
+							{
+								"__typename": "Media",
+								"media": null,
+								"role": "GAMEHUB_COVER_ART",
+								"type": "IMAGE",
+								"url": "https://image.api.playstation.com/vulcan/ap/rnd/202011/3009/WbCXgSutHvmBlGTVXnNuERRx.jpg"
+							},
+							{
+								"__typename": "Media",
+								"media": null,
+								"role": "LOGO",
+								"type": "IMAGE",
+								"url": "https://image.api.playstation.com/vulcan/ap/rnd/202011/3009/hrh9UrkpTb4YXonEverexSDm.png"
+							},
+							{
+								"__typename": "Media",
+								"media": null,
+								"role": "PORTRAIT_BANNER",
+								"type": "IMAGE",
+								"url": "https://image.api.playstation.com/vulcan/ap/rnd/202011/3009/jACA12Z58ka5V6vvxlcdoQfJ.jpg"
+							},
+							{
+								"__typename": "Media",
+								"media": null,
+								"role": "SCREENSHOT",
+								"type": "IMAGE",
+								"url": "https://image.api.playstation.com/vulcan/ap/rnd/202006/1218/eEACljs1JuVv8hlNJ85Whwhm.jpg"
+							},
+							{
+								"__typename": "Media",
+								"media": null,
+								"role": "SCREENSHOT",
+								"type": "IMAGE",
+								"url": "https://image.api.playstation.com/vulcan/img/rnd/202104/1314/prtwcbqxp4C9heF8ocG1n2VT.jpg"
+							},
+							{
+								"__typename": "Media",
+								"media": null,
+								"role": "SCREENSHOT",
+								"type": "IMAGE",
+								"url": "https://image.api.playstation.com/vulcan/img/rnd/202104/1210/4otJ9EBu1EAkZCzyDvCikFSE.jpg"
+							},
+							{
+								"__typename": "Media",
+								"media": null,
+								"role": "SCREENSHOT",
+								"type": "IMAGE",
+								"url": "https://image.api.playstation.com/vulcan/img/rnd/202104/1210/HLSCld96fbtaJAtqnhDbM1eA.jpg"
+							},
+							{
+								"__typename": "Media",
+								"media": null,
+								"role": "SCREENSHOT",
+								"type": "IMAGE",
+								"url": "https://image.api.playstation.com/vulcan/img/rnd/202104/3012/axwLhzHWST2d5joCSrpWFTJW.jpg"
+							},
+							{
+								"__typename": "Media",
+								"media": null,
+								"role": "SCREENSHOT",
+								"type": "IMAGE",
+								"url": "https://image.api.playstation.com/vulcan/img/rnd/202104/3012/LRXB5NhSReYY4WGrggrRrfHu.jpg"
+							},
+							{
+								"__typename": "Media",
+								"media": null,
+								"role": "SCREENSHOT",
+								"type": "IMAGE",
+								"url": "https://image.api.playstation.com/vulcan/img/rnd/202104/3012/U4qJLnElqq4WDA4a1r21lgjb.jpg"
+							},
+							{
+								"__typename": "Media",
+								"media": null,
+								"role": "SCREENSHOT",
+								"type": "IMAGE",
+								"url": "https://image.api.playstation.com/vulcan/img/rnd/202104/3012/xLnUAoc3q9IxsKRK31SZ2DLA.jpg"
+							},
+							{
+								"__typename": "Media",
+								"media": null,
+								"role": "SCREENSHOT",
+								"type": "IMAGE",
+								"url": "https://image.api.playstation.com/vulcan/img/rnd/202104/3012/Qu5pIXv6ZaMKJds1VoRGI9Bg.jpg"
+							},
+							{
+								"__typename": "Media",
+								"media": null,
+								"role": "SCREENSHOT",
+								"type": "IMAGE",
+								"url": "https://image.api.playstation.com/vulcan/img/rnd/202104/3012/GnrGsDHH12ep4mvoPqWItZ1d.jpg"
+							},
+							{
+								"__typename": "Media",
+								"media": null,
+								"role": "MASTER",
+								"type": "IMAGE",
+								"url": "https://image.api.playstation.com/vulcan/ap/rnd/202011/3009/602G2eMHHKudXKkt4qohOMlk.png"
+							}
+						],
+						"name": "Returnal Digital Deluxe Edition",
+						"npTitleId": "PPSA01285_00",
+						"platforms": ["PS5"],
+						"privacyPolicy": null,
+						"publisherName": "Sony Interactive Entertainment",
+						"releaseDate": "2021-04-29T22:00:00Z",
+						"screenLanguages": [
+							"ar",
+							"es",
+							"fr",
+							"fi",
+							"ru",
+							"sv",
+							"de",
+							"no",
+							"nl",
+							"pl",
+							"da",
+							"it",
+							"en",
+							"pt"
+						],
+						"spokenLanguages": [
+							"en",
+							"fr",
+							"it",
+							"ar",
+							"es",
+							"pl",
+							"de",
+							"pt",
+							"ru"
+						],
+						"storeDisplayClassification": "GAME_BUNDLE",
+						"subType": "BUNDLE",
+						"topCategory": "GAME",
+						"type": "GAME"
+					}
+				],
+				"purchasedTitles": []
+			}
+		}
+	}
+}

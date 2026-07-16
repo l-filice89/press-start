@@ -204,8 +204,10 @@ export async function backfillGameFacts(
  * `D1_ERROR: too many SQL variables`, which failed the whole PS+ check). The
  * `value` bind takes one slot, so the id slice is 99, and the chunks go through
  * one `db.batch` so the write still costs a single binding call (AD-15).
+ * 96, not 99: the clear branch binds THREE values beside the ids since Story
+ * 10.4 (flag + leaving-date clear + departure stamp) — 96 + 3 = 99 ≤ 100.
  */
-const PS_PLUS_FLAG_CHUNK_SIZE = 99;
+const PS_PLUS_FLAG_CHUNK_SIZE = 96;
 
 /**
  * Story 10.2 (review hardening): the departure date rides IN the flag write —
@@ -235,6 +237,10 @@ export async function setPsPlusExtraFlags(
 						? { psPlusExtra: true, psPlusLeftOn: null }
 						: {
 								psPlusExtra: false,
+								// A departed game must not keep a future-dated LEAVING
+								// warning (Story 10.4) — cleared in the same atomic statement;
+								// the sweep owns re-setting it.
+								psPlusLeavingOn: null,
 								...(departedOn ? { psPlusLeftOn: departedOn } : {}),
 							},
 				)
@@ -242,6 +248,46 @@ export async function setPsPlusExtraFlags(
 		);
 	}
 	await db.batch(statements as [(typeof statements)[0], ...typeof statements]);
+}
+
+/**
+ * Persist one leaving-sweep chunk's answers (Story 10.4). One `db.batch` = one
+ * D1 subrequest (Epic 9 budget lesson). Values differ per row (date OR null —
+ * BOTH directions are writes: a null clears a reprieved game), so per-row
+ * statements like `updateGameIgdbFacts`, each binding 3 params. The caller
+ * passes ONLY games whose pricing reply was well-formed — a failed fetch keeps
+ * its stored value (per-game fail-closed).
+ */
+export async function setPsPlusLeaving(
+	db: Db,
+	updates: {
+		gameId: string;
+		leavingOn: string | null;
+		psnConceptId: string;
+	}[],
+) {
+	if (updates.length === 0) return;
+	const statements = updates.map(({ gameId, leavingOn, psnConceptId }) =>
+		db
+			.update(game)
+			.set({ psPlusLeavingOn: leavingOn, psnConceptId })
+			.where(eq(game.id, gameId)),
+	);
+	await db.batch(statements as [(typeof statements)[0], ...typeof statements]);
+}
+
+/**
+ * Drop cached store concept ids (Story 10.4 review) — a cached id that failed
+ * a pricing query may be remapped/delisted; clearing it makes the next sweep
+ * re-resolve from the product id instead of failing identically forever.
+ * Leaves `ps_plus_leaving_on` untouched (fail-closed keeps the stored date).
+ */
+export async function clearPsnConceptIds(db: Db, gameIds: string[]) {
+	if (gameIds.length === 0) return;
+	await db
+		.update(game)
+		.set({ psnConceptId: null })
+		.where(inArray(game.id, gameIds));
 }
 
 /**
@@ -337,6 +383,10 @@ export type LibraryRow = {
 	userScoreCount: number | null;
 	/** Date the game left the PS+ Extra catalog; null = in catalog or never was. */
 	psPlusLeftOn: string | null;
+	/** Date the game LEAVES PS+ (Story 10.4, store `endTime`); null = staying. */
+	psPlusLeavingOn: string | null;
+	/** Cached store concept id (Story 10.4) — sweep resolves once, reuses after. */
+	psnConceptId: string | null;
 	/** Time-to-beat in seconds (Story 10.3): story / 100% / submission count. */
 	ttbStorySeconds: number | null;
 	ttbCompleteSeconds: number | null;
@@ -389,6 +439,8 @@ export async function listLibraryForUser(
 			userScore: game.userScore,
 			userScoreCount: game.userScoreCount,
 			psPlusLeftOn: game.psPlusLeftOn,
+			psPlusLeavingOn: game.psPlusLeavingOn,
+			psnConceptId: game.psnConceptId,
 			ttbStorySeconds: game.ttbStorySeconds,
 			ttbCompleteSeconds: game.ttbCompleteSeconds,
 			ttbCount: game.ttbCount,

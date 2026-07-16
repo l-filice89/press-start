@@ -43,19 +43,29 @@ export default {
 		// Isolated (review): runScheduledPsPlusCheck catches its own body, but a
 		// throw from its pre-try user lookup (or a flag write inside its catch)
 		// would otherwise abort the invocation and starve the score refresh below.
-		await runScheduledPsPlusCheck(db, env).catch((error) =>
-			console.error('scheduled ps+ check escaped its own handling', error),
-		);
+		const psPlus = await runScheduledPsPlusCheck(db, env).catch((error) => {
+			console.error('scheduled ps+ check escaped its own handling', error);
+			// Unknown how much the failed invocation spent — be conservative.
+			return { spentFanOut: true };
+		});
 		// Story 10.1: IGDB score refresh rides the SAME cron — sequential, after
 		// the PS+ work, inside one invocation's budget (Epic 9 rule, arithmetic
-		// in services/scores.ts: PS+ membership pass ≤34 + scores/TTB ≤10 ≈ 44 of 50,
-		// and the scores stale-gate fires it once per monthly window). Its
-		// failures persist their own FR-40 flag inside, so a throw here never
+		// in services/scores.ts: PS+ membership pass ≤36 + scores/TTB ≤10 ≈ 46 of
+		// 50, and the scores stale-gate fires it once per monthly window). BUT
+		// never on top of a SWEEP chunk (Story 10.4 review): a genre or leaving
+		// chunk's fan-out (≈34/≈42) + scores ≈10 busts the 50 cap mid-write —
+		// the stale-gate simply fires it on a later fire in the window (14/month).
+		// Its failures persist their own FR-40 flag inside, so a throw here never
 		// masks the PS+ outcome above.
 		// Same isolation as PS+ above (follow-up review): its pre-try user lookup
 		// can throw past its own catch, and an unhandled throw errors the cron.
-		await runScheduledScoreRefresh(db, env, igdbFromEnv(env)).catch((error) =>
-			console.error('scheduled score refresh escaped its own handling', error),
-		);
+		if (!psPlus.spentFanOut) {
+			await runScheduledScoreRefresh(db, env, igdbFromEnv(env)).catch((error) =>
+				console.error(
+					'scheduled score refresh escaped its own handling',
+					error,
+				),
+			);
+		}
 	},
 } satisfies ExportedHandler<Env>;

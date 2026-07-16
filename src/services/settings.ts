@@ -247,3 +247,51 @@ export async function setPsPlusSweepState(
 		JSON.stringify(state),
 	);
 }
+
+/**
+ * Leaving-sweep resume state (Story 10.4) — the genre sweep's shape adapted to
+ * a GAME-id cursor: generation-keyed so a fresh membership snapshot restarts
+ * it, cursor kept server-side so the cron drives chunks without a client. A
+ * corrupt row parses to null and the next refresh rewrites it, same as above.
+ */
+export const PSPLUS_LEAVING_STATE_SETTING_KEY = 'psplus_leaving_state';
+
+export interface PsPlusLeavingState {
+	region: string;
+	generation: string;
+	/** Last game id finished; null = start from the beginning. */
+	cursor: string | null;
+	/**
+	 * Wholesale failures of the CURRENT chunk (review: livelock guard). The
+	 * second consecutive one steps the cursor PAST the chunk — a poison product
+	 * must not pin the rotation forever; its games retry next re-arm.
+	 */
+	attempts: number;
+	done: boolean;
+}
+
+export async function getPsPlusLeavingState(
+	db: Db,
+	userId: string,
+): Promise<PsPlusLeavingState | null> {
+	const raw = await getSetting(db, userId, PSPLUS_LEAVING_STATE_SETTING_KEY);
+	if (!raw) return null;
+	try {
+		return JSON.parse(raw) as PsPlusLeavingState;
+	} catch {
+		return null;
+	}
+}
+
+export async function setPsPlusLeavingState(
+	db: Db,
+	userId: string,
+	state: PsPlusLeavingState,
+) {
+	await setSetting(
+		db,
+		userId,
+		PSPLUS_LEAVING_STATE_SETTING_KEY,
+		JSON.stringify(state),
+	);
+}

@@ -31,7 +31,11 @@ const PSN_WIRE_PATTERNS: {
 	{
 		label: 'the PSN API endpoint',
 		pattern: /web\.np\.playstation\.com/,
-		allowed: [PROVIDER, 'scripts/probe-psn-last-chance.ts'],
+		allowed: [
+			PROVIDER,
+			'scripts/probe-psn-last-chance.ts',
+			'scripts/probe-psn-leaving.ts',
+		],
 	},
 	{
 		label: 'the persisted categoryGridRetrieve query (PS+ catalog, 5.1)',

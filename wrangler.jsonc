@@ -30,9 +30,14 @@
 	 * wipes). ~7 cheap runs/month, well inside the free-tier subrequest budget.
 	 * ponytail: window-scan, not a 3rd-Tuesday guard — trades 6 redundant
 	 * idempotent runs for zero date-gate code. Not mirrored into env.e2e.
+	 *
+	 * Twice daily since Story 10.4: one invocation runs ONE rotation slot
+	 * (genre-sweep chunk OR leaving-sweep chunk OR membership pass — see
+	 * runScheduledPsPlusCheck), and 7 fires no longer cover membership + a
+	 * ~5-chunk genre sweep + ~3 leaving chunks + retries. 14 fires do.
 	 */
 	"triggers": {
-		"crons": ["0 21 15-21 * *"]
+		"crons": ["0 9,21 15-21 * *"]
 	},
 	"upload_source_maps": true,
 	"compatibility_flags": ["nodejs_compat"],

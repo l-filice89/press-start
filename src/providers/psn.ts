@@ -33,6 +33,20 @@ const CATALOG_MAX_PAGES = 30;
  */
 const CATALOG_DRIFT_TOLERANCE = 2;
 
+// Story 10.4 (VR-6 rework): per-game departure dates. Two more persisted
+// queries on the same anonymous endpoint (hashes pinned from the store web
+// app via mrt1m/playstation-store-api, verified live 2026-07-16 — probe
+// artifact psn-leaving-endtime-probe-2026-07-16.md): a product's concept id,
+// then the concept's pricing, whose PS_PLUS-branded offer carries `endTime`
+// (epoch ms) exactly when the game is scheduled to leave the catalog —
+// staying games answer null (distribution probed over 11 games, never one).
+const PRODUCT_OPERATION = 'metGetProductById';
+const PRODUCT_QUERY_HASH =
+	'a128042177bd93dd831164103d53b73ef790d56f51dae647064cb8f9d9fc9d1a';
+const PRICING_OPERATION = 'metGetPricingDataByConceptId';
+const PRICING_QUERY_HASH =
+	'abcb311ea830e679fe2b697a27f755764535d825b24510ab1239a4ca3092bd09';
+
 /**
  * The store ANSWERED (HTTP 200) but refused the catalog query — a null grid or
  * a GraphQL `errors[]`. In practice this is a region that is not a real store
@@ -71,6 +85,27 @@ export interface PsnProvider {
 		region: string,
 		genreKey: string,
 	): Promise<PsnCatalogProduct[]>;
+	/**
+	 * The date a catalog product LEAVES PS+ (Story 10.4) — the store's own
+	 * PS_PLUS offer `endTime`, or null while the game is staying. Resolves the
+	 * product's concept id first unless the caller already cached it (the
+	 * steady-state sweep pays one call, not two). Throws on any malformed or
+	 * refused reply so the caller keeps its stored value (per-game fail-closed);
+	 * a WELL-FORMED reply with no PS_PLUS offer or a null endTime is the
+	 * legitimate "staying" answer.
+	 */
+	fetchPsPlusOfferEnd(
+		region: string,
+		productId: string,
+		conceptId?: string | null,
+	): Promise<PsnOfferEnd>;
+}
+
+/** One leaving-sweep answer: the (cacheable) concept id + the departure date. */
+export interface PsnOfferEnd {
+	conceptId: string;
+	/** ISO date (UTC) the game leaves PS+, or null while it is staying. */
+	leavingOn: string | null;
 }
 
 /**
@@ -201,6 +236,53 @@ function catalogPageUrl(
 	return `${API_URL}?${query}`;
 }
 
+/**
+ * Every OFFER node in a pricing reply, wherever it nests — the payload shape
+ * shifts between products (2–3 offer nodes observed), so a structural walk
+ * beats a brittle path. An offer node carries BOTH `serviceBranding` and an
+ * `endTime` field.
+ *
+ * The caller keeps only the CATALOG-INCLUSION offers (review, H1): `isFree:
+ * true, isTiedToSubscription: true` beside the PS_PLUS branding — a PS+
+ * member DISCOUNT is also PS_PLUS-branded, and its `endTime` is the promo
+ * end, not a departure. Branding alone would paint "LEAVING <sale end>" on a
+ * game that is merely on sale.
+ */
+interface PricingOfferNode {
+	branding: unknown[];
+	endTime: unknown;
+	isFree: unknown;
+	isTiedToSubscription: unknown;
+}
+
+function collectOfferNodes(node: unknown, out: PricingOfferNode[]): void {
+	if (!node || typeof node !== 'object') return;
+	if (Array.isArray(node)) {
+		for (const item of node) collectOfferNodes(item, out);
+		return;
+	}
+	const record = node as Record<string, unknown>;
+	if (Array.isArray(record.serviceBranding) && 'endTime' in record) {
+		out.push({
+			branding: record.serviceBranding,
+			endTime: record.endTime,
+			isFree: record.isFree,
+			isTiedToSubscription: record.isTiedToSubscription,
+		});
+	}
+	for (const key of Object.keys(record)) {
+		collectOfferNodes(record[key], out);
+	}
+}
+
+/**
+ * Plausibility bounds for the store's epoch-MS `endTime` (review): a scale
+ * regression to epoch-SECONDS (1784620800) would otherwise write 1970-01-21
+ * and the card would dutifully warn "LEAVING 21 JAN". Fail closed instead.
+ */
+const END_TIME_MIN_MS = Date.UTC(2015, 0, 1);
+const END_TIME_MAX_MS = Date.UTC(2100, 0, 1);
+
 /** Real PSN store-browse adapter — anonymous catalog reads only. */
 export function createPsnProvider(): PsnProvider {
 	async function fetchCatalogPage(
@@ -312,8 +394,129 @@ export function createPsnProvider(): PsnProvider {
 		};
 	}
 
+	async function fetchOp(
+		region: string,
+		operationName: string,
+		hash: string,
+		variables: Record<string, unknown>,
+	): Promise<unknown> {
+		const query = new URLSearchParams({
+			operationName,
+			variables: JSON.stringify(variables),
+			extensions: JSON.stringify({
+				persistedQuery: { version: 1, sha256Hash: hash },
+			}),
+		});
+		const response = await fetch(`${API_URL}?${query}`, {
+			headers: {
+				accept: 'application/json',
+				'content-type': 'application/json',
+				'x-psn-store-locale-override': region,
+			},
+			signal: AbortSignal.timeout(PSN_TIMEOUT_MS),
+		});
+		if (!response.ok) {
+			throw new Error(
+				`PSN ${operationName} failed: ${response.status} ${(await response.text()).slice(0, 300)}`,
+			);
+		}
+		const text = await response.text();
+		let payload: { errors?: unknown; data?: unknown };
+		try {
+			payload = JSON.parse(text);
+		} catch {
+			throw new Error(
+				`PSN ${operationName} returned non-JSON: ${text.slice(0, 200)}`,
+			);
+		}
+		if (payload.errors) {
+			throw new PsnStoreRejectionError(
+				`${operationName} GraphQL error: ${JSON.stringify(payload.errors).slice(0, 300)}`,
+			);
+		}
+		return payload.data;
+	}
+
 	return {
 		fetchPsPlusExtraCatalog: (region) => walkCatalog(region),
+
+		async fetchPsPlusOfferEnd(region, productId, conceptId) {
+			let concept = conceptId ?? null;
+			if (!concept) {
+				const data = (await fetchOp(
+					region,
+					PRODUCT_OPERATION,
+					PRODUCT_QUERY_HASH,
+					{
+						productId,
+					},
+				)) as { productRetrieve?: { concept?: { id?: unknown } } } | null;
+				const id = data?.productRetrieve?.concept?.id;
+				// No concept = no priceable surface. Malformed for our purpose: throw
+				// so the caller keeps its stored value instead of clearing it.
+				if (typeof id !== 'string' && typeof id !== 'number') {
+					throw new PsnStoreRejectionError(
+						`product ${productId} answered without a concept id`,
+					);
+				}
+				concept = String(id);
+			}
+			const pricing = (await fetchOp(
+				region,
+				PRICING_OPERATION,
+				PRICING_QUERY_HASH,
+				{ conceptId: concept },
+			)) as { conceptRetrieve?: unknown } | null;
+			const offers: PricingOfferNode[] = [];
+			collectOfferNodes(pricing, offers);
+			// DEGENERATE-RESPONSE GUARD: a hollow-but-200 reply (null/empty
+			// conceptRetrieve, schema drift) carries ZERO offer nodes — writing
+			// "staying" off it would CLEAR a real departure date. Fail closed;
+			// "staying" needs offers present with no inclusion date among them.
+			if (!pricing?.conceptRetrieve || offers.length === 0) {
+				throw new PsnStoreRejectionError(
+					`pricing for concept ${concept} answered no offer nodes`,
+				);
+			}
+			// The catalog-INCLUSION offers only (H1: a PS+ member discount is also
+			// PS_PLUS-branded; its endTime is a promo end, not a departure).
+			const inclusionEnds = offers
+				.filter(
+					(offer) =>
+						offer.branding.includes('PS_PLUS') &&
+						offer.isFree === true &&
+						offer.isTiedToSubscription === true,
+				)
+				.map((offer) => offer.endTime)
+				.filter((value) => value != null);
+			if (inclusionEnds.length === 0)
+				return { conceptId: concept, leavingOn: null };
+			// Multiple inclusion nodes ride one reply (2–3 observed, same value) —
+			// take the EARLIEST after validation so a mixed answer warns sooner,
+			// never later, and never depends on walk order.
+			let earliest = Number.POSITIVE_INFINITY;
+			for (const raw of inclusionEnds) {
+				const ms = Number(raw);
+				// A present-but-unreadable or implausibly-scaled endTime must fail
+				// closed, never clear (and never write 1970).
+				if (
+					!Number.isFinite(ms) ||
+					ms < END_TIME_MIN_MS ||
+					ms > END_TIME_MAX_MS
+				) {
+					throw new PsnStoreRejectionError(
+						`concept ${concept} carries an unreadable endTime: ${String(raw).slice(0, 40)}`,
+					);
+				}
+				earliest = Math.min(earliest, ms);
+			}
+			return {
+				conceptId: concept,
+				// The UTC date of the departure instant (the store announces UTC
+				// morning instants; the region-local day matched in the capture).
+				leavingOn: new Date(earliest).toISOString().slice(0, 10),
+			};
+		},
 
 		fetchPsPlusExtraCatalogByGenre: async (region, genreKey) =>
 			(await walkCatalog(region, genreKey)).products,

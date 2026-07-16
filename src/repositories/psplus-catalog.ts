@@ -142,6 +142,24 @@ export async function listCatalogTitleKeys(
 }
 
 /**
+ * Title-key → product-id pairs for the whole snapshot (Story 10.4) — the
+ * leaving sweep joins flagged games to their store products on the SAME
+ * normalized key the flag pass matches on, so the two can never disagree.
+ */
+export async function listCatalogTitleProducts(
+	db: Db,
+	{ region, tier = PS_PLUS_TIER }: Scope,
+): Promise<{ titleNormalized: string; productId: string }[]> {
+	return db
+		.select({
+			titleNormalized: psPlusCatalog.titleNormalized,
+			productId: psPlusCatalog.productId,
+		})
+		.from(psPlusCatalog)
+		.where(and(eq(psPlusCatalog.region, region), eq(psPlusCatalog.tier, tier)));
+}
+
+/**
  * Every product id currently in the snapshot — the sweep filters its tag writes
  * through this (Story 7.1 review, M4): a genre-filtered query can name a product
  * that entered the store AFTER the last membership pass, and inserting its tag

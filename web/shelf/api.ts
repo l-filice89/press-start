@@ -74,7 +74,7 @@ export const shelfGameSchema = z.object({
 	userScoreCount: z.number().nullable().default(null),
 	// Story 10.2: date the game left the PS+ Extra catalog. Defaulted for
 	// deploy skew like the score fields above.
-	psPlusLeftOn: z.string().nullable().default(null),
+	psPlusLeavingOn: z.string().nullable().default(null),
 	// Story 10.3: time-to-beat seconds (story / 100% / submissions), rounded
 	// to hours at render. Defaulted for deploy skew.
 	ttbStorySeconds: z.number().nullable().default(null),

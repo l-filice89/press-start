@@ -42,7 +42,7 @@ function card(
 		criticScoreCount: null,
 		userScore: null,
 		userScoreCount: null,
-		psPlusLeftOn: null,
+		psPlusLeavingOn: null,
 		ttbStorySeconds: null,
 		ttbCompleteSeconds: null,
 		ttbCount: null,

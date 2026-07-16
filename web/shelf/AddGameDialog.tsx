@@ -186,6 +186,11 @@ export function AddGameDialog({
 	const noMatch = preview?.available && !preview.candidate;
 	// The candidate Save would commit — the pick wins over the auto-match.
 	const activeCandidate = picked ?? preview?.candidate ?? null;
+	// Gates the cover COLUMN too: an unscored, coverless candidate must not
+	// leave an empty flex item shifting the fields by one gap.
+	const hasCandidateScores =
+		activeCandidate != null &&
+		(activeCandidate.criticScore != null || activeCandidate.userScore != null);
 
 	return createPortal(
 		// biome-ignore lint/a11y/noStaticElementInteractions: the backdrop is a dismiss surface, not a control — Escape and the Cancel button are the accessible paths; this only mirrors them for pointer users.
@@ -226,20 +231,6 @@ export function AddGameDialog({
 						No games-DB match — saving the name only.
 					</p>
 				)}
-				{/* The matched game's reception (Story 10.5): the "check ratings →
-				    add if ~75+" decision happens HERE, on the primary path — not
-				    only in the correction picker. Scores ride the candidate the
-				    Save would commit (picked over auto-match), never the edited
-				    draft. Absent when the candidate has none. */}
-				{activeCandidate && (
-					<ScoreBadges
-						critic={activeCandidate.criticScore}
-						criticCount={activeCandidate.criticScoreCount}
-						user={activeCandidate.userScore}
-						userCount={activeCandidate.userScoreCount}
-						testId="add-game-preview-scores"
-					/>
-				)}
 				{/* Correct a wrong auto-match BEFORE the row exists (Story 6.6 /
 				    PV-6). Hidden when the games DB is unavailable — the picker's
 				    search would answer [] every time, an always-empty dead end. */}
@@ -259,13 +250,31 @@ export function AddGameDialog({
 				)}
 
 				<div className="add-game__body">
-					{coverUrl.trim() !== '' && (
-						<img
-							className="add-game__cover"
-							src={coverUrl}
-							alt=""
-							data-testid="add-game-cover"
-						/>
+					{/* Cover column: art with the matched game's reception under it
+					    (Story 10.5, placement per Luca 2026-07-16 — the "check
+					    ratings → add if ~75+" decision happens on this screen).
+					    Scores ride the candidate Save would commit (picked over
+					    auto-match), never the edited draft; absent when none. */}
+					{(coverUrl.trim() !== '' || hasCandidateScores) && (
+						<div className="add-game__media">
+							{coverUrl.trim() !== '' && (
+								<img
+									className="add-game__cover"
+									src={coverUrl}
+									alt=""
+									data-testid="add-game-cover"
+								/>
+							)}
+							{hasCandidateScores && activeCandidate && (
+								<ScoreBadges
+									critic={activeCandidate.criticScore}
+									criticCount={activeCandidate.criticScoreCount}
+									user={activeCandidate.userScore}
+									userCount={activeCandidate.userScoreCount}
+									testId="add-game-preview-scores"
+								/>
+							)}
+						</div>
 					)}
 					<div className="add-game__fields">
 						<label className="add-game__field">

@@ -8,6 +8,35 @@ import { formatTtbHours } from './ttb';
 import { useTrackingMutations } from './useTrackingMutations';
 import './card.css';
 
+const LEAVING_MONTHS = [
+	'JAN',
+	'FEB',
+	'MAR',
+	'APR',
+	'MAY',
+	'JUN',
+	'JUL',
+	'AUG',
+	'SEP',
+	'OCT',
+	'NOV',
+	'DEC',
+];
+
+/**
+ * "2026-07-21" → "21 JUL" (Story 10.4) — the pill needs a glanceable date, the
+ * sr-only text keeps the full ISO one. Pure string slicing: the value is the
+ * store's own UTC date and must not shift a day through a local-zone Date.
+ */
+function formatLeavingDate(iso: string): string {
+	const month = LEAVING_MONTHS[Number(iso.slice(5, 7)) - 1];
+	const day = Number(iso.slice(8, 10));
+	// An unparseable month/day falls back to the raw ISO date — wrong-looking
+	// beats "LEAVING undefined" or "LEAVING NaN JUL".
+	if (!month || !(day >= 1 && day <= 31)) return iso;
+	return `${day} ${month}`;
+}
+
 /**
  * A single shelf card. The cover is the open-detail trigger (Story 2.3): a
  * non-control press flips the card open into the DetailPanel dialog, and
@@ -164,26 +193,33 @@ export function Card({
 								</span>
 							</span>
 						)}
-						{/* Story 10.2 (VR-6): the game LEFT the catalog while un-owned —
-					    the human-facing half of the flag clear. Amber (warn family,
-					    like SOON/TBA), visually distinct from the steady-state PS+
-					    pill. Owned games never warn (FR-38). `!psPlusExtra` is belt
-					    over the write-path invariant (review): if a skewed row ever
-					    carries both facts, membership wins — never two contradictory
-					    pills. "As of": the date is when the departure was OBSERVED
-					    (the cron fires ~7×/month), not the day Sony pulled it. */}
-						{game.psPlusLeftOn && !game.owned && !game.psPlusExtra && (
-							<span
-								className="card__flag card__flag--ps-left"
-								data-testid="card-flag-ps-left"
-							>
-								<span aria-hidden="true">LEFT PS+</span>
-								<span className="sr-only">
-									Left the PlayStation Plus Extra catalog as of{' '}
-									{game.psPlusLeftOn}
+						{/* Story 10.4 (VR-6 rework): the game is LEAVING the catalog —
+					    the store's own departure date, warned while playing or
+					    buying is still possible (it REPLACED 10.2's post-departure
+					    LEFT PS+ pill per Luca's directive; `ps_plus_left_on` lives
+					    on as a quiet internal fact). Amber (warn family), shown
+					    BESIDE the PS+ pill — still being in the catalog is the
+					    point. Owned games never warn (FR-38). */}
+						{game.psPlusLeavingOn &&
+							!game.owned &&
+							// A PAST date is suppressed (review): a game departing inside
+							// the cron's blind window (22nd–14th) keeps its date until the
+							// next flag pass clears it — weeks of a wrong amber warning
+							// otherwise. Lexicographic compare is exact on ISO dates.
+							game.psPlusLeavingOn >= new Date().toISOString().slice(0, 10) && (
+								<span
+									className="card__flag card__flag--leaving"
+									data-testid="card-flag-leaving"
+								>
+									<span aria-hidden="true">
+										LEAVING {formatLeavingDate(game.psPlusLeavingOn)}
+									</span>
+									<span className="sr-only">
+										Leaving the PlayStation Plus Extra catalog on{' '}
+										{game.psPlusLeavingOn}
+									</span>
 								</span>
-							</span>
-						)}
+							)}
 						{releaseFlag && (
 							<span className="card__flag card__flag--release">
 								<span aria-hidden="true">{releaseFlag.label}</span>

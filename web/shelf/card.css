@@ -153,7 +153,7 @@
 
 /* Story 10.2: the game LEFT the PS+ catalog — warn amber (the SOON/TBA
    family), deliberately NOT the accent glow of the steady-state PS+ pill. */
-.card__flag--ps-left {
+.card__flag--leaving {
 	color: var(--color-warn-amber);
 	font-weight: 600;
 	letter-spacing: 0.04em;

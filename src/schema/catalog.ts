@@ -87,6 +87,20 @@ export const game = sqliteTable(
 		 */
 		psPlusLeftOn: text('ps_plus_left_on'),
 		/**
+		 * Date this game LEAVES the PS+ Extra catalog (Story 10.4, VR-6 rework) —
+		 * the store's own PS_PLUS offer `endTime`, written BOTH directions by the
+		 * chunked leaving sweep (a null endTime clears it) and NULLed atomically
+		 * when the flag pass clears `ps_plus_extra`. Shared game fact; UI gates
+		 * display on `!owned` (FR-38).
+		 */
+		psPlusLeavingOn: text('ps_plus_leaving_on'),
+		/**
+		 * The store concept id behind this game's catalog product (Story 10.4) —
+		 * resolved once via `metGetProductById` and cached so the steady-state
+		 * sweep pays one pricing call per game instead of two.
+		 */
+		psnConceptId: text('psn_concept_id'),
+		/**
 		 * IGDB time-to-beat (Story 10.3, VR-8) — `/game_time_to_beats` values in
 		 * SECONDS, verbatim (rendering rounds to hours): `normally` = the story,
 		 * `completely` = 100%, plus the submission count. Nullable like the

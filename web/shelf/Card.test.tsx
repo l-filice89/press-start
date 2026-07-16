@@ -37,7 +37,7 @@ function game(overrides: Partial<ShelfGame> = {}): ShelfGame {
 		criticScoreCount: null,
 		userScore: null,
 		userScoreCount: null,
-		psPlusLeftOn: null,
+		psPlusLeavingOn: null,
 		ttbStorySeconds: null,
 		ttbCompleteSeconds: null,
 		ttbCount: null,
@@ -294,46 +294,54 @@ describe('Card', () => {
 		).not.toBeInTheDocument();
 	});
 
-	describe('LEFT PS+ warning (Story 10.2, VR-6)', () => {
-		it('warns on an un-owned game that left the catalog, visually distinct from the PS+ pill', () => {
+	describe('LEAVING PS+ warning (Story 10.4, VR-6 rework)', () => {
+		it('warns on an un-owned game with a departure date — beside the PS+ pill, not instead of it', () => {
 			renderCard(
 				game({
 					owned: false,
-					psPlusExtra: false,
-					psPlusLeftOn: '2026-07-16',
+					psPlusExtra: true,
+					psPlusLeavingOn: '2099-07-21',
 				}),
 			);
-			const flag = screen.getByTestId('card-flag-ps-left');
-			expect(flag).toHaveTextContent('LEFT PS+');
-			expect(flag).toHaveClass('card__flag--ps-left');
-			expect(flag).not.toHaveClass('card__flag--ps-extra');
-			// The steady-state pill is gone — the two never render together.
+			const flag = screen.getByTestId('card-flag-leaving');
+			expect(flag).toHaveTextContent('LEAVING 21 JUL');
+			expect(flag).toHaveClass('card__flag--leaving');
+			expect(flag).toHaveTextContent(
+				'Leaving the PlayStation Plus Extra catalog on 2099-07-21',
+			);
+			// STILL in the catalog — the steady-state pill renders alongside.
 			expect(
-				screen.queryByText('In the PlayStation Plus Extra catalog'),
-			).not.toBeInTheDocument();
+				screen.getByText('In the PlayStation Plus Extra catalog'),
+			).toBeInTheDocument();
 		});
 
 		it('never warns on an owned game (FR-38 — ownership makes membership irrelevant)', () => {
 			renderCard(
-				game({ owned: true, psPlusExtra: false, psPlusLeftOn: '2026-07-16' }),
+				game({ owned: true, psPlusExtra: true, psPlusLeavingOn: '2099-07-21' }),
 			);
-			expect(screen.queryByTestId('card-flag-ps-left')).not.toBeInTheDocument();
+			expect(screen.queryByTestId('card-flag-leaving')).not.toBeInTheDocument();
 		});
 
-		it('no warning without the departure fact', () => {
-			renderCard(game({ owned: false, psPlusLeftOn: null }));
-			expect(screen.queryByTestId('card-flag-ps-left')).not.toBeInTheDocument();
-		});
-
-		it('membership WINS over a stale stamp — the two pills can never render together (review belt)', () => {
-			// A skewed row carrying both facts (impossible after the atomic
-			// write, but the UI must never show contradictory badges).
+		it('a PAST leaving date is suppressed — the game departed inside the cron blind window (review)', () => {
 			renderCard(
-				game({ owned: false, psPlusExtra: true, psPlusLeftOn: '2026-07-16' }),
+				game({
+					owned: false,
+					psPlusExtra: true,
+					psPlusLeavingOn: '2020-01-05',
+				}),
 			);
-			expect(
-				screen.getByText('In the PlayStation Plus Extra catalog'),
-			).toBeInTheDocument();
+			expect(screen.queryByTestId('card-flag-leaving')).not.toBeInTheDocument();
+		});
+
+		it('no warning without a leaving date', () => {
+			renderCard(
+				game({ owned: false, psPlusExtra: true, psPlusLeavingOn: null }),
+			);
+			expect(screen.queryByTestId('card-flag-leaving')).not.toBeInTheDocument();
+		});
+
+		it('the retired LEFT PS+ pill renders for no input shape (Story 10.4 directive)', () => {
+			renderCard(game({ owned: false, psPlusExtra: false }));
 			expect(screen.queryByTestId('card-flag-ps-left')).not.toBeInTheDocument();
 		});
 	});

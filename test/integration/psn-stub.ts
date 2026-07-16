@@ -18,6 +18,12 @@ export interface StoreCall {
 	genreKey: string | null;
 	/** `x-psn-store-locale-override` — the region the catalog is fetched for. */
 	locale: string;
+	/** The persisted-query `operationName` (Story 10.4 added two beyond the grid). */
+	operation: string | null;
+	/** `metGetProductById`'s variable, when present. */
+	productId: string | null;
+	/** `metGetPricingDataByConceptId`'s variable, when present. */
+	conceptId: string | null;
 }
 
 /**
@@ -39,9 +45,13 @@ export function stubStore(
 		async (input: RequestInfo | URL, init?: RequestInit) => {
 			const url = String(input instanceof Request ? input.url : input);
 			if (!url.startsWith(PSN_LIBRARY_HOST)) return realFetch(input, init);
-			const variables = JSON.parse(
-				new URL(url).searchParams.get('variables') ?? '{}',
-			) as { pageArgs?: { offset?: number }; filterBy?: string[] };
+			const params = new URL(url).searchParams;
+			const variables = JSON.parse(params.get('variables') ?? '{}') as {
+				pageArgs?: { offset?: number };
+				filterBy?: string[];
+				productId?: string;
+				conceptId?: string;
+			};
 			const filter = variables.filterBy?.[0] ?? '';
 			const headers = new Headers(
 				input instanceof Request ? input.headers : init?.headers,
@@ -52,6 +62,9 @@ export function stubStore(
 					? filter.slice('productGenres:'.length)
 					: null,
 				locale: headers.get('x-psn-store-locale-override') ?? '',
+				operation: params.get('operationName'),
+				productId: variables.productId ?? null,
+				conceptId: variables.conceptId ?? null,
 			};
 			seen.push(call);
 			const { status = 200, body } = await reply(call);
