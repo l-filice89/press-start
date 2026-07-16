@@ -285,10 +285,11 @@ The v1.x tier of `roadmap.md`. The PRD lists these as unnumbered bullets in §6,
 - **VR-6** — **"Leaving PS+ Extra soon" warnings**: flag backlog games about to exit the region's catalog. [PRD §6 v1.x]
 - **VR-7** — **Shared IGDB match picker (PV-6)**: extract `<IgdbMatchPicker>` from `RematchDialog`, migrate `StragglersDialog`'s `ResolveView` onto it, and mount it in `AddGameDialog` behind a "Not the right game?" affordance — so a wrong auto-match is caught before the row exists. No new endpoint. [`implementation-artifacts/post-v1-backlog.md`]
 - **VR-8** — **Time to beat**: hours to finish the story and hours to 100% a game, shown next to the scores. **Source: IGDB `/game_time_to_beats`** (`normally` / `completely` + `count`), keyed by the `igdbId` already stored — same provider, same credentials, no fuzzy title matching. **HowLongToBeat is the fallback**, a second adapter behind the same port, only if IGDB coverage proves thin on real titles. Persisted fields + the same scheduled refresh as VR-5. [new 2026-07-13, sprint-change-proposal-2026-07-13-hltb]
+- **VR-9** — **Time-to-beat shelf filter**: a new shelf filter group over the VR-8 hours — five bands (≤25h, 25–50h, 50–75h, 75–100h, >100h) plus an explicit `Unknown`, OR within the group, AND across groups (FR-20 semantics), evaluated against story hours by default with a story/100% toggle. Pure client-side over the persisted 10.3 fields — no new data, no new fetch. [new 2026-07-16, sprint-change-proposal-2026-07-16-ttb-filter]
 
 **Multi-user blockers (B1a–B6):** owned by Epic 8; the table in `implementation-artifacts/publication-blockers.md` is the live source and is not duplicated here.
 
-**Post-v1 coverage map:** VR-1, VR-2, VR-3, VR-4 → E9 · VR-5, VR-6, VR-8 → E10 · VR-7 → E6 (Story 6.6) · FR-50, FR-51, FR-52 → E7 · B1a–B6 → E8
+**Post-v1 coverage map:** VR-1, VR-2, VR-3, VR-4 → E9 · VR-5, VR-6, VR-8 → E10 · VR-7 → E6 (Story 6.6) · VR-9 → E12 · FR-50, FR-51, FR-52 → E7 · B1a–B6 → E8
 
 ## Epic List
 
@@ -340,6 +341,11 @@ Three decision-support signals on the card: what the world thinks of a game (IGD
 ### Epic 11: PSN Account Safety — Sanitize the Credentialed Surface — _HIGH PRIORITY, sequenced first_
 Every call Press Start makes to PlayStation with Luca's own NPSSO token is attributed to his real account — and locked it once (2026-07-15). This epic removes the entire credentialed PSN surface: library sync, trophy sync, and the platinum backfill, plus the NPSSO auth machinery and the trophy display that depended on it. What stays is everything that carries no account identity — the anonymous PS+ Extra catalog (check + monthly cron), manual add-by-name, and manual milestone tracking. After this epic, no credential ever reaches the wire, so the account is out of the ban blast radius.
 **FRs affected:** FR-33–FR-37 removed; FR-9/FR-10 sync-clauses removed; FR-36 superseded; Epic 9 VR-2/VR-3 display removed · AR-5 narrowed to anonymous catalog. **Supersedes Epic 4 and the credentialed half of Epic 9; PS+ awareness (Epics 5/7) untouched. Sequenced ahead of Epics 8 and 10.** (Rationale: `sprint-change-proposal-2026-07-15.md`.)
+
+### Epic 12: Fit the Time I Have — the Time-to-beat Filter — _v1.x, after Epic 10_
+The shelf answers "what can I actually finish?" — a time-to-beat filter group narrows the backlog to games that fit the hours available, riding the TTB data Story 10.3 already persists. One story; a pure client-side filter-system revision.
+**VRs covered:** VR-9 · reuses FR-20/21 semantics (OR within, AND across), AD-7 (server computes, client filters), Story 10.3 fields
+(Added 2026-07-16 via correct-course: `sprint-change-proposal-2026-07-16-ttb-filter.md`.)
 
 ---
 
@@ -2029,3 +2035,39 @@ Drop the trophy %/grade readout from `Card.tsx` and `DetailPanel.tsx`, delete `c
 **Given** a platinum or story-completion milestone
 **When** Luca sets it manually in the detail view
 **Then** it records and displays exactly as before — the manual flow is unchanged [Epic 2, FR-5/FR-6]
+
+## Epic 12: Fit the Time I Have — the Time-to-beat Filter
+
+The shelf answers "what can I actually finish?" — a time-to-beat filter group narrows the backlog to games that fit the hours available, riding the TTB data Story 10.3 already persists (`ttbStorySeconds` / `ttbCompleteSeconds`, on the shelf payload since v2.1.0). Pure client-side: no schema, no API, no cron. (Added 2026-07-16 via correct-course: `sprint-change-proposal-2026-07-16-ttb-filter.md`; deferred-work.md entry homed here.)
+
+### Story 12.1: Filter the shelf by time-to-beat bands (VR-9)
+
+As Luca,
+I want to filter the shelf by how many hours a game takes,
+So that I pick a game that fits the time I actually have — the 10.3 numbers become a lens, not just a label.
+
+**Acceptance Criteria:**
+
+**Given** the filter row
+**When** it renders
+**Then** a Time group offers five bands — ≤25h, 25–50h, 50–75h, 75–100h, >100h — plus `Unknown`, OR within the group, AND across groups (FR-20 amended 2026-07-16) [VR-9, FR-20]
+
+**Given** band boundaries
+**When** a game's hours land exactly on one (e.g. 50h)
+**Then** it matches exactly one band — bands are half-open (25 < h ≤ 50), no overlap, no gap [VR-9]
+
+**Given** the story/100% toggle inside the group
+**When** it switches
+**Then** every selected band re-evaluates against the chosen metric (default: story hours); the toggle is part of the filter state, not a global setting [VR-9, Luca 2026-07-16]
+
+**Given** a game missing the selected metric (IGDB gap, unenriched, or only the other value)
+**When** a band filter is active
+**Then** it matches only the `Unknown` band — never a numeric band, never a zero standing in for a value (the 10.3 absence contract extended to filtering) [VR-9, NFR-4]
+
+**Given** active Time selections
+**When** the shelf renders
+**Then** the live summary sentence narrates them with the same or/and words, and the mobile filter sheet carries the group + count badge [FR-20, UX-DR23, UX-DR26]
+
+**Given** the standing rules
+**When** this story is specced
+**Then** it carries a placement-level UI mock signed off by Luca before implementation (UI-MOCK-GATE) and ships Playwright coverage for every UI AC (PLAYWRIGHT-COVERAGE); EXTERNAL-RISK-FLAG is N/A (no external call) — and `EXPERIENCE.md`'s filter-row line gains the group when the mock is signed off

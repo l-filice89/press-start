@@ -157,6 +157,12 @@ development_status:
   11-3-remove-the-trophy-display-and-schema: done # 2026-07-15 (dev-auto): readout/core/DTO/orphan-fns deleted, migration 0011 drops 11 trophy_* columns (hazard test: survivors byte-identical); 6 review patches; followup_review_recommended:false
   epic-11-retrospective: done # 2026-07-16 — epic-11-retro-2026-07-16.md; EXTERNAL-RISK-FLAG rule shipped; merge = critical path
 
+  # Epic 12: Fit the Time I Have — the Time-to-beat Filter — v1.x, after Epic 10
+  # Added 2026-07-16 via correct-course (sprint-change-proposal-2026-07-16-ttb-filter.md)
+  epic-12: backlog
+  12-1-filter-the-shelf-by-time-to-beat-bands: backlog
+  epic-12-retrospective: optional
+
 action_items:
   - epic: 1
     action: "Wire a hazard-named-AC-gets-a-hazard-named-test rule into the bmad-loop dev/review gate"

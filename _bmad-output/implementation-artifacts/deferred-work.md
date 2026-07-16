@@ -498,6 +498,7 @@ resolution: done 2026-07-16 (Story 10.2) — DECIDED: `first_seen_at` keeps its 
 - source_spec: none
   summary: Filter the shelf by time-to-beat bands (e.g. <=25h, 25-50, 50-75, 75-100, >100) — a revision of the filter system.
   evidence: Split from the 2026-07-16 minor-bugs quick-dev intent; Luca flagged it as likely epic/story-sized — route through /bmad-correct-course to create the epic/stories rather than bundling with small bug fixes.
+  decision: 2026-07-16 Homed in Story 12.1 (Epic 12, VR-9) via correct-course (sprint-change-proposal-2026-07-16-ttb-filter.md) — five bands + an explicit Unknown, story/100% toggle (default story), half-open boundaries, FR-20 semantics. Ledger closes when 12.1 ships.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-minor-ux-bugs-sweep.md`
   summary: The frozen-vocabulary union in `listCatalogGenreFacets` is dead machinery now that zero-count keys are filtered — the sweep-state read and Set union can never affect the response.
