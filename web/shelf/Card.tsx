@@ -162,6 +162,26 @@ export function Card({
 								</span>
 							</span>
 						)}
+						{/* Story 10.2 (VR-6): the game LEFT the catalog while un-owned —
+					    the human-facing half of the flag clear. Amber (warn family,
+					    like SOON/TBA), visually distinct from the steady-state PS+
+					    pill. Owned games never warn (FR-38). `!psPlusExtra` is belt
+					    over the write-path invariant (review): if a skewed row ever
+					    carries both facts, membership wins — never two contradictory
+					    pills. "As of": the date is when the departure was OBSERVED
+					    (the cron fires ~7×/month), not the day Sony pulled it. */}
+						{game.psPlusLeftOn && !game.owned && !game.psPlusExtra && (
+							<span
+								className="card__flag card__flag--ps-left"
+								data-testid="card-flag-ps-left"
+							>
+								<span aria-hidden="true">LEFT PS+</span>
+								<span className="sr-only">
+									Left the PlayStation Plus Extra catalog as of{' '}
+									{game.psPlusLeftOn}
+								</span>
+							</span>
+						)}
 						{releaseFlag && (
 							<span className="card__flag card__flag--release">
 								<span aria-hidden="true">{releaseFlag.label}</span>

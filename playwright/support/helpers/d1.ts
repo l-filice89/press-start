@@ -132,9 +132,9 @@ const seedSql = (game: SeedGame): string[] => {
 	const t = game.tracking;
 	return [
 		`INSERT INTO game (id, title, title_normalized, release_date, cover_url, store_url, ps_plus_extra, unenriched,
-		   critic_score, critic_score_count, user_score, user_score_count)
+		   critic_score, critic_score_count, user_score, user_score_count, ps_plus_left_on)
 		 VALUES (${sq(game.id)}, ${sq(game.title)}, ${sq(normalizeTitle(game.title))}, ${sq(game.releaseDate)}, ${sq(game.coverUrl)}, ${sq(game.storeUrl)}, ${game.psPlusExtra ? 1 : 0}, 0,
-		   ${sqNum(game.criticScore)}, ${sqNum(game.criticScoreCount)}, ${sqNum(game.userScore)}, ${sqNum(game.userScoreCount)});`,
+		   ${sqNum(game.criticScore)}, ${sqNum(game.criticScoreCount)}, ${sqNum(game.userScore)}, ${sqNum(game.userScoreCount)}, ${sq(game.psPlusLeftOn)});`,
 		`INSERT INTO game_tracking (user_id, game_id, owned, owned_via, play_status, completed_on, platinum_on, wishlisted_on)
 		 SELECT id, ${sq(game.id)}, ${t.owned ? 1 : 0}, ${sq(t.ownedVia)}, ${sq(t.playStatus)}, ${sq(t.completedOn)}, ${sq(t.platinumOn)}, ${sq(t.wishlistedOn)} FROM user LIMIT 1;`,
 	];

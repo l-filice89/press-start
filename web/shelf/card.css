@@ -151,6 +151,16 @@
 	letter-spacing: 0.04em;
 }
 
+/* Story 10.2: the game LEFT the PS+ catalog — warn amber (the SOON/TBA
+   family), deliberately NOT the accent glow of the steady-state PS+ pill. */
+.card__flag--ps-left {
+	color: var(--color-warn-amber);
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	/* Derived from the token, not a hardcoded rgba twin of it (review). */
+	border: 1px solid color-mix(in srgb, var(--color-warn-amber) 40%, transparent);
+}
+
 .card__flag--milestone {
 	color: var(--color-milestone-silver);
 }

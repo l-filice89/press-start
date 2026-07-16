@@ -37,6 +37,7 @@ function game(overrides: Partial<ShelfGame> = {}): ShelfGame {
 		criticScoreCount: null,
 		userScore: null,
 		userScoreCount: null,
+		psPlusLeftOn: null,
 		...overrides,
 	};
 }
@@ -190,6 +191,50 @@ describe('Card', () => {
 		expect(
 			screen.queryByTestId('card-owned-via-membership'),
 		).not.toBeInTheDocument();
+	});
+
+	describe('LEFT PS+ warning (Story 10.2, VR-6)', () => {
+		it('warns on an un-owned game that left the catalog, visually distinct from the PS+ pill', () => {
+			renderCard(
+				game({
+					owned: false,
+					psPlusExtra: false,
+					psPlusLeftOn: '2026-07-16',
+				}),
+			);
+			const flag = screen.getByTestId('card-flag-ps-left');
+			expect(flag).toHaveTextContent('LEFT PS+');
+			expect(flag).toHaveClass('card__flag--ps-left');
+			expect(flag).not.toHaveClass('card__flag--ps-extra');
+			// The steady-state pill is gone — the two never render together.
+			expect(
+				screen.queryByText('In the PlayStation Plus Extra catalog'),
+			).not.toBeInTheDocument();
+		});
+
+		it('never warns on an owned game (FR-38 — ownership makes membership irrelevant)', () => {
+			renderCard(
+				game({ owned: true, psPlusExtra: false, psPlusLeftOn: '2026-07-16' }),
+			);
+			expect(screen.queryByTestId('card-flag-ps-left')).not.toBeInTheDocument();
+		});
+
+		it('no warning without the departure fact', () => {
+			renderCard(game({ owned: false, psPlusLeftOn: null }));
+			expect(screen.queryByTestId('card-flag-ps-left')).not.toBeInTheDocument();
+		});
+
+		it('membership WINS over a stale stamp — the two pills can never render together (review belt)', () => {
+			// A skewed row carrying both facts (impossible after the atomic
+			// write, but the UI must never show contradictory badges).
+			renderCard(
+				game({ owned: false, psPlusExtra: true, psPlusLeftOn: '2026-07-16' }),
+			);
+			expect(
+				screen.getByText('In the PlayStation Plus Extra catalog'),
+			).toBeInTheDocument();
+			expect(screen.queryByTestId('card-flag-ps-left')).not.toBeInTheDocument();
+		});
 	});
 
 	it('shows the PS+ Extra badge only for an unowned in-catalog game', () => {

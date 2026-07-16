@@ -72,6 +72,9 @@ export const shelfGameSchema = z.object({
 	criticScoreCount: z.number().nullable().default(null),
 	userScore: z.number().nullable().default(null),
 	userScoreCount: z.number().nullable().default(null),
+	// Story 10.2: date the game left the PS+ Extra catalog. Defaulted for
+	// deploy skew like the score fields above.
+	psPlusLeftOn: z.string().nullable().default(null),
 });
 
 export type ShelfGame = z.infer<typeof shelfGameSchema>;

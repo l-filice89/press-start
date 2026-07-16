@@ -1,0 +1,1 @@
+ALTER TABLE `game` ADD `ps_plus_left_on` text;

@@ -44,6 +44,7 @@ function game(over: Partial<ShelfGame> = {}): ShelfGame {
 		criticScoreCount: null,
 		userScore: null,
 		userScoreCount: null,
+		psPlusLeftOn: null,
 		...over,
 	};
 }

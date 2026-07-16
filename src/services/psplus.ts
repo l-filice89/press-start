@@ -95,11 +95,13 @@ const CATALOG_DRIFT_TOLERANCE = 2;
  *             (holdsPsnLock) 1 · timezone read (todayForUser) 1 · pre-run product
  *             ids 1 · snapshot upsert ceil(490/50) = 10 · prune 1 · stale-region
  *             delete 1 · sweep-state read 1 + write 1 · title keys 1 · library
- *             read 1 · flag set + clear 2 · bookkeeping (failed-flag clear 1 +
- *             stamp, which re-reads the timezone, 2) 3 · post-pass sweep-state
- *             read 1 · lock release 1
+ *             read 1 · flag set + clear 2 (the Story 10.2 departure stamp
+ *             rides IN these statements — no extra call) · bookkeeping
+ *             (failed-flag clear 1 + stamp, which re-reads the timezone, 2) 3
+ *             · post-pass sweep-state read 1 · lock release 1
  *           = 29
- *   total (cron) = 5 external + 29 D1 = 34 of 50.
+ *   total (cron) = 5 external + 29 D1 = 34 of 50 (+ the Story 10.1 score
+ *   refresh ≈9 once per window: worst case ≈43).
  *   The HTTP button pays the auth middleware (3) on top instead of
  *   findUserByEmail (1): 36 of 50.
  * A GENRE-SWEEP CHUNK NO LONGER RIDES ALONG (H3): 34 + a chunk (~25) busts the
@@ -254,6 +256,12 @@ export async function runPsPlusCheck(
 		(row) => row.psPlusExtra && !catalog.has(normalizeTitle(row.title)),
 	);
 
+	// Story 10.2 (VR-6): the flag transition IS the departure diff, and the
+	// stamp rides IN the flag statement (atomic per chunk — review): a set
+	// NULLs `ps_plus_left_on` so a pruned-then-readded title can never read as
+	// a fresh departure (DW-13); a clear stamps the run's user-zone date. Runs
+	// strictly after the wipe guard above — a degenerate response never
+	// mass-stamps.
 	await setPsPlusExtraFlags(
 		db,
 		toFlag.map((row) => row.id),
@@ -263,6 +271,7 @@ export async function runPsPlusCheck(
 		db,
 		toClear.map((row) => row.id),
 		false,
+		today,
 	);
 
 	// Post-write bookkeeping (5.2 failed-flag clear + 5.3 freshness stamp) is

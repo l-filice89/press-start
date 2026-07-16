@@ -50,6 +50,15 @@ async function runBatch<T extends BatchItem<'sqlite'>>(
  * once (the insert) and never touched again — a game that has sat in the
  * catalog since March keeps its March date; `last_seen_at` and `generation`
  * move every run.
+ *
+ * DW-13 (decided, Story 10.2): `first_seen_at` means "first seen since the
+ * LAST PRUNE", not "first ever seen" — a pruned-then-readded title comes back
+ * as a fresh INSERT, so the date restamps. That is accepted and documented,
+ * not fixed: nothing reads the column, and the 10.2 departure warning
+ * deliberately derives from the game-level flag transition instead (re-entry
+ * NULLs `game.ps_plus_left_on`), so a returning game can never misread as a
+ * new arrival. Any future consumer of catalog HISTORY must not treat this
+ * column as "first ever seen".
  */
 export async function upsertCatalogProducts(
 	db: Db,

@@ -77,6 +77,15 @@ export const game = sqliteTable(
 		criticScoreCount: integer('critic_score_count'),
 		userScore: real('user_score'),
 		userScoreCount: integer('user_score_count'),
+		/**
+		 * Date this game LEFT the PS+ Extra catalog (Story 10.2, VR-6) — stamped
+		 * by the flag pass when it clears `ps_plus_extra` on a previously-flagged
+		 * game, NULLed when the game re-enters (so a pruned-then-readded title can
+		 * never read as a fresh departure — DW-13). A shared game fact like the
+		 * flag itself: owned/discarded games carry it too; the UI gates display
+		 * on `!owned` (FR-38).
+		 */
+		psPlusLeftOn: text('ps_plus_left_on'),
 	},
 	(table) => [
 		// Non-unique — the first-pass match key (AD-18), used by every ingest path.

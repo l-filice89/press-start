@@ -18,6 +18,8 @@ export interface SeedGame {
 	criticScoreCount: number | null;
 	userScore: number | null;
 	userScoreCount: number | null;
+	/** Story 10.2: date the game left the PS+ catalog (warning pill). */
+	psPlusLeftOn: string | null;
 	tracking: {
 		owned: boolean;
 		/** FR-9 amended: `membership` = PS+ claim (card shows the PS+ tag). */
@@ -52,6 +54,7 @@ export function createGame(
 		criticScoreCount: null,
 		userScore: null,
 		userScoreCount: null,
+		psPlusLeftOn: null,
 		...overrides,
 		tracking: {
 			owned: true,

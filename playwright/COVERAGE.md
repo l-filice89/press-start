@@ -357,3 +357,16 @@ refresh is a cron job with no UI trigger.
 | 10.1d a game with no IGDB score renders NO score area — never a zero or placeholder | `epic10-scores.spec.ts` › an unscored game renders NO score + › a critic-only game shows the critic slot alone; jsdom null-slot asserts in `Card.test.tsx`/`DetailPanel.test.tsx` |
 | 10.1e scheduled refresh updates stored scores within the free-tier budget (batched by id, one shared cron) | no UI flow — integration `scores.test.ts` (happy path, partial reply, degenerate `[]` keeps scores, stale gate) + provider batch assert (2 ids → ONE subrequest); budget arithmetic in `src/services/scores.ts` |
 | 10.1f a failed refresh surfaces on next app open (FR-40 banner), stale scores never silently pass | integration `scores.test.ts` › a provider throw persists the FR-40 failure flag + `settings.test.ts` full-payload assert (`scoresRefreshFailed`); banner render is the same `AttentionBanner` seam pinned by the Epic 5 rows above — no dedicated e2e (no UI path can force a cron failure) |
+
+Story 10.2 ("Leaving PS+ Extra soon", VR-6). Sony publishes no departure
+dates, so this shipped as the observable "LEFT PS+" warning — stamped by the
+existing flag pass, rendered from the stored `ps_plus_left_on` fact.
+
+| AC | Coverage |
+|----|----------|
+| 10.2a the previous snapshot is retained long enough to diff (present-before, absent-now = left) | no UI flow — the game-level flag transition IS the diff; pinned in integration `psplus-departure.test.ts` › stamps ps_plus_left_on and clears the flag (two-run) |
+| 10.2b a tracked, non-owned departed game carries a warning visually distinct from the PS+ pill | `epic10-left-psplus.spec.ts` › an un-owned departed game shows the amber LEFT PS+ warning (distinct class + amber token); jsdom pins in `Card.test.tsx` incl. the contradictory-row belt (membership wins — the two pills can never co-render) |
+| 10.2c the warning never guesses — grounded in observed departure, ships as "left" not "leaving soon" | not test-pinned (honest): no automated check forbids a future predictive path — the only write site is the observed flag transition (the 10.2a pin), the pill copy is "LEFT PS+"/"as of", and the store payload carries no departure-date field to predict from. Re-audit if any ingest change surfaces an end date |
+| 10.2d the departed game's PS+ pill clears and it stops counting Playable-now | pre-existing both-directions discipline, still pinned by `psplus.test.ts` flag-pass rows + `derived-state.test.ts`; exclusivity (warning ⇒ no pill) asserted in `Card.test.tsx` |
+| 10.2e no warning on owned games | `epic10-left-psplus.spec.ts` › an OWNED departed game shows no warning + `Card.test.tsx` › never warns on an owned game; the FACT still stamps (integration › an OWNED game departing carries the fact) |
+| 10.2f DW-13: first_seen_at semantics decided + documented; a returning game never misreads | no UI flow — integration `psplus-departure.test.ts` › DW-13 HAZARD (return NULLs the stamp); decision documented at `src/repositories/psplus-catalog.ts` upsert comment |

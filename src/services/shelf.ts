@@ -65,6 +65,10 @@ export interface ShelfGame {
 	criticScoreCount: number | null;
 	userScore: number | null;
 	userScoreCount: number | null;
+	/** Date the game LEFT the PS+ Extra catalog (Story 10.2, VR-6) — drives
+	 * the amber warning pill; null = in catalog or never was. The card gates
+	 * display on `!owned` (FR-38), same as the PS+ pill. */
+	psPlusLeftOn: string | null;
 }
 
 function bakeCard(row: LibraryRow, genres: string[]): ShelfGame {
@@ -107,6 +111,7 @@ function bakeCard(row: LibraryRow, genres: string[]): ShelfGame {
 		criticScoreCount: row.criticScoreCount,
 		userScore: row.userScore,
 		userScoreCount: row.userScoreCount,
+		psPlusLeftOn: row.psPlusLeftOn,
 	};
 }
 

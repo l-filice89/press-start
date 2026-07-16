@@ -195,10 +195,19 @@ export async function backfillGameFacts(
  */
 const PS_PLUS_FLAG_CHUNK_SIZE = 99;
 
+/**
+ * Story 10.2 (review hardening): the departure date rides IN the flag write —
+ * one atomic statement per chunk, so a partially-failed run can never leave a
+ * cleared flag without its stamp (departure silently lost) or a re-set flag
+ * with a stale stamp (contradictory PS+ + LEFT PS+ pills). Setting the flag
+ * NULLs the stamp (the DW-13 returning-game rule); clearing it stamps
+ * `departedOn` (the run's user-zone today).
+ */
 export async function setPsPlusExtraFlags(
 	db: Db,
 	gameIds: string[],
 	value: boolean,
+	departedOn: string | null = null,
 ) {
 	if (gameIds.length === 0) return;
 	const statements = [];
@@ -206,7 +215,17 @@ export async function setPsPlusExtraFlags(
 		statements.push(
 			db
 				.update(game)
-				.set({ psPlusExtra: value })
+				// Setting always NULLs the stamp; clearing stamps only when a date
+				// was given (a dateless clear leaves any existing stamp standing
+				// rather than silently wiping a recorded departure).
+				.set(
+					value
+						? { psPlusExtra: true, psPlusLeftOn: null }
+						: {
+								psPlusExtra: false,
+								...(departedOn ? { psPlusLeftOn: departedOn } : {}),
+							},
+				)
 				.where(inArray(game.id, gameIds.slice(i, i + PS_PLUS_FLAG_CHUNK_SIZE))),
 		);
 	}
@@ -291,6 +310,8 @@ export type LibraryRow = {
 	criticScoreCount: number | null;
 	userScore: number | null;
 	userScoreCount: number | null;
+	/** Date the game left the PS+ Extra catalog; null = in catalog or never was. */
+	psPlusLeftOn: string | null;
 	playStatus: (typeof gameTracking.$inferSelect)['playStatus'];
 	completedOn: string | null;
 	platinumOn: string | null;
@@ -338,6 +359,7 @@ export async function listLibraryForUser(
 			criticScoreCount: game.criticScoreCount,
 			userScore: game.userScore,
 			userScoreCount: game.userScoreCount,
+			psPlusLeftOn: game.psPlusLeftOn,
 			playStatus: gameTracking.playStatus,
 			completedOn: gameTracking.completedOn,
 			platinumOn: gameTracking.platinumOn,

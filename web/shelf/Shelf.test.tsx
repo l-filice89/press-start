@@ -42,6 +42,7 @@ function card(
 		criticScoreCount: null,
 		userScore: null,
 		userScoreCount: null,
+		psPlusLeftOn: null,
 		...over,
 	};
 }
