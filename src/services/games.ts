@@ -507,6 +507,11 @@ export async function rematchGame(
 		// payload with NO score fields at all (older client) means "unknown",
 		// and unknown must not erase data (review): leave stored scores alone.
 		...(hasScoreFields(input) ? { scores: scoresFromInput(input) } : {}),
+		// TTB clears whenever the IGDB identity CHANGES (`!owner` = the picked id
+		// wasn't already this game's): the stored hours are the old match's, and
+		// no client payload nor partial cron reply would ever correct them. A
+		// same-id re-pick keeps them — still the right game.
+		clearTimeToBeat: !owner,
 	});
 	await clearGameGenres(db, gameId);
 	await linkGenresByName(db, gameId, input.genres);

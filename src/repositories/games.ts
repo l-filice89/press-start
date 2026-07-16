@@ -291,6 +291,13 @@ export async function enrichGame(
 		 * unit when given, so a rematch onto an unscored game clears the old
 		 * match's scores rather than keeping the wrong game's numbers. */
 		scores?: GameScores;
+		/** Null the stored time-to-beat columns (Story 10.3). Set on a rematch
+		 * that changes the IGDB identity: the hours belong to the OLD match, and
+		 * the cron's partial-reply rule would otherwise preserve them forever
+		 * (follow-up review). Clients never send TTB, so unlike scores this
+		 * clears on identity change alone — the new match's hours arrive with
+		 * the next refresh pass. */
+		clearTimeToBeat?: boolean;
 	},
 ) {
 	await db
@@ -303,6 +310,9 @@ export async function enrichGame(
 				? { title: facts.title, titleNormalized: facts.titleNormalized }
 				: {}),
 			...(facts.scores ?? {}),
+			...(facts.clearTimeToBeat
+				? { ttbStorySeconds: null, ttbCompleteSeconds: null, ttbCount: null }
+				: {}),
 		})
 		.where(eq(game.id, gameId));
 }

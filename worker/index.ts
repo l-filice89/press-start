@@ -52,6 +52,10 @@ export default {
 		// and the scores stale-gate fires it once per monthly window). Its
 		// failures persist their own FR-40 flag inside, so a throw here never
 		// masks the PS+ outcome above.
-		await runScheduledScoreRefresh(db, env, igdbFromEnv(env));
+		// Same isolation as PS+ above (follow-up review): its pre-try user lookup
+		// can throw past its own catch, and an unhandled throw errors the cron.
+		await runScheduledScoreRefresh(db, env, igdbFromEnv(env)).catch((error) =>
+			console.error('scheduled score refresh escaped its own handling', error),
+		);
 	},
 } satisfies ExportedHandler<Env>;

@@ -478,3 +478,8 @@ resolution: done 2026-07-16 (Story 10.2) — DECIDED: `first_seen_at` keeps its 
 - source_spec: `_bmad-output/implementation-artifacts/spec-10-2-leaving-ps-extra-soon-vr-6.md`
   summary: The LEFT PS+ warning never expires — a game that departed years ago still renders the amber pill, decaying from signal into noise.
   evidence: `ps_plus_left_on` only clears on catalog re-entry or (display-wise) on owning the game; no staleness policy exists. Fine for a fresh feature on a monthly-refresh catalog; revisit when the first genuinely stale warning annoys (candidate: hide after N months, or a per-game dismiss).
+
+### DW-14: Seed-imported games persist import-day scores but have no IGDB anchor — they never refresh
+- source_spec: `_bmad-output/implementation-artifacts/spec-10-3-time-to-beat-the-story-and-100-vr-8.md` (found by the 2026-07-16 independent follow-up review)
+  summary: `seed-import` writes scores from `enrich(title)` but only creates PSN external links, so the cron refresh (which walks IGDB links) can never reach those games — their scores freeze at import-day values and they never gain time-to-beat, silently.
+  evidence: `src/services/seed-import.ts:149-177`. Mitigated per game by rematch (which anchors an IGDB id). Candidate fix: persist the IGDB link when `enrich()` resolves one, same anchor-gate rationale the add path cites. Single-user, seed path runs once — tolerable.

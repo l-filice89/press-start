@@ -469,6 +469,46 @@ describe('rematch a game (PV-4, through the route)', () => {
 		});
 	});
 
+	it('time-to-beat: an identity-changing rematch CLEARS stored hours, a same-id re-pick keeps them (Story 10.3, follow-up review)', async () => {
+		// HAZARD: TTB arrives only via cron, so a rematch that leaves the old
+		// match's hours standing keeps the WRONG game's figures forever — the
+		// partial-reply rule never corrects an id absent from the TTB response.
+		const created = await postGame(
+			{ title: 'TTB Rematch', igdbId: 'ttb-orig' },
+			sessionCookie,
+		);
+		const { gameId } = (await created.json()) as { gameId: string };
+		await db()
+			.update(game)
+			.set({ ttbStorySeconds: 180000, ttbCompleteSeconds: 300000, ttbCount: 5 })
+			.where(eq(game.id, gameId));
+
+		// Same-id re-pick: still the right game — hours survive.
+		const repick = await postRematch(
+			gameId,
+			{ igdbId: 'ttb-orig', name: 'TTB Rematch' },
+			sessionCookie,
+		);
+		expect(repick.status).toBe(200);
+		let [row] = await db().select().from(game).where(eq(game.id, gameId));
+		expect(row).toMatchObject({ ttbStorySeconds: 180000, ttbCount: 5 });
+
+		// New identity: the hours were the old match's — cleared, refilled by
+		// the next cron pass.
+		const swap = await postRematch(
+			gameId,
+			{ igdbId: 'ttb-new', name: 'TTB Rematch' },
+			sessionCookie,
+		);
+		expect(swap.status).toBe(200);
+		[row] = await db().select().from(game).where(eq(game.id, gameId));
+		expect(row).toMatchObject({
+			ttbStorySeconds: null,
+			ttbCompleteSeconds: null,
+			ttbCount: null,
+		});
+	});
+
 	it('rematch to a genre-less candidate REPLACES genres with none (documented wipe)', async () => {
 		const created = await postGame(
 			{ title: 'Genre Wipe Target', igdbId: 'gw-1', genres: ['Action', 'RPG'] },

@@ -435,20 +435,22 @@ export function createIgdbProvider(
 					if (record.game_id === undefined) continue;
 					// Zero/negative seconds are an anomaly, not a figure — mapped to
 					// null so the UI can never render a fabricated "<1h" (review;
-					// VR-8's never-zero rule). A count without ANY figure is likewise
-					// dropped: nothing could ever display it.
+					// VR-8's never-zero rule). A record with NO usable figure is
+					// dropped entirely: an all-null row would WIPE stored hours,
+					// and an anomaly must not erase standing data any more than a
+					// missing record does (follow-up review).
 					const positive = (v: unknown): number | null =>
 						typeof v === 'number' && v > 0 ? v : null;
 					const ttbStorySeconds = positive(record.normally);
 					const ttbCompleteSeconds = positive(record.completely);
+					if (ttbStorySeconds === null && ttbCompleteSeconds === null) {
+						continue;
+					}
 					rows.push({
 						igdbId: String(record.game_id),
 						ttbStorySeconds,
 						ttbCompleteSeconds,
-						ttbCount:
-							ttbStorySeconds !== null || ttbCompleteSeconds !== null
-								? positive(record.count)
-								: null,
+						ttbCount: positive(record.count),
 					});
 				}
 			}

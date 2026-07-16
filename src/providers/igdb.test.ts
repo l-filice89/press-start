@@ -259,14 +259,9 @@ describe('createIgdbProvider.fetchTimeToBeatByIds (Story 10.3)', () => {
 				ttbCompleteSeconds: 95400,
 				ttbCount: 8,
 			},
-			// A record with figures missing maps to nulls — never substituted,
-			// and a count with NO figure is dropped (nothing could display it).
-			{
-				igdbId: '42',
-				ttbStorySeconds: null,
-				ttbCompleteSeconds: null,
-				ttbCount: null,
-			},
+			// The count-only record for 42 is DROPPED entirely — an all-null row
+			// would wipe stored hours, and an anomaly must not erase standing
+			// data any more than a missing record does (follow-up review).
 		]);
 		const ttbCalls = m.mock.calls.filter((c) =>
 			String(c[0]).includes('game_time_to_beats'),

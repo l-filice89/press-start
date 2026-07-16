@@ -126,3 +126,16 @@ Two independent hunters over the full 10.3 diff. 16 findings → 11 patch / 0 in
 - **Live probe (production D1 + IGDB):** 61/65 story (93.8%), 55/65 complete (84.6%), 62/65 either (95.4%) — >=50% gate PASS. HLTB never built; no EXTERNAL-RISK-FLAG needed beyond the IGDB sign-off already recorded (user directive 2026-07-16).
 - **Budget:** TTB adds ceil(links/500)=1 external call to the score pass — pass total ≈10 of 50, combined worst-case with PS+ ≈44 of 50 once per monthly window.
 - **Follow-up:** followup_review_recommended: true (see frontmatter reason); shares the independent pass 10.1 already requires.
+
+## Follow-up Review Record (FOLLOW-UP-REVIEW CONTRACT)
+
+2026-07-16 — independent pass RAN (fresh reviewer agent, no shared context) over f84e54d..HEAD. Findings and disposition:
+
+- **MEDIUM (fixed):** `rematchGame` cleared the old match's scores but inherited its time-to-beat hours — permanently, since the cron's partial-reply rule never corrects an id absent from the TTB reply. Fix: `enrichGame` gained a `clearTimeToBeat` unit; rematch clears the three TTB columns whenever the IGDB identity changes (`!owner`), a same-id re-pick preserves. Hazard pinned in test/integration/games.test.ts.
+- **LOW (fixed):** an all-null TTB record (0/negative/absent figures) pushed a row that WIPED stored hours — provider now drops figure-less records entirely; anomalies preserve like missing records do.
+- **LOW (fixed):** `runScheduledScoreRefresh`'s pre-try user lookup could throw past its catch and error the cron — worker now `.catch()`es it, same isolation as the PS+ call.
+- **LOW (deferred → DW-14):** seed-imported games persist scores but never get an IGDB anchor, so they can never refresh.
+- **LOW (rejected, speculative):** all-links-dead-on-IGDB permanent banner — unreachable at this scale (65 games, requires every id deleted at once).
+- **NIT (rejected):** 401-retry skips the 260ms throttle (one extra call, self-limiting); `scoresFromInput` duplicated in stragglers (two small files, rule change greps trivially).
+
+Post-fix verification: typecheck clean, biome clean, vitest 1860/1860, playwright epic10 8/8. Reviewer's verdict was NOT MERGE-READY on the MEDIUM alone; with it fixed and everything else LOW/NIT dispositioned, the epic is merge-ready. Obligation discharged for both flagged stories.
