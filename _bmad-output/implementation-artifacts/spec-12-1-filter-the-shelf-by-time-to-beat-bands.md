@@ -145,3 +145,6 @@ warnings: [oversized]
 **Verification:** `bun run typecheck` clean; `bun run lint` (Biome) clean; Vitest 74 files / 1991 tests green; Playwright `epic12-ttb.spec.ts` 4/4 + `epic3-filter.spec.ts` regression 4/4 green (post-patch run also re-ran epic3-summary earlier: green).
 
 **Residual risks:** shared-dropdown focus rework regression surface on State/Genre menus (covered by existing epic3 e2e, still the reason for the follow-up flag); summary sentence metric ambiguity deferred; band keys load-bearing in test-ids.
+
+### 2026-07-16 — Independent follow-up review (FOLLOW-UP-REVIEW CONTRACT)
+Fresh-context second-opinion pass over the final diff (baseline 8798036 → 21eba55), angles: shared FilterDropdown regression (radioCount=0 path for State/Genre), predicate correctness incl. reveal-mode interaction, sheet/summary integration, full verification re-run (typecheck, lint, 1991 Vitest, 12/12 Playwright incl. epic3-focus keyboard pins). **Verdict: clean — no high/medium findings; one low cosmetic note (shared `filter-ttb-metric` testid across viewport-exclusive surfaces), no change required.** Merge gate obligation satisfied.
