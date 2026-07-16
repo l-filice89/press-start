@@ -65,6 +65,22 @@ describe('RematchDialog (PV-4)', () => {
 		);
 	});
 
+	it('renders graded candidate scores through the shared picker (Story 10.5 — pins THIS caller keeps using it)', async () => {
+		vi.mocked(api.searchIgdb).mockResolvedValue([
+			{ ...CANDIDATE, criticScore: 88.5, userScore: 55 },
+		]);
+		renderDialog();
+		const row = (await screen.findByText(/Spider-Man 2 \(2023\)/)).closest(
+			'li',
+		) as HTMLElement;
+		expect(
+			row.querySelector('.score-badge.score-grade--high'),
+		).toHaveTextContent('◎ 89');
+		expect(
+			row.querySelector('.score-badge.score-grade--low'),
+		).toHaveTextContent('★ 55');
+	});
+
 	it('picking a candidate calls rematchGame with the game id + candidate, then onRematched', async () => {
 		const user = userEvent.setup();
 		const { onRematched } = renderDialog();

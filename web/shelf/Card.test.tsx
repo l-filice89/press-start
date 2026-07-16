@@ -117,6 +117,45 @@ describe('Card', () => {
 			expect(screen.queryByTestId('card-scores')).not.toBeInTheDocument();
 		});
 
+		it('color-grades each score by its rounded value (Story 10.5) with sr-only text untouched', () => {
+			renderCard(
+				game({
+					criticScore: 88.5, // rounds to 89 → green
+					criticScoreCount: 17,
+					userScore: 60.4, // rounds to 60 → red
+					userScoreCount: 3,
+				}),
+			);
+			const row = screen.getByTestId('card-scores');
+			expect(row.querySelector('.card__score--critic')).toHaveClass(
+				'score-grade--high',
+			);
+			expect(row.querySelector('.card__score--user')).toHaveClass(
+				'score-grade--low',
+			);
+			// Grading is presentation-only — the a11y string is byte-identical to
+			// the pre-10.5 shape (exact compare on the sr-only node, not substring).
+			expect(
+				row.querySelector('.card__score--critic .sr-only')?.textContent,
+			).toBe('Critic score 89 out of 100 from 17 reviews');
+		});
+
+		it('grades the mid bucket amber (61–74)', () => {
+			renderCard(game({ userScore: 71 }));
+			expect(
+				screen.getByTestId('card-scores').querySelector('.card__score--user'),
+			).toHaveClass('score-grade--mid');
+		});
+
+		it('renders a 0 score as a real red value — never treated as absent (I/O matrix)', () => {
+			renderCard(game({ userScore: 0 }));
+			const slot = screen
+				.getByTestId('card-scores')
+				.querySelector('.card__score--user');
+			expect(slot).toHaveTextContent('★ 0');
+			expect(slot).toHaveClass('score-grade--low');
+		});
+
 		it('stacks reviews, story, and 100% as separate lines (Luca 2026-07-16)', () => {
 			renderCard(
 				game({

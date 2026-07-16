@@ -80,6 +80,33 @@ describe('StragglersDialog (Story 6.2)', () => {
 		);
 	});
 
+	it('renders graded candidate scores through the shared picker (Story 10.5 — pins THIS caller keeps using it)', async () => {
+		const user = userEvent.setup();
+		vi.mocked(api.searchIgdb).mockResolvedValue([
+			{
+				igdbId: '7',
+				name: 'Celeste',
+				coverUrl: null,
+				releaseDate: '2018-01-25',
+				genres: ['Platformer'],
+				criticScore: 92,
+				criticScoreCount: 30,
+				userScore: null,
+				userScoreCount: null,
+			},
+		]);
+		renderDialog();
+		const findButtons = await screen.findAllByRole('button', {
+			name: 'Find a match',
+		});
+		await user.click(findButtons[0]);
+		const use = await screen.findByRole('button', { name: 'Use this match' });
+		const row = use.closest('li') as HTMLElement;
+		expect(
+			row.querySelector('.score-badge.score-grade--high'),
+		).toHaveTextContent('◎ 92');
+	});
+
 	it('offers Ignore only on the import row and Discard only on the name-only row', async () => {
 		renderDialog();
 		const rows = await screen.findAllByRole('listitem');

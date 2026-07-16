@@ -383,3 +383,14 @@ the 10.1 score refresh; HLTB was never built (coverage gate passed at 93.8%).
 | 10.3d a missing value is absent — never zero, never the completionist figure standing in | `epic10-scores.spec.ts` › a story-only figure renders alone; jsdom one-value + <1h pins; integration › one-value-only persists null |
 | 10.3e refreshed in the same scheduled pass — one cron, one walk | no UI flow — integration `scores.test.ts` › persists story/100%/count in the same refresh (+ degenerate-[]-keeps-hours, TTB-throw-fails-closed, partial-reply-keeps-hours); budget ledger in `src/services/scores.ts` |
 | 10.3f a failed refresh surfaces (FR-40) | same banner chain as 10.1f (one flag for the whole pass): integration TTB degenerate/throw rows above + `AppShell.test.tsx` banner pins |
+
+Story 10.5 (scores in the add-game modal, color-graded everywhere, VR-5
+follow-on). Candidate scores were ALREADY on the wire (10.1); this story
+renders them in the one shared picker and grades every rendered score:
+rounded ≤60 red / 61–74 amber / ≥75 green, presentation-only.
+
+| AC | Coverage |
+| --- | --- |
+| 10.5a add/rematch/straggler candidate rows show critic + user scores from the response — no new fetch, no TTB (review widened: the add PREVIEW pane shows the active candidate's scores too — the decision screen on the primary path) | `epic10-scores.spec.ts` › add-modal candidate rows show graded scores (route-stubbed search, per the 6.6 precedent — e2e carries no IGDB creds; also pins the preview badges after a pick); jsdom row + preview renders in `AddGameDialog.test.tsx`; per-caller pins that rematch/straggler keep using the shared picker in `RematchDialog.test.tsx`/`StragglersDialog.test.tsx` |
+| 10.5b every rendered score is color-graded with AA contrast, number always present, sr-only unchanged | `epic10-scores.spec.ts` › scores are color-graded on card AND detail (computed-color asserts — pins the cascade, incl. the detail-panel override hazard); bucket boundaries in `score-grade.test.ts` (60/61/74/75 + round-then-grade); class + sr-only pins in `Card.test.tsx`/`DetailPanel.test.tsx` |
+| 10.5c no score → slot absent, never a zero or gray pill | `epic10-scores.spec.ts` › …an unscored candidate has no slot (same test); jsdom absent-slot asserts in `AddGameDialog.test.tsx`; card/detail absence already pinned by 10.1d rows |

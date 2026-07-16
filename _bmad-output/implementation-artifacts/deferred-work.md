@@ -483,3 +483,7 @@ resolution: done 2026-07-16 (Story 10.2) — DECIDED: `first_seen_at` keeps its 
 - source_spec: `_bmad-output/implementation-artifacts/spec-10-3-time-to-beat-the-story-and-100-vr-8.md` (found by the 2026-07-16 independent follow-up review)
   summary: `seed-import` writes scores from `enrich(title)` but only creates PSN external links, so the cron refresh (which walks IGDB links) can never reach those games — their scores freeze at import-day values and they never gain time-to-beat, silently.
   evidence: `src/services/seed-import.ts:149-177`. Mitigated per game by rematch (which anchors an IGDB id). Candidate fix: persist the IGDB link when `enrich()` resolves one, same anchor-gate rationale the add path cites. Single-user, seed path runs once — tolerable.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-10-5-scores-in-add-modal-color-graded.md`
+  summary: `.sr-only` is defined only in `web/shelf/card.css` yet consumed app-wide (catalog/Catalog.tsx, CatalogCard.tsx, IgdbMatchPicker/ScoreBadges) — it works solely because the app ships one CSS bundle; code splitting or reuse outside the bundle would render every sr-only string visibly inline.
+  evidence: `grep -rln 'sr-only' web --include='*.tsx'` hits files in web/catalog that import no shelf css; the only definition is card.css:7. Pre-existing pattern (predates 10.5); fix is a one-rule global sheet when anyone touches bundling.

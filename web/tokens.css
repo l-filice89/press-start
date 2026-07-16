@@ -35,8 +35,11 @@
 	/* ---- Colors: milestone + semantic state ---- */
 	--color-milestone-silver: #d6e6f5;
 	--color-state-dormant: #3d5566; /* Not started / dropped dim */
-	--color-warn-amber: #ffb254; /* stragglers / attention */
-	--color-success-green: #8fe6a8; /* toast success */
+	--color-warn-amber: #ffb254; /* stragglers / attention — 10.2:1 on surface */
+	--color-success-green: #8fe6a8; /* toast success — 12.2:1 on surface */
+	/* Score-grade red (Story 10.5) — light tint, 7.9:1 on --color-surface (AA);
+	   never --color-heat-magenta, which is reserved for Playing. */
+	--color-danger-red: #ff8a80;
 
 	/* ---- Semantic aliases (map roles onto the palette) ---- */
 	--bg-app: var(--color-void);

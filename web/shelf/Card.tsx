@@ -3,6 +3,7 @@ import { PlatinumTrophy } from '../components/PlatinumTrophy';
 import type { ShelfGame } from './api';
 import { OwnershipSourceDialog } from './OwnershipSourceDialog';
 import { StatusPopover } from './StatusPopover';
+import { scoreGrade } from './score-grade';
 import { formatTtbHours } from './ttb';
 import { useTrackingMutations } from './useTrackingMutations';
 import './card.css';
@@ -227,7 +228,9 @@ export function Card({
 							{(game.criticScore != null || game.userScore != null) && (
 								<p className="card__scores-line">
 									{game.criticScore != null && (
-										<span className="card__score card__score--critic">
+										<span
+											className={`card__score card__score--critic score-grade--${scoreGrade(game.criticScore)}`}
+										>
 											<span aria-hidden="true">
 												◎ {Math.round(game.criticScore)}
 											</span>
@@ -240,7 +243,9 @@ export function Card({
 										</span>
 									)}
 									{game.userScore != null && (
-										<span className="card__score card__score--user">
+										<span
+											className={`card__score card__score--user score-grade--${scoreGrade(game.userScore)}`}
+										>
 											<span aria-hidden="true">
 												★ {Math.round(game.userScore)}
 											</span>

@@ -1,0 +1,29 @@
+/* Score-grade colors (Story 10.5) — imported by score-grade.ts so every
+   consumer of the helper ships the classes. All three tints clear WCAG AA on
+   --color-surface / --color-surface-raised (see tokens.css).
+
+   Doubled class = specificity 0,2,0: the grade must beat single-class component
+   color rules (e.g. .detail-panel__score-value) regardless of CSS bundle
+   order, which follows the import graph and is not a contract. */
+.score-grade--low.score-grade--low {
+	color: var(--color-danger-red);
+}
+
+.score-grade--mid.score-grade--mid {
+	color: var(--color-warn-amber);
+}
+
+.score-grade--high.score-grade--high {
+	color: var(--color-success-green);
+}
+
+/* Layout for the shared ◎/★ badge pair (ScoreBadges.tsx). */
+.score-badges {
+	font-family: var(--font-body);
+	font-size: 11px;
+	white-space: nowrap;
+}
+
+.score-badge + .score-badge {
+	margin-left: var(--space-2);
+}

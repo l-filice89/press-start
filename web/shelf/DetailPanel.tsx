@@ -13,6 +13,7 @@ import {
 } from './api';
 import { OwnershipSourceDialog } from './OwnershipSourceDialog';
 import { RematchDialog } from './RematchDialog';
+import { scoreGrade } from './score-grade';
 import { formatTtbHours } from './ttb';
 import { MILESTONE_LABELS, useTrackingMutations } from './useTrackingMutations';
 import './detail-panel.css';
@@ -336,7 +337,9 @@ export function DetailPanel({
 									<p className="detail-panel__score">
 										{game.criticScore != null && (
 											<span className="detail-panel__score-slot">
-												<span className="detail-panel__score-value">
+												<span
+													className={`detail-panel__score-value score-grade--${scoreGrade(game.criticScore)}`}
+												>
 													{Math.round(game.criticScore)}
 												</span>{' '}
 												Critics
@@ -352,7 +355,9 @@ export function DetailPanel({
 										)}
 										{game.userScore != null && (
 											<span className="detail-panel__score-slot">
-												<span className="detail-panel__score-value">
+												<span
+													className={`detail-panel__score-value score-grade--${scoreGrade(game.userScore)}`}
+												>
 													{Math.round(game.userScore)}
 												</span>{' '}
 												Players

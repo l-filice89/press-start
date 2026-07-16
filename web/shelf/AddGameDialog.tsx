@@ -12,6 +12,7 @@ import {
 } from './api';
 import { toDetail, useActiveDestination } from './detail-navigation';
 import { IgdbMatchPicker } from './IgdbMatchPicker';
+import { ScoreBadges } from './ScoreBadges';
 import './add-game-dialog.css';
 import './stragglers-dialog.css';
 
@@ -183,6 +184,8 @@ export function AddGameDialog({
 	// notice instead of a bare, unexplained form.
 	const unavailable = previewError || (preview && !preview.available);
 	const noMatch = preview?.available && !preview.candidate;
+	// The candidate Save would commit — the pick wins over the auto-match.
+	const activeCandidate = picked ?? preview?.candidate ?? null;
 
 	return createPortal(
 		// biome-ignore lint/a11y/noStaticElementInteractions: the backdrop is a dismiss surface, not a control — Escape and the Cancel button are the accessible paths; this only mirrors them for pointer users.
@@ -222,6 +225,20 @@ export function AddGameDialog({
 					<p className="add-game__notice" role="status">
 						No games-DB match — saving the name only.
 					</p>
+				)}
+				{/* The matched game's reception (Story 10.5): the "check ratings →
+				    add if ~75+" decision happens HERE, on the primary path — not
+				    only in the correction picker. Scores ride the candidate the
+				    Save would commit (picked over auto-match), never the edited
+				    draft. Absent when the candidate has none. */}
+				{activeCandidate && (
+					<ScoreBadges
+						critic={activeCandidate.criticScore}
+						criticCount={activeCandidate.criticScoreCount}
+						user={activeCandidate.userScore}
+						userCount={activeCandidate.userScoreCount}
+						testId="add-game-preview-scores"
+					/>
 				)}
 				{/* Correct a wrong auto-match BEFORE the row exists (Story 6.6 /
 				    PV-6). Hidden when the games DB is unavailable — the picker's

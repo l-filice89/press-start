@@ -182,6 +182,33 @@ describe('DetailPanel', () => {
 			expect(section).toHaveTextContent('Players (1 rating)');
 		});
 
+		it('color-grades critic/user values but never the TTB hours (Story 10.5)', async () => {
+			await openPanel(
+				game({
+					criticScore: 55, // red
+					userScore: 74.6, // rounds to 75 → green
+					ttbStorySeconds: 54000,
+					ttbCount: 8,
+				}),
+			);
+			const section = screen.getByTestId('detail-scores');
+			// Select by MEANING, not list position — a fixture/order change must
+			// not silently shift which node the ungraded-hours assert checks.
+			const critic = within(section)
+				.getByText('Critics', { exact: false })
+				.querySelector('.detail-panel__score-value');
+			const user = within(section)
+				.getByText('Players', { exact: false })
+				.querySelector('.detail-panel__score-value');
+			const hours = within(section)
+				.getByText('Story', { exact: false })
+				.querySelector('.detail-panel__score-value');
+			expect(critic).toHaveClass('score-grade--low');
+			expect(user).toHaveClass('score-grade--high');
+			// The hours value carries NO grade — grading is for reception scores.
+			expect(hours?.className).not.toMatch(/score-grade/);
+		});
+
 		it('renders no Scores section for an unscored game (never a zero)', async () => {
 			await openPanel();
 			expect(screen.queryByTestId('detail-scores')).not.toBeInTheDocument();
