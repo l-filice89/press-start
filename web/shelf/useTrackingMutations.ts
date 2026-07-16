@@ -76,9 +76,12 @@ export interface MilestoneRow {
  *
  * `onConfirmClose` runs when the confirm dialog resolves (confirm or cancel) —
  * the caller owns returning focus, since only it knows the originating control.
- * `onHidden` runs after a successful write whose new effective state is hidden
- * from the default shelf (the card is about to unmount) — the detail panel
- * closes itself on it rather than vanishing under the user.
+ * `onHidden` runs after a successful STATUS write (or discard) whose outcome
+ * hides the game from the default shelf — the detail panel closes itself on it
+ * rather than vanishing under the user. Milestone writes never fire it: the
+ * routed panel (Story 7.2) resolves the game by id, not through the shelf
+ * card, so a platinum can hide the card while the panel stays open showing
+ * the new state.
  */
 export function useTrackingMutations(
 	game: ShelfGame,
@@ -173,10 +176,10 @@ export function useTrackingMutations(
 	const milestoneMutation = useMutation({
 		mutationFn: (milestone: Milestone) => logMilestone(game.id, milestone),
 		onSettled: settleWrite,
-		onSuccess: (state) => {
-			invalidateShelfQueries();
-			if (becameHidden(state)) onHidden?.();
-		},
+		// No `onHidden` here (UX sweep 2026-07-16): a milestone may hide the CARD
+		// (platinum, or a milestone on a status-less game), but the routed panel
+		// reads its own by-id query — it must stay open showing the new state.
+		onSuccess: invalidateShelfQueries,
 		onError: () =>
 			toast({ message: `Couldn’t update ${game.title}. Try again.` }),
 	});

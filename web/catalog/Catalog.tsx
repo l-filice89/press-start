@@ -298,10 +298,13 @@ function CatalogFilters({
 					The genre filters couldn’t load. Refresh to try again.
 				</p>
 			)}
-			{/* A selected key with no vocabulary behind it still gets its own chip —
-			    the filter is live, so it must be visible and switchable off. */}
-			{genres.length === 0 &&
-				selected.map((key) => (
+			{/* A selected key the vocabulary doesn't list still gets its own chip —
+			    the filter is live, so it must be visible and switchable off. Covers
+			    both a failed/empty vocabulary (M9) and a key whose count dropped to
+			    zero, which the facet response now omits (UX sweep 2026-07-16). */}
+			{selected
+				.filter((key) => !genres.some((genre) => genre.key === key))
+				.map((key) => (
 					<button
 						key={key}
 						type="button"

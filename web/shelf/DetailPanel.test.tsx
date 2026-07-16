@@ -549,7 +549,10 @@ describe('DetailPanel', () => {
 		expect(screen.getByRole('dialog', { name: 'Bloodborne' })).toBeVisible();
 	});
 
-	it('closes after logging a platinum — that write hides the card', async () => {
+	// UX sweep 2026-07-16: a platinum hides the CARD, but the routed panel reads
+	// its own by-id query — auto-closing it yanked the updated state away from
+	// the user. Milestone writes no longer fire onHidden at all.
+	it('stays open after logging a platinum — the write hides only the card', async () => {
 		fetchMock.mockResolvedValue({
 			ok: true,
 			status: 200,
@@ -561,9 +564,8 @@ describe('DetailPanel', () => {
 		await user.click(screen.getByRole('button', { name: /Platinum achieved/ }));
 		await user.click(screen.getByRole('button', { name: 'Confirm' }));
 
-		await waitFor(() =>
-			expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
-		);
+		await waitFor(() => expect(writes()).toHaveLength(1));
+		expect(screen.getByRole('dialog', { name: 'Bloodborne' })).toBeVisible();
 	});
 
 	// HAZARD (Story 3.2, FR-4/FR-17): a panel open on an ALREADY-hidden game

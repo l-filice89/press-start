@@ -7,12 +7,16 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
  * every card up front — infinite scroll, NOT a SQL cursor.
  *
  * `visible` is the leading slice; `showMore` advances by one page; `hasMore`
- * says whether a further page exists. When the source list changes (a new fetch
- * or a switch to search results) the window resets to the first page.
+ * says whether a further page exists. A new `items` reference (a refetch after
+ * a tracking write) PRESERVES the window — resetting on it yanked a deep
+ * scroll back to page 1 on every status change (UX sweep 2026-07-16); the
+ * count only clamps down when the list shrinks. A `resetKey` change (the
+ * caller's filter/search context) is what snaps back to the first page.
  */
 export function useProgressiveList<T>(
 	items: readonly T[],
 	pageSize = 48,
+	resetKey?: unknown,
 ): {
 	visible: T[];
 	hasMore: boolean;
@@ -21,12 +25,18 @@ export function useProgressiveList<T>(
 } {
 	const [count, setCount] = useState(pageSize);
 
-	// Reset the window whenever the underlying list identity changes (a new
-	// fetch or a switch to search results), keyed on the `items` reference.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: the `items` reference is the intended reset trigger
+	// A data change keeps the window, only clamping to the new length (never
+	// below one page) so a shrunken list doesn't leave a hollow oversized count.
+	useEffect(() => {
+		setCount((c) => Math.max(pageSize, Math.min(c, items.length)));
+	}, [items, pageSize]);
+
+	// Full reset belongs to the CALLER's context change (filter/search), not to
+	// refetches — ordered after the clamp so it wins when both fire together.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: `resetKey` is the intended reset trigger
 	useEffect(() => {
 		setCount(pageSize);
-	}, [items, pageSize]);
+	}, [resetKey, pageSize]);
 
 	const showMore = useCallback(() => {
 		setCount((c) => c + pageSize);

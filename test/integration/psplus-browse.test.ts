@@ -5,6 +5,7 @@ import { normalizeTitle } from '../../src/core';
 import {
 	addExternalLink,
 	deleteCatalogOutsideRegion,
+	deleteSetting,
 	insertGame,
 	setCatalogGenres,
 	setSetting,
@@ -18,7 +19,11 @@ import {
 	psPlusCatalogGenre,
 	user,
 } from '../../src/schema';
-import { PSN_REGION_SETTING_KEY } from '../../src/services/settings';
+import {
+	PSN_REGION_SETTING_KEY,
+	PSPLUS_SWEEP_STATE_SETTING_KEY,
+	setPsPlusSweepState,
+} from '../../src/services/settings';
 import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
 
 /**
@@ -340,6 +345,30 @@ describe('GET /api/ps-plus-catalog/genres — facet counts', () => {
 		const filtered = await browse('?genre=FIGHTING');
 		expect(filtered.total).toBe(2); // the pair collapsed + Brawlout
 		expect(fighting?.count).toBe(filtered.total);
+	});
+
+	// UX sweep 2026-07-16: a key in the sweep's frozen vocabulary with zero
+	// tagged rows in the current snapshot is a dead pill — it filters straight
+	// to NO MATCH. Zero counts are dropped by product decision.
+	it('omits a zero-count key even when the sweep vocabulary names it', async () => {
+		await seedProducts([['p-c', 'Crow Country']]);
+		await setCatalogGenres(db(), scope, 'HORROR', ['p-c']);
+		// The sweep state names ARCADE, but nothing is tagged with it yet.
+		await setPsPlusSweepState(db(), userId, {
+			region: REGION,
+			generation: GENERATION,
+			keys: ['ARCADE', 'HORROR'],
+			cursor: null,
+			skipped: [],
+			done: true,
+		});
+		try {
+			expect((await genres()).genres).toEqual([{ key: 'HORROR', count: 1 }]);
+		} finally {
+			// beforeEach only wipes the catalog tables — the state row must not
+			// leak the frozen vocabulary into the tests around this one.
+			await deleteSetting(db(), userId, PSPLUS_SWEEP_STATE_SETTING_KEY);
+		}
 	});
 });
 

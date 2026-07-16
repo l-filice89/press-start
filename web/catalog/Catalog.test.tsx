@@ -178,6 +178,47 @@ describe('Catalog filters', () => {
 		);
 	});
 
+	// UX sweep 2026-07-16: the facet response now omits zero-count keys, so a
+	// selected key can be missing from a NON-empty vocabulary (its count dropped
+	// to zero after a snapshot refresh, or a stale deep link). The live filter
+	// still needs its own pressed chip — "Clear genres" alone hides WHICH filter
+	// is starving the grid.
+	it('a selected genre missing from a non-empty vocabulary keeps its own chip', async () => {
+		const user = userEvent.setup();
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (url: string) => ({
+				ok: true,
+				status: 200,
+				json: async () =>
+					url.includes('/genres')
+						? { genres: [{ key: 'HORROR', count: 3 }] }
+						: (page({
+								total: 0,
+								snapshotTotal: 490,
+								games: [],
+							}) as unknown),
+			})),
+		);
+		renderCatalog('/catalog?genre=ARCADE');
+		const filters = await screen.findByTestId('catalog-filters');
+
+		// The orphaned selection renders pressed, beside the listed vocabulary…
+		expect(
+			within(filters).getByRole('button', { name: genreLabel('ARCADE') }),
+		).toHaveAttribute('aria-pressed', 'true');
+		expect(
+			within(filters).getByRole('button', { name: /^Horror/ }),
+		).toHaveAttribute('aria-pressed', 'false');
+		// …and toggling it off releases the grid.
+		await user.click(
+			within(filters).getByRole('button', { name: genreLabel('ARCADE') }),
+		);
+		expect(
+			within(filters).queryByRole('button', { name: genreLabel('ARCADE') }),
+		).not.toBeInTheDocument();
+	});
+
 	// HAZARD (review, M9): a deep link with a genre whose vocabulary failed to load
 	// rendered NO chip and NO clear control — a filtered grid with no way out but
 	// editing the URL. The selected key is always visible and always switchable off,

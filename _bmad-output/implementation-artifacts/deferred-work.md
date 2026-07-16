@@ -494,3 +494,11 @@ resolution: done 2026-07-16 (Story 10.2) — DECIDED: `first_seen_at` keeps its 
   summary: The 15th–21st cron window can miss a departure entirely — a date announced after the 21st for a departure effective before the next 15th is never observed, so the game gets no "leaving" warning at all.
   evidence: Review finding on the 10.4 diff. The cron (`0 9,21 15-21 * *`) only sweeps inside the monthly window; Sony sometimes announces month-boundary rotations after the 21st. Candidate fixes: a second short window (e.g. 1st–3rd), or riding the leaving sweep on the "Check PS+ Extra" button. Cadence/product decision, not a code defect.
   resolution: done 2026-07-16 (Epic 10 retro) — cadence researched live: Sony announces mid-month (~15th–16th, e.g. Jun 16 for Jul 21) but ALSO late-month (Aug list surfaced Jun 25) and has moved dates post-announcement (part of the Jul 21 group slipped to Aug 18). Window widened to `0 9,21 15-28 * *` (wrangler.jsonc), covering both announcement patterns and post-announcement moves; per-invocation budget untouched. Departures cluster on the 3rd Tuesday (15th–21st), so the 1st–14th stays dark deliberately — nothing new to observe there.
+
+- source_spec: none
+  summary: Filter the shelf by time-to-beat bands (e.g. <=25h, 25-50, 50-75, 75-100, >100) — a revision of the filter system.
+  evidence: Split from the 2026-07-16 minor-bugs quick-dev intent; Luca flagged it as likely epic/story-sized — route through /bmad-correct-course to create the epic/stories rather than bundling with small bug fixes.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-minor-ux-bugs-sweep.md`
+  summary: The frozen-vocabulary union in `listCatalogGenreFacets` is dead machinery now that zero-count keys are filtered — the sweep-state read and Set union can never affect the response.
+  evidence: Review finding (Blind Hunter): every `state.keys` entry absent from the tag buckets maps to count 0 and is filtered out, so the output is exactly the tagged keys; the spec's frozen Never-list forbade removing the union in this story, so it stays as a wasted per-request settings read. Candidate cleanup: drop the sweep-state read and return tagged keys directly.
