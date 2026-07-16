@@ -260,6 +260,41 @@
 		color-mix(in srgb, var(--color-accent-glow) 30%, transparent);
 }
 
+/* Story 12.1: the story/100% metric toggle — a two-option segmented control
+   pinned at the Time menu top and above the sheet's band rows. Pressed state
+   reuses the accent-glow active treatment (never color alone: aria-pressed
+   carries it). */
+.filter-ttb__metric {
+	display: inline-flex;
+	align-self: flex-start;
+	gap: var(--space-1);
+	margin-bottom: var(--space-2);
+	padding: var(--space-1);
+	border: 1px solid var(--color-border-hairline);
+	border-radius: var(--radius-pill);
+}
+
+.filter-ttb__metric-option {
+	padding: var(--space-1) var(--space-3);
+	border: 0;
+	border-radius: var(--radius-pill);
+	background: none;
+	color: var(--color-text-secondary);
+	font-family: var(--font-ui);
+	font-size: 0.85rem;
+	cursor: pointer;
+}
+
+.filter-ttb__metric-option[data-active] {
+	background: color-mix(in srgb, var(--color-accent-glow) 18%, transparent);
+	color: var(--color-text-primary);
+}
+
+/* Sheet context: the toggle takes its own row above the band options. */
+.filter-sheet__metric {
+	flex-basis: 100%;
+}
+
 /* Inert placeholder menuitem (empty/pending/failed vocabulary). */
 .filter-row__empty {
 	padding: var(--space-2) var(--space-3);

@@ -159,8 +159,8 @@ development_status:
 
   # Epic 12: Fit the Time I Have — the Time-to-beat Filter — v1.x, after Epic 10
   # Added 2026-07-16 via correct-course (sprint-change-proposal-2026-07-16-ttb-filter.md)
-  epic-12: backlog
-  12-1-filter-the-shelf-by-time-to-beat-bands: backlog
+  epic-12: in-progress # 1/1 stories dev-complete 2026-07-16 (dev-auto); merge gate pending independent follow-up review
+  12-1-filter-the-shelf-by-time-to-beat-bands: done # 2026-07-16 (dev-auto): Time filter group — 5 half-open bands + Unknown, story/100% toggle, single-predicate clause, summary+sheet, hazard tests + epic12-ttb e2e; 5 review patches; followup_review_recommended:true (shared dropdown focus rework)
   epic-12-retrospective: optional
 
 action_items:

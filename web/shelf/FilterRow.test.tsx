@@ -435,6 +435,169 @@ describe('FilterRow', () => {
 		expect(trigger).toHaveFocus();
 	});
 
+	it('Time opens six band rows with the metric toggle pinned on top (Story 12.1)', async () => {
+		const user = userEvent.setup();
+		mockGenres([]);
+		renderRow();
+
+		await user.click(screen.getByTestId('filter-ttb'));
+
+		const menu = screen.getByTestId('filter-ttb-menu');
+		const items = within(menu).getAllByRole('menuitemcheckbox');
+		expect(items.map((i) => i.textContent)).toEqual([
+			'≤25h',
+			'25–50h',
+			'50–75h',
+			'75–100h',
+			'>100h',
+			'Unknown',
+		]);
+		for (const item of items) {
+			expect(item).toHaveAttribute('aria-checked', 'false');
+		}
+		// The metric toggle sits inside the menu as menuitemradio rows (a menu
+		// may not own plain aria-pressed buttons), story checked by default.
+		const toggle = within(menu).getByTestId('filter-ttb-metric');
+		expect(
+			within(toggle).getByRole('menuitemradio', { name: 'Story hours' }),
+		).toHaveAttribute('aria-checked', 'true');
+		expect(
+			within(toggle).getByRole('menuitemradio', { name: '100% hours' }),
+		).toHaveAttribute('aria-checked', 'false');
+	});
+
+	// HAZARD (Story 12.1 review): the metric radios and the band rows are ONE
+	// roving focus list — the toggle must be keyboard-reachable inside the menu,
+	// and selecting a radio must not close it (same contract as the checkboxes).
+	it('the Time menu roves one focus list over metric radios and band rows', async () => {
+		const user = userEvent.setup();
+		mockGenres([]);
+		const onChange = vi.fn();
+		renderRow(EMPTY_FILTER, onChange);
+
+		const trigger = screen.getByTestId('filter-ttb');
+		trigger.focus();
+		await user.keyboard('{ArrowDown}');
+
+		// Focus opens on the first radio; arrows walk radios → bands as one list.
+		const story = screen.getByRole('menuitemradio', { name: 'Story hours' });
+		expect(story).toHaveFocus();
+		await user.keyboard('{ArrowDown}');
+		expect(
+			screen.getByRole('menuitemradio', { name: '100% hours' }),
+		).toHaveFocus();
+		await user.keyboard('{ArrowDown}');
+		expect(
+			screen.getByRole('menuitemcheckbox', { name: '≤25h' }),
+		).toHaveFocus();
+
+		// Home/End span the whole combined list, radios included.
+		await user.keyboard('{End}');
+		expect(
+			screen.getByRole('menuitemcheckbox', { name: 'Unknown' }),
+		).toHaveFocus();
+		await user.keyboard('{Home}');
+		expect(story).toHaveFocus();
+
+		// Enter on a radio selects the metric WITHOUT closing the menu.
+		await user.keyboard('{ArrowDown}');
+		await user.keyboard('{Enter}');
+		expect(onChange).toHaveBeenCalledWith({
+			...EMPTY_FILTER,
+			ttb: { metric: 'complete', bands: [] },
+		});
+		expect(screen.getByRole('menu')).toBeInTheDocument();
+
+		// Escape behaves like the rows: closes and returns focus to the trigger.
+		await user.keyboard('{Escape}');
+		expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+		expect(trigger).toHaveFocus();
+	});
+
+	it('the metric toggle flips the metric in filter state, preserving bands', async () => {
+		const user = userEvent.setup();
+		mockGenres([]);
+		const onChange = vi.fn();
+		renderRow(
+			{ ...EMPTY_FILTER, ttb: { metric: 'story', bands: ['lte25'] } },
+			onChange,
+		);
+
+		await user.click(screen.getByTestId('filter-ttb'));
+		await user.click(screen.getByRole('menuitemradio', { name: '100% hours' }));
+		expect(onChange).toHaveBeenCalledWith({
+			...EMPTY_FILTER,
+			ttb: { metric: 'complete', bands: ['lte25'] },
+		});
+	});
+
+	it('toggling a band row reports it and shows a count badge on the Time trigger', async () => {
+		const user = userEvent.setup();
+		mockGenres([]);
+		const onChange = vi.fn();
+		renderRow(
+			{
+				...EMPTY_FILTER,
+				ttb: { metric: 'story', bands: ['25-50', 'unknown'] },
+			},
+			onChange,
+		);
+
+		const trigger = screen.getByRole('button', { name: 'Time — 2 selected' });
+		expect(trigger).toHaveAttribute('data-active');
+		expect(trigger).toHaveTextContent('2');
+
+		await user.click(trigger);
+		expect(screen.getByTestId('filter-ttb-25-50')).toHaveAttribute(
+			'aria-checked',
+			'true',
+		);
+		await user.click(screen.getByTestId('filter-ttb-gt100'));
+		expect(onChange).toHaveBeenCalledWith({
+			...EMPTY_FILTER,
+			ttb: { metric: 'story', bands: ['25-50', 'unknown', 'gt100'] },
+		});
+		// Multiselect: the menu stays open for further picks.
+		expect(screen.getByRole('menu')).toBeInTheDocument();
+	});
+
+	it('the sheet carries the Time group and its bands count in the trigger badge (Story 12.1)', async () => {
+		const user = userEvent.setup();
+		mockGenres([]);
+		const onChange = vi.fn();
+		renderRow(
+			{ ...EMPTY_FILTER, ttb: { metric: 'story', bands: ['lte25'] } },
+			onChange,
+		);
+
+		// Bands count into the sheet trigger's active badge.
+		const trigger = screen.getByRole('button', { name: 'Filters — 1 active' });
+		await user.click(trigger);
+
+		const sheet = screen.getByRole('dialog', { name: 'Filters' });
+		expect(sheet).toHaveTextContent('Time to beat — any of (or)');
+		// Toggle above the six band rows.
+		expect(within(sheet).getByTestId('filter-ttb-metric')).toBeInTheDocument();
+		expect(within(sheet).getByRole('button', { name: '≤25h' })).toHaveAttribute(
+			'aria-pressed',
+			'true',
+		);
+
+		await user.click(within(sheet).getByRole('button', { name: 'Unknown' }));
+		expect(onChange).toHaveBeenCalledWith({
+			...EMPTY_FILTER,
+			ttb: { metric: 'story', bands: ['lte25', 'unknown'] },
+		});
+
+		// The sheet toggle keeps aria-pressed buttons — with explicit "… hours"
+		// names, so a screen reader hears what the toggle aims at.
+		await user.click(within(sheet).getByRole('button', { name: '100% hours' }));
+		expect(onChange).toHaveBeenCalledWith({
+			...EMPTY_FILTER,
+			ttb: { metric: 'complete', bands: ['lte25'] },
+		});
+	});
+
 	it('supports keyboard traversal and Escape returns focus to the trigger', async () => {
 		const user = userEvent.setup();
 		mockGenres([]);

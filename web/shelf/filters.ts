@@ -49,11 +49,43 @@ export const FLAGS = [
 
 export type FlagKey = (typeof FLAGS)[number]['key'];
 
+/**
+ * Time-to-beat bands (Story 12.1, VR-9). Half-open (`25 < h ≤ 50` shape): a
+ * game landing exactly on a boundary matches exactly ONE band — no overlap,
+ * no gap. Hours = selected-metric seconds / 3600. `unknown` is the explicit
+ * absence band: a null selected metric matches it and ONLY it (NFR-4 — never
+ * a numeric band, never zero-as-value); its hour predicate is therefore
+ * constant-false. Bands are static — always all six, no zero-count hiding.
+ */
+export const TTB_BANDS = [
+	{ key: 'lte25', label: '≤25h', match: (h: number) => h <= 25 },
+	{ key: '25-50', label: '25–50h', match: (h: number) => h > 25 && h <= 50 },
+	{ key: '50-75', label: '50–75h', match: (h: number) => h > 50 && h <= 75 },
+	{
+		key: '75-100',
+		label: '75–100h',
+		match: (h: number) => h > 75 && h <= 100,
+	},
+	{ key: 'gt100', label: '>100h', match: (h: number) => h > 100 },
+	{ key: 'unknown', label: 'Unknown', match: () => false },
+] as const;
+
+export type TtbBandKey = (typeof TTB_BANDS)[number]['key'];
+
+/** Display label for a band key — the ONE lookup both the menu rows and the
+ *  summary sentence render from. */
+export const ttbBandLabel = (key: TtbBandKey): string =>
+	TTB_BANDS.find((b) => b.key === key)?.label ?? key;
+
+/** Which stored TTB metric the bands read — filter state, never persisted. */
+export type TtbMetric = 'story' | 'complete';
+
 export type ShelfFilter = {
 	states: LiveStatus[];
 	genres: string[];
 	reveals: RevealState[];
 	flags: FlagKey[];
+	ttb: { metric: TtbMetric; bands: TtbBandKey[] };
 };
 
 export const EMPTY_FILTER: ShelfFilter = {
@@ -61,14 +93,37 @@ export const EMPTY_FILTER: ShelfFilter = {
 	genres: [],
 	reveals: [],
 	flags: [],
+	ttb: { metric: 'story', bands: [] },
 };
 
 export function isFilterActive(filter: ShelfFilter): boolean {
+	// The TTB metric alone never activates the filter — only selected bands do.
 	return (
 		filter.states.length > 0 ||
 		filter.genres.length > 0 ||
 		filter.reveals.length > 0 ||
-		filter.flags.length > 0
+		filter.flags.length > 0 ||
+		filter.ttb.bands.length > 0
+	);
+}
+
+/**
+ * The Time-group clause (Story 12.1): OR across the selected bands against
+ * the chosen metric. An absent metric ⇒ matches only `unknown` — and absence
+ * covers any value that is not an honest duration (null/undefined schema
+ * drift, NaN, negatives), never just `null`, so a malformed value can't
+ * silently vanish a game or dishonestly land in ≤25h. `0` seconds is a real
+ * value (≤25h) — absence is never zero (NFR-4).
+ */
+function matchesTtb(game: ShelfGame, ttb: ShelfFilter['ttb']): boolean {
+	if (ttb.bands.length === 0) return true;
+	const seconds =
+		ttb.metric === 'story' ? game.ttbStorySeconds : game.ttbCompleteSeconds;
+	if (seconds == null || !Number.isFinite(seconds) || seconds < 0)
+		return ttb.bands.includes('unknown');
+	const hours = seconds / 3600;
+	return TTB_BANDS.some(
+		(band) => ttb.bands.includes(band.key) && band.match(hours),
 	);
 }
 
@@ -105,7 +160,8 @@ export function applyShelfFilter(
 					: flag === 'leavingSoon'
 						? showLeaving(game.psPlusLeavingOn, game.owned)
 						: game[flag],
-			),
+			) &&
+			matchesTtb(game, filter.ttb),
 	);
 }
 
@@ -170,6 +226,10 @@ export function summarizeFilter(filter: ShelfFilter): SummaryPart[] {
 		filter.reveals.length > 0 ? [...filter.reveals] : [...filter.states];
 	if (stateTerms.length > 0) groups.push(joinWithOr(stateTerms));
 	if (filter.genres.length > 0) groups.push(joinWithOr(filter.genres));
+	// Time bands narrate in selection order, like every other OR group.
+	if (filter.ttb.bands.length > 0) {
+		groups.push(joinWithOr(filter.ttb.bands.map(ttbBandLabel)));
+	}
 	for (const key of filter.flags) {
 		const flag = FLAGS.find((f) => f.key === key);
 		if (flag) groups.push([{ text: flag.label }]);

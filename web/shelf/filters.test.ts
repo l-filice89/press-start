@@ -248,6 +248,185 @@ describe('isFilterActive', () => {
 		expect(isFilterActive(f({ genres: ['RPG'] }))).toBe(true);
 		expect(isFilterActive(f({ reveals: ['Dropped'] }))).toBe(true);
 		expect(isFilterActive(f({ flags: ['owned'] }))).toBe(true);
+		expect(
+			isFilterActive(f({ ttb: { metric: 'story', bands: ['lte25'] } })),
+		).toBe(true);
+	});
+
+	// HAZARD (Story 12.1): the metric toggle is NOT a selection — a non-default
+	// metric with zero bands must read as inactive.
+	it('the TTB metric alone never activates the filter — bands.length only', () => {
+		expect(isFilterActive(f({ ttb: { metric: 'complete', bands: [] } }))).toBe(
+			false,
+		);
+	});
+
+	// DECISION (Story 12.1 review): the metric toggle is FILTER STATE, so
+	// "Clear filters" (assigning EMPTY_FILTER) intentionally snaps it back to
+	// the story default along with everything else.
+	it('EMPTY_FILTER pins the TTB group to the story metric with no bands', () => {
+		expect(EMPTY_FILTER.ttb).toEqual({ metric: 'story', bands: [] });
+	});
+});
+
+describe('Time-to-beat filter (Story 12.1, VR-9)', () => {
+	const hours = (h: number) => h * 3600;
+	const ttb = (
+		bands: ShelfFilter['ttb']['bands'],
+		metric: ShelfFilter['ttb']['metric'] = 'story',
+	) => f({ ttb: { metric, bands } });
+
+	it('a band matches on selected-metric hours (25h game in ≤25h)', () => {
+		const games = [
+			game({ id: 't1', ttbStorySeconds: hours(25) }),
+			game({ id: 't2', ttbStorySeconds: hours(26) }),
+		];
+		expect(ids(applyShelfFilter(games, ttb(['lte25'])))).toEqual(['t1']);
+	});
+
+	// HAZARD (boundary exactness): bands are half-open — a game at exactly 50h
+	// matches 25–50h ONLY; with both neighbours selected it appears once.
+	it('a game at exactly 50h matches 25–50h and never 50–75h', () => {
+		const boundary = game({ id: 'b', ttbStorySeconds: hours(50) });
+		expect(ids(applyShelfFilter([boundary], ttb(['25-50'])))).toEqual(['b']);
+		expect(applyShelfFilter([boundary], ttb(['50-75']))).toEqual([]);
+		expect(ids(applyShelfFilter([boundary], ttb(['25-50', '50-75'])))).toEqual([
+			'b',
+		]);
+	});
+
+	it('every boundary lands in exactly one band (75h, 100h)', () => {
+		const at75 = game({ id: 'x75', ttbStorySeconds: hours(75) });
+		const at100 = game({ id: 'x100', ttbStorySeconds: hours(100) });
+		expect(ids(applyShelfFilter([at75], ttb(['50-75'])))).toEqual(['x75']);
+		expect(applyShelfFilter([at75], ttb(['75-100']))).toEqual([]);
+		expect(ids(applyShelfFilter([at100], ttb(['75-100'])))).toEqual(['x100']);
+		expect(applyShelfFilter([at100], ttb(['gt100']))).toEqual([]);
+	});
+
+	it('ORs within the Time group (≤25h + >100h)', () => {
+		const games = [
+			game({ id: 's', ttbStorySeconds: hours(10) }),
+			game({ id: 'm', ttbStorySeconds: hours(60) }),
+			game({ id: 'l', ttbStorySeconds: hours(120) }),
+		];
+		expect(ids(applyShelfFilter(games, ttb(['lte25', 'gt100'])))).toEqual([
+			's',
+			'l',
+		]);
+	});
+
+	it('ANDs against other groups (≤25h + genre RPG)', () => {
+		const games = [
+			game({ id: 'sr', ttbStorySeconds: hours(10), genres: ['RPG'] }),
+			game({ id: 's-', ttbStorySeconds: hours(10), genres: ['Racing'] }),
+			game({ id: 'lr', ttbStorySeconds: hours(200), genres: ['RPG'] }),
+		];
+		expect(
+			ids(
+				applyShelfFilter(games, {
+					...ttb(['lte25']),
+					genres: ['RPG'],
+				}),
+			),
+		).toEqual(['sr']);
+	});
+
+	it('the metric toggle re-evaluates every selected band', () => {
+		const g = game({
+			id: 'mt',
+			ttbStorySeconds: hours(10),
+			ttbCompleteSeconds: hours(40),
+		});
+		expect(applyShelfFilter([g], ttb(['25-50'], 'story'))).toEqual([]);
+		expect(ids(applyShelfFilter([g], ttb(['25-50'], 'complete')))).toEqual([
+			'mt',
+		]);
+	});
+
+	// HAZARD (NFR-4, cross-metric absence): a null SELECTED metric matches only
+	// Unknown even when the OTHER metric holds a value — never a numeric band.
+	it('a game with only the other metric matches only Unknown', () => {
+		const g = game({
+			id: 'cm',
+			ttbStorySeconds: null,
+			ttbCompleteSeconds: hours(55.6),
+		});
+		expect(applyShelfFilter([g], ttb(['50-75'], 'story'))).toEqual([]);
+		expect(applyShelfFilter([g], ttb(['lte25'], 'story'))).toEqual([]);
+		expect(ids(applyShelfFilter([g], ttb(['unknown'], 'story')))).toEqual([
+			'cm',
+		]);
+		// Aimed at the metric it DOES carry, it filters as a value again.
+		expect(ids(applyShelfFilter([g], ttb(['50-75'], 'complete')))).toEqual([
+			'cm',
+		]);
+	});
+
+	it('Unknown shows only games with a null selected metric', () => {
+		const games = [
+			game({ id: 'u', ttbStorySeconds: null }),
+			game({ id: 'v', ttbStorySeconds: hours(10) }),
+		];
+		expect(ids(applyShelfFilter(games, ttb(['unknown'])))).toEqual(['u']);
+	});
+
+	// HAZARD (0 is a value): zero seconds matches ≤25h — never absence.
+	it('0 seconds is a real value: matches ≤25h, not Unknown', () => {
+		const g = game({ id: 'z', ttbStorySeconds: 0 });
+		expect(ids(applyShelfFilter([g], ttb(['lte25'])))).toEqual(['z']);
+		expect(applyShelfFilter([g], ttb(['unknown']))).toEqual([]);
+	});
+
+	// HAZARD (review P2): a value that is not an honest duration — undefined
+	// (schema drift), NaN — is ABSENCE: it matches Unknown and only Unknown,
+	// never a numeric band, and never silently vanishes from every band.
+	it('undefined or NaN seconds match only Unknown — never a numeric band, never nothing', () => {
+		const drift = game({
+			id: 'dr',
+			ttbStorySeconds: undefined as unknown as number | null,
+		});
+		const nan = game({ id: 'nn', ttbStorySeconds: Number.NaN });
+		for (const g of [drift, nan]) {
+			expect(ids(applyShelfFilter([g], ttb(['unknown'])))).toEqual([g.id]);
+			expect(
+				applyShelfFilter(
+					[g],
+					ttb(['lte25', '25-50', '50-75', '75-100', 'gt100']),
+				),
+			).toEqual([]);
+		}
+	});
+
+	// HAZARD (review P2): negative seconds must never dishonestly match ≤25h.
+	it('negative seconds match only Unknown, never ≤25h', () => {
+		const g = game({ id: 'neg', ttbStorySeconds: -3600 });
+		expect(applyShelfFilter([g], ttb(['lte25']))).toEqual([]);
+		expect(ids(applyShelfFilter([g], ttb(['unknown'])))).toEqual(['neg']);
+	});
+
+	it('no bands selected imposes nothing, whatever the toggle position', () => {
+		const games = [
+			game({ id: 'n1', ttbStorySeconds: null }),
+			game({ id: 'n2', ttbStorySeconds: hours(300) }),
+		];
+		expect(ids(applyShelfFilter(games, ttb([], 'complete')))).toEqual([
+			'n1',
+			'n2',
+		]);
+	});
+
+	it('narrates in the summary via literal or/and words', () => {
+		expect(summarizeFilterText(ttb(['lte25', 'gt100']))).toBe(
+			'Showing ≤25h or >100h games.',
+		);
+		expect(
+			summarizeFilterText({
+				...ttb(['25-50', 'unknown']),
+				genres: ['RPG'],
+				flags: ['owned'],
+			}),
+		).toBe('Showing RPG, and 25–50h or Unknown, and Owned games.');
 	});
 });
 

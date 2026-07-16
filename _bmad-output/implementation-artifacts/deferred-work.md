@@ -499,7 +499,11 @@ resolution: done 2026-07-16 (Story 10.2) — DECIDED: `first_seen_at` keeps its 
   summary: Filter the shelf by time-to-beat bands (e.g. <=25h, 25-50, 50-75, 75-100, >100) — a revision of the filter system.
   evidence: Split from the 2026-07-16 minor-bugs quick-dev intent; Luca flagged it as likely epic/story-sized — route through /bmad-correct-course to create the epic/stories rather than bundling with small bug fixes.
   decision: 2026-07-16 Homed in Story 12.1 (Epic 12, VR-9) via correct-course (sprint-change-proposal-2026-07-16-ttb-filter.md) — five bands + an explicit Unknown, story/100% toggle (default story), half-open boundaries, FR-20 semantics. Ledger closes when 12.1 ships.
+  resolution: done 2026-07-16 (Story 12.1) — the Time filter group shipped: five half-open bands + explicit Unknown, story/100% metric toggle in filter state, one clause in the single `applyShelfFilter` predicate, summary-sentence + mobile-sheet integration, hazard unit tests + `epic12-ttb.spec.ts` e2e.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-minor-ux-bugs-sweep.md`
   summary: The frozen-vocabulary union in `listCatalogGenreFacets` is dead machinery now that zero-count keys are filtered — the sweep-state read and Set union can never affect the response.
   evidence: Review finding (Blind Hunter): every `state.keys` entry absent from the tag buckets maps to count 0 and is filtered out, so the output is exactly the tagged keys; the spec's frozen Never-list forbade removing the union in this story, so it stays as a wasted per-request settings read. Candidate cleanup: drop the sweep-state read and return tagged keys directly.
+- source_spec: `_bmad-output/implementation-artifacts/spec-12-1-filter-the-shelf-by-time-to-beat-bands.md`
+  summary: The live filter summary sentence does not name the active TTB metric — "Showing ≤25h … games." reads identically whether bands evaluate story or 100% hours.
+  evidence: Review finding 2026-07-16 — `summarizeFilter` narrates band labels only; two materially different filters produce the same sentence, so the summary can't be decoded without opening the Time menu. Copy decision for Luca (e.g. append "(story)"/"(100%)" when bands are active), not a defect against the approved ACs.
