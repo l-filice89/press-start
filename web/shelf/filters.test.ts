@@ -416,9 +416,9 @@ describe('Time-to-beat filter (Story 12.1, VR-9)', () => {
 		]);
 	});
 
-	it('narrates in the summary via literal or/and words', () => {
+	it('narrates in the summary via literal or/and words, naming the metric', () => {
 		expect(summarizeFilterText(ttb(['lte25', 'gt100']))).toBe(
-			'Showing ≤25h or >100h games.',
+			'Showing ≤25h or >100h story completion games.',
 		);
 		expect(
 			summarizeFilterText({
@@ -426,7 +426,22 @@ describe('Time-to-beat filter (Story 12.1, VR-9)', () => {
 				genres: ['RPG'],
 				flags: ['owned'],
 			}),
-		).toBe('Showing RPG, and 25–50h or Unknown, and Owned games.');
+		).toBe(
+			'Showing RPG, and 25–50h or Unknown story completion, and Owned games.',
+		);
+	});
+
+	// Retro 12: the sentence must say WHICH hours it filtered on — the same
+	// band reads differently under story vs 100% completion.
+	it('names 100% completion when the complete metric is active', () => {
+		expect(summarizeFilterText(ttb(['lte25'], 'complete'))).toBe(
+			'Showing ≤25h 100% completion games.',
+		);
+		// The group-scoping comma lands on the metric label (the group's last
+		// token), not the band, when another AND group follows.
+		expect(
+			summarizeFilterText({ ...ttb(['lte25'], 'complete'), flags: ['owned'] }),
+		).toBe('Showing ≤25h 100% completion, and Owned games.');
 	});
 });
 

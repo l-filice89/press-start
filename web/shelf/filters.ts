@@ -80,6 +80,13 @@ export const ttbBandLabel = (key: TtbBandKey): string =>
 /** Which stored TTB metric the bands read — filter state, never persisted. */
 export type TtbMetric = 'story' | 'complete';
 
+/** How the summary sentence names each metric — exhaustive so a new metric
+ *  can't silently narrate under the wrong label. */
+const TTB_METRIC_LABEL: Record<TtbMetric, string> = {
+	story: 'story completion',
+	complete: '100% completion',
+};
+
 export type ShelfFilter = {
 	states: LiveStatus[];
 	genres: string[];
@@ -226,9 +233,15 @@ export function summarizeFilter(filter: ShelfFilter): SummaryPart[] {
 		filter.reveals.length > 0 ? [...filter.reveals] : [...filter.states];
 	if (stateTerms.length > 0) groups.push(joinWithOr(stateTerms));
 	if (filter.genres.length > 0) groups.push(joinWithOr(filter.genres));
-	// Time bands narrate in selection order, like every other OR group.
+	// Time bands narrate in selection order, like every other OR group, then
+	// name the active metric ("story completion" / "100% completion") so the
+	// sentence is unambiguous about which hours it filtered on (epic-12 retro,
+	// wording Luca's).
 	if (filter.ttb.bands.length > 0) {
-		groups.push(joinWithOr(filter.ttb.bands.map(ttbBandLabel)));
+		groups.push([
+			...joinWithOr(filter.ttb.bands.map(ttbBandLabel)),
+			{ text: TTB_METRIC_LABEL[filter.ttb.metric] },
+		]);
 	}
 	for (const key of filter.flags) {
 		const flag = FLAGS.find((f) => f.key === key);

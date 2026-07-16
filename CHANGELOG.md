@@ -4,6 +4,21 @@ All notable changes to PRESS START are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/); this project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] — 2026-07-17
+
+Fit the Time I Have: filter the shelf by how long a game takes to beat.
+
+### Added
+- **Time filter group on the shelf.** Five hour bands (≤25h, 25–50h, 50–75h,
+  75–100h, >100h) plus an explicit Unknown pill — OR within the group, AND
+  against State/Genre/Flags, on desktop as a third dropdown and in the mobile
+  filter sheet. A story/100% toggle inside the group picks which time-to-beat
+  metric the bands read (default story hours); a game missing the selected
+  metric matches only Unknown, never a numeric band.
+- **The filter summary names the time metric.** Active bands narrate as
+  "… story completion" or "… 100% completion", so the sentence says which
+  hours it filtered on.
+
 ## [2.1.2] — 2026-07-16
 
 ### Fixed

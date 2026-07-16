@@ -104,6 +104,11 @@ test('the story/100% toggle re-evaluates the selected bands against the chosen m
 		await page.keyboard.press('Escape');
 		await loadAllPages(page);
 		await expect(cardFor(page, split)).toBeVisible();
+
+		// The summary names the flipped metric end-to-end (epic-12 retro copy).
+		await expect(page.getByTestId('filter-summary')).toHaveText(
+			'Showing 50–75h 100% completion games.',
+		);
 	} finally {
 		await deleteGames([split.id]);
 	}
@@ -153,7 +158,7 @@ test('a game missing the selected metric matches only Unknown — never a numeri
 		await expect(cardFor(page, unknownUnowned)).toHaveCount(0);
 		const summary = page.getByTestId('filter-summary');
 		await expect(summary).toHaveText(
-			'Showing 50–75h or Unknown, and Owned games.',
+			'Showing 50–75h or Unknown story completion, and Owned games.',
 		);
 		await expect(summary.locator('.filter-summary__or')).toHaveText('or');
 		await expect(summary.locator('.filter-summary__and')).toHaveText('and');

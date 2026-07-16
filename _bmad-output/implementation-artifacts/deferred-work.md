@@ -507,3 +507,4 @@ resolution: done 2026-07-16 (Story 10.2) — DECIDED: `first_seen_at` keeps its 
 - source_spec: `_bmad-output/implementation-artifacts/spec-12-1-filter-the-shelf-by-time-to-beat-bands.md`
   summary: The live filter summary sentence does not name the active TTB metric — "Showing ≤25h … games." reads identically whether bands evaluate story or 100% hours.
   evidence: Review finding 2026-07-16 — `summarizeFilter` narrates band labels only; two materially different filters produce the same sentence, so the summary can't be decoded without opening the Time menu. Copy decision for Luca (e.g. append "(story)"/"(100%)" when bands are active), not a defect against the approved ACs.
+  resolution: done 2026-07-17 (epic-12 retro, quick-dev one-shot) — Luca picked the copy: the Time group narrates "… story completion" / "… 100% completion" after its band terms; unit + e2e asserts updated.
