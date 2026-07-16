@@ -1931,6 +1931,54 @@ So that I pick a game that fits the time I actually have, instead of stalling ou
 **When** the next app open happens
 **Then** the failure surfaces (the FR-40 posture) rather than leaving stale hours passing as current [NFR-4, AR-14]
 
+### Story 10.4: Leaving PS+ soon — the "Last Chance to Play" category (VR-6 rework)
+
+As Luca,
+I want to be warned BEFORE a game leaves the PS+ Extra catalog, not after,
+So that I can play or buy it while the choice still exists.
+
+**Context (Luca, 2026-07-16):** Story 10.2 shipped an honest post-departure stamp — correct per the "Open at design time" note, but Luca judged it low-value: "the second case, I don't think it's much use." Sony's store exposes a **"Last Chance to Play"** category on the same public `categoryGridRetrieve` endpoint the catalog sync already uses (different category id) — a real pre-departure signal.
+
+**Acceptance Criteria:**
+
+**Given** the public PSN catalog endpoint the sync already calls (no credential, EXTERNAL-RISK posture unchanged)
+**When** the **first task** of this story runs
+**Then** a probe discovers the "Last Chance to Play" category id for the configured region and verifies it answers with a plausible grid — recorded as an artifact; if the category does not exist for `it-it`, HALT blocked for a decision [VR-6, SAMPLE-OF-ONE]
+
+**Given** the monthly PS+ pass
+**When** it runs
+**Then** it also fetches the last-chance grid (budget ledger updated honestly) and flags matching tracked games "leaving soon" — warning shown while the game is STILL in the catalog [VR-6, AR-15]
+
+**Given** the shipped `ps_plus_left_on` post-departure stamp
+**When** this story lands
+**Then** its role is decided per Luca's directive: departure no longer deserves a warning pill of its own — the stamp survives only if kept as a quiet internal fact (cleared when a game re-enters the catalog), and the LEFT PS+ pill is replaced by the leaving-soon warning [VR-6, Luca 2026-07-16]
+
+**Given** an owned game
+**When** it appears in the last-chance category
+**Then** no warning — ownership makes catalog membership irrelevant (FR-38) [FR-38]
+
+### Story 10.5: Scores in the add-game modal, color-graded everywhere (VR-5 follow-on)
+
+As Luca,
+I want candidate ratings visible when I search for a game to add, and scores color-coded wherever they appear,
+So that my "hear about a game → check ratings → add if ~75+" flow happens inside the app in one glance.
+
+**Context (Luca, 2026-07-16):** search/preview candidates ALREADY carry critic/user scores (Story 10.1 fetches them on the same IGDB call and persists them on add) — the add modal just doesn't render them. TTB is explicitly OUT: "never a decision breaker when I add a game."
+
+**Acceptance Criteria:**
+
+**Given** the add-game search results (and the rematch/straggler candidate lists, which share the shape)
+**When** candidates render
+**Then** each row shows its critic and user score from the data already in the response — no new fetch, no TTB [VR-5, NFR-3]
+
+**Given** any rendered score (card, detail panel, candidate rows)
+**When** it displays
+**Then** it is color-graded: **≤60 red, 61–74 yellow, ≥75 green** — WCAG AA contrast on the dark theme, consistent with the existing palette (warn-amber family for yellow), and never color-only (the number is always present; sr-only text unchanged) [Luca 2026-07-16, UX-DR, a11y]
+
+**Given** a candidate or game with no score
+**When** it renders
+**Then** the slot is absent — never a zero, never a gray "0" pill [VR-5, NFR-4]
+
 ---
 
 ## Epic 11: PSN Account Safety — Sanitize the Credentialed Surface

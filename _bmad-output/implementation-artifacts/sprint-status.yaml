@@ -144,6 +144,8 @@ development_status:
   10-1-critic-user-scores-on-every-game-vr-5: done # 2026-07-16 (dev-auto, 291a588): IGDB scores on same call, migration 0012, cron refresh, 96.9% coverage probe; 13 review patches; followup_review_recommended:true
   10-2-leaving-ps-extra-soon-vr-6: done # 2026-07-16 (dev-auto, 0171cfb): ps_plus_left_on stamped atomically in the flag pass, LEFT PS+ pill, DW-13 closed by decision; 9 review patches; followup_review_recommended:false
   10-3-time-to-beat-the-story-and-100-vr-8: done # 2026-07-16 (dev-auto, 024b4eb): IGDB game_time_to_beats on the same cron pass, migration 0014, 95.4% either-value probe, HLTB never needed; 11 review patches; followup_review_recommended:true
+  10-4-leaving-ps-soon-last-chance-category-vr-6: backlog # added 2026-07-16 (Luca): pre-departure warning via the public last-chance category; LEFT PS+ pill retired per directive
+  10-5-scores-in-add-modal-color-graded-vr-5: backlog # added 2026-07-16 (Luca): render candidate scores in add/rematch dialogs + color-grade all scores (<=60 red, 61-74 yellow, >=75 green, WCAG AA); TTB explicitly out
   epic-10-retrospective: optional
 
   # Epic 11: PSN Account Safety — Sanitize the Credentialed Surface — HIGH PRIORITY, sequenced first
