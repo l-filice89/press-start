@@ -8,7 +8,10 @@ import { ToastHost } from '../components/Toast';
 import { AddGameDialog } from './AddGameDialog';
 import * as api from './api';
 
-vi.mock('./api', () => ({
+// importOriginal keeps the pure helpers (candidateScores) real — only the
+// network calls are mocked.
+vi.mock('./api', async (importOriginal) => ({
+	...(await importOriginal<typeof api>()),
 	fetchAddPreview: vi.fn(),
 	searchIgdb: vi.fn(),
 	addGame: vi.fn(),
@@ -22,6 +25,10 @@ const AUTO = {
 	coverUrl: 'https://img/tie-in.jpg',
 	releaseDate: '2004-06-28',
 	genres: ['Platform'],
+	criticScore: null,
+	criticScoreCount: null,
+	userScore: null,
+	userScoreCount: null,
 };
 const RIGHT = {
 	igdbId: '99',
@@ -29,6 +36,10 @@ const RIGHT = {
 	coverUrl: 'https://img/marvel.jpg',
 	releaseDate: '2023-10-20',
 	genres: ['Adventure', 'Shooter'],
+	criticScore: 88.5,
+	criticScoreCount: 40,
+	userScore: 92.1,
+	userScoreCount: 300,
 };
 
 function renderDialog(prefill?: {

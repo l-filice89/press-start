@@ -163,6 +163,29 @@
 	color: var(--color-text-muted);
 }
 
+/* Reception scores (Story 10.1): read-only fact row — value big, count quiet. */
+.detail-panel__scores {
+	display: flex;
+	gap: var(--space-5);
+}
+
+.detail-panel__score {
+	margin: 0;
+	font-family: var(--font-body);
+	font-size: 13px;
+	color: var(--color-text-muted);
+}
+
+.detail-panel__score-value {
+	font-family: var(--font-ui);
+	font-size: 18px;
+	color: var(--color-text);
+}
+
+.detail-panel__score-count {
+	font-size: 11px;
+}
+
 /* Segmented play-status control. */
 .detail-panel__statuses {
 	display: flex;

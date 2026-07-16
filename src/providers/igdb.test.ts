@@ -15,12 +15,32 @@ import { __resetIgdbTokenCache, createIgdbProvider } from './igdb';
  *    `enrich`, which stays exact-or-null).
  */
 
+// Score fields captured live 2026-07-16 (Story 10.1 probe — real payload, not
+// hand-written): floats stored verbatim, rounding is a render concern.
 const HADES = {
 	id: 113112,
 	name: 'Hades',
 	first_release_date: 1600300800,
 	cover: { image_id: 'cob9kr' },
 	genres: [{ name: 'Role-playing (RPG)' }, { name: 'Indie' }],
+	aggregated_rating: 93.52941176470588,
+	aggregated_rating_count: 17,
+	rating: 89.47202036710553,
+	rating_count: 1699,
+};
+
+const HADES_SCORES = {
+	criticScore: 93.52941176470588,
+	criticScoreCount: 17,
+	userScore: 89.47202036710553,
+	userScoreCount: 1699,
+};
+
+const NO_SCORES = {
+	criticScore: null,
+	criticScoreCount: null,
+	userScore: null,
+	userScoreCount: null,
 };
 
 const igdbGame = (
@@ -74,6 +94,7 @@ describe('createIgdbProvider.enrich (live-probed failure modes)', () => {
 				'https://images.igdb.com/igdb/image/upload/t_cover_big/cob9kr.jpg',
 			releaseDate: '2020-09-17',
 			genres: ['Role-playing (RPG)', 'Indie'],
+			...HADES_SCORES,
 		});
 		expect(tokenMints(m)).toBe(1);
 	});
@@ -151,6 +172,58 @@ describe('createIgdbProvider query (PV-2 game_type filter)', () => {
 		expect(body).toContain('where game_type = (0,2,4,6,8,9,10,11);');
 		expect(body).not.toContain('category');
 	});
+
+	it('requests the four score fields on the SAME games call (VR-5: no second adapter)', async () => {
+		const m = stubFetch({ games: () => jsonResponse([HADES]) });
+		await provider().enrich('Hades');
+		const gamesCall = m.mock.calls.find((c) => !isTokenUrl(c[0]));
+		const body = String((gamesCall?.[1] as RequestInit).body);
+		for (const field of [
+			'aggregated_rating',
+			'aggregated_rating_count',
+			'rating',
+			'rating_count',
+		]) {
+			expect(body).toContain(field);
+		}
+	});
+});
+
+describe('createIgdbProvider.fetchScoresByIds (Story 10.1 refresh fetch)', () => {
+	it('fetches one batched where-id query and maps rows to IgdbScores', async () => {
+		const m = stubFetch({
+			games: () => jsonResponse([HADES, igdbGame(42, 'Unscored Game')]),
+		});
+		const rows = await provider().fetchScoresByIds(['113112', '42']);
+		expect(rows).toEqual([
+			{ igdbId: '113112', ...HADES_SCORES },
+			{ igdbId: '42', ...NO_SCORES },
+		]);
+		const gamesCalls = m.mock.calls.filter((c) => !isTokenUrl(c[0]));
+		expect(gamesCalls).toHaveLength(1); // 2 ids, ONE subrequest
+		const body = String((gamesCalls[0]?.[1] as RequestInit).body);
+		expect(body).toContain('where id = (113112,42);');
+		expect(body).toContain('limit 500;');
+		// A refresh must not re-filter by game_type: an anchored id is trusted.
+		expect(body).not.toContain('game_type');
+	});
+
+	it('drops non-numeric ids instead of interpolating them into the query', async () => {
+		const m = stubFetch({ games: () => jsonResponse([HADES]) });
+		await provider().fetchScoresByIds(['113112', 'evil); fields *;']);
+		const body = String(
+			(m.mock.calls.find((c) => !isTokenUrl(c[0]))?.[1] as RequestInit).body,
+		);
+		expect(body).toContain('where id = (113112);');
+		expect(body).not.toContain('evil');
+	});
+
+	it('DEGENERATE GUARD: a 200 non-array body fails closed here too', async () => {
+		stubFetch({ games: () => jsonResponse({ count: 31 }) });
+		await expect(provider().fetchScoresByIds(['113112'])).rejects.toThrow(
+			/non-array body/,
+		);
+	});
 });
 
 describe('createIgdbProvider.searchCandidate', () => {
@@ -175,6 +248,8 @@ describe('createIgdbProvider.searchCandidate', () => {
 			coverUrl: 'https://images.igdb.com/igdb/image/upload/t_cover_big/abc.jpg',
 			releaseDate: '2020-09-17',
 			genres: ['Roguelike'],
+			// An unscored hit maps to nulls — persisted as NULL, rendered as absent.
+			...NO_SCORES,
 		});
 	});
 

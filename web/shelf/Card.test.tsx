@@ -33,6 +33,10 @@ function game(overrides: Partial<ShelfGame> = {}): ShelfGame {
 		ownedVia: null,
 		releaseDate: '2015-03-24',
 		genres: ['Action', 'RPG'],
+		criticScore: null,
+		criticScoreCount: null,
+		userScore: null,
+		userScoreCount: null,
 		...overrides,
 	};
 }
@@ -74,6 +78,40 @@ describe('Card', () => {
 		expect(
 			screen.queryByTestId(['card-', 'trophy'].join('')),
 		).not.toBeInTheDocument();
+	});
+
+	describe('reception scores (Story 10.1, VR-5)', () => {
+		it('renders rounded critic and user scores with counts in the a11y text', () => {
+			renderCard(
+				game({
+					criticScore: 93.52941176470588,
+					criticScoreCount: 17,
+					userScore: 89.47202036710553,
+					userScoreCount: 1699,
+				}),
+			);
+			const row = screen.getByTestId('card-scores');
+			expect(row).toHaveTextContent('◎ 94');
+			expect(row).toHaveTextContent('★ 89');
+			expect(row).toHaveTextContent('from 17 reviews');
+			expect(row).toHaveTextContent('from 1699 ratings');
+		});
+
+		it('renders NOTHING in a null slot — never a zero (row itself stays for uniform height)', () => {
+			renderCard(
+				game({ criticScore: null, userScore: 42.4, userScoreCount: 3 }),
+			);
+			const row = screen.getByTestId('card-scores');
+			// No critic glyph and no fabricated zero — the slot is simply absent.
+			expect(row).not.toHaveTextContent('◎');
+			expect(row).toHaveTextContent('★ 42');
+			expect(row.querySelector('.card__score--critic')).toBeNull();
+		});
+
+		it('renders an empty scores row when the game has no scores at all', () => {
+			renderCard(game());
+			expect(screen.getByTestId('card-scores')).toBeEmptyDOMElement();
+		});
 	});
 
 	it('shows a non-network cover fallback when no cover URL', () => {

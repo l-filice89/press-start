@@ -21,6 +21,18 @@ export type GameFacts = {
 	storeUrl?: string | null;
 	psPlusExtra?: boolean;
 	unenriched?: boolean;
+	criticScore?: number | null;
+	criticScoreCount?: number | null;
+	userScore?: number | null;
+	userScoreCount?: number | null;
+};
+
+/** The four IGDB reception facts (Story 10.1) — always written as a unit. */
+export type GameScores = {
+	criticScore: number | null;
+	criticScoreCount: number | null;
+	userScore: number | null;
+	userScoreCount: number | null;
 };
 
 export type ExternalLinkSource = (typeof EXTERNAL_LINK_SOURCES)[number];
@@ -202,6 +214,31 @@ export async function setPsPlusExtraFlags(
 }
 
 /**
+ * Persist refreshed reception scores on a batch of games (Story 10.1). One
+ * `db.batch` call — one D1 subrequest however many rows (the Epic 9
+ * BUDGET-COUNTS-EVERY-SUBREQUEST lesson: a per-row loop of UPDATEs is N
+ * subrequests the mock can't see). Values differ per row so this can't be the
+ * `inArray` shape `setPsPlusExtraFlags` uses; each statement binds 5 params,
+ * far under D1's 100-param cap. Caller passes ONLY rows present in the IGDB
+ * response — a game absent from the reply keeps its stored scores (VR-5:
+ * absence of fresh data never erases standing data).
+ *
+ * ponytail: one unchunked batch — fine at the ~65-row library; D1 also caps
+ * statements-per-batch, so slice into multiple db.batch calls (each is one
+ * subrequest) if the linked library ever grows past a few hundred rows.
+ */
+export async function updateGameScores(
+	db: Db,
+	updates: { gameId: string; scores: GameScores }[],
+) {
+	if (updates.length === 0) return;
+	const statements = updates.map(({ gameId, scores }) =>
+		db.update(game).set(scores).where(eq(game.id, gameId)),
+	);
+	await db.batch(statements as [(typeof statements)[0], ...typeof statements]);
+}
+
+/**
  * Enrich a name-only (`unenriched`) game once a manual IGDB match is confirmed
  * (Story 6.2, FR-28): fill the facts the add-by-name save lacked and clear the
  * flag. Straight `set` (not COALESCE) — resolution is the user deliberately
@@ -216,6 +253,10 @@ export async function enrichGame(
 		/** Correct the name-only title to the chosen IGDB match, when given. */
 		title?: string;
 		titleNormalized?: string;
+		/** Reception scores from the chosen match (Story 10.1) — written as a
+		 * unit when given, so a rematch onto an unscored game clears the old
+		 * match's scores rather than keeping the wrong game's numbers. */
+		scores?: GameScores;
 	},
 ) {
 	await db
@@ -227,6 +268,7 @@ export async function enrichGame(
 			...(facts.title
 				? { title: facts.title, titleNormalized: facts.titleNormalized }
 				: {}),
+			...(facts.scores ?? {}),
 		})
 		.where(eq(game.id, gameId));
 }
@@ -245,6 +287,10 @@ export type LibraryRow = {
 	storeUrl: string | null;
 	psPlusExtra: boolean;
 	unenriched: boolean;
+	criticScore: number | null;
+	criticScoreCount: number | null;
+	userScore: number | null;
+	userScoreCount: number | null;
 	playStatus: (typeof gameTracking.$inferSelect)['playStatus'];
 	completedOn: string | null;
 	platinumOn: string | null;
@@ -288,6 +334,10 @@ export async function listLibraryForUser(
 			storeUrl: game.storeUrl,
 			psPlusExtra: game.psPlusExtra,
 			unenriched: game.unenriched,
+			criticScore: game.criticScore,
+			criticScoreCount: game.criticScoreCount,
+			userScore: game.userScore,
+			userScoreCount: game.userScoreCount,
 			playStatus: gameTracking.playStatus,
 			completedOn: gameTracking.completedOn,
 			platinumOn: gameTracking.platinumOn,

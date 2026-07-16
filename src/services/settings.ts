@@ -138,6 +138,59 @@ export async function getPsPlusRefreshedAt(
 }
 
 /**
+ * IGDB score refresh bookkeeping (Story 10.1, FR-40/AR-14 posture — the exact
+ * shape of the PS+ pair above). `scores_refreshed_at` is stamped on every
+ * successful refresh and gates the once-a-window cadence (the cron fires 7×
+ * a month; the refresh runs when the stamp is stale). `scores_refresh_failed`
+ * lights the attention banner; any successful refresh clears it.
+ */
+export const SCORES_REFRESH_FAILED_SETTING_KEY = 'scores_refresh_failed';
+const SCORES_REFRESH_FAILED = 'failed';
+
+export async function markScoresRefreshFailed(db: Db, userId: string) {
+	await setSetting(
+		db,
+		userId,
+		SCORES_REFRESH_FAILED_SETTING_KEY,
+		SCORES_REFRESH_FAILED,
+	);
+}
+
+export async function clearScoresRefreshFailed(db: Db, userId: string) {
+	await deleteSetting(db, userId, SCORES_REFRESH_FAILED_SETTING_KEY);
+}
+
+export async function isScoresRefreshFailed(
+	db: Db,
+	userId: string,
+): Promise<boolean> {
+	return (
+		(await getSetting(db, userId, SCORES_REFRESH_FAILED_SETTING_KEY)) ===
+		SCORES_REFRESH_FAILED
+	);
+}
+
+export const SCORES_REFRESHED_AT_SETTING_KEY = 'scores_refreshed_at';
+
+export async function stampScoresRefreshedAt(db: Db, userId: string) {
+	await setSetting(
+		db,
+		userId,
+		SCORES_REFRESHED_AT_SETTING_KEY,
+		await todayForUser(db, userId),
+	);
+}
+
+export async function getScoresRefreshedAt(
+	db: Db,
+	userId: string,
+): Promise<string | null> {
+	return (
+		(await getSetting(db, userId, SCORES_REFRESHED_AT_SETTING_KEY)) ?? null
+	);
+}
+
+/**
  * PS+ CATALOG SWEEP STATE (Story 7.1 review, M1/M2/M5) — one `setting` row, the
  * whole state machine of the catalog ingest:
  *

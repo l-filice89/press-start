@@ -4,7 +4,12 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router';
 import { useToast } from '../components/Toast';
 import { useModalTrap } from '../components/useModalTrap';
-import { addGame, fetchAddPreview, type IgdbCandidate } from './api';
+import {
+	addGame,
+	candidateScores,
+	fetchAddPreview,
+	type IgdbCandidate,
+} from './api';
 import { toDetail, useActiveDestination } from './detail-navigation';
 import { IgdbMatchPicker } from './IgdbMatchPicker';
 import './add-game-dialog.css';
@@ -154,7 +159,11 @@ export function AddGameDialog({
 			// ponytail: the IGDB id sticks even if the title is edited — an
 			// edition tweak keeps the right identity; retyping a different game
 			// entirely is rare enough to not special-case yet.
-			...(candidate ? { igdbId: candidate.igdbId } : {}),
+			// Scores ride the candidate too (Story 10.1) — never user-edited, so
+			// they come straight from the preview, not the form.
+			...(candidate
+				? { igdbId: candidate.igdbId, ...candidateScores(candidate) }
+				: {}),
 			// Forwarded, never interpreted: the server resolves it against the stored
 			// catalog and writes the `PSN_PRODUCT` link (AD-20) — or, if it was pruned
 			// meanwhile, ignores it and saves the title alone.

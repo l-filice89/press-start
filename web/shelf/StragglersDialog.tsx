@@ -5,6 +5,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useToast } from '../components/Toast';
 import { useModalTrap } from '../components/useModalTrap';
 import {
+	candidateScores,
 	fetchStragglers,
 	type IgdbCandidate,
 	ignoreStraggler,
@@ -270,6 +271,7 @@ function ResolveView({
 				coverUrl: candidate.coverUrl,
 				releaseDate: candidate.releaseDate,
 				genres: candidate.genres,
+				...candidateScores(candidate),
 			}),
 		onSuccess: onResolved,
 		// A stale straggler (404 — resolved elsewhere), a rejected field (400), or

@@ -1,7 +1,9 @@
 import { Hono } from 'hono';
 import { createDb } from '../src/repositories/db';
 import { apiRoutes } from '../src/routes';
+import { igdbFromEnv } from '../src/routes/games';
 import { runScheduledPsPlusCheck } from '../src/services/psplus';
+import { runScheduledScoreRefresh } from '../src/services/scores';
 
 /**
  * The Worker is the composition root (AD-1): one deploy serves both the
@@ -37,6 +39,19 @@ app.all('*', (c) => c.env.ASSETS.fetch(c.req.raw));
 export default {
 	fetch: app.fetch,
 	async scheduled(_controller, env: Env, _ctx) {
-		await runScheduledPsPlusCheck(createDb(env.DB), env);
+		const db = createDb(env.DB);
+		// Isolated (review): runScheduledPsPlusCheck catches its own body, but a
+		// throw from its pre-try user lookup (or a flag write inside its catch)
+		// would otherwise abort the invocation and starve the score refresh below.
+		await runScheduledPsPlusCheck(db, env).catch((error) =>
+			console.error('scheduled ps+ check escaped its own handling', error),
+		);
+		// Story 10.1: IGDB score refresh rides the SAME cron — sequential, after
+		// the PS+ work, inside one invocation's budget (Epic 9 rule, arithmetic
+		// in services/scores.ts: PS+ membership pass ≤34 + scores ≤9 ≈ 43 of 50,
+		// and the scores stale-gate fires it once per monthly window). Its
+		// failures persist their own FR-40 flag inside, so a throw here never
+		// masks the PS+ outcome above.
+		await runScheduledScoreRefresh(db, env, igdbFromEnv(env));
 	},
 } satisfies ExportedHandler<Env>;

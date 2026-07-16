@@ -146,6 +146,11 @@ export async function runSeedImport({
 				storeUrl: candidate.psStoreUrl ?? null,
 				unenriched,
 				psPlusExtra: candidate.psPlusExtra,
+				// Reception scores ride the same enrichment call (Story 10.1).
+				criticScore: enrichment?.criticScore ?? null,
+				criticScoreCount: enrichment?.criticScoreCount ?? null,
+				userScore: enrichment?.userScore ?? null,
+				userScoreCount: enrichment?.userScoreCount ?? null,
 			});
 			gameId = created.id;
 			summary.gamesCreated++;

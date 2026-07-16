@@ -17,6 +17,7 @@ import {
 	index,
 	integer,
 	primaryKey,
+	real,
 	sqliteTable,
 	text,
 	uniqueIndex,
@@ -64,6 +65,18 @@ export const game = sqliteTable(
 		unenriched: integer('unenriched', { mode: 'boolean' })
 			.notNull()
 			.default(false),
+		/**
+		 * IGDB reception scores (Story 10.1, VR-5) — shared fetched facts, written
+		 * only by ingest (enrichment paths + the scheduled refresh). All four are
+		 * nullable and stay NULL when IGDB has no value: a missing score renders as
+		 * ABSENT, never 0 (VR-5 — no fabrication). Scores are IGDB's 0–100 scale
+		 * stored VERBATIM (real, e.g. 87.33) — rounding is a render concern; counts
+		 * ride along so 3 reviews never reads like 300.
+		 */
+		criticScore: real('critic_score'),
+		criticScoreCount: integer('critic_score_count'),
+		userScore: real('user_score'),
+		userScoreCount: integer('user_score_count'),
 	},
 	(table) => [
 		// Non-unique — the first-pass match key (AD-18), used by every ingest path.

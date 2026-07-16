@@ -7,7 +7,10 @@ import { ToastHost } from '../components/Toast';
 import * as api from './api';
 import { RematchDialog } from './RematchDialog';
 
-vi.mock('./api', () => ({
+// importOriginal keeps the pure helpers (candidateScores) real — only the
+// network calls are mocked.
+vi.mock('./api', async (importOriginal) => ({
+	...(await importOriginal<typeof api>()),
 	searchIgdb: vi.fn(),
 	rematchGame: vi.fn(),
 }));
@@ -18,6 +21,10 @@ const CANDIDATE = {
 	coverUrl: null,
 	releaseDate: '2023-10-20',
 	genres: ['Adventure'],
+	criticScore: null,
+	criticScoreCount: null,
+	userScore: null,
+	userScoreCount: null,
 };
 
 function renderDialog(over: Partial<Parameters<typeof RematchDialog>[0]> = {}) {
@@ -73,6 +80,12 @@ describe('RematchDialog (PV-4)', () => {
 				coverUrl: null,
 				releaseDate: '2023-10-20',
 				genres: ['Adventure'],
+				// Story 10.1: candidate scores ride the rematch payload (nulls
+				// clear the old — wrong — match's numbers).
+				criticScore: null,
+				criticScoreCount: null,
+				userScore: null,
+				userScoreCount: null,
 			}),
 		);
 		await waitFor(() => expect(onRematched).toHaveBeenCalled());

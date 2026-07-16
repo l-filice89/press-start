@@ -1,6 +1,10 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { createIgdbProvider, type IgdbSearch } from '../providers';
+import {
+	createIgdbProvider,
+	type IgdbScoreFetch,
+	type IgdbSearch,
+} from '../providers';
 import { createDb } from '../repositories/db';
 import {
 	addGame,
@@ -20,7 +24,7 @@ import { shelfGameSchema } from './shelf';
  * The provider mints/refreshes its own Twitch app token from id+secret (Epic 5
  * stable-auth) — no manual token rotation.
  */
-function igdbFromEnv(rawEnv: Env): IgdbSearch | null {
+export function igdbFromEnv(rawEnv: Env): (IgdbSearch & IgdbScoreFetch) | null {
 	const env = rawEnv as Env & {
 		IGDB_CLIENT_ID?: string;
 		IGDB_CLIENT_SECRET?: string;
@@ -42,6 +46,24 @@ function igdbFromEnv(rawEnv: Env): IgdbSearch | null {
  * view instead (AR-9).
  */
 
+// IGDB reception scores as they ride a candidate (Story 10.1): response side
+// (nullable — the provider always fills them) and request side (nullish — the
+// client echoes the candidate back, and older/absent payloads mean "unknown",
+// which persists as NULL, never 0). 0–100 is IGDB's own scale; the count cap
+// only bounds a client-controlled write.
+const candidateScoreFields = {
+	criticScore: z.number().nullable(),
+	criticScoreCount: z.number().nullable(),
+	userScore: z.number().nullable(),
+	userScoreCount: z.number().nullable(),
+};
+export const scoreBodyFields = {
+	criticScore: z.number().min(0).max(100).nullish(),
+	criticScoreCount: z.number().int().min(0).max(1_000_000).nullish(),
+	userScore: z.number().min(0).max(100).nullish(),
+	userScoreCount: z.number().int().min(0).max(10_000_000).nullish(),
+};
+
 const previewResponseSchema = z.object({
 	available: z.boolean(),
 	candidate: z
@@ -51,6 +73,7 @@ const previewResponseSchema = z.object({
 			coverUrl: z.string().nullable(),
 			releaseDate: z.string().nullable(),
 			genres: z.array(z.string()),
+			...candidateScoreFields,
 		})
 		.nullable(),
 });
@@ -79,6 +102,7 @@ const addBodySchema = z
 			})
 			.nullish(),
 		genres: z.array(z.string().max(64)).max(20).optional(),
+		...scoreBodyFields,
 		owned: z.boolean().optional(),
 		// The PS Store product the add came from (Story 7.3). Resolved against the
 		// stored catalog server-side — a pruned id is ignored, not trusted, and the
@@ -121,6 +145,7 @@ const searchResponseSchema = z.object({
 			coverUrl: z.string().nullable(),
 			releaseDate: z.string().nullable(),
 			genres: z.array(z.string()),
+			...candidateScoreFields,
 		}),
 	),
 });
@@ -172,6 +197,7 @@ const rematchBodySchema = z.object({
 		})
 		.nullish(),
 	genres: z.array(z.string().max(64)).max(20).optional(),
+	...scoreBodyFields,
 });
 
 gamesRoute.post('/games/:id/rematch', requireAuth, async (c) => {

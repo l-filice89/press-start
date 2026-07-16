@@ -49,6 +49,10 @@ function game(over: Partial<ShelfGame> = {}): ShelfGame {
 		ownedVia: null,
 		releaseDate: null,
 		genres: [],
+		criticScore: null,
+		criticScoreCount: null,
+		userScore: null,
+		userScoreCount: null,
 		...over,
 	};
 }
@@ -148,6 +152,36 @@ describe('DetailPanel', () => {
 		expect(
 			within(panel()).queryByRole('heading', { name: 'Trophies' }),
 		).not.toBeInTheDocument();
+	});
+
+	describe('Scores section (Story 10.1, VR-5)', () => {
+		it('shows rounded scores labelled Critics/Players with their sample counts', async () => {
+			await openPanel(
+				game({
+					criticScore: 93.52941176470588,
+					criticScoreCount: 17,
+					userScore: 89.47202036710553,
+					userScoreCount: 1699,
+				}),
+			);
+			const section = screen.getByTestId('detail-scores');
+			expect(section).toHaveTextContent('94');
+			expect(section).toHaveTextContent('Critics (17 reviews)');
+			expect(section).toHaveTextContent('89');
+			expect(section).toHaveTextContent('Players (1699 ratings)');
+		});
+
+		it('omits a null score line, and the WHOLE section when no score exists', async () => {
+			await openPanel(game({ userScore: 61.2, userScoreCount: 1 }));
+			const section = screen.getByTestId('detail-scores');
+			expect(section).not.toHaveTextContent('Critics');
+			expect(section).toHaveTextContent('Players (1 rating)');
+		});
+
+		it('renders no Scores section for an unscored game (never a zero)', async () => {
+			await openPanel();
+			expect(screen.queryByTestId('detail-scores')).not.toBeInTheDocument();
+		});
 	});
 
 	it('has an accessibly named cover trigger, out of the tab order', () => {

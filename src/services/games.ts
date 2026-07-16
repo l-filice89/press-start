@@ -53,7 +53,45 @@ export async function previewAddGame(
 	}
 }
 
-export interface AddGameInput {
+/** Optional candidate score fields as they arrive from the routes (Story
+ * 10.1) — echoed from the IGDB preview like cover/date/genres. */
+export interface CandidateScoreInput {
+	criticScore?: number | null;
+	criticScoreCount?: number | null;
+	userScore?: number | null;
+	userScoreCount?: number | null;
+}
+
+/**
+ * Normalize to the repository's all-four-fields unit. Review hardening:
+ * a count never persists without its score (an orphan count is a standing
+ * inconsistency the UI can't show), and `undefined` throughout means the
+ * CLIENT SENT NO SCORE FIELDS AT ALL — the caller must then leave stored
+ * scores untouched rather than wipe them (absent ≠ null at this boundary).
+ */
+function scoresFromInput(input: CandidateScoreInput) {
+	const criticScore = input.criticScore ?? null;
+	const userScore = input.userScore ?? null;
+	return {
+		criticScore,
+		criticScoreCount:
+			criticScore !== null ? (input.criticScoreCount ?? null) : null,
+		userScore,
+		userScoreCount: userScore !== null ? (input.userScoreCount ?? null) : null,
+	};
+}
+
+/** True when the payload carried ANY of the four score fields (even null). */
+function hasScoreFields(input: CandidateScoreInput): boolean {
+	return (
+		input.criticScore !== undefined ||
+		input.criticScoreCount !== undefined ||
+		input.userScore !== undefined ||
+		input.userScoreCount !== undefined
+	);
+}
+
+export interface AddGameInput extends CandidateScoreInput {
 	title: string;
 	/** Present = the previewed IGDB match; absent = name-only (unenriched). */
 	igdbId?: string;
@@ -354,6 +392,12 @@ export async function addGame(
 		titleNormalized,
 		coverUrl: input.coverUrl ?? null,
 		releaseDate: input.releaseDate ?? null,
+		// Reception scores ride the previewed candidate (Story 10.1) — persisted
+		// at add time so a fresh game isn't scoreless until the next cron.
+		// ANCHOR-GATED (review): a name-only add has no IGDB identity, so the
+		// refresh could never correct a fabricated value — scores are only
+		// accepted alongside the igdbId they claim to describe.
+		...(input.igdbId ? scoresFromInput(input) : {}),
 		// The store URL comes from the CATALOG ROW we just resolved, never from the
 		// client — a pruned product contributes nothing (Story 7.3). It is what
 		// "Claim now" deep-links to on the shelf card later.
@@ -398,7 +442,7 @@ export async function addGame(
 	return { kind: 'created', gameId };
 }
 
-export interface RematchInput {
+export interface RematchInput extends CandidateScoreInput {
 	igdbId: string;
 	/** Chosen IGDB name — overwrites the game's title when given. */
 	name?: string;
@@ -458,6 +502,11 @@ export async function rematchGame(
 					titleNormalized: normalizeTitle(input.name),
 				}
 			: {}),
+		// Written as a unit: the old match's numbers are the WRONG game's — an
+		// unscored new pick must clear them, not inherit them (VR-5). But a
+		// payload with NO score fields at all (older client) means "unknown",
+		// and unknown must not erase data (review): leave stored scores alone.
+		...(hasScoreFields(input) ? { scores: scoresFromInput(input) } : {}),
 	});
 	await clearGameGenres(db, gameId);
 	await linkGenresByName(db, gameId, input.genres);

@@ -191,6 +191,34 @@ export function Card({
 						{game.title}
 					</p>
 					<p className="card__genres">{game.genres.join(' · ')}</p>
+					{/* Reception scores (Story 10.1, VR-5): stored IGDB facts only —
+				    a null renders NOTHING in its slot (never a zero); the row itself
+				    always renders so card heights stay uniform. Counts live in the
+				    sr-only text here and visibly in the detail panel. */}
+					<p className="card__scores" data-testid="card-scores">
+						{game.criticScore != null && (
+							<span className="card__score card__score--critic">
+								<span aria-hidden="true">◎ {Math.round(game.criticScore)}</span>
+								<span className="sr-only">
+									Critic score {Math.round(game.criticScore)} out of 100
+									{game.criticScoreCount != null
+										? ` from ${game.criticScoreCount} ${game.criticScoreCount === 1 ? 'review' : 'reviews'}`
+										: ''}
+								</span>
+							</span>
+						)}
+						{game.userScore != null && (
+							<span className="card__score card__score--user">
+								<span aria-hidden="true">★ {Math.round(game.userScore)}</span>
+								<span className="sr-only">
+									User score {Math.round(game.userScore)} out of 100
+									{game.userScoreCount != null
+										? ` from ${game.userScoreCount} ${game.userScoreCount === 1 ? 'rating' : 'ratings'}`
+										: ''}
+								</span>
+							</span>
+						)}
+					</p>
 					<div className="card__meta">
 						<StatusPopover
 							game={game}

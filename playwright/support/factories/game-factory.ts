@@ -13,6 +13,11 @@ export interface SeedGame {
 	coverUrl: string | null;
 	storeUrl: string | null;
 	psPlusExtra: boolean;
+	/** IGDB reception scores (Story 10.1) — null = absent, renders nothing. */
+	criticScore: number | null;
+	criticScoreCount: number | null;
+	userScore: number | null;
+	userScoreCount: number | null;
 	tracking: {
 		owned: boolean;
 		/** FR-9 amended: `membership` = PS+ claim (card shows the PS+ tag). */
@@ -43,6 +48,10 @@ export function createGame(
 		coverUrl: null,
 		storeUrl: null,
 		psPlusExtra: false,
+		criticScore: null,
+		criticScoreCount: null,
+		userScore: null,
+		userScoreCount: null,
 		...overrides,
 		tracking: {
 			owned: true,

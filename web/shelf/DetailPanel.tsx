@@ -256,6 +256,50 @@ export function DetailPanel({
 						</button>
 					</header>
 
+					{/* Reception scores (Story 10.1, VR-5): stored IGDB facts with their
+					    sample counts — 3 reviews must not read like 300. The whole
+					    section is ABSENT when IGDB has no score (never a zero). */}
+					{(game.criticScore != null || game.userScore != null) && (
+						<section
+							className="detail-panel__section"
+							data-testid="detail-scores"
+						>
+							<h3 className="detail-panel__heading">Scores</h3>
+							<div className="detail-panel__scores">
+								{game.criticScore != null && (
+									<p className="detail-panel__score">
+										<span className="detail-panel__score-value">
+											{Math.round(game.criticScore)}
+										</span>{' '}
+										Critics
+										{game.criticScoreCount != null && (
+											<span className="detail-panel__score-count">
+												{' '}
+												({game.criticScoreCount}{' '}
+												{game.criticScoreCount === 1 ? 'review' : 'reviews'})
+											</span>
+										)}
+									</p>
+								)}
+								{game.userScore != null && (
+									<p className="detail-panel__score">
+										<span className="detail-panel__score-value">
+											{Math.round(game.userScore)}
+										</span>{' '}
+										Players
+										{game.userScoreCount != null && (
+											<span className="detail-panel__score-count">
+												{' '}
+												({game.userScoreCount}{' '}
+												{game.userScoreCount === 1 ? 'rating' : 'ratings'})
+											</span>
+										)}
+									</p>
+								)}
+							</div>
+						</section>
+					)}
+
 					<section className="detail-panel__section">
 						<h3 className="detail-panel__heading">Play status</h3>
 						<div

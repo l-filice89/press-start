@@ -58,6 +58,13 @@ export interface ShelfGame {
 	ownedVia: 'purchase' | 'membership' | null;
 	releaseDate: string | null;
 	genres: string[];
+	/** IGDB reception scores (Story 10.1, VR-5): 0–100 verbatim, null = IGDB
+	 * has none and the UI renders NO score area (never a zero). Counts ride
+	 * along so the UI can show sample size (3 reviews ≠ 300). */
+	criticScore: number | null;
+	criticScoreCount: number | null;
+	userScore: number | null;
+	userScoreCount: number | null;
 }
 
 function bakeCard(row: LibraryRow, genres: string[]): ShelfGame {
@@ -96,6 +103,10 @@ function bakeCard(row: LibraryRow, genres: string[]): ShelfGame {
 		ownedVia: row.ownedVia,
 		releaseDate: row.releaseDate,
 		genres,
+		criticScore: row.criticScore,
+		criticScoreCount: row.criticScoreCount,
+		userScore: row.userScore,
+		userScoreCount: row.userScoreCount,
 	};
 }
 

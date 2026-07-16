@@ -365,6 +365,10 @@ describe('searchGamesForResolve (service seam, fake IGDB)', () => {
 		coverUrl: null,
 		releaseDate: '2020-09-17',
 		genres: ['Roguelike'],
+		criticScore: null,
+		criticScoreCount: null,
+		userScore: null,
+		userScoreCount: null,
 	};
 
 	it('passes the provider candidates through', async () => {

@@ -35,6 +35,10 @@ function game(overrides: Partial<ShelfGame> & { id: string }): ShelfGame {
 		ownedVia: null,
 		releaseDate: null,
 		genres: [],
+		criticScore: null,
+		criticScoreCount: null,
+		userScore: null,
+		userScoreCount: null,
 		...overrides,
 	};
 }

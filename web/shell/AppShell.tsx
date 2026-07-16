@@ -94,6 +94,12 @@ export function AppShell({
 						message="The monthly PS+ Extra catalog refresh didn't complete — it'll retry next month, or run Check PS+ Extra from the menu to try now."
 					/>
 				)}
+				{settings?.scoresRefreshFailed && (
+					<AttentionBanner
+						variant="failed-score-refresh"
+						message="The scheduled game-score refresh didn't complete — stored scores may be stale. It retries on the next scheduled run."
+					/>
+				)}
 				{stragglerCount > 0 && (
 					<AttentionBanner
 						variant="enrich"

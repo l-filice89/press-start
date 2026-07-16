@@ -12,7 +12,13 @@ import './attention-banner.css';
  * attention sources address unambiguously. (`expired-token` died with the PSN
  * credential surface, Epic 11 story 11.2.)
  */
-export type AttentionVariant = 'stragglers' | 'enrich' | 'failed-refresh';
+export type AttentionVariant =
+	| 'stragglers'
+	| 'enrich'
+	| 'failed-refresh'
+	// Story 10.1: the scheduled IGDB score refresh failed (steel, same tone
+	// family as the PS+ failed-refresh — a background job, not a user task).
+	| 'failed-score-refresh';
 
 export function AttentionBanner({
 	variant,

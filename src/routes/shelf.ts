@@ -38,6 +38,11 @@ export const shelfGameSchema = z.object({
 	ownedVia: z.enum(['purchase', 'membership']).nullable(),
 	releaseDate: z.string().nullable(),
 	genres: z.array(z.string()),
+	// IGDB reception scores (Story 10.1) — null = absent, the UI renders nothing.
+	criticScore: z.number().nullable(),
+	criticScoreCount: z.number().nullable(),
+	userScore: z.number().nullable(),
+	userScoreCount: z.number().nullable(),
 });
 
 const shelfResponseSchema = z.object({

@@ -342,3 +342,18 @@ went.
 | 11.3a no trophy %/grade/tier readout renders on the card or in detail | `epic2-detail.spec.ts` › detail panel opens from the cover (`card-trophy` and `detail-trophies` both count 0 in the live app); jsdom absence pinned in `Card.test.tsx` and `DetailPanel.test.tsx` |
 | 11.3b migration 0011 drops every `trophy_*` column while `platinum_on`/`completed_on`/`owned_via`/`bought_on` survive with values byte-identical | no UI flow — pinned in integration `migration-0011.test.ts` › drops every trophy_* column and ONLY those (PRAGMA + seeded-row two-sided assert) |
 | 11.3c the manual platinum/story-completion milestone flow records and displays exactly as before | Epic 2 suites untouched and green: `epic2-tracking.spec.ts` › milestones are confirm-gated + › platinum clears the play status; the platinum badge stays pinned by `Card.test.tsx` › platinum-trophy |
+
+## Epic 10
+
+Story 10.1 (critic & user scores on every game, VR-5). Scores are stored
+IGDB facts (four columns on `game`) rendered from the shelf payload; the
+refresh is a cron job with no UI trigger.
+
+| AC | Coverage |
+|----|----------|
+| 10.1a the four score fields ride the SAME `/games` call — no second adapter, no new credentials | no UI flow — pinned at the wire in `src/providers/igdb.test.ts` › requests the four score fields on the SAME games call + captured-payload mapping asserts (`fetchScoresByIds`) |
+| 10.1b coverage verified against the real library first, result recorded | no UI flow — live probe artifact `_bmad-output/implementation-artifacts/igdb-score-coverage-2026-07-16.md` (96.9% either-score, gate PASS, OpenCritic not built) |
+| 10.1c card and detail show critic + user scores from stored data, sample counts available | `epic10-scores.spec.ts` › a scored game shows rounded critic + user scores on its card + › the detail view shows both scores WITH their sample counts; jsdom halves in `Card.test.tsx` and `DetailPanel.test.tsx` |
+| 10.1d a game with no IGDB score renders NO score area — never a zero or placeholder | `epic10-scores.spec.ts` › an unscored game renders NO score + › a critic-only game shows the critic slot alone; jsdom null-slot asserts in `Card.test.tsx`/`DetailPanel.test.tsx` |
+| 10.1e scheduled refresh updates stored scores within the free-tier budget (batched by id, one shared cron) | no UI flow — integration `scores.test.ts` (happy path, partial reply, degenerate `[]` keeps scores, stale gate) + provider batch assert (2 ids → ONE subrequest); budget arithmetic in `src/services/scores.ts` |
+| 10.1f a failed refresh surfaces on next app open (FR-40 banner), stale scores never silently pass | integration `scores.test.ts` › a provider throw persists the FR-40 failure flag + `settings.test.ts` full-payload assert (`scoresRefreshFailed`); banner render is the same `AttentionBanner` seam pinned by the Epic 5 rows above — no dedicated e2e (no UI path can force a cron failure) |

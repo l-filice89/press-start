@@ -26,13 +26,27 @@ const db = () => createDb(env.DB);
 const USER_EMAIL = 'l.filice.89@gmail.com';
 
 /** A fake IGDB provider driven by a title→enrichment map; missing = no match. */
-function fakeIgdb(map: Record<string, IgdbEnrichment> = {}): IgdbProvider {
+// Score fields default to null so pre-10.1 fixture literals stay terse.
+function fakeIgdb(
+	map: Record<
+		string,
+		Omit<IgdbEnrichment, keyof typeof NO_SCORES> & Partial<IgdbEnrichment>
+	> = {},
+): IgdbProvider {
 	return {
 		async enrich(title) {
-			return map[title] ?? null;
+			const hit = map[title];
+			return hit ? { ...NO_SCORES, ...hit } : null;
 		},
 	};
 }
+
+const NO_SCORES = {
+	criticScore: null,
+	criticScoreCount: null,
+	userScore: null,
+	userScoreCount: null,
+};
 
 function csv(header: string[], rows: Record<string, string>[]): string {
 	const cell = (v: string) =>

@@ -233,3 +233,27 @@
 		display: none;
 	}
 }
+
+/* Reception scores (Story 10.1): a quiet fact row under the genres. The row
+   always renders (min-height reserves the line — uniform card heights); an
+   absent score renders nothing in its slot, never a zero (VR-5). */
+.card__scores {
+	font-family: var(--font-body);
+	font-size: 11px;
+	line-height: 1.4;
+	min-height: 1.4em;
+	color: var(--color-text-muted);
+	white-space: nowrap;
+	overflow: hidden;
+	/* Ellipsize, never clip mid-number — "★ 8…" must not read as a score of 8. */
+	text-overflow: ellipsis;
+	display: block;
+}
+
+.card__score + .card__score {
+	margin-left: var(--space-2);
+}
+
+.card__score--critic {
+	color: var(--color-accent-electric);
+}
