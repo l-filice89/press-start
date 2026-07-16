@@ -76,20 +76,51 @@ test('the detail view shows both scores WITH their sample counts (10.1c)', async
 	}
 });
 
-test('an unscored game renders NO score — empty card row, no detail section, no zero (10.1d)', async ({
+test('an unscored game renders NO score — scores block absent, no detail section, no zero (10.1d)', async ({
 	page,
 }) => {
 	const game = uniqueGame('Unscored');
 	try {
 		await seedGames([game]);
 		await page.goto('/');
-		const scores = cardFor(page, game).getByTestId('card-scores');
-		await expect(scores).toBeVisible();
-		await expect(scores).toHaveText('');
+		// Compaction (2026-07-16): no facts → no block at all, not a blank line.
+		const card = cardFor(page, game);
+		await expect(card).toBeVisible();
+		await expect(card.getByTestId('card-scores')).toHaveCount(0);
 		const panel = await openDetail(page, game);
 		await expect(panel.getByTestId('detail-scores')).toHaveCount(0);
 	} finally {
 		await deleteGames([game.id]);
+	}
+});
+
+test('cards keep a uniform height whether or not facts render (strip-level reservation)', async ({
+	page,
+}) => {
+	const full = uniqueGame('Full Facts', {
+		...SCORED,
+		ttbStorySeconds: 54000,
+		ttbCompleteSeconds: 95400,
+		ttbCount: 8,
+	});
+	const bare = uniqueGame('Bare Facts');
+	try {
+		await seedGames([full, bare]);
+		await page.goto('/');
+		// Measure the INFO STRIPS, not the cards: the shelf grid stretches
+		// every card in a row to the row height, so card boxes equalize even
+		// with the min-height rule deleted (review — tautology guard). The
+		// strip keeps its own height and only the CSS floor makes them equal.
+		const fullInfo = await cardFor(page, full)
+			.locator('.card__info')
+			.boundingBox();
+		const bareInfo = await cardFor(page, bare)
+			.locator('.card__info')
+			.boundingBox();
+		expect(fullInfo?.height).toBeGreaterThan(0);
+		expect(bareInfo?.height).toBe(fullInfo?.height);
+	} finally {
+		await deleteGames([full.id, bare.id]);
 	}
 });
 
@@ -106,8 +137,12 @@ test('time-to-beat hours show on card and detail, story vs 100% labelled (10.3c)
 		await seedGames([game]);
 		await page.goto('/');
 		const scores = cardFor(page, game).getByTestId('card-scores');
+		// Stacked lines (2026-07-16): the 100% figure is VISIBLE, no ellipsis
+		// swallowing it — reviews, story, 100% each on their own line.
+		await expect(scores.locator('.card__scores-line')).toHaveCount(3);
 		await expect(scores).toContainText('15h story');
 		await expect(scores).toContainText('27h 100%');
+		await expect(scores.locator('.card__scores-line').nth(2)).toBeVisible();
 		const panel = await openDetail(page, game);
 		const section = panel.getByTestId('detail-scores');
 		await expect(section).toContainText('Story (8 submissions)');

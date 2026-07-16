@@ -101,7 +101,7 @@ describe('Card', () => {
 			expect(row).toHaveTextContent('from 1699 ratings');
 		});
 
-		it('renders NOTHING in a null slot — never a zero (row itself stays for uniform height)', () => {
+		it('renders NOTHING in a null slot — never a zero', () => {
 			renderCard(
 				game({ criticScore: null, userScore: 42.4, userScoreCount: 3 }),
 			);
@@ -112,9 +112,41 @@ describe('Card', () => {
 			expect(row.querySelector('.card__score--critic')).toBeNull();
 		});
 
-		it('renders an empty scores row when the game has no scores at all', () => {
+		it('renders NO scores block at all when the game has no facts — compaction, not a blank line', () => {
 			renderCard(game());
-			expect(screen.getByTestId('card-scores')).toBeEmptyDOMElement();
+			expect(screen.queryByTestId('card-scores')).not.toBeInTheDocument();
+		});
+
+		it('stacks reviews, story, and 100% as separate lines (Luca 2026-07-16)', () => {
+			renderCard(
+				game({
+					criticScore: 78,
+					userScore: 75,
+					ttbStorySeconds: 160800,
+					ttbCompleteSeconds: 216000,
+				}),
+			);
+			const lines = screen
+				.getByTestId('card-scores')
+				.querySelectorAll('.card__scores-line');
+			expect(lines).toHaveLength(3);
+			expect(lines[0]).toHaveTextContent('◎ 78');
+			expect(lines[0]).toHaveTextContent('★ 75');
+			expect(lines[1]).toHaveTextContent('45h story');
+			expect(lines[2]).toHaveTextContent('60h 100%');
+		});
+	});
+
+	describe('info-strip compaction (Luca 2026-07-16)', () => {
+		it('drops the genres row entirely when a game has none', () => {
+			const { container } = renderCard(game({ genres: [] }));
+			expect(container.querySelector('.card__genres')).toBeNull();
+		});
+
+		it('renders no OWNED chip at all when un-owned — absence, not visibility:hidden', () => {
+			const { container } = renderCard(game({ owned: false }));
+			expect(screen.queryByText('OWNED')).not.toBeInTheDocument();
+			expect(container.querySelector('.card__owned-line')).toBeNull();
 		});
 	});
 

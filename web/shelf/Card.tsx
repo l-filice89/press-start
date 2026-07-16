@@ -202,68 +202,88 @@ export function Card({
 					</div>
 				</div>
 
-				{/* Info strip stacks one row per line — title, genres, status, owned —
-			    and every row is always rendered (hidden/empty rows reserve their
-			    line) so all cards are the same height regardless of content.
-			    (Below 600px the genres row is display:none for every card, so
-			    uniformity holds per breakpoint, not via reservation there.) */}
+				{/* Info strip: title, genres, fact lines, status, owned. A row with
+			    nothing to show is ABSENT — remaining rows sit flush at the top and
+			    slack pools at the bottom (Luca 2026-07-16, supersedes per-row
+			    reservation). Uniform card height holds at the STRIP level: a fixed
+			    min-height in card.css sized for the fullest stack. */}
 				<div className="card__info">
 					<p className="card__title" title={game.title}>
 						{game.title}
 					</p>
-					<p className="card__genres">{game.genres.join(' · ')}</p>
-					{/* Reception scores (Story 10.1, VR-5): stored IGDB facts only —
-				    a null renders NOTHING in its slot (never a zero); the row itself
-				    always renders so card heights stay uniform. Counts live in the
-				    sr-only text here and visibly in the detail panel. */}
-					<p className="card__scores" data-testid="card-scores">
-						{game.criticScore != null && (
-							<span className="card__score card__score--critic">
-								<span aria-hidden="true">◎ {Math.round(game.criticScore)}</span>
-								<span className="sr-only">
-									Critic score {Math.round(game.criticScore)} out of 100
-									{game.criticScoreCount != null
-										? ` from ${game.criticScoreCount} ${game.criticScoreCount === 1 ? 'review' : 'reviews'}`
-										: ''}
-								</span>
-							</span>
-						)}
-						{game.userScore != null && (
-							<span className="card__score card__score--user">
-								<span aria-hidden="true">★ {Math.round(game.userScore)}</span>
-								<span className="sr-only">
-									User score {Math.round(game.userScore)} out of 100
-									{game.userScoreCount != null
-										? ` from ${game.userScoreCount} ${game.userScoreCount === 1 ? 'rating' : 'ratings'}`
-										: ''}
-								</span>
-							</span>
-						)}
-						{/* Story 10.3 (VR-8): hours ride the same fact row, labelled so
-					    story vs 100% is unmistakable; a missing figure is ABSENT —
-					    the other never stands in for it. */}
-						{game.ttbStorySeconds != null && (
-							<span className="card__score card__score--ttb">
-								<span aria-hidden="true">
-									{formatTtbHours(game.ttbStorySeconds)} story
-								</span>
-								<span className="sr-only">
-									About {formatTtbHours(game.ttbStorySeconds)} to beat the story
-								</span>
-							</span>
-						)}
-						{game.ttbCompleteSeconds != null && (
-							<span className="card__score card__score--ttb">
-								<span aria-hidden="true">
-									{formatTtbHours(game.ttbCompleteSeconds)} 100%
-								</span>
-								<span className="sr-only">
-									About {formatTtbHours(game.ttbCompleteSeconds)} to complete
-									100%
-								</span>
-							</span>
-						)}
-					</p>
+					{game.genres.length > 0 && (
+						<p className="card__genres">{game.genres.join(' · ')}</p>
+					)}
+					{/* Reception facts (Stories 10.1/10.3): stored IGDB facts only —
+				    a null renders NOTHING (never a zero), and each family gets its
+				    own stacked line — reviews, story hours, 100% hours — so the
+				    100% figure can't be ellipsized away. Counts live in the sr-only
+				    text here and visibly in the detail panel. */}
+					{(game.criticScore != null ||
+						game.userScore != null ||
+						game.ttbStorySeconds != null ||
+						game.ttbCompleteSeconds != null) && (
+						<div className="card__scores" data-testid="card-scores">
+							{(game.criticScore != null || game.userScore != null) && (
+								<p className="card__scores-line">
+									{game.criticScore != null && (
+										<span className="card__score card__score--critic">
+											<span aria-hidden="true">
+												◎ {Math.round(game.criticScore)}
+											</span>
+											<span className="sr-only">
+												Critic score {Math.round(game.criticScore)} out of 100
+												{game.criticScoreCount != null
+													? ` from ${game.criticScoreCount} ${game.criticScoreCount === 1 ? 'review' : 'reviews'}`
+													: ''}
+											</span>
+										</span>
+									)}
+									{game.userScore != null && (
+										<span className="card__score card__score--user">
+											<span aria-hidden="true">
+												★ {Math.round(game.userScore)}
+											</span>
+											<span className="sr-only">
+												User score {Math.round(game.userScore)} out of 100
+												{game.userScoreCount != null
+													? ` from ${game.userScoreCount} ${game.userScoreCount === 1 ? 'rating' : 'ratings'}`
+													: ''}
+											</span>
+										</span>
+									)}
+								</p>
+							)}
+							{/* Story 10.3 (VR-8): story vs 100% unmistakable; a missing
+						    figure is ABSENT — the other never stands in for it. */}
+							{game.ttbStorySeconds != null && (
+								<p className="card__scores-line">
+									<span className="card__score card__score--ttb">
+										<span aria-hidden="true">
+											{formatTtbHours(game.ttbStorySeconds)} story
+										</span>
+										<span className="sr-only">
+											About {formatTtbHours(game.ttbStorySeconds)} to beat the
+											story
+										</span>
+									</span>
+								</p>
+							)}
+							{game.ttbCompleteSeconds != null && (
+								<p className="card__scores-line">
+									<span className="card__score card__score--ttb">
+										<span aria-hidden="true">
+											{formatTtbHours(game.ttbCompleteSeconds)} 100%
+										</span>
+										<span className="sr-only">
+											About {formatTtbHours(game.ttbCompleteSeconds)} to
+											complete 100%
+										</span>
+									</span>
+								</p>
+							)}
+						</div>
+					)}
 					<div className="card__meta">
 						<StatusPopover
 							game={game}
@@ -271,24 +291,24 @@ export function Card({
 							onOpenChange={onStatusMenuOpenChange}
 						/>
 					</div>
-					<p className="card__owned-line">
-						{/* visibility-hidden (CSS, via data-owned) when un-owned — keeps
-					    the row height and drops the chip from the a11y tree. */}
-						<span className="card__owned" data-owned={game.owned || undefined}>
-							OWNED
-							{/* FR-9 amended: a PS+ claim is owned but subscription-bound —
-						    worth knowing at a glance (it vanishes if PS+ lapses). */}
-							{game.ownedVia === 'membership' && (
-								<span
-									className="card__owned-via"
-									data-testid="card-owned-via-membership"
-								>
-									<span aria-hidden="true"> · PS+</span>
-									<span className="sr-only"> via PS Plus claim</span>
-								</span>
-							)}
-						</span>
-					</p>
+					{game.owned && (
+						<p className="card__owned-line">
+							<span className="card__owned">
+								OWNED
+								{/* FR-9 amended: a PS+ claim is owned but subscription-bound —
+							    worth knowing at a glance (it vanishes if PS+ lapses). */}
+								{game.ownedVia === 'membership' && (
+									<span
+										className="card__owned-via"
+										data-testid="card-owned-via-membership"
+									>
+										<span aria-hidden="true"> · PS+</span>
+										<span className="sr-only"> via PS Plus claim</span>
+									</span>
+								)}
+							</span>
+						</p>
+					)}
 				</div>
 			</div>
 
