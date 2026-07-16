@@ -163,10 +163,17 @@
 	color: var(--color-text-muted);
 }
 
-/* Reception scores (Story 10.1): read-only fact row — value big, count quiet. */
+/* Reception scores (Story 10.1): read-only facts — value big, count quiet.
+   Stacked one family per line (Luca 2026-07-16): reviews / story / 100%. */
 .detail-panel__scores {
 	display: flex;
-	gap: var(--space-5);
+	flex-direction: column;
+	gap: var(--space-2);
+}
+
+/* Critic + user share the reviews line. */
+.detail-panel__score-slot + .detail-panel__score-slot {
+	margin-left: var(--space-5);
 }
 
 .detail-panel__score {

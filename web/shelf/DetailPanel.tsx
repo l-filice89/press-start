@@ -257,89 +257,6 @@ export function DetailPanel({
 						</button>
 					</header>
 
-					{/* Reception scores (Story 10.1, VR-5) + time-to-beat (Story 10.3,
-					    VR-8): stored IGDB facts with their sample counts — 3 reviews or
-					    4 submissions must not read like 300. The whole section is
-					    ABSENT when IGDB has neither a score nor an hour (never a zero,
-					    and 100% never stands in for story). */}
-					{(game.criticScore != null ||
-						game.userScore != null ||
-						game.ttbStorySeconds != null ||
-						game.ttbCompleteSeconds != null) && (
-						<section
-							className="detail-panel__section"
-							data-testid="detail-scores"
-						>
-							<h3 className="detail-panel__heading">Scores & time to beat</h3>
-							<div className="detail-panel__scores">
-								{game.criticScore != null && (
-									<p className="detail-panel__score">
-										<span className="detail-panel__score-value">
-											{Math.round(game.criticScore)}
-										</span>{' '}
-										Critics
-										{game.criticScoreCount != null && (
-											<span className="detail-panel__score-count">
-												{' '}
-												({game.criticScoreCount}{' '}
-												{game.criticScoreCount === 1 ? 'review' : 'reviews'})
-											</span>
-										)}
-									</p>
-								)}
-								{game.userScore != null && (
-									<p className="detail-panel__score">
-										<span className="detail-panel__score-value">
-											{Math.round(game.userScore)}
-										</span>{' '}
-										Players
-										{game.userScoreCount != null && (
-											<span className="detail-panel__score-count">
-												{' '}
-												({game.userScoreCount}{' '}
-												{game.userScoreCount === 1 ? 'rating' : 'ratings'})
-											</span>
-										)}
-									</p>
-								)}
-								{/* Story 10.3: hours next to the scores, story vs 100%
-								    unmistakable, submission count visible (4 ≠ 400). The
-								    count rides WHICHEVER figure exists (review: a
-								    complete-only game must not read like 400 submissions). */}
-								{game.ttbStorySeconds != null && (
-									<p className="detail-panel__score">
-										<span className="detail-panel__score-value">
-											{formatTtbHours(game.ttbStorySeconds)}
-										</span>{' '}
-										Story
-										{game.ttbCount != null && (
-											<span className="detail-panel__score-count">
-												{' '}
-												({game.ttbCount}{' '}
-												{game.ttbCount === 1 ? 'submission' : 'submissions'})
-											</span>
-										)}
-									</p>
-								)}
-								{game.ttbCompleteSeconds != null && (
-									<p className="detail-panel__score">
-										<span className="detail-panel__score-value">
-											{formatTtbHours(game.ttbCompleteSeconds)}
-										</span>{' '}
-										100%
-										{game.ttbStorySeconds == null && game.ttbCount != null && (
-											<span className="detail-panel__score-count">
-												{' '}
-												({game.ttbCount}{' '}
-												{game.ttbCount === 1 ? 'submission' : 'submissions'})
-											</span>
-										)}
-									</p>
-								)}
-							</div>
-						</section>
-					)}
-
 					<section className="detail-panel__section">
 						<h3 className="detail-panel__heading">Play status</h3>
 						<div
@@ -398,6 +315,95 @@ export function DetailPanel({
 							</button>
 						))}
 					</section>
+
+					{/* Reception scores (Story 10.1, VR-5) + time-to-beat (Story 10.3,
+					    VR-8): stored IGDB facts with their sample counts — 3 reviews or
+					    4 submissions must not read like 300. Stacked one fact family
+					    per line (Luca 2026-07-16): reviews, then story, then 100%.
+					    The whole section is ABSENT when IGDB has neither a score nor
+					    an hour (never a zero, and 100% never stands in for story). */}
+					{(game.criticScore != null ||
+						game.userScore != null ||
+						game.ttbStorySeconds != null ||
+						game.ttbCompleteSeconds != null) && (
+						<section
+							className="detail-panel__section"
+							data-testid="detail-scores"
+						>
+							<h3 className="detail-panel__heading">Scores & time to beat</h3>
+							<div className="detail-panel__scores">
+								{(game.criticScore != null || game.userScore != null) && (
+									<p className="detail-panel__score">
+										{game.criticScore != null && (
+											<span className="detail-panel__score-slot">
+												<span className="detail-panel__score-value">
+													{Math.round(game.criticScore)}
+												</span>{' '}
+												Critics
+												{game.criticScoreCount != null && (
+													<span className="detail-panel__score-count">
+														{' '}
+														({game.criticScoreCount}{' '}
+														{game.criticScoreCount === 1 ? 'review' : 'reviews'}
+														)
+													</span>
+												)}
+											</span>
+										)}
+										{game.userScore != null && (
+											<span className="detail-panel__score-slot">
+												<span className="detail-panel__score-value">
+													{Math.round(game.userScore)}
+												</span>{' '}
+												Players
+												{game.userScoreCount != null && (
+													<span className="detail-panel__score-count">
+														{' '}
+														({game.userScoreCount}{' '}
+														{game.userScoreCount === 1 ? 'rating' : 'ratings'})
+													</span>
+												)}
+											</span>
+										)}
+									</p>
+								)}
+								{/* Story 10.3: hours under the reviews, story vs 100%
+								    unmistakable, submission count visible (4 ≠ 400). The
+								    count rides WHICHEVER figure exists (review: a
+								    complete-only game must not read like 400 submissions). */}
+								{game.ttbStorySeconds != null && (
+									<p className="detail-panel__score">
+										<span className="detail-panel__score-value">
+											{formatTtbHours(game.ttbStorySeconds)}
+										</span>{' '}
+										Story
+										{game.ttbCount != null && (
+											<span className="detail-panel__score-count">
+												{' '}
+												({game.ttbCount}{' '}
+												{game.ttbCount === 1 ? 'submission' : 'submissions'})
+											</span>
+										)}
+									</p>
+								)}
+								{game.ttbCompleteSeconds != null && (
+									<p className="detail-panel__score">
+										<span className="detail-panel__score-value">
+											{formatTtbHours(game.ttbCompleteSeconds)}
+										</span>{' '}
+										100%
+										{game.ttbStorySeconds == null && game.ttbCount != null && (
+											<span className="detail-panel__score-count">
+												{' '}
+												({game.ttbCount}{' '}
+												{game.ttbCount === 1 ? 'submission' : 'submissions'})
+											</span>
+										)}
+									</p>
+								)}
+							</div>
+						</section>
+					)}
 
 					<section className="detail-panel__section">
 						<h3 className="detail-panel__heading">Dates</h3>
