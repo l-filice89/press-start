@@ -99,6 +99,7 @@ const catalogResponseSchema = z.object({
 			coverUrl: z.string().nullable(),
 			storeUrl: z.string().nullable(),
 			inLibrary: z.boolean(),
+			leavingOn: z.string().nullable(),
 			owned: z.boolean(),
 			gameId: z.string().nullable(),
 		}),

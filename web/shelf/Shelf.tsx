@@ -13,10 +13,12 @@ import {
 	EMPTY_FILTER,
 	foldForSearch,
 	isFilterActive,
+	LIVE_STATUSES,
 	matchesTitleQuery,
 	type ShelfFilter,
 	summarizeFilterText,
 } from './filters';
+import { showLeaving } from './leaving';
 import { useProgressiveList } from './useProgressiveList';
 import './shelf.css';
 
@@ -166,6 +168,15 @@ function FilteredShelf({ games }: { games: ShelfGame[] }) {
 				onChange={setFilter}
 				visibleCount={visible.length}
 				showPsPlus={games.some((g) => g.psPlusExtra && !g.owned)}
+				showLeavingSoon={games.some(
+					(g) =>
+						// LIVE states only (review): the flag ANDs with the default
+						// visible set, so a leaving game hidden behind a reveal
+						// (Dropped/Completed/Platinum) must not summon a pill whose
+						// toggle then shows an empty shelf.
+						(LIVE_STATUSES as readonly string[]).includes(g.effectiveState) &&
+						showLeaving(g.psPlusLeavingOn, g.owned),
+				)}
 			/>
 			{/* Scope caption (redesign 2026-07-12): the search reach is stated in the
 			    UI, not just felt — whole-library vs within-filter — so a completed

@@ -36,6 +36,7 @@ export function FilterRow({
 	onChange,
 	visibleCount,
 	showPsPlus = false,
+	showLeavingSoon = false,
 }: {
 	filter: ShelfFilter;
 	onChange: (next: ShelfFilter) => void;
@@ -44,14 +45,20 @@ export function FilterRow({
 	 *  unowned game (proxy for "has PS+"). Always shown while it's the active
 	 *  filter, so a filter can't strand un-removable if the last such game leaves. */
 	showPsPlus?: boolean;
+	/** Same gating as `showPsPlus`: ≥1 un-owned game with a future leaving date. */
+	showLeavingSoon?: boolean;
 }) {
-	// Hide the PS+ pill for non-subscribers (no badge games), but never hide it
-	// while it's the active filter — mirrors the genre "uncheckable-off" guard.
+	// Hide the PS+/Leaving pills when the library has no matching game, but
+	// never while one is the active filter — mirrors the genre
+	// "uncheckable-off" guard.
 	const flags = FLAGS.filter(
 		(f) =>
-			f.key !== 'psPlusExtra' ||
-			showPsPlus ||
-			filter.flags.includes('psPlusExtra'),
+			(f.key !== 'psPlusExtra' ||
+				showPsPlus ||
+				filter.flags.includes('psPlusExtra')) &&
+			(f.key !== 'leavingSoon' ||
+				showLeavingSoon ||
+				filter.flags.includes('leavingSoon')),
 	);
 	const {
 		data: genres = [],

@@ -1,4 +1,5 @@
 import type { PlayStatus, ShelfGame } from './api';
+import { showLeaving } from './leaving';
 
 /**
  * Shelf filter model (Stories 3.1/3.2/3.5, FR-20/21 as amended 2026-07-10).
@@ -40,6 +41,10 @@ export const FLAGS = [
 	// visibility as a pill is gated on the library actually having such a game
 	// (see FilterRow) — a natural proxy for "has a PS+ subscription".
 	{ key: 'psPlusExtra', label: 'PS+' },
+	// The LEAVING pill set exactly (Story 10.4 follow-on): un-owned with a
+	// future departure date — `showLeaving`, the same gate every surface
+	// renders by. Visibility gated like PS+ (see FilterRow).
+	{ key: 'leavingSoon', label: 'Leaving soon' },
 ] as const;
 
 export type FlagKey = (typeof FLAGS)[number]['key'];
@@ -91,10 +96,15 @@ export function applyShelfFilter(
 			allowedStates.includes(game.effectiveState) &&
 			(filter.genres.length === 0 ||
 				game.genres.some((genre) => filter.genres.includes(genre))) &&
-			// PS+ pill matches the card badge: in-catalog AND not owned. Every
-			// other flag reads its game field directly.
+			// PS+ and Leaving pills match their card badges exactly (in-catalog
+			// AND not owned / future date AND not owned). Every other flag reads
+			// its game field directly.
 			filter.flags.every((flag) =>
-				flag === 'psPlusExtra' ? game.psPlusExtra && !game.owned : game[flag],
+				flag === 'psPlusExtra'
+					? game.psPlusExtra && !game.owned
+					: flag === 'leavingSoon'
+						? showLeaving(game.psPlusLeavingOn, game.owned)
+						: game[flag],
 			),
 	);
 }

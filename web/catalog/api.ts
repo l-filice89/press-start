@@ -18,6 +18,8 @@ const catalogGameSchema = z.object({
 	storeUrl: z.string().nullable(),
 	/** Already tracked → the `In library` / `Owned` marker instead of `＋ Add`. */
 	inLibrary: z.boolean(),
+	// Deploy-skew default like the shelf's (an old server payload parses).
+	leavingOn: z.string().nullable().default(null),
 	owned: z.boolean(),
 	gameId: z.string().nullable(),
 });

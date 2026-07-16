@@ -11,6 +11,7 @@ import {
 	PLAY_STATUSES,
 	type ShelfGame,
 } from './api';
+import { showLeaving } from './leaving';
 import { OwnershipSourceDialog } from './OwnershipSourceDialog';
 import { RematchDialog } from './RematchDialog';
 import { scoreGrade } from './score-grade';
@@ -257,6 +258,16 @@ export function DetailPanel({
 							Wrong match?
 						</button>
 					</header>
+
+					{/* Story 10.4 follow-on: the departure date in full — the card
+					    pill's big sibling, same gates (un-owned, future date). Above
+					    everything else: "play it before {date}" is exactly the
+					    decision this panel is opened to make. */}
+					{showLeaving(game.psPlusLeavingOn, game.owned) && (
+						<p className="detail-panel__leaving" data-testid="detail-leaving">
+							Leaving PS+ Extra on {game.psPlusLeavingOn}
+						</p>
+					)}
 
 					<section className="detail-panel__section">
 						<h3 className="detail-panel__heading">Play status</h3>

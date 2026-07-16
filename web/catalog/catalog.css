@@ -118,6 +118,17 @@
 	border-radius: var(--radius-pill);
 }
 
+/* The leaving warning stacks under the PS+ badge (Story 10.4 follow-on) —
+   warn-amber like every leaving signal, distinct from the accent badge.
+   26px = the badge's rendered height (10px mono + 2px padding + 1px borders +
+   line-height) + a 6px gap — retune if `.catalog-card__flag` type/padding
+   changes. */
+.catalog-card__flag--leaving {
+	top: calc(var(--space-2) + 26px);
+	color: var(--color-warn-amber);
+	border-color: color-mix(in srgb, var(--color-warn-amber) 60%, transparent);
+}
+
 .catalog-card__info {
 	display: flex;
 	flex-direction: column;

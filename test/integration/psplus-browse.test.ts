@@ -12,7 +12,12 @@ import {
 	upsertTracking,
 } from '../../src/repositories';
 import { createDb } from '../../src/repositories/db';
-import { psPlusCatalog, psPlusCatalogGenre, user } from '../../src/schema';
+import {
+	game,
+	psPlusCatalog,
+	psPlusCatalogGenre,
+	user,
+} from '../../src/schema';
 import { PSN_REGION_SETTING_KEY } from '../../src/services/settings';
 import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
 
@@ -73,6 +78,7 @@ type CatalogResponse = {
 		productId: string;
 		name: string;
 		inLibrary: boolean;
+		leavingOn: string | null;
 		owned: boolean;
 		gameId: string | null;
 	}[];
@@ -386,6 +392,52 @@ describe('GET /api/ps-plus-catalog — the in-library join', () => {
 		expect(row.inLibrary).toBe(true);
 		expect(row.owned).toBe(false);
 		expect(row.gameId).toBe(added.id);
+	});
+
+	// Story 10.4 follow-on: the tracked match carries its departure date; an
+	// untracked product answers null (no fabricated data — the sweep never
+	// fans out to the whole catalog).
+	it('carries the tracked match leavingOn; untracked products answer null', async () => {
+		const leaving = await insertGame(db(), {
+			title: 'Vanishing Act',
+			titleNormalized: normalizeTitle('Vanishing Act'),
+		});
+		await upsertTracking(db(), userId, leaving.id, { owned: false });
+		await db()
+			.update(game)
+			.set({ psPlusLeavingOn: '2099-07-21' })
+			.where(eq(game.id, leaving.id));
+
+		await seedProducts([
+			['p-vanish', 'Vanishing Act'],
+			['p-stay', 'Staying Product'],
+		]);
+		const rows = (await browse()).games;
+		const vanish = rows.find((r) => r.name === 'Vanishing Act');
+		const stay = rows.find((r) => r.name === 'Staying Product');
+		expect(vanish?.leavingOn).toBe('2099-07-21');
+		expect(stay?.leavingOn).toBeNull();
+	});
+
+	// Owned-wins interplay (review): when the OWNED match wins the join, the
+	// row still carries its date AND owned:true — the client's shared
+	// `showLeaving` gate is what suppresses the warning (FR-38), and it can
+	// only do that if `owned` rides the same row as the date.
+	it('an owned match returns its date WITH owned:true — the FR-38 gate has what it needs', async () => {
+		const ownedLeaving = await insertGame(db(), {
+			title: 'Owned Vanisher',
+			titleNormalized: normalizeTitle('Owned Vanisher'),
+		});
+		await upsertTracking(db(), userId, ownedLeaving.id, { owned: true });
+		await db()
+			.update(game)
+			.set({ psPlusLeavingOn: '2099-07-21' })
+			.where(eq(game.id, ownedLeaving.id));
+
+		await seedProducts([['p-ownvanish', 'Owned Vanisher']]);
+		const [row] = (await browse()).games;
+		expect(row.owned).toBe(true);
+		expect(row.leavingOn).toBe('2099-07-21');
 	});
 
 	// L6: the marker exists ONLY because both sides key on the same normalizer —

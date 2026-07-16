@@ -158,6 +158,39 @@ describe('DetailPanel', () => {
 		).not.toBeInTheDocument();
 	});
 
+	describe('Leaving line (Story 10.4 follow-on)', () => {
+		it('shows the full departure date for an un-owned game with a future date', async () => {
+			await openPanel(
+				game({
+					owned: false,
+					psPlusExtra: true,
+					psPlusLeavingOn: '2099-07-21',
+				}),
+			);
+			expect(screen.getByTestId('detail-leaving')).toHaveTextContent(
+				'Leaving PS+ Extra on 2099-07-21',
+			);
+		});
+
+		it('never shows for an owned game (FR-38)', async () => {
+			await openPanel(
+				game({ owned: true, psPlusExtra: true, psPlusLeavingOn: '2099-07-21' }),
+			);
+			expect(screen.queryByTestId('detail-leaving')).not.toBeInTheDocument();
+		});
+
+		it('a PAST date is suppressed like the card pill', async () => {
+			await openPanel(
+				game({
+					owned: false,
+					psPlusExtra: true,
+					psPlusLeavingOn: '2020-01-05',
+				}),
+			);
+			expect(screen.queryByTestId('detail-leaving')).not.toBeInTheDocument();
+		});
+	});
+
 	describe('Scores section (Story 10.1, VR-5)', () => {
 		it('shows rounded scores labelled Critics/Players with their sample counts', async () => {
 			await openPanel(

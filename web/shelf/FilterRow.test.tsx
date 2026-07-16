@@ -231,6 +231,45 @@ describe('FilterRow', () => {
 		);
 	});
 
+	it('Leaving soon pill: hidden without leaving games, shown when showLeavingSoon, kept visible while active (Story 10.4 follow-on)', () => {
+		mockGenres([]);
+		const client = () =>
+			new QueryClient({ defaultOptions: { queries: { retry: false } } });
+		const row = (props: {
+			showLeavingSoon?: boolean;
+			filter?: ShelfFilter;
+		}) => (
+			<QueryClientProvider client={client()}>
+				<FilterRow
+					filter={props.filter ?? EMPTY_FILTER}
+					onChange={() => {}}
+					visibleCount={5}
+					showLeavingSoon={props.showLeavingSoon}
+				/>
+			</QueryClientProvider>
+		);
+
+		const { rerender } = render(row({ showLeavingSoon: false }));
+		expect(screen.queryByTestId('filter-flag-leavingSoon')).toBeNull();
+
+		rerender(row({ showLeavingSoon: true }));
+		expect(
+			screen.getByRole('button', { name: 'Leaving soon' }),
+		).toBeInTheDocument();
+
+		// Stranding guard: the last leaving game departs but the filter is
+		// active — the pill must remain so it can be toggled off.
+		rerender(
+			row({
+				showLeavingSoon: false,
+				filter: { ...EMPTY_FILTER, flags: ['leavingSoon'] },
+			}),
+		);
+		expect(
+			screen.getByRole('button', { name: 'Leaving soon' }),
+		).toHaveAttribute('aria-pressed', 'true');
+	});
+
 	it('toggling a reveal pill reports it into the filter (FR-21)', async () => {
 		const user = userEvent.setup();
 		mockGenres([]);

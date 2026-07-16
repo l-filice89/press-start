@@ -467,3 +467,16 @@
 	color: var(--color-text-secondary);
 	text-align: center;
 }
+
+/* Leaving warning (Story 10.4 follow-on) — the card pill's full-sentence
+   sibling, same warn-amber family, derived borders like the pill. */
+.detail-panel__leaving {
+	margin: 0 0 var(--space-3);
+	padding: var(--space-2) var(--space-3);
+	font-family: var(--font-ui);
+	font-size: 13px;
+	letter-spacing: 0.04em;
+	color: var(--color-warn-amber);
+	border: 1px solid color-mix(in srgb, var(--color-warn-amber) 40%, transparent);
+	border-radius: var(--radius-sm);
+}
