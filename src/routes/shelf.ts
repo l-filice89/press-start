@@ -45,6 +45,10 @@ export const shelfGameSchema = z.object({
 	userScoreCount: z.number().nullable(),
 	// Story 10.2: date the game left the PS+ Extra catalog (warning pill).
 	psPlusLeftOn: z.string().nullable(),
+	// Story 10.3: time-to-beat seconds (story / 100% / submissions).
+	ttbStorySeconds: z.number().nullable(),
+	ttbCompleteSeconds: z.number().nullable(),
+	ttbCount: z.number().nullable(),
 });
 
 const shelfResponseSchema = z.object({

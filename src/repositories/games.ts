@@ -35,6 +35,18 @@ export type GameScores = {
 	userScoreCount: number | null;
 };
 
+/**
+ * The scheduled refresh's per-game write (Stories 10.1 + 10.3): every key is
+ * optional so the batch sets exactly what the IGDB reply carried — a game
+ * with a score row but no time-to-beat record updates its scores and KEEPS
+ * its stored hours (absence of fresh data never erases standing data).
+ */
+export type GameIgdbFacts = Partial<GameScores> & {
+	ttbStorySeconds?: number | null;
+	ttbCompleteSeconds?: number | null;
+	ttbCount?: number | null;
+};
+
 export type ExternalLinkSource = (typeof EXTERNAL_LINK_SOURCES)[number];
 
 /** Create a game; the id/`ps_plus_extra`/`unenriched` defaults fill themselves. */
@@ -246,13 +258,16 @@ export async function setPsPlusExtraFlags(
  * statements-per-batch, so slice into multiple db.batch calls (each is one
  * subrequest) if the linked library ever grows past a few hundred rows.
  */
-export async function updateGameScores(
+export async function updateGameIgdbFacts(
 	db: Db,
-	updates: { gameId: string; scores: GameScores }[],
+	updates: { gameId: string; facts: GameIgdbFacts }[],
 ) {
-	if (updates.length === 0) return;
-	const statements = updates.map(({ gameId, scores }) =>
-		db.update(game).set(scores).where(eq(game.id, gameId)),
+	// An empty facts object would make Drizzle throw "No values to set" and
+	// fail the whole batch — filter defensively (the caller already guards).
+	const nonEmpty = updates.filter(({ facts }) => Object.keys(facts).length > 0);
+	if (nonEmpty.length === 0) return;
+	const statements = nonEmpty.map(({ gameId, facts }) =>
+		db.update(game).set(facts).where(eq(game.id, gameId)),
 	);
 	await db.batch(statements as [(typeof statements)[0], ...typeof statements]);
 }
@@ -312,6 +327,10 @@ export type LibraryRow = {
 	userScoreCount: number | null;
 	/** Date the game left the PS+ Extra catalog; null = in catalog or never was. */
 	psPlusLeftOn: string | null;
+	/** Time-to-beat in seconds (Story 10.3): story / 100% / submission count. */
+	ttbStorySeconds: number | null;
+	ttbCompleteSeconds: number | null;
+	ttbCount: number | null;
 	playStatus: (typeof gameTracking.$inferSelect)['playStatus'];
 	completedOn: string | null;
 	platinumOn: string | null;
@@ -360,6 +379,9 @@ export async function listLibraryForUser(
 			userScore: game.userScore,
 			userScoreCount: game.userScoreCount,
 			psPlusLeftOn: game.psPlusLeftOn,
+			ttbStorySeconds: game.ttbStorySeconds,
+			ttbCompleteSeconds: game.ttbCompleteSeconds,
+			ttbCount: game.ttbCount,
 			playStatus: gameTracking.playStatus,
 			completedOn: gameTracking.completedOn,
 			platinumOn: gameTracking.platinumOn,

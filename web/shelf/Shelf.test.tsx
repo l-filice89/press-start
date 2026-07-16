@@ -43,6 +43,9 @@ function card(
 		userScore: null,
 		userScoreCount: null,
 		psPlusLeftOn: null,
+		ttbStorySeconds: null,
+		ttbCompleteSeconds: null,
+		ttbCount: null,
 		...over,
 	};
 }

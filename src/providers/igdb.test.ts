@@ -59,15 +59,25 @@ function jsonResponse(body: unknown, status = 200): Response {
 const isTokenUrl = (url: unknown) =>
 	String(url).startsWith('https://id.twitch.tv');
 
-/** Route fetch: Twitch token endpoint → `token`, IGDB games → `games`. */
-function stubFetch(opts: { token?: () => Response; games: () => Response }) {
+/** Route fetch: Twitch token → `token`, `/game_time_to_beats` → `ttb`
+ * (defaults to an empty array so a misrouted TTB call from a scores test
+ * surfaces as missing data, never as the games fixture), else `games`. */
+function stubFetch(opts: {
+	token?: () => Response;
+	games: () => Response;
+	ttb?: () => Response;
+}) {
 	const token =
 		opts.token ??
 		(() => jsonResponse({ access_token: 'app-tok', expires_in: 5_000_000 }));
 	// Second param typed so `calls[i][1]` (the request init) is reachable — the
 	// PV-2 query-body assertion inspects it.
 	const fetchMock = vi.fn(async (url: unknown, _init?: unknown) =>
-		isTokenUrl(url) ? token() : opts.games(),
+		isTokenUrl(url)
+			? token()
+			: String(url).includes('game_time_to_beats')
+				? (opts.ttb ?? (() => jsonResponse([])))()
+				: opts.games(),
 	);
 	vi.stubGlobal('fetch', fetchMock);
 	return fetchMock;
@@ -221,6 +231,75 @@ describe('createIgdbProvider.fetchScoresByIds (Story 10.1 refresh fetch)', () =>
 	it('DEGENERATE GUARD: a 200 non-array body fails closed here too', async () => {
 		stubFetch({ games: () => jsonResponse({ count: 31 }) });
 		await expect(provider().fetchScoresByIds(['113112'])).rejects.toThrow(
+			/non-array body/,
+		);
+	});
+});
+
+describe('createIgdbProvider.fetchTimeToBeatByIds (Story 10.3)', () => {
+	// Captured live 2026-07-16 (probe artifact) — seconds, keyed by game_id.
+	const TTB_ROW = {
+		id: 3540,
+		game_id: 159119,
+		normally: 54000,
+		completely: 95400,
+		count: 8,
+	};
+
+	it('queries /game_time_to_beats by game_id and maps seconds verbatim', async () => {
+		const m = stubFetch({
+			games: () => jsonResponse([]),
+			ttb: () => jsonResponse([TTB_ROW, { id: 1, game_id: 42, count: 2 }]),
+		});
+		const rows = await provider().fetchTimeToBeatByIds(['159119', '42']);
+		expect(rows).toEqual([
+			{
+				igdbId: '159119',
+				ttbStorySeconds: 54000,
+				ttbCompleteSeconds: 95400,
+				ttbCount: 8,
+			},
+			// A record with figures missing maps to nulls — never substituted,
+			// and a count with NO figure is dropped (nothing could display it).
+			{
+				igdbId: '42',
+				ttbStorySeconds: null,
+				ttbCompleteSeconds: null,
+				ttbCount: null,
+			},
+		]);
+		const ttbCalls = m.mock.calls.filter((c) =>
+			String(c[0]).includes('game_time_to_beats'),
+		);
+		expect(ttbCalls).toHaveLength(1); // 2 ids, ONE subrequest
+		const body = String((ttbCalls[0]?.[1] as RequestInit).body);
+		expect(body).toContain('where game_id = (159119,42);');
+		expect(body).toContain('fields game_id, normally, completely, count;');
+	});
+
+	it('drops non-numeric ids before interpolation (same guard as scores)', async () => {
+		const m = stubFetch({
+			games: () => jsonResponse([]),
+			ttb: () => jsonResponse([]),
+		});
+		await provider().fetchTimeToBeatByIds(['159119', 'evil); fields *;']);
+		const body = String(
+			(
+				m.mock.calls.find((c) =>
+					String(c[0]).includes('game_time_to_beats'),
+				)?.[1] as RequestInit
+			).body,
+		);
+		expect(body).toContain('where game_id = (159119);');
+		expect(body).not.toContain('evil');
+	});
+
+	it('DEGENERATE GUARD: a 200 non-array body fails closed on this endpoint too', async () => {
+		stubFetch({
+			games: () => jsonResponse([]),
+			ttb: () => jsonResponse({ count: 31 }),
+		});
+		await expect(provider().fetchTimeToBeatByIds(['159119'])).rejects.toThrow(
 			/non-array body/,
 		);
 	});

@@ -100,8 +100,8 @@ const CATALOG_DRIFT_TOLERANCE = 2;
  *             (failed-flag clear 1 + stamp, which re-reads the timezone, 2) 3
  *             · post-pass sweep-state read 1 · lock release 1
  *           = 29
- *   total (cron) = 5 external + 29 D1 = 34 of 50 (+ the Story 10.1 score
- *   refresh ≈9 once per window: worst case ≈43).
+ *   total (cron) = 5 external + 29 D1 = 34 of 50 (+ the Story 10.1/10.3 score+TTB
+ *   refresh ≈10 once per window: worst case ≈44).
  *   The HTTP button pays the auth middleware (3) on top instead of
  *   findUserByEmail (1): 36 of 50.
  * A GENRE-SWEEP CHUNK NO LONGER RIDES ALONG (H3): 34 + a chunk (~25) busts the

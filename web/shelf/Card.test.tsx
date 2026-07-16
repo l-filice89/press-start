@@ -38,6 +38,9 @@ function game(overrides: Partial<ShelfGame> = {}): ShelfGame {
 		userScore: null,
 		userScoreCount: null,
 		psPlusLeftOn: null,
+		ttbStorySeconds: null,
+		ttbCompleteSeconds: null,
+		ttbCount: null,
 		...overrides,
 	};
 }
@@ -112,6 +115,33 @@ describe('Card', () => {
 		it('renders an empty scores row when the game has no scores at all', () => {
 			renderCard(game());
 			expect(screen.getByTestId('card-scores')).toBeEmptyDOMElement();
+		});
+	});
+
+	describe('time to beat (Story 10.3, VR-8)', () => {
+		it('renders labelled story and 100% hours from stored seconds', () => {
+			renderCard(
+				game({
+					ttbStorySeconds: 54000,
+					ttbCompleteSeconds: 95400,
+					ttbCount: 8,
+				}),
+			);
+			const row = screen.getByTestId('card-scores');
+			expect(row).toHaveTextContent('15h story');
+			expect(row).toHaveTextContent('27h 100%');
+		});
+
+		it('a missing figure is ABSENT — the completionist figure never stands in for story', () => {
+			renderCard(game({ ttbStorySeconds: null, ttbCompleteSeconds: 95400 }));
+			const row = screen.getByTestId('card-scores');
+			expect(row).not.toHaveTextContent('story');
+			expect(row).toHaveTextContent('27h 100%');
+		});
+
+		it('an under-an-hour figure says <1h, never a zero', () => {
+			renderCard(game({ ttbStorySeconds: 1800 }));
+			expect(screen.getByTestId('card-scores')).toHaveTextContent('<1h story');
 		});
 	});
 

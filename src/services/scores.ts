@@ -5,25 +5,26 @@
  * IGDB id (`external_link (IGDB, …)`) — no fuzzy title matching anywhere.
  *
  * SUBREQUEST BUDGET (Epic 9 rule — count EVERY consumer, AD-15's 50 ceiling):
- *   external: ≤1 Twitch token mint (cold isolate) + ceil(links/500) IGDB
- *             fetches = 2 for any library under 500 linked games;
+ *   external: ≤1 Twitch token mint (cold isolate) + ceil(links/500) games
+ *             fetches + ceil(links/500) time-to-beat fetches (Story 10.3,
+ *             same pass) = 3 for any library under 500 linked games;
  *   D1:       1 user lookup + 1 stale-stamp read + 1 link list + 1 batched
  *             score write (one `db.batch`, however many rows) + the stamp
  *             (1 timezone read via todayForUser + 1 write) + failed-flag
  *             clear (1) — or, on the failure path, the flag mark (1) = ≤7.
- *   Total ≈ 9 of 50 — and the worker runs it AFTER `runScheduledPsPlusCheck`
+ *   Total ≈ 10 of 50 — and the worker runs it AFTER `runScheduledPsPlusCheck`
  *   in the same invocation, whose heaviest path (the membership pass — the
  *   Story 10.2 departure stamp rides inside its flag statements) is 34: the
  *   stale-gate means the two only combine once per monthly window, worst
- *   case ~43 of 50. No cursor machinery at this scale (65 linked games
+ *   case ~44 of 50. No cursor machinery at this scale (65 linked games
  *   today); the chunked provider fetch is the only paging.
  */
-import type { IgdbScoreFetch, IgdbScores } from '../providers';
+import type { IgdbScoreFetch, IgdbScores, IgdbTimeToBeat } from '../providers';
 import {
 	findUserByEmail,
 	type GameScores,
 	listExternalLinksBySource,
-	updateGameScores,
+	updateGameIgdbFacts,
 } from '../repositories';
 import type { Db } from '../repositories/db';
 import {
@@ -81,9 +82,10 @@ export async function runScoreRefresh(
 		return { ok: true, updated: 0 };
 	}
 
+	const ids = queryable.map((l) => l.externalId);
 	let rows: IgdbScores[];
 	try {
-		rows = await igdb.fetchScoresByIds(queryable.map((l) => l.externalId));
+		rows = await igdb.fetchScoresByIds(ids);
 	} catch (error) {
 		console.error('score refresh: IGDB fetch failed', error);
 		return { ok: false, reason: 'provider' };
@@ -95,15 +97,56 @@ export async function runScoreRefresh(
 		return { ok: false, reason: 'provider' };
 	}
 
+	// Story 10.3: time-to-beat rides the SAME pass (one cron, one walk). A TTB
+	// THROW fails the pass (banner, retry next cron day — the score fetch is
+	// re-spent on that retry, an accepted ≤7-days-per-window cost) but the
+	// fresh scores still land first — spec: "already-written score rows
+	// stand". A `200 []` is NOT degenerate here, unlike /games (review): TTB
+	// records exist only for games with submissions (62 of 65 in the
+	// 2026-07-16 probe), so a library whose linked games all lack records
+	// legitimately gets an empty reply — treating that as a provider failure
+	// would light a banner no retry could ever clear. Genuine endpoint
+	// breakage still fails closed via the provider's HTTP/non-array guards.
+	let ttbRows: IgdbTimeToBeat[] | null;
+	try {
+		ttbRows = await igdb.fetchTimeToBeatByIds(ids);
+	} catch (error) {
+		console.error('score refresh: IGDB time-to-beat fetch failed', error);
+		ttbRows = null;
+	}
+	const ttbByExternalId = new Map(
+		(ttbRows ?? []).map((row) => [row.igdbId, row]),
+	);
+
 	// A game can carry several IGDB links only pathologically; last write wins
 	// inside the single batch either way. Map response rows back through the
-	// link table — ids IGDB skipped simply produce no update.
+	// link table — ids IGDB skipped simply produce no update, and a game with
+	// scores but no TTB record keeps its stored hours (partial-reply rule).
 	const byExternalId = new Map(rows.map((row) => [row.igdbId, row]));
 	const updates = queryable.flatMap((link) => {
-		const row = byExternalId.get(link.externalId);
-		return row ? [{ gameId: link.gameId, scores: toGameScores(row) }] : [];
+		const scoreRow = byExternalId.get(link.externalId);
+		const ttbRow = ttbByExternalId.get(link.externalId);
+		if (!scoreRow && !ttbRow) return [];
+		return [
+			{
+				gameId: link.gameId,
+				facts: {
+					...(scoreRow ? toGameScores(scoreRow) : {}),
+					...(ttbRow
+						? {
+								ttbStorySeconds: ttbRow.ttbStorySeconds,
+								ttbCompleteSeconds: ttbRow.ttbCompleteSeconds,
+								ttbCount: ttbRow.ttbCount,
+							}
+						: {}),
+				},
+			},
+		];
 	});
-	await updateGameScores(db, updates);
+	await updateGameIgdbFacts(db, updates);
+	if (ttbRows === null) {
+		return { ok: false, reason: 'provider' };
+	}
 	await stampScoresRefreshedAt(db, userId);
 	await clearScoresRefreshFailed(db, userId);
 	return { ok: true, updated: updates.length };

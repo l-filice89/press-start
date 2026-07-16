@@ -93,6 +93,45 @@ test('an unscored game renders NO score — empty card row, no detail section, n
 	}
 });
 
+test('time-to-beat hours show on card and detail, story vs 100% labelled (10.3c)', async ({
+	page,
+}) => {
+	const game = uniqueGame('Timed Game', {
+		...SCORED,
+		ttbStorySeconds: 54000,
+		ttbCompleteSeconds: 95400,
+		ttbCount: 8,
+	});
+	try {
+		await seedGames([game]);
+		await page.goto('/');
+		const scores = cardFor(page, game).getByTestId('card-scores');
+		await expect(scores).toContainText('15h story');
+		await expect(scores).toContainText('27h 100%');
+		const panel = await openDetail(page, game);
+		const section = panel.getByTestId('detail-scores');
+		await expect(section).toContainText('Story (8 submissions)');
+		await expect(section).toContainText('100%');
+	} finally {
+		await deleteGames([game.id]);
+	}
+});
+
+test('a story-only figure renders alone — 100% absent, never substituted (10.3d)', async ({
+	page,
+}) => {
+	const game = uniqueGame('Story Only Hours', { ttbStorySeconds: 7200 });
+	try {
+		await seedGames([game]);
+		await page.goto('/');
+		const scores = cardFor(page, game).getByTestId('card-scores');
+		await expect(scores).toContainText('2h story');
+		await expect(scores).not.toContainText('100%');
+	} finally {
+		await deleteGames([game.id]);
+	}
+});
+
 test('a critic-only game shows the critic slot alone — the user slot is absent, not zero (10.1d)', async ({
 	page,
 }) => {

@@ -48,7 +48,7 @@ export default {
 		);
 		// Story 10.1: IGDB score refresh rides the SAME cron — sequential, after
 		// the PS+ work, inside one invocation's budget (Epic 9 rule, arithmetic
-		// in services/scores.ts: PS+ membership pass ≤34 + scores ≤9 ≈ 43 of 50,
+		// in services/scores.ts: PS+ membership pass ≤34 + scores/TTB ≤10 ≈ 44 of 50,
 		// and the scores stale-gate fires it once per monthly window). Its
 		// failures persist their own FR-40 flag inside, so a throw here never
 		// masks the PS+ outcome above.

@@ -86,6 +86,16 @@ export const game = sqliteTable(
 		 * on `!owned` (FR-38).
 		 */
 		psPlusLeftOn: text('ps_plus_left_on'),
+		/**
+		 * IGDB time-to-beat (Story 10.3, VR-8) — `/game_time_to_beats` values in
+		 * SECONDS, verbatim (rendering rounds to hours): `normally` = the story,
+		 * `completely` = 100%, plus the submission count. Nullable like the
+		 * scores: a missing value renders ABSENT, and the completionist figure
+		 * never stands in for the story figure.
+		 */
+		ttbStorySeconds: integer('ttb_story_seconds'),
+		ttbCompleteSeconds: integer('ttb_complete_seconds'),
+		ttbCount: integer('ttb_count'),
 	},
 	(table) => [
 		// Non-unique — the first-pass match key (AD-18), used by every ingest path.

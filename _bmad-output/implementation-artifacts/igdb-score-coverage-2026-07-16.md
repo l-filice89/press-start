@@ -35,3 +35,7 @@ Notes:
 - Whole population fetched in ONE IGDB call (65 ids ≪ 500 limit) —
   SAMPLE-OF-ONE satisfied: this is the full distribution, not a sample.
 - Story 10.3 records its time-to-beat coverage next to this file.
+
+> Story 10.3's time-to-beat coverage was probed the same day and recorded
+> beside this file: [igdb-ttb-coverage-2026-07-16.md] — 93.8% story /
+> 84.6% 100% over the same 65-game population; gate PASS, HLTB not built.

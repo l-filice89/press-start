@@ -54,6 +54,9 @@ function game(over: Partial<ShelfGame> = {}): ShelfGame {
 		userScore: null,
 		userScoreCount: null,
 		psPlusLeftOn: null,
+		ttbStorySeconds: null,
+		ttbCompleteSeconds: null,
+		ttbCount: null,
 		...over,
 	};
 }
@@ -182,6 +185,44 @@ describe('DetailPanel', () => {
 		it('renders no Scores section for an unscored game (never a zero)', async () => {
 			await openPanel();
 			expect(screen.queryByTestId('detail-scores')).not.toBeInTheDocument();
+		});
+
+		it('shows time-to-beat hours with the submission count, story vs 100% labelled (Story 10.3)', async () => {
+			await openPanel(
+				game({
+					ttbStorySeconds: 54000,
+					ttbCompleteSeconds: 95400,
+					ttbCount: 8,
+				}),
+			);
+			const section = screen.getByTestId('detail-scores');
+			expect(section).toHaveTextContent('15h');
+			expect(section).toHaveTextContent('Story (8 submissions)');
+			expect(section).toHaveTextContent('27h');
+			expect(section).toHaveTextContent('100%');
+		});
+
+		it('a complete-only game still shows its submission count (review: 4 must not read like 400)', async () => {
+			await openPanel(
+				game({
+					ttbStorySeconds: null,
+					ttbCompleteSeconds: 95400,
+					ttbCount: 4,
+				}),
+			);
+			const section = screen.getByTestId('detail-scores');
+			expect(section).toHaveTextContent('27h');
+			expect(section).toHaveTextContent('100% (4 submissions)');
+			expect(section).not.toHaveTextContent('Story');
+		});
+
+		it('a TTB-only game still gets the section; a missing figure stays absent', async () => {
+			await openPanel(game({ ttbStorySeconds: 7200, ttbCount: 3 }));
+			const section = screen.getByTestId('detail-scores');
+			expect(section).toHaveTextContent('2h');
+			expect(section).toHaveTextContent('Story (3 submissions)');
+			expect(section).not.toHaveTextContent('100%');
+			expect(section).not.toHaveTextContent('Critics');
 		});
 	});
 

@@ -40,6 +40,9 @@ function game(overrides: Partial<ShelfGame> & { id: string }): ShelfGame {
 		userScore: null,
 		userScoreCount: null,
 		psPlusLeftOn: null,
+		ttbStorySeconds: null,
+		ttbCompleteSeconds: null,
+		ttbCount: null,
 		...overrides,
 	};
 }

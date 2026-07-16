@@ -20,6 +20,10 @@ export interface SeedGame {
 	userScoreCount: number | null;
 	/** Story 10.2: date the game left the PS+ catalog (warning pill). */
 	psPlusLeftOn: string | null;
+	/** Story 10.3: time-to-beat seconds (story / 100% / submissions). */
+	ttbStorySeconds: number | null;
+	ttbCompleteSeconds: number | null;
+	ttbCount: number | null;
 	tracking: {
 		owned: boolean;
 		/** FR-9 amended: `membership` = PS+ claim (card shows the PS+ tag). */
@@ -55,6 +59,9 @@ export function createGame(
 		userScore: null,
 		userScoreCount: null,
 		psPlusLeftOn: null,
+		ttbStorySeconds: null,
+		ttbCompleteSeconds: null,
+		ttbCount: null,
 		...overrides,
 		tracking: {
 			owned: true,

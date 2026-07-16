@@ -370,3 +370,16 @@ existing flag pass, rendered from the stored `ps_plus_left_on` fact.
 | 10.2d the departed game's PS+ pill clears and it stops counting Playable-now | pre-existing both-directions discipline, still pinned by `psplus.test.ts` flag-pass rows + `derived-state.test.ts`; exclusivity (warning ⇒ no pill) asserted in `Card.test.tsx` |
 | 10.2e no warning on owned games | `epic10-left-psplus.spec.ts` › an OWNED departed game shows no warning + `Card.test.tsx` › never warns on an owned game; the FACT still stamps (integration › an OWNED game departing carries the fact) |
 | 10.2f DW-13: first_seen_at semantics decided + documented; a returning game never misreads | no UI flow — integration `psplus-departure.test.ts` › DW-13 HAZARD (return NULLs the stamp); decision documented at `src/repositories/psplus-catalog.ts` upsert comment |
+
+Story 10.3 (time to beat — the story, and 100%, VR-8). IGDB's
+`/game_time_to_beats` (seconds, by game_id) rides the SAME scheduled pass as
+the 10.1 score refresh; HLTB was never built (coverage gate passed at 93.8%).
+
+| AC | Coverage |
+|----|----------|
+| 10.3a fetched from IGDB by stored id, no fuzzy matching, no new adapter/credentials/cron | no UI flow — provider wire pins in `src/providers/igdb.test.ts` › fetchTimeToBeatByIds (by-game_id body, one subrequest, captured fixture); same-pass persistence in integration `scores.test.ts` |
+| 10.3b coverage verified against real titles first, recorded next to the 10.1 finding | no UI flow — `_bmad-output/implementation-artifacts/igdb-ttb-coverage-2026-07-16.md` (93.8% story, gate PASS, HLTB not built) |
+| 10.3c both numbers on card + detail, story vs 100% unmistakable, count available | `epic10-scores.spec.ts` › time-to-beat hours show on card and detail; jsdom label pins in `Card.test.tsx`/`DetailPanel.test.tsx` |
+| 10.3d a missing value is absent — never zero, never the completionist figure standing in | `epic10-scores.spec.ts` › a story-only figure renders alone; jsdom one-value + <1h pins; integration › one-value-only persists null |
+| 10.3e refreshed in the same scheduled pass — one cron, one walk | no UI flow — integration `scores.test.ts` › persists story/100%/count in the same refresh (+ degenerate-[]-keeps-hours, TTB-throw-fails-closed, partial-reply-keeps-hours); budget ledger in `src/services/scores.ts` |
+| 10.3f a failed refresh surfaces (FR-40) | same banner chain as 10.1f (one flag for the whole pass): integration TTB degenerate/throw rows above + `AppShell.test.tsx` banner pins |

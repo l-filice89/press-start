@@ -38,6 +38,20 @@ export interface IgdbScores {
 	userScoreCount: number | null;
 }
 
+/**
+ * Time-to-beat facts (Story 10.3, VR-8): `/game_time_to_beats` values in
+ * SECONDS, verbatim (probe 2026-07-16: `normally` 54000 = 15h story), keyed
+ * by the game's IGDB id. Null = IGDB has no submissions for that figure —
+ * persists as NULL, renders as absent, and the completionist figure never
+ * stands in for the story figure.
+ */
+export interface IgdbTimeToBeat {
+	igdbId: string;
+	ttbStorySeconds: number | null;
+	ttbCompleteSeconds: number | null;
+	ttbCount: number | null;
+}
+
 export interface IgdbProvider {
 	/** Enrich by title; null = no confident IGDB match (never guessed). */
 	enrich(title: string): Promise<IgdbEnrichment | null>;
@@ -76,6 +90,9 @@ export interface IgdbSearch {
  */
 export interface IgdbScoreFetch {
 	fetchScoresByIds(igdbIds: string[]): Promise<IgdbScores[]>;
+	/** Story 10.3: same batched by-id shape against `/game_time_to_beats` —
+	 * the shared refresh pass calls both, one subrequest per 500 ids each. */
+	fetchTimeToBeatByIds(igdbIds: string[]): Promise<IgdbTimeToBeat[]>;
 }
 
 export interface IgdbConfig {
@@ -108,6 +125,7 @@ const GAME_FIELDS =
 	'id, name, first_release_date, cover.image_id, genres.name, aggregated_rating, aggregated_rating_count, rating, rating_count';
 
 const IGDB_GAMES_ENDPOINT = 'https://api.igdb.com/v4/games';
+const IGDB_TTB_ENDPOINT = 'https://api.igdb.com/v4/game_time_to_beats';
 const TWITCH_TOKEN_ENDPOINT = 'https://id.twitch.tv/oauth2/token';
 const IGDB_TIMEOUT_MS = 15_000;
 
@@ -225,13 +243,17 @@ export function createIgdbProvider(
 		nextAllowed = Math.max(now, nextAllowed) + minInterval;
 	}
 
-	async function fetchGames(body: string, forceRefresh: boolean) {
+	async function fetchGames(
+		body: string,
+		forceRefresh: boolean,
+		endpoint: string = IGDB_GAMES_ENDPOINT,
+	) {
 		const token = await getAccessToken(
 			config.clientId,
 			config.clientSecret,
 			forceRefresh,
 		);
-		return fetch(IGDB_GAMES_ENDPOINT, {
+		return fetch(endpoint, {
 			method: 'POST',
 			headers: {
 				'Client-ID': config.clientId,
@@ -243,21 +265,25 @@ export function createIgdbProvider(
 		});
 	}
 
-	// Shared request seam for EVERY games query — the searches (enrich,
-	// add-by-name previews, Stories 6.1/6.2) and the by-id score fetch (Story
-	// 10.1): throttle, stable-auth 401 retry, and the Epic-5
-	// DEGENERATE-RESPONSE guard all live here so every caller inherits them —
-	// an empty/error IGDB response can never write a garbage game.
-	async function queryGames(body: string): Promise<IgdbGame[]> {
+	// Shared request seam for EVERY IGDB query — the searches (enrich,
+	// add-by-name previews, Stories 6.1/6.2), the by-id score fetch (10.1)
+	// and the time-to-beat fetch (10.3, its own endpoint): throttle,
+	// stable-auth 401 retry, and the Epic-5 DEGENERATE-RESPONSE guard all
+	// live here so every caller inherits them — an empty/error IGDB response
+	// can never write a garbage game.
+	async function queryRows(
+		body: string,
+		endpoint: string = IGDB_GAMES_ENDPOINT,
+	): Promise<unknown[]> {
 		await throttle();
 
 		// A cached token that Twitch has expired/revoked answers 401/403 —
 		// mint a fresh one and retry ONCE, so a 60-day rotation self-heals
 		// with no manual refresh. A second 401 means the id/secret itself is
 		// bad, not a stale token.
-		let response = await fetchGames(body, false);
+		let response = await fetchGames(body, false, endpoint);
 		if (response.status === 401 || response.status === 403) {
-			response = await fetchGames(body, true);
+			response = await fetchGames(body, true, endpoint);
 		}
 		if (response.status === 401 || response.status === 403) {
 			throw new Error(
@@ -283,8 +309,11 @@ export function createIgdbProvider(
 				`IGDB returned a 200 with a non-array body: ${JSON.stringify(parsed).slice(0, 200)}`,
 			);
 		}
-		return parsed as IgdbGame[];
+		return parsed;
 	}
+
+	const queryGames = async (body: string): Promise<IgdbGame[]> =>
+		(await queryRows(body)) as IgdbGame[];
 
 	// `limit 50`, not IGDB's default 15 (verified live): a base game (e.g.
 	// "Genshin Impact") can rank behind dozens of same-named DLC/event entries,
@@ -379,6 +408,48 @@ export function createIgdbProvider(
 				for (const game of games) {
 					if (game.id === undefined) continue;
 					rows.push({ igdbId: String(game.id), ...scores(game) });
+				}
+			}
+			return rows;
+		},
+
+		// Story 10.3: `/game_time_to_beats`, keyed by game_id — SECONDS, verbatim
+		// (captured probe row 2026-07-16: normally 54000, completely 95400,
+		// count 8). Same batching and guard seam as the score fetch; a missing
+		// figure maps to null (never the other figure — VR-8).
+		async fetchTimeToBeatByIds(igdbIds) {
+			const numeric = igdbIds.filter((id) => /^\d+$/.test(id));
+			const rows: IgdbTimeToBeat[] = [];
+			for (let i = 0; i < numeric.length; i += 500) {
+				const chunk = numeric.slice(i, i + 500);
+				const records = (await queryRows(
+					`fields game_id, normally, completely, count; where game_id = (${chunk.join(',')}); limit 500;`,
+					IGDB_TTB_ENDPOINT,
+				)) as {
+					game_id?: number;
+					normally?: number;
+					completely?: number;
+					count?: number;
+				}[];
+				for (const record of records) {
+					if (record.game_id === undefined) continue;
+					// Zero/negative seconds are an anomaly, not a figure — mapped to
+					// null so the UI can never render a fabricated "<1h" (review;
+					// VR-8's never-zero rule). A count without ANY figure is likewise
+					// dropped: nothing could ever display it.
+					const positive = (v: unknown): number | null =>
+						typeof v === 'number' && v > 0 ? v : null;
+					const ttbStorySeconds = positive(record.normally);
+					const ttbCompleteSeconds = positive(record.completely);
+					rows.push({
+						igdbId: String(record.game_id),
+						ttbStorySeconds,
+						ttbCompleteSeconds,
+						ttbCount:
+							ttbStorySeconds !== null || ttbCompleteSeconds !== null
+								? positive(record.count)
+								: null,
+					});
 				}
 			}
 			return rows;

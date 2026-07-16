@@ -3,6 +3,7 @@ import { PlatinumTrophy } from '../components/PlatinumTrophy';
 import type { ShelfGame } from './api';
 import { OwnershipSourceDialog } from './OwnershipSourceDialog';
 import { StatusPopover } from './StatusPopover';
+import { formatTtbHours } from './ttb';
 import { useTrackingMutations } from './useTrackingMutations';
 import './card.css';
 
@@ -235,6 +236,30 @@ export function Card({
 									{game.userScoreCount != null
 										? ` from ${game.userScoreCount} ${game.userScoreCount === 1 ? 'rating' : 'ratings'}`
 										: ''}
+								</span>
+							</span>
+						)}
+						{/* Story 10.3 (VR-8): hours ride the same fact row, labelled so
+					    story vs 100% is unmistakable; a missing figure is ABSENT —
+					    the other never stands in for it. */}
+						{game.ttbStorySeconds != null && (
+							<span className="card__score card__score--ttb">
+								<span aria-hidden="true">
+									{formatTtbHours(game.ttbStorySeconds)} story
+								</span>
+								<span className="sr-only">
+									About {formatTtbHours(game.ttbStorySeconds)} to beat the story
+								</span>
+							</span>
+						)}
+						{game.ttbCompleteSeconds != null && (
+							<span className="card__score card__score--ttb">
+								<span aria-hidden="true">
+									{formatTtbHours(game.ttbCompleteSeconds)} 100%
+								</span>
+								<span className="sr-only">
+									About {formatTtbHours(game.ttbCompleteSeconds)} to complete
+									100%
 								</span>
 							</span>
 						)}
