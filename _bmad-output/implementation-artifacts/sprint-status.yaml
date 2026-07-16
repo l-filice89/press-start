@@ -357,7 +357,7 @@ action_items:
   - epic: 10
     action: "PRESERVE-VS-CLEAR rule (candidate): partial-update write paths state per-field absent-vs-clear semantics and external 200-[] paths state empty-vs-failure, each with an absent/empty hazard test; draft the persistent fact, Luca approves wording before it lands"
     owner: "Winston + Murat"
-    status: open
+    status: done # 2026-07-16: wording approved by Luca, persistent fact added to _bmad/custom/bmad-dev-auto.toml
   - epic: 10
     action: "Record Epic 10's new game-level globals (ps_plus_left_on, ps_plus_leaving_on, psn_concept_id) in publication-blockers.md B2 inventory for Story 8.0's design gate"
     owner: "Amelia"

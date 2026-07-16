@@ -4,6 +4,28 @@ All notable changes to PRESS START are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/); this project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] — 2026-07-16
+
+Know Before You Play: three decision signals — critic/user scores, time to
+beat, and PS+ departure dates — stored and refreshed on schedule, never
+fetched on render.
+
+### Added
+- **Critic and user scores** on every game (IGDB, 96.9% coverage), shown
+  color-graded on cards, the detail panel, and the add/rematch pickers.
+- **Time to beat** (IGDB, main story and completionist) on cards and the
+  detail panel.
+- **Per-game PS+ departure dates** from the store's PS_PLUS inclusion-offer
+  `endTime` — a dated "LEAVING {date}" pill and detail-header banner replace
+  the post-hoc "LEFT PS+" stamp, plus a shelf Leaving-soon filter and leaving
+  dates on catalog cards.
+- **Score/TTB/leaving refresh crons** — leaving sweep runs `0 9,21 15-28 * *`
+  matching Sony's announcement cadence.
+- Migrations 0012–0015, all additive.
+
+### Changed
+- "LEFT PS+" pill retired in favor of the dated LEAVING pill.
+
 ## [2.0.0] — 2026-07-16
 
 PSN account safety: everything that signed in as you is gone.
