@@ -2,9 +2,10 @@
 title: 'Story 10.1: Critic & user scores on every game (VR-5)'
 type: 'feature'
 created: '2026-07-16'
-status: 'in-review'
+status: 'done'
 review_loop_iteration: 0
 baseline_revision: 'f84e54d6510759878b73bbb21f77342aa748fe02'
+final_revision: '291a5887a272a881d406e2524ee937595f832573'
 followup_review_recommended: true # 13 review patches incl. 2 medium behavior fixes at the write-path trust boundary — breadth + volume warrant an independent pass before the epic merge
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-10-context.md'
