@@ -4,6 +4,24 @@ All notable changes to PRESS START are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/); this project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.2] — 2026-07-16
+
+### Fixed
+- **Milestones no longer close the detail panel.** Logging a platinum or a
+  story completion keeps the panel open showing the new state; clearing or
+  dropping a status still closes it.
+- **The shelf no longer jumps to the top after tracking writes.** Status
+  changes, milestone logs, and rematches used to collapse the progressively
+  rendered list back to the first page, yanking the scroll position; the
+  rendered window now survives refetches and resets only when filters or
+  search change.
+- **Export CSV is hidden on the catalog.** It exports the library, so
+  offering it while browsing the PS+ catalog was misleading; it stays
+  available on the shelf.
+- **Genre pills with 0 games no longer render in the catalog.** Zero-count
+  facet keys are dropped server-side; a selected genre whose count drops to
+  zero keeps its own chip so the live filter stays visible and escapable.
+
 ## [2.1.1] — 2026-07-16
 
 ### Fixed
