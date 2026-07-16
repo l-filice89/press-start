@@ -2,8 +2,9 @@
 title: 'Filter the shelf by time-to-beat bands (VR-9)'
 type: 'feature'
 created: '2026-07-16'
-status: 'in-review'
+status: 'done'
 baseline_revision: '87980360ddbefaa7eae4e2f7326ec8fa96834265'
+final_revision: '39b317437fc179dcd1dade779f528a4222c24683'
 review_loop_iteration: 0
 followup_review_recommended: true # P1 reworked shared FilterDropdown roving-focus machinery (State/Genre regression surface) mid-review
 context: []
