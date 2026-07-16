@@ -14,7 +14,7 @@
  * Cloudflare D1 creds + SEED_USER_EMAIL.
  */
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
-import { eq, notInArray } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { pickIgdbMatch } from '../src/core/igdb-match';
 import { createIgdbProvider } from '../src/providers/igdb';
 import { findUserByEmail } from '../src/repositories';
@@ -98,22 +98,27 @@ async function main(): Promise<void> {
 		process.exit(1);
 	}
 
-	const linked = (
+	// Filtered in JS, not SQL: a `NOT IN (…293 params…)` blows the D1 HTTP
+	// API's bound-parameter limit.
+	const linked = new Set(
+		(
+			await db
+				.select({ gameId: schema.externalLink.gameId })
+				.from(schema.externalLink)
+				.where(eq(schema.externalLink.source, 'IGDB'))
+		).map((r) => r.gameId),
+	);
+	const unlinked = (
 		await db
-			.select({ gameId: schema.externalLink.gameId })
-			.from(schema.externalLink)
-			.where(eq(schema.externalLink.source, 'IGDB'))
-	).map((r) => r.gameId);
-	const unlinked = await db
-		.select({
-			id: schema.game.id,
-			title: schema.game.title,
-			coverUrl: schema.game.coverUrl,
-			releaseDate: schema.game.releaseDate,
-			unenriched: schema.game.unenriched,
-		})
-		.from(schema.game)
-		.where(notInArray(schema.game.id, linked));
+			.select({
+				id: schema.game.id,
+				title: schema.game.title,
+				coverUrl: schema.game.coverUrl,
+				releaseDate: schema.game.releaseDate,
+				unenriched: schema.game.unenriched,
+			})
+			.from(schema.game)
+	).filter((g) => !linked.has(g.id));
 
 	console.log(`${unlinked.length} games without an IGDB link — matching…`);
 	let matched = 0;

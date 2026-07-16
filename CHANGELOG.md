@@ -4,6 +4,16 @@ All notable changes to PRESS START are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/); this project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.1] — 2026-07-16
+
+### Fixed
+- **Store collections now match on IGDB.** Bundle (`game_type 3`) was excluded
+  from every IGDB search — titles owned as one product (Crash Bandicoot
+  N. Sane Trilogy, Mass Effect Legendary Edition, Overcooked! All You Can
+  Eat) could not be matched anywhere, even manually in the stragglers
+  dialog, despite carrying scores on IGDB. DLC/season/pack/update noise
+  stays excluded.
+
 ## [2.1.0] — 2026-07-16
 
 Know Before You Play: three decision signals — critic/user scores, time to
