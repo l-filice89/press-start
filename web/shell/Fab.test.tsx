@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ToastHost } from '../components/Toast';
 import { Fab } from './Fab';
@@ -26,21 +27,28 @@ function deferredFetch(result: () => Promise<Response>) {
 	return { fetchMock, release };
 }
 
-function renderFab(handedness: 'left' | 'right' = 'right') {
+function renderFab(
+	handedness: 'left' | 'right' = 'right',
+	// The active destination decides whether Export CSV is offered — the entry
+	// can carry a `background` state to mimic a detail overlay.
+	initialEntry: string | { pathname: string; state?: unknown } = '/',
+) {
 	const client = new QueryClient({
 		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 	});
 	const invalidate = vi.spyOn(client, 'invalidateQueries');
 	const onPsPlusCheckComplete = vi.fn();
 	render(
-		<QueryClientProvider client={client}>
-			<ToastHost>
-				<Fab
-					onPsPlusCheckComplete={onPsPlusCheckComplete}
-					handedness={handedness}
-				/>
-			</ToastHost>
-		</QueryClientProvider>,
+		<MemoryRouter initialEntries={[initialEntry]}>
+			<QueryClientProvider client={client}>
+				<ToastHost>
+					<Fab
+						onPsPlusCheckComplete={onPsPlusCheckComplete}
+						handedness={handedness}
+					/>
+				</ToastHost>
+			</QueryClientProvider>
+		</MemoryRouter>,
 	);
 	return { invalidate, onPsPlusCheckComplete };
 }
@@ -64,7 +72,7 @@ describe('Fab', () => {
 		expect(screen.queryByTestId('fab-drawer')).not.toBeInTheDocument();
 	});
 
-	it('offers exactly Check PS+ Extra and Export CSV — no sync or trophy control survives Epic 11', async () => {
+	it('on the shelf offers exactly Check PS+ Extra and Export CSV — no sync or trophy control survives Epic 11', async () => {
 		renderFab();
 		await userEvent.click(screen.getByRole('button', { name: 'Chores' }));
 
@@ -75,6 +83,36 @@ describe('Fab', () => {
 		expect(screen.getByTestId('fab-export')).toBeInTheDocument();
 		expect(screen.queryByTestId('fab-sync')).not.toBeInTheDocument();
 		expect(screen.queryByTestId('fab-trophy-sync')).not.toBeInTheDocument();
+	});
+
+	// Export CSV exports the LIBRARY (FR-49) — offering it while looking at the
+	// catalog misleads (UX sweep 2026-07-16).
+	it('hides Export CSV on the catalog — Check PS+ Extra remains', async () => {
+		renderFab('right', '/catalog');
+		await userEvent.click(screen.getByRole('button', { name: 'Chores' }));
+
+		expect(screen.getByTestId('fab-psplus-check')).toBeInTheDocument();
+		expect(screen.queryByTestId('fab-export')).not.toBeInTheDocument();
+	});
+
+	it('hides Export CSV when a detail overlay sits over the catalog — the BACKGROUND is the active destination', async () => {
+		renderFab('right', {
+			pathname: '/game/g1',
+			state: { fromApp: true, background: { pathname: '/catalog' } },
+		});
+		await userEvent.click(screen.getByRole('button', { name: 'Chores' }));
+
+		expect(screen.queryByTestId('fab-export')).not.toBeInTheDocument();
+	});
+
+	it('keeps Export CSV when a detail overlay sits over the SHELF', async () => {
+		renderFab('right', {
+			pathname: '/game/g1',
+			state: { fromApp: true, background: { pathname: '/' } },
+		});
+		await userEvent.click(screen.getByRole('button', { name: 'Chores' }));
+
+		expect(screen.getByTestId('fab-export')).toBeInTheDocument();
 	});
 
 	it('runs the PS+ Extra check with a spinner, hands the result over, and repaints the shelf', async () => {

@@ -240,7 +240,14 @@ function FilteredShelf({ games }: { games: ShelfGame[] }) {
 						<EmptyState variant="insert-games" />
 					)
 				) : (
-					<ShelfGrid games={visible} />
+					// The filter/search signature is the grid's progressive-window reset
+					// key: changing it snaps back to page 1 (scroll-to-top is correct on
+					// a context change), while a plain refetch of the same view keeps the
+					// rendered window and the scroll position.
+					<ShelfGrid
+						games={visible}
+						resetKey={`${JSON.stringify(filter)}|${searchTerm}`}
+					/>
 				)}
 			</div>
 		</>
@@ -274,11 +281,18 @@ export function chunkIntoRows<T>(items: T[], columnCount: number): T[][] {
 }
 
 /** The card grid with roving-tabindex keyboard nav + progressive rendering. */
-function ShelfGrid({ games }: { games: ShelfGame[] }) {
+function ShelfGrid({
+	games,
+	resetKey,
+}: {
+	games: ShelfGame[];
+	/** Filter/search signature — a change resets the progressive window. */
+	resetKey?: string;
+}) {
 	// jsdom (tests) has no IntersectionObserver — render everything there so the
 	// full set is assertable; real browsers page it in on scroll.
 	const supportsObserver = typeof IntersectionObserver !== 'undefined';
-	const progressive = useProgressiveList(games, PAGE_SIZE);
+	const progressive = useProgressiveList(games, PAGE_SIZE, resetKey);
 	const visible = supportsObserver ? progressive.visible : games;
 	const navigate = useNavigate();
 	const destination = useActiveDestination();

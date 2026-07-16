@@ -5,6 +5,7 @@ import { useAnnounce } from '../components/LiveRegion';
 import { useToast } from '../components/Toast';
 import { type PsPlusCheckResult, runPsPlusCheck } from '../settings/api';
 import { serverMessage } from '../shelf/api';
+import { useActiveDestination } from '../shelf/detail-navigation';
 import './fab.css';
 
 /**
@@ -30,6 +31,10 @@ export function Fab({
 	const queryClient = useQueryClient();
 	const { toast } = useToast();
 	const announce = useAnnounce();
+	// Export CSV exports the LIBRARY (FR-49) — offering it on the catalog view
+	// misleads. The ACTIVE destination (the background when a detail overlay is
+	// open), not the raw pathname, decides — same rule as the header toggle.
+	const onCatalog = useActiveDestination().pathname.startsWith('/catalog');
 
 	const check = useMutation({
 		mutationFn: runPsPlusCheck,
@@ -133,28 +138,30 @@ export function Fab({
 							{check.isPending ? 'Checking…' : 'Check PS+ Extra'}
 						</span>
 					</button>
-					<button
-						type="button"
-						className="fab__item tap-target"
-						onClick={() => exportCsv.mutate()}
-						disabled={exportCsv.isPending}
-						aria-label="Export CSV"
-						data-testid="fab-export"
-					>
-						<span className="fab__item-icon" aria-hidden="true">
-							{exportCsv.isPending ? (
-								<span
-									className="fab__spinner"
-									data-testid="fab-export-spinner"
-								/>
-							) : (
-								'⤓'
-							)}
-						</span>
-						<span className="fab__item-label">
-							{exportCsv.isPending ? 'Exporting…' : 'Export CSV'}
-						</span>
-					</button>
+					{!onCatalog && (
+						<button
+							type="button"
+							className="fab__item tap-target"
+							onClick={() => exportCsv.mutate()}
+							disabled={exportCsv.isPending}
+							aria-label="Export CSV"
+							data-testid="fab-export"
+						>
+							<span className="fab__item-icon" aria-hidden="true">
+								{exportCsv.isPending ? (
+									<span
+										className="fab__spinner"
+										data-testid="fab-export-spinner"
+									/>
+								) : (
+									'⤓'
+								)}
+							</span>
+							<span className="fab__item-label">
+								{exportCsv.isPending ? 'Exporting…' : 'Export CSV'}
+							</span>
+						</button>
+					)}
 				</div>
 			)}
 			<button

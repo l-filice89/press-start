@@ -37,15 +37,43 @@ describe('useProgressiveList', () => {
 		expect(result.current.visible).toHaveLength(8);
 	});
 
-	it('resets the window when the source list changes', () => {
+	// The scroll-jump root cause (UX sweep 2026-07-16): a tracking write refetches
+	// the shelf, handing this hook a NEW array of the SAME view — the window must
+	// survive it, or a deep scroll snaps back to page 1 on every status change.
+	it('preserves the window when the source list is refetched (same resetKey)', () => {
 		const { result, rerender } = renderHook(
-			({ list }) => useProgressiveList(list, 4),
+			({ list }) => useProgressiveList(list, 4, 'view-a'),
 			{ initialProps: { list: items } },
 		);
 		act(() => result.current.showMore());
 		expect(result.current.visible).toHaveLength(8);
-		rerender({ list: [1, 2, 3] });
-		expect(result.current.visible).toEqual([1, 2, 3]);
+		rerender({ list: [...items] }); // new reference, same view
+		expect(result.current.visible).toHaveLength(8);
+	});
+
+	it('clamps the window to a shrunken list without resetting to one page', () => {
+		const long = Array.from({ length: 20 }, (_, i) => i);
+		const { result, rerender } = renderHook(
+			({ list }) => useProgressiveList(list, 4, 'view-a'),
+			{ initialProps: { list: long } },
+		);
+		act(() => result.current.revealThrough(15)); // window at 16
+		rerender({ list: long.slice(0, 10) }); // a game left the view
+		// Clamped to the new length — not snapped back to the first page — and
+		// still the LEADING slice of the new list.
+		expect(result.current.visible).toEqual(long.slice(0, 10));
 		expect(result.current.hasMore).toBe(false);
+	});
+
+	it('resets to the first page when resetKey changes (a filter change)', () => {
+		const { result, rerender } = renderHook(
+			({ list, key }) => useProgressiveList(list, 4, key),
+			{ initialProps: { list: items, key: 'view-a' } },
+		);
+		act(() => result.current.showMore());
+		expect(result.current.visible).toHaveLength(8);
+		rerender({ list: items.slice(0, 7), key: 'view-b' });
+		expect(result.current.visible).toEqual([0, 1, 2, 3]);
+		expect(result.current.hasMore).toBe(true);
 	});
 });
