@@ -119,13 +119,13 @@ development_status:
   epic-7-retrospective: done # 2026-07-15 — epic-7-retro-2026-07-15.md; +1 follow-up fix same day (genre-sweep client loop, 927d0ff)
 
   # Epic 8: Multi-user Readiness — POST-v1.0.0, demand-driven (after Epic 7)
-  epic-8: backlog
+  epic-8: done
   8-0-foundation-auth-model-data-scoping-design-gate: done # 2026-07-17 (dev-auto): AD-29..33 SIGNED OFF by Luca — open registration (invite proposal overturned), diff-upserts dropped. Gate open for 8.2+
   8-1-sign-in-with-google-b1a: done # 2026-07-13 (dev-auto): Google alongside magic link; allowlist enforced on the OAuth path via a databaseHooks create gate (+ requireAuth re-check); 6 review patches incl. 1 HIGH (the rejection code never reached the browser); followup_review_recommended:true (forced by the HIGH)
   8-2-real-users-can-register-b1b: done # 2026-07-17 (dev-auto): allowlist deleted per AD-29 — open registration, verified-email admission at every door incl. account linking; in-memory rate limiter + verification TTL sweep; 13 review patches (2 HIGH); followup_review_recommended:true
   8-3-per-user-ps-facts-region-and-catalog-flag-b2-b3: done # 2026-07-17 (dev-auto): columns dropped, membership derives per region (three-key SQL), departure ledger; deleteCatalogOutsideRegion killed (two-region coexistence); 11 review patches (1 HIGH); followup_review_recommended:true
   8-4-the-scheduled-refresh-serves-every-region-b4: done # 2026-07-17 (dev-auto): region-state ledger + per-region cron rotation + stale-snapshot guard; button/banner/client-sweep removed; migration 0017; 12 review patches (3 HIGH); followup_review_recommended:true
-  8-5-backfill-legacy-owned-via-rows-b6: backlog
+  8-5-backfill-legacy-owned-via-rows-b6: done # 2026-07-17 (dev-auto): migration 0018 + honest-scoped decision record + slice-pattern hazard test; 8 review patches (2 HIGH, both in the artifact's truthing)
   8-6-free-tier-read-budget-hardening: done # 2026-07-17 (dev-auto): single-row reads, SQL counts, paged catalog, shelf ETag/304, cookieCache — DAU ~550→~2,000; 13 review patches (2 HIGH: missed shared-fact bumps); followup_review_recommended:true (forced by the HIGHs)
   epic-8-retrospective: optional
 
