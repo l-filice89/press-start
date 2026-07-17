@@ -4,7 +4,7 @@ type: 'chore'
 created: '2026-07-17'
 status: 'blocked'
 baseline_revision: '14ae6d2'
-final_revision: 'bd219d7'
+final_revision: 'd2b13a1'
 review_loop_iteration: 0
 followup_review_recommended: true
 context:
