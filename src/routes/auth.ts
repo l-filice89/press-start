@@ -57,7 +57,8 @@ export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
 	const session = await auth.api.getSession({ headers: c.req.raw.headers });
 	// The allowlist is re-checked on every protected request, not just at
 	// sign-in: a `user` row outlives the allowlist that admitted it, so a
-	// changed (or emptied) AUTH_ALLOWED_EMAIL must strand the old session
+	// changed (or emptied) AUTH_ALLOWED_EMAIL strands the old session (within
+	// the ≤5-min cookieCache TTL, AD-33 §6)
 	// rather than leave a stale account with a live key to the library.
 	if (!session || !isAllowedEmail(session.user.email, c.env)) {
 		return c.json({ error: 'unauthorized' }, 401);

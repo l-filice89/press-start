@@ -18,6 +18,7 @@ import {
 	upsertGenre,
 } from '../repositories';
 import type { Db } from '../repositories/db';
+import { bumpLibraryVersion } from './library-version';
 
 function normalizeGenreName(raw: string): string {
 	return raw.trim().replace(/\s+/g, ' ');
@@ -49,6 +50,7 @@ export async function addGenreToGame(
 	const existing = await findGenreByNameInsensitive(db, name);
 	const row = existing ?? (await upsertGenre(db, name));
 	await linkGameGenre(db, gameId, row.id);
+	await bumpLibraryVersion(db, userId);
 
 	return genreNames(db, gameId);
 }
@@ -68,7 +70,10 @@ export async function removeGenreFromGame(
 	const name = normalizeGenreName(rawName);
 	if (name) {
 		const existing = await findGenreByNameInsensitive(db, name);
-		if (existing) await unlinkGameGenre(db, gameId, existing.id);
+		if (existing) {
+			await unlinkGameGenre(db, gameId, existing.id);
+			await bumpLibraryVersion(db, userId);
+		}
 	}
 
 	return genreNames(db, gameId);

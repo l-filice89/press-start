@@ -92,6 +92,21 @@ export async function releaseLock(
 		);
 }
 
+/**
+ * Rewrite EVERY user's row for one key in a single UPDATE (Story 8.6): the
+ * shared-`game`-fact writers (PS+ flags, leaving sweep, score refresh) must
+ * invalidate every user's shelf ETag, and the `setting` FK to `user` rules out
+ * one global row without a migration. Rows that don't exist yet are fine — the
+ * version read lazily initializes, which is fresh by construction.
+ */
+export async function updateSettingForAllUsers(
+	db: Db,
+	key: string,
+	value: string,
+) {
+	await db.update(setting).set({ value }).where(eq(setting.key, key));
+}
+
 export async function setSetting(
 	db: Db,
 	userId: string,

@@ -4,6 +4,7 @@ import { EFFECTIVE_STATES, PLAY_STATUSES } from '../core';
 import { createDb } from '../repositories/db';
 import { OWNERSHIP_TYPES } from '../schema/catalog';
 import { getShelf } from '../services';
+import { readLibraryVersion } from '../services/library-version';
 import { type AuthVariables, requireAuth } from './auth';
 
 /**
@@ -64,9 +65,29 @@ export const shelfRoute = new Hono<ShelfEnv>();
 
 shelfRoute.get('/shelf', requireAuth, async (c) => {
 	const db = createDb(c.env.DB);
+	// Conditional GET (Story 8.6, AD-33 §4): the ETag is the user's library
+	// version — rotated by EVERY writer (user-scoped and shared-fact alike, see
+	// services/library-version.ts), so a match proves the shelf bytes would be
+	// identical and the whole-library read is skipped. Weak tag (`W/`): the
+	// guarantee is semantic equivalence, not byte identity across serializers.
+	// An unconditional GET always answers 200 + body.
+	const version = await readLibraryVersion(db, c.get('userId'));
+	const etag = `W/"${version}"`;
+	// RFC 9110 list form: `If-None-Match` may carry several tags or `*`. A miss
+	// only costs a spurious 200 (safe direction), but an aggregating proxy would
+	// otherwise silently defeat the whole optimization.
+	const ifNoneMatch = (c.req.header('if-none-match') ?? '')
+		.split(',')
+		.map((t) => t.trim());
+	// `private`: the body is one signed-in user's library — a validator with no
+	// cache directives invites shared proxies to heuristic-cache it (RFC 9111).
+	const headers = { ETag: etag, 'Cache-Control': 'private' };
+	if (ifNoneMatch.includes(etag) || ifNoneMatch.includes('*')) {
+		return c.body(null, 304, headers);
+	}
 	// `?include=hidden` (Story 3.2): the whole ordered library, so the client's
 	// reveal pills can OR hidden states into the visible set. Default unchanged.
 	const includeHidden = c.req.query('include') === 'hidden';
 	const games = await getShelf(db, c.get('userId'), includeHidden);
-	return c.json(shelfResponseSchema.parse({ games }), 200);
+	return c.json(shelfResponseSchema.parse({ games }), 200, headers);
 });

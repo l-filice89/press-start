@@ -304,7 +304,17 @@ export async function listCatalogForBrowse(
 	{
 		genreKeys,
 		searchNormalized,
-	}: { genreKeys?: string[]; searchNormalized?: string } = {},
+		limit,
+		offset,
+	}: {
+		genreKeys?: string[];
+		searchNormalized?: string;
+		/** SQL page (Story 8.6): rows read scale with the page, not the snapshot.
+		 * Omitted = the full filtered set (page 0 needs it for the collapsed
+		 * `total`; the facet counts need it for card parity). */
+		limit?: number;
+		offset?: number;
+	} = {},
 ): Promise<CatalogBrowseRow[]> {
 	const scoped = [
 		eq(psPlusCatalog.region, region),
@@ -332,7 +342,7 @@ export async function listCatalogForBrowse(
 			),
 		);
 	}
-	return db
+	const query = db
 		.select({
 			productId: psPlusCatalog.productId,
 			npTitleId: psPlusCatalog.npTitleId,
@@ -345,6 +355,10 @@ export async function listCatalogForBrowse(
 		.from(psPlusCatalog)
 		.where(and(...scoped))
 		.orderBy(psPlusCatalog.titleNormalized, psPlusCatalog.productId);
+	if (limit !== undefined) {
+		return query.limit(limit).offset(offset ?? 0);
+	}
+	return query;
 }
 
 /**

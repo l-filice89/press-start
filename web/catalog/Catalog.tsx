@@ -178,7 +178,17 @@ export function Catalog({ onOpenSettings }: { onOpenSettings?: () => void }) {
 
 	const pages = query.data.pages;
 	const first = pages[0];
-	const games = pages.flatMap((page) => page.games);
+	// Dedupe by productId (Story 8.6, defensive): SQL pages are disjoint within
+	// one generation, but a refresh landing mid-scroll can hand two pages an
+	// overlapping row before the generation re-key kicks in — rendering both
+	// would collide React keys. First occurrence wins. (An edition pair
+	// straddling a boundary has distinct ids and stays the documented cosmetic
+	// double-card.)
+	const games = [
+		...new Map(
+			pages.flatMap((page) => page.games).map((g) => [g.productId, g]),
+		).values(),
+	];
 	const filtering = genreKeys.length > 0 || search !== '';
 
 	// Cause 1 — no region. The catalog is per-region; without one there is

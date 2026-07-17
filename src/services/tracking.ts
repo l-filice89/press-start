@@ -19,6 +19,7 @@ import {
 	wouldViolateCompletionInvariant,
 } from '../core';
 import {
+	countMembershipClaimsForUser,
 	getTracking,
 	listTrackingForUser,
 	setDiscarded,
@@ -28,6 +29,7 @@ import {
 	updateTrackingStatus,
 } from '../repositories';
 import type { Db } from '../repositories/db';
+import { bumpLibraryVersion } from './library-version';
 
 /**
  * Apply a play status (or clear it with `null`, Story 2.3) to this user's
@@ -71,6 +73,7 @@ export async function changePlayStatus(
 		return (await getTracking(db, userId, gameId)) ? 'invariant' : null;
 	}
 
+	await bumpLibraryVersion(db, userId);
 	return computeEffectiveState({
 		playStatus: updated.playStatus,
 		completedOn: updated.completedOn,
@@ -104,6 +107,7 @@ export async function logMilestone(
 	// Nothing updated: the row was deleted underneath us (404).
 	if (!row) return null;
 
+	if (patch) await bumpLibraryVersion(db, userId);
 	return computeEffectiveState({
 		playStatus: row.playStatus,
 		completedOn: row.completedOn,
@@ -144,6 +148,7 @@ export async function changeOwnership(
 		return (await getTracking(db, userId, gameId)) ? 'invalid' : null;
 	}
 
+	await bumpLibraryVersion(db, userId);
 	return computeEffectiveState({
 		playStatus: updated.playStatus,
 		completedOn: updated.completedOn,
@@ -160,10 +165,9 @@ export async function countMembershipClaims(
 	db: Db,
 	userId: string,
 ): Promise<number> {
-	const rows = await listTrackingForUser(db, userId);
-	return rows.filter(
-		(r) => r.owned && r.ownedVia === 'membership' && !r.discarded,
-	).length;
+	// SQL COUNT (Story 8.6) — same predicate `cancelMembership` un-owns by,
+	// without hauling the whole tracking table for a `.length`.
+	return countMembershipClaimsForUser(db, userId);
 }
 
 /**
@@ -199,6 +203,7 @@ export async function cancelMembership(
 			ownedVia: null,
 		});
 	}
+	if (claims.length > 0) await bumpLibraryVersion(db, userId);
 	return { unowned: claims.length };
 }
 
@@ -230,6 +235,7 @@ export async function editDates(
 		return (await getTracking(db, userId, gameId)) ? 'invariant' : null;
 	}
 
+	await bumpLibraryVersion(db, userId);
 	return computeEffectiveState({
 		playStatus: updated.playStatus,
 		completedOn: updated.completedOn,
@@ -250,5 +256,7 @@ export async function setGameDiscarded(
 	gameId: string,
 	discarded: boolean,
 ): Promise<boolean> {
-	return Boolean(await setDiscarded(db, userId, gameId, discarded));
+	const flipped = Boolean(await setDiscarded(db, userId, gameId, discarded));
+	if (flipped) await bumpLibraryVersion(db, userId);
+	return flipped;
 }

@@ -14,6 +14,7 @@ import {
 	type PlayStatus,
 } from '../core';
 import {
+	findLibraryRowById,
 	type LibraryRow,
 	listGenresForGames,
 	listLibraryForUser,
@@ -154,17 +155,22 @@ export async function loadLibrary(
  * route would render not-found on a game that exists (AD-25). User-scoped, so
  * another user's id is a plain miss.
  *
- * ponytail: bakes the whole library and finds the id — one extra query at the
- * ~350-game scale, and the DTO is then guaranteed identical to the shelf's. A
- * dedicated single-row read is the upgrade if the library ever gets big.
+ * Single-row read (Story 8.6): the shared `librarySelection` keeps the DTO
+ * identical to the shelf's by construction — the old bake-everything-and-find
+ * shape cost ~1,500 D1 rows to return one game.
  */
 export async function getGameById(
 	db: Db,
 	userId: string,
 	gameId: string,
 ): Promise<ShelfGame | null> {
-	const library = await loadLibrary(db, userId);
-	return library.find((game) => game.id === gameId) ?? null;
+	const row = await findLibraryRowById(db, userId, gameId);
+	if (!row) return null;
+	const genreRows = await listGenresForGames(db, [row.id]);
+	return bakeCard(
+		row,
+		genreRows.map((g) => g.name),
+	);
 }
 
 /**

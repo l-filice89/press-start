@@ -32,9 +32,10 @@
  *   D1, CRON: findUserByEmail 1 · lock claim 1 · genre-state read (rotation) 1
  *             · leaving-state read (rotation) 1 + (sweep's own) 1 · region
  *             read 1 · library read 1 · catalog title→product read 1 · fence
- *             (holdsPsnLock) 1 · batched leaving write 1 · stale-concept
- *             clear ≤1 · state write 1 · lock release 1 = 13.
- *   total ≈ 30 + 13 = 43 of 50 worst case; steady state (concepts cached) ≈ 28.
+ *             (holdsPsnLock) 1 · batched leaving write 1 · library-version
+ *             rotate (8.6 ETag) 1 · stale-concept
+ *             clear ≤1 · state write 1 · lock release 1 = 14.
+ *   total ≈ 30 + 14 = 44 of 50 worst case; steady state (concepts cached) ≈ 29.
  *   The score refresh NEVER stacks on a sweep invocation (worker/index.ts
  *   skips it whenever the rotation spent fan-out).
  * 39 flagged games = 3 chunks; the cron fires 28× a month
@@ -51,6 +52,7 @@ import {
 	setPsPlusLeaving,
 } from '../repositories';
 import type { Db } from '../repositories/db';
+import { bumpAllLibraryVersions } from './library-version';
 import { holdsPsnLock } from './psn-lock';
 import {
 	getPsnRegion,
@@ -184,6 +186,8 @@ export async function runLeavingSweep(
 	}
 
 	await setPsPlusLeaving(db, updates);
+	// Shared `game` facts changed → every user's shelf ETag rotates (8.6).
+	if (updates.length > 0) await bumpAllLibraryVersions(db);
 	// Failed cached concepts re-resolve on the next sweep (one extra batched
 	// statement only when something actually failed).
 	await clearPsnConceptIds(db, staleConcepts);

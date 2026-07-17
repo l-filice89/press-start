@@ -3,30 +3,35 @@
  * source: repositories only, nothing external on render (AD-6). It never
  * touches `PsnProvider` — the snapshot 7.1 persisted is all it reads.
  *
- * ORDERING is A–Z by title through `core/compareTitle` — the same tiebreaker
- * `compareShelf` ends on, and deliberately NOT `compareShelf` itself: its state
- * and ownership tiers would hoist the games already discovered to the top of a
- * discovery surface. No state tier, no ownership tier (UX: catalog ordering).
+ * ORDERING is A–Z by normalized title, straight from SQL (`title_normalized,
+ * product_id` — total order, so pages can never overlap or drop a row), and
+ * deliberately NOT `compareShelf`: its state and ownership tiers would hoist
+ * the games already discovered to the top of a discovery surface (UX: catalog
+ * ordering). Story 8.6 retired the `core/compareTitle` re-sort with the
+ * whole-snapshot read; the two orders differ only on accent/case edge cases.
  *
- * PAGING is an offset cursor over that sorted set. ~490 rows is one D1 read, so
- * the honest simple thing is: filter in SQL, sort in `core/`, slice here. The
- * snapshot DOES move under it (this destination runs Check PS+ Extra itself, and
- * the cron fires several times a month), so every page carries the `generation`
- * it was cut from and the client restarts its paging when that moves (review, M3)
- * — the same discipline as the genre sweep's cursor.
- * ponytail: offset paging + a generation stamp, not a keyset cursor — a keyset
- * would have to page in SQL collation order, which is not the A–Z order the UI
- * shows (`core/compareTitle`).
+ * PAGING is SQL `LIMIT/OFFSET` in the snapshot's own order (Story 8.6 / AD-33
+ * §2 ruling): `ORDER BY title_normalized, product_id` IS the display order —
+ * the old in-memory `compareTitle` re-sort retired with the whole-snapshot
+ * read. Page 0 still reads the full filtered set ONCE, because the collapsed
+ * card `total` (DW-11 chip parity) is a whole-set fact; later pages read
+ * `PAGE_SIZE + 1` rows. The snapshot DOES move under it (the cron fires several
+ * times a month), so every page carries the `generation` it was cut from and
+ * the client restarts its paging when that moves (review, M3).
+ * ponytail: `collapseEditions` now runs per page, so an edition pair straddling
+ * a page boundary can render one card per page — cosmetic, rare (pairs sit
+ * adjacent in title order), and the price of not hauling ~490 rows per scroll.
  */
-import { compareTitle, normalizeTitle } from '../core';
+import { normalizeTitle } from '../core';
 import {
 	type CatalogBrowseRow,
 	countCatalogProducts,
 	getCatalogGeneration,
+	type LibraryMarkerRow,
 	listCatalogForBrowse,
 	listCatalogGenres,
-	listExternalLinksBySource,
-	listLibraryForUser,
+	listLibraryRowsByNormalizedTitles,
+	listUserGamesByExternalIds,
 	PS_PLUS_TIER,
 } from '../repositories';
 import type { Db } from '../repositories/db';
@@ -160,115 +165,106 @@ export async function browseCatalog(
 	// M2), so "Pokémon" finds Pokémon — SQLite's `lower()` is ASCII-only and could
 	// not, while the shelf's client-side search always could.
 	const searchNormalized = search ? normalizeTitle(search) : undefined;
+	const filtering = Boolean(genreKeys?.length || searchNormalized);
+	const from = Number.isFinite(cursor) && cursor > 0 ? Math.trunc(cursor) : 0;
+
+	// Page 0 reads the FULL filtered set once: the collapsed-card `total` (the
+	// "N games matching" line and the DW-11 chip-parity number) is a whole-set
+	// fact no page-sized read can answer. Later pages read PAGE_SIZE + 1 SKUs —
+	// the sentinel row answers "is there a next page" without a count query.
+	// The CURSOR is a SKU-space offset into the SQL order; the client treats it
+	// as opaque and re-keys on `generation`, so the semantics change (it was a
+	// collapsed-card offset) is invisible to it.
+	const fullRead = from === 0;
 	const rows = await listCatalogForBrowse(db, scope, {
 		genreKeys,
 		searchNormalized,
+		...(fullRead ? {} : { limit: PAGE_SIZE + 1, offset: from }),
 	});
 	// "Is the snapshot empty" is a different question from "did the filter match
 	// nothing" — EMPTY CATALOG vs NO MATCH — so it is asked separately. A COUNT
 	// (review, M5): re-reading the whole table for its `.length` is a count query
 	// wearing a table scan.
-	const filtering = Boolean(genreKeys?.length || searchNormalized);
-	// Only ever compared against 0 (EMPTY CATALOG vs NO MATCH), so the raw SKU
-	// count is the honest answer — the collapsed count is `total`, below.
-	const snapshotTotal = filtering
-		? await countCatalogProducts(db, scope)
+	// Later pages skip the count entirely (review): the client reads `total`
+	// and `snapshotTotal` from page 0 only, and a COUNT bills the rows it scans
+	// — a read-budget story must not ship a per-page scan for dead values.
+	const snapshotTotal = fullRead
+		? filtering
+			? await countCatalogProducts(db, scope)
+			: rows.length
 		: rows.length;
 	const generation = await getCatalogGeneration(db, scope);
 
-	// The membership marker: the user's library keyed by the AD-9 normalized
-	// title — the one key both sides already store (AD-24: a catalog row has no
-	// link to a GAME except this). Owned wins on a normalized-title clash: the
-	// stronger claim is the one that removes the actions.
-	//
-	// An EMPTY key joins nothing on either side (review, M7): a product named
-	// "Remastered" normalizes to '' (the edition suffix IS the whole title), and
-	// with '' in the map every other ''-keyed row reads as In library / Owned and
-	// links to a WRONG gameId. Same reason `psplus.ts` filters its title keys.
-	const library = await listLibraryForUser(db, userId);
-	const tracked = new Map<
-		string,
-		{ gameId: string; owned: boolean; leavingOn: string | null }
-	>();
-	for (const row of library) {
+	const pageRows = rows.slice(0, PAGE_SIZE);
+	const hasNext = fullRead
+		? rows.length > from + PAGE_SIZE
+		: rows.length > PAGE_SIZE;
+	// `total` is the collapsed CARD count across the whole filtered set — a
+	// whole-set fact only page 0 computes, and the ONLY value the client reads
+	// (`pageList[0].total`). Later pages carry the page length as a schema
+	// placeholder rather than paying a count query for a number nothing reads.
+	const total = fullRead ? collapseEditions(rows).length : snapshotTotal;
+
+	// The membership markers, PAGE-SCOPED (Story 8.6): three exact-key joins
+	// against only this page's keys — never the whole library or the whole
+	// external-link table per request. Key precedence and merge rules are
+	// unchanged (7.3 H3 / Epic 7 H1 / M7):
+	//   1. `EXTERNAL_LINK('PSN_PRODUCT', product_id)` — the add path's anchor,
+	//      immune to title drift.
+	//   2. `EXTERNAL_LINK('PSN', np_title_id)` — the sync's identity.
+	//   3. the AD-9 normalized title — the only key AD-24 gives a catalog row.
+	// EMPTY title keys join nothing (M7): "Remastered" normalizes to '' and
+	// would false-mark every ''-keyed row. Owned wins on any clash; among
+	// un-owned matches a dated row beats a date-less one (a leaving warning must
+	// not be dropped by insertion order).
+	type Marker = { gameId: string; owned: boolean; leavingOn: string | null };
+	const better = (a: Marker | undefined, b: LibraryMarkerRow): boolean =>
+		!a ||
+		(b.owned && !a.owned) ||
+		(!a.owned && !a.leavingOn && Boolean(b.psPlusLeavingOn));
+	const toMarker = (row: LibraryMarkerRow): Marker => ({
+		gameId: row.id,
+		owned: row.owned,
+		leavingOn: row.psPlusLeavingOn,
+	});
+	const titleKeys = [
+		...new Set(pageRows.map((r) => r.titleNormalized).filter(Boolean)),
+	];
+	const productIds = pageRows.map((r) => r.productId);
+	const npTitleIds = [
+		...new Set(
+			pageRows.map((r) => r.npTitleId).filter((v): v is string => Boolean(v)),
+		),
+	];
+	const [titleRows, productLinkRows, npLinkRows] = await Promise.all([
+		listLibraryRowsByNormalizedTitles(db, userId, titleKeys),
+		listUserGamesByExternalIds(db, userId, 'PSN_PRODUCT', productIds),
+		listUserGamesByExternalIds(db, userId, 'PSN', npTitleIds),
+	]);
+	const tracked = new Map<string, Marker>();
+	for (const row of titleRows) {
 		if (!row.titleNormalized) continue;
-		const existing = tracked.get(row.titleNormalized);
-		// Owned wins (unchanged); among UN-OWNED duplicates the dated row wins
-		// (review) — first-inserted-wins silently dropped a leaving warning when
-		// a date-less duplicate landed first.
-		if (
-			!existing ||
-			(row.owned && !existing.owned) ||
-			(!existing.owned && !existing.leavingOn && row.psPlusLeavingOn)
-		) {
-			tracked.set(row.titleNormalized, {
-				gameId: row.id,
-				owned: row.owned,
-				leavingOn: row.psPlusLeavingOn,
-			});
-		}
+		if (better(tracked.get(row.titleNormalized), row))
+			tracked.set(row.titleNormalized, toMarker(row));
+	}
+	const linked = new Map<string, Marker>();
+	for (const row of productLinkRows) {
+		if (better(linked.get(row.externalId), row))
+			linked.set(row.externalId, toMarker(row));
+	}
+	const byNpTitleId = new Map<string, Marker>();
+	for (const row of npLinkRows) {
+		if (better(byNpTitleId.get(row.externalId), row))
+			byNpTitleId.set(row.externalId, toMarker(row));
 	}
 
-	// …and the STABLE key, checked FIRST (Story 7.3 review, H3): the add anchors
-	// `EXTERNAL_LINK('PSN_PRODUCT', product_id)` on the game, and the title it
-	// saves is the IGDB candidate's — routinely NOT the store's name. Keyed on the
-	// title alone, the two diverge and the card a user just added still reads
-	// `＋ Add`, forever (every re-add 409s and bounces to the detail). The link is
-	// the one key that cannot drift.
-	//
-	// …and the SYNC's key (Epic 7 cross-story review, H1): a game the library sync
-	// created carries `EXTERNAL_LINK('PSN', np_title_id)` and PSN's own title,
-	// which routinely does not normalize like the store's name ("…Valhalla
-	// Ragnarök Edition" vs "…Valhalla"). Without this join the card offered ＋Add
-	// for a game the user OWNS. The catalog row carries the same np_title_id, so
-	// it is a third exact key.
-	const byId = new Map(library.map((row) => [row.id, row]));
-	const byLink = async (source: 'PSN_PRODUCT' | 'PSN') => {
-		const map = new Map<
-			string,
-			{ gameId: string; owned: boolean; leavingOn: string | null }
-		>();
-		for (const link of await listExternalLinksBySource(db, source)) {
-			const row = byId.get(link.gameId);
-			if (!row) continue; // linked, but not in THIS user's library
-			const existing = map.get(link.externalId);
-			// Same merge rule as the tracked map: owned wins; else a dated row
-			// beats a date-less one.
-			if (
-				!existing ||
-				(row.owned && !existing.owned) ||
-				(!existing.owned && !existing.leavingOn && row.psPlusLeavingOn)
-			) {
-				map.set(link.externalId, {
-					gameId: row.id,
-					owned: row.owned,
-					leavingOn: row.psPlusLeavingOn,
-				});
-			}
-		}
-		return map;
-	};
-	const linked = await byLink('PSN_PRODUCT');
-	const byNpTitleId = await byLink('PSN');
-
-	// A TOTAL order (review, M1): `compareTitle` is `sensitivity: 'base'`, so NieR
-	// and NIER compare EQUAL — not an order at all. Each page is a separate query
-	// + sort, so an unspecified tie order lets two base-equal titles swap across
-	// the offset boundary between requests: one row served twice, one never shown.
-	// `productId` is the primary key, so it makes the order total.
-	const sorted = collapseEditions(rows).sort(
-		(a, b) =>
-			compareTitle(a.name, b.name) || a.productId.localeCompare(b.productId),
-	);
-	const from = Number.isFinite(cursor) && cursor > 0 ? Math.trunc(cursor) : 0;
-	const page = sorted.slice(from, from + PAGE_SIZE);
-	const next = from + PAGE_SIZE;
+	const page = collapseEditions(pageRows);
 
 	return {
 		region,
-		total: sorted.length,
+		total,
 		snapshotTotal,
-		nextCursor: next < sorted.length ? next : null,
+		nextCursor: hasNext ? from + PAGE_SIZE : null,
 		generation,
 		games: page.map((row) => {
 			// OWNED WINS across all three keys, not "first key that hits" (review, H1):

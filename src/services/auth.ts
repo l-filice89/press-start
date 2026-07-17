@@ -75,6 +75,10 @@ export function createAuth(env: Env, options: CreateAuthOptions) {
 			schema,
 		}),
 		telemetry: { enabled: false },
+		// Story 8.6 (AD-33 §6): a signed cookie cache skips the per-request D1
+		// session read. TTL is capped at 5 minutes — that is the revocation
+		// latency bound (a revoked session stays live until the cache expires).
+		session: { cookieCache: { enabled: true, maxAge: 300 } },
 		// Google (Story 8.1 / B1a) sits ALONGSIDE magic link — neither replaces
 		// the other. Registered only when both credentials are present, so dev,
 		// e2e and any deploy without them keep working on magic link alone.

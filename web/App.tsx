@@ -5,6 +5,7 @@ import { BrowserRouter } from 'react-router';
 import { authClient } from './auth-client';
 import { Skeleton } from './components/Skeleton';
 import Login from './Login';
+import { clearEtagCache } from './shelf/api';
 import { AppShell } from './shell/AppShell';
 
 /**
@@ -71,6 +72,9 @@ function AuthenticatedApp({ email }: { email: string }) {
 			const result = await authClient.signOut();
 			if (result.error) {
 				setSignOutFailed(true);
+			} else {
+				// Review hygiene (8.6): no previous account's retained bodies.
+				clearEtagCache();
 			}
 		} catch {
 			setSignOutFailed(true);

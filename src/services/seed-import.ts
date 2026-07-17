@@ -26,6 +26,7 @@ import {
 	upsertTracking,
 } from '../repositories';
 import type { Db } from '../repositories/db';
+import { bumpLibraryVersion } from './library-version';
 
 export interface SeedSummary {
 	gamesCreated: number;
@@ -199,5 +200,7 @@ export async function runSeedImport({
 		summary.tracked++;
 	}
 
+	// One rotate for the whole bulk write (8.6) — the seed is out-of-band.
+	await bumpLibraryVersion(db, userRow.id);
 	return summary;
 }

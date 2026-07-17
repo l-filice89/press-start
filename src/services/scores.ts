@@ -9,14 +9,16 @@
  *             fetches + ceil(links/500) time-to-beat fetches (Story 10.3,
  *             same pass) = 3 for any library under 500 linked games;
  *   D1:       1 user lookup + 1 stale-stamp read + 1 link list + 1 batched
- *             score write (one `db.batch`, however many rows) + the stamp
+ *             score write (one `db.batch`, however many rows) + the
+ *             library-version rotate (8.6 ETag) 1 + the stamp
  *             (1 timezone read via todayForUser + 1 write) + failed-flag
- *             clear (1) — or, on the failure path, the flag mark (1) = ≤7.
- *   Total ≈ 10 of 50 — and the worker runs it AFTER `runScheduledPsPlusCheck`
+ *             clear (1) — or, on the failure path, the flag mark (1) = ≤8.
+ *   Total ≈ 11 of 50 — and the worker runs it AFTER `runScheduledPsPlusCheck`
  *   in the same invocation, whose heaviest path (the membership pass — the
- *   Story 10.2 departure stamp rides inside its flag statements) is 34: the
+ *   Story 10.2 departure stamp rides inside its flag statements) is 38 with
+ *   the 8.6 version rotate: the
  *   stale-gate means the two only combine once per monthly window, worst
- *   case ~44 of 50. No cursor machinery at this scale (65 linked games
+ *   case ~49 of 50 (matches the psplus.ts ledger: 38 + 11). No cursor machinery at this scale (65 linked games
  *   today); the chunked provider fetch is the only paging.
  */
 import type { IgdbScoreFetch, IgdbScores, IgdbTimeToBeat } from '../providers';
@@ -27,6 +29,7 @@ import {
 	updateGameIgdbFacts,
 } from '../repositories';
 import type { Db } from '../repositories/db';
+import { bumpAllLibraryVersions } from './library-version';
 import {
 	clearScoresRefreshFailed,
 	getScoresRefreshedAt,
@@ -144,6 +147,8 @@ export async function runScoreRefresh(
 		];
 	});
 	await updateGameIgdbFacts(db, updates);
+	// Shared `game` facts changed → every user's shelf ETag rotates (8.6).
+	if (updates.length > 0) await bumpAllLibraryVersions(db);
 	if (ttbRows === null) {
 		return { ok: false, reason: 'provider' };
 	}

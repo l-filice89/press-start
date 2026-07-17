@@ -89,6 +89,22 @@ const shelfResponseSchema = z.object({
 });
 
 /**
+ * Conditional-GET cache (Story 8.6, AD-33 §4): the last ETag'd body per URL.
+ * A GET whose stored ETag still matches answers 304 with no body — the Worker
+ * skips its whole-library read and the retained body is returned as-is. Only
+ * routes that SEND an ETag ever populate this (the shelf today); everything
+ * else round-trips exactly as before. Session-scoped module state: a reload
+ * starts empty, which just means one full 200.
+ */
+const etagCache = new Map<string, { etag: string; body: unknown }>();
+
+/** Sign-out hygiene (review): drop the retained bodies so a signed-out (or
+ * future same-document re-auth) session holds no previous account's library. */
+export function clearEtagCache() {
+	etagCache.clear();
+}
+
+/**
  * Same-origin JSON call: the better-auth session cookie rides along
  * automatically. A non-OK response throws an error carrying its HTTP `status`,
  * which is what lets the query client skip pointless retries on a 4xx and route
@@ -98,11 +114,22 @@ export async function callApi(
 	url: string,
 	init?: RequestInit,
 ): Promise<unknown> {
+	const method = (init?.method ?? 'GET').toUpperCase();
+	const cached = method === 'GET' ? etagCache.get(url) : undefined;
 	const response = await fetch(url, {
 		credentials: 'same-origin',
 		...init,
-		headers: { accept: 'application/json', ...init?.headers },
+		headers: {
+			accept: 'application/json',
+			...(cached ? { 'if-none-match': cached.etag } : {}),
+			...init?.headers,
+		},
 	});
+	// 304 = "your copy is current" — success, not an error (`response.ok` is
+	// false for it, so it must be answered before the throw below).
+	if (response.status === 304 && cached) {
+		return cached.body;
+	}
 	if (!response.ok) {
 		const error = new Error(`Request failed (${response.status})`);
 		(error as Error & { status?: number }).status = response.status;
@@ -116,7 +143,14 @@ export async function callApi(
 			.catch(() => undefined);
 		throw error;
 	}
-	return response.json();
+	const body: unknown = await response.json();
+	if (method === 'GET') {
+		// Optional-chained: unit tests stub fetch with header-less plain objects,
+		// and a mock without an ETag simply never populates the cache.
+		const etag = response.headers?.get?.('etag');
+		if (etag) etagCache.set(url, { etag, body });
+	}
+	return body;
 }
 
 /**

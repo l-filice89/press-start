@@ -38,6 +38,7 @@ import {
 	upsertCatalogProducts,
 } from '../repositories';
 import type { Db } from '../repositories/db';
+import { bumpAllLibraryVersions } from './library-version';
 import { holdsPsnLock, withPsnLock } from './psn-lock';
 import { runGenreSweep } from './psplus-genres';
 import { runLeavingSweep } from './psplus-leaving';
@@ -104,15 +105,16 @@ const CATALOG_DRIFT_TOLERANCE = 2;
  *             call) · bookkeeping
  *             (failed-flag clear 1 + stamp, which re-reads the timezone, 2) 3
  *             · post-pass sweep-state read 1 · lock release 1
- *           = 30 (+ the rotation's genre-state and leaving-state reads that
- *           precede every CRON membership pass: 32)
- *   total (cron) = 5 external + 32 D1 = 37 of 50 (+ the Story 10.1/10.3 score+TTB
- *   refresh ≈10 once per window: worst case ≈47). The 10.4 leaving sweep never
+ *             · library-version rotate (8.6 ETag, when flags changed) 1
+ *           = 31 (+ the rotation's genre-state and leaving-state reads that
+ *           precede every CRON membership pass: 33)
+ *   total (cron) = 5 external + 33 D1 = 38 of 50 (+ the Story 10.1/10.3 score+TTB
+ *   refresh ≈11 once per window: worst case ≈49). The 10.4 leaving sweep never
  *   shares an invocation with the membership pass OR the score refresh
  *   (worker/index.ts skips scores on any sweep invocation; sweep ledger:
- *   psplus-leaving.ts, ≤43).
+ *   psplus-leaving.ts, ≤44).
  *   The HTTP button pays the auth middleware (3) on top instead of
- *   findUserByEmail (1), and none of the rotation reads: 36 of 50.
+ *   findUserByEmail (1), and none of the rotation reads: 37 of 50.
  * A GENRE-SWEEP CHUNK NO LONGER RIDES ALONG (H3): 34 + a chunk (~25) busts the
  * budget, and the resulting mid-sweep "Too many subrequests" throw was
  * self-perpetuating — see `runScheduledPsPlusCheck`.
@@ -293,6 +295,10 @@ export async function runPsPlusCheck(
 		false,
 		today,
 	);
+	// Shared `game` facts changed → every user's shelf ETag rotates (8.6).
+	if (toFlag.length > 0 || toClear.length > 0) {
+		await bumpAllLibraryVersions(db);
+	}
 
 	// Post-write bookkeeping (5.2 failed-flag clear + 5.3 freshness stamp) is
 	// non-critical: the flags above already applied, so a write failure here

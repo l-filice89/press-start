@@ -4,7 +4,7 @@
  * title return an array (non-unique candidate key) while lookups by external
  * link return a single game.
  */
-import { and, eq, inArray, ne, sql } from 'drizzle-orm';
+import { and, count, eq, inArray, ne, sql } from 'drizzle-orm';
 import {
 	type EXTERNAL_LINK_SOURCES,
 	externalLink,
@@ -414,8 +414,42 @@ export type LibraryRow = {
  * Discarded rows (soft-delete tombstone) are excluded here — this is the SINGLE
  * visibility filter, so shelf, search, stragglers, and CSV export all inherit
  * it. Sync reads `listTrackingForUser` (unfiltered) so it still sees discarded
- * rows to skip them (services/sync.ts).
+ * rows to skip them (the Epic 4 sync — deleted by Epic 11; a future sync
+ * writer MUST also bump the library version, services/library-version.ts).
  */
+/** The shelf's tracking-joined column set — shared by the whole-library read
+ * and the single-row by-id read so the two can never drift apart. */
+const librarySelection = {
+	id: game.id,
+	title: game.title,
+	titleNormalized: game.titleNormalized,
+	releaseDate: game.releaseDate,
+	coverUrl: game.coverUrl,
+	storeUrl: game.storeUrl,
+	psPlusExtra: game.psPlusExtra,
+	unenriched: game.unenriched,
+	criticScore: game.criticScore,
+	criticScoreCount: game.criticScoreCount,
+	userScore: game.userScore,
+	userScoreCount: game.userScoreCount,
+	psPlusLeftOn: game.psPlusLeftOn,
+	psPlusLeavingOn: game.psPlusLeavingOn,
+	psnConceptId: game.psnConceptId,
+	ttbStorySeconds: game.ttbStorySeconds,
+	ttbCompleteSeconds: game.ttbCompleteSeconds,
+	ttbCount: game.ttbCount,
+	playStatus: gameTracking.playStatus,
+	completedOn: gameTracking.completedOn,
+	platinumOn: gameTracking.platinumOn,
+	startedOn: gameTracking.startedOn,
+	boughtOn: gameTracking.boughtOn,
+	wishlistedOn: gameTracking.wishlistedOn,
+	owned: gameTracking.owned,
+	ownershipType: gameTracking.ownershipType,
+	ownedVia: gameTracking.ownedVia,
+	discarded: gameTracking.discarded,
+} as const;
+
 export async function listLibraryForUser(
 	db: Db,
 	userId: string,
@@ -425,36 +459,7 @@ export async function listLibraryForUser(
 	{ includeDiscarded = false }: { includeDiscarded?: boolean } = {},
 ): Promise<LibraryRow[]> {
 	return db
-		.select({
-			id: game.id,
-			title: game.title,
-			titleNormalized: game.titleNormalized,
-			releaseDate: game.releaseDate,
-			coverUrl: game.coverUrl,
-			storeUrl: game.storeUrl,
-			psPlusExtra: game.psPlusExtra,
-			unenriched: game.unenriched,
-			criticScore: game.criticScore,
-			criticScoreCount: game.criticScoreCount,
-			userScore: game.userScore,
-			userScoreCount: game.userScoreCount,
-			psPlusLeftOn: game.psPlusLeftOn,
-			psPlusLeavingOn: game.psPlusLeavingOn,
-			psnConceptId: game.psnConceptId,
-			ttbStorySeconds: game.ttbStorySeconds,
-			ttbCompleteSeconds: game.ttbCompleteSeconds,
-			ttbCount: game.ttbCount,
-			playStatus: gameTracking.playStatus,
-			completedOn: gameTracking.completedOn,
-			platinumOn: gameTracking.platinumOn,
-			startedOn: gameTracking.startedOn,
-			boughtOn: gameTracking.boughtOn,
-			wishlistedOn: gameTracking.wishlistedOn,
-			owned: gameTracking.owned,
-			ownershipType: gameTracking.ownershipType,
-			ownedVia: gameTracking.ownedVia,
-			discarded: gameTracking.discarded,
-		})
+		.select(librarySelection)
 		.from(gameTracking)
 		.innerJoin(game, eq(gameTracking.gameId, game.id))
 		.where(
@@ -463,4 +468,162 @@ export async function listLibraryForUser(
 				...(includeDiscarded ? [] : [eq(gameTracking.discarded, false)]),
 			),
 		);
+}
+
+/**
+ * ONE library row by game id (Story 8.6): the `GET /games/:id` read, replacing
+ * the bake-everything-and-find shape. Same join, columns, and discard filter as
+ * `listLibraryForUser`, so the DTO parity the old shape guaranteed by
+ * construction is now guaranteed by the shared `librarySelection`.
+ */
+export async function findLibraryRowById(
+	db: Db,
+	userId: string,
+	gameId: string,
+): Promise<LibraryRow | null> {
+	const rows = await db
+		.select(librarySelection)
+		.from(gameTracking)
+		.innerJoin(game, eq(gameTracking.gameId, game.id))
+		.where(
+			and(
+				eq(gameTracking.userId, userId),
+				eq(gameTracking.gameId, gameId),
+				eq(gameTracking.discarded, false),
+			),
+		)
+		.limit(1);
+	return rows[0] ?? null;
+}
+
+/** The marker columns the catalog browse joins against (Story 8.6) — enough
+ * for the in-library/owned/leaving card marks, nothing more. */
+export type LibraryMarkerRow = {
+	id: string;
+	titleNormalized: string;
+	owned: boolean;
+	psPlusLeavingOn: string | null;
+};
+
+const MARKER_CHUNK = 90; // D1's ~100-bind cap, with headroom for the fixed binds
+
+/**
+ * The user's live library rows whose normalized title is in `keys` — the
+ * catalog page's title-join, scoped to the page instead of the whole library
+ * (Story 8.6). Chunked under the bind cap.
+ */
+export async function listLibraryRowsByNormalizedTitles(
+	db: Db,
+	userId: string,
+	keys: string[],
+): Promise<LibraryMarkerRow[]> {
+	const out: LibraryMarkerRow[] = [];
+	for (let i = 0; i < keys.length; i += MARKER_CHUNK) {
+		const chunk = keys.slice(i, i + MARKER_CHUNK);
+		if (chunk.length === 0) continue;
+		out.push(
+			...(await db
+				.select({
+					id: game.id,
+					titleNormalized: game.titleNormalized,
+					owned: gameTracking.owned,
+					psPlusLeavingOn: game.psPlusLeavingOn,
+				})
+				.from(gameTracking)
+				.innerJoin(game, eq(gameTracking.gameId, game.id))
+				.where(
+					and(
+						eq(gameTracking.userId, userId),
+						eq(gameTracking.discarded, false),
+						inArray(game.titleNormalized, chunk),
+					),
+				)),
+		);
+	}
+	return out;
+}
+
+/**
+ * The user's live library rows linked to any of `externalIds` under `source` —
+ * the catalog page's exact-key joins (`PSN_PRODUCT` product ids, `PSN`
+ * np-title-ids), scoped to the page (Story 8.6). Chunked under the bind cap.
+ */
+export async function listUserGamesByExternalIds(
+	db: Db,
+	userId: string,
+	source: (typeof EXTERNAL_LINK_SOURCES)[number],
+	externalIds: string[],
+): Promise<(LibraryMarkerRow & { externalId: string })[]> {
+	const out: (LibraryMarkerRow & { externalId: string })[] = [];
+	for (let i = 0; i < externalIds.length; i += MARKER_CHUNK) {
+		const chunk = externalIds.slice(i, i + MARKER_CHUNK);
+		if (chunk.length === 0) continue;
+		out.push(
+			...(await db
+				.select({
+					externalId: externalLink.externalId,
+					id: game.id,
+					titleNormalized: game.titleNormalized,
+					owned: gameTracking.owned,
+					psPlusLeavingOn: game.psPlusLeavingOn,
+				})
+				.from(externalLink)
+				.innerJoin(game, eq(externalLink.gameId, game.id))
+				.innerJoin(
+					gameTracking,
+					and(
+						eq(gameTracking.gameId, game.id),
+						eq(gameTracking.userId, userId),
+						eq(gameTracking.discarded, false),
+					),
+				)
+				.where(
+					and(
+						eq(externalLink.source, source),
+						inArray(externalLink.externalId, chunk),
+					),
+				)),
+		);
+	}
+	return out;
+}
+
+/** SQL count of the user's un-enriched (name-only) games — the straggler badge
+ * number without a whole-library read (Story 8.6). */
+export async function countUnenrichedForUser(
+	db: Db,
+	userId: string,
+): Promise<number> {
+	const rows = await db
+		.select({ n: count() })
+		.from(gameTracking)
+		.innerJoin(game, eq(gameTracking.gameId, game.id))
+		.where(
+			and(
+				eq(gameTracking.userId, userId),
+				eq(gameTracking.discarded, false),
+				eq(game.unenriched, true),
+			),
+		);
+	return rows[0]?.n ?? 0;
+}
+
+/** SQL count of live PS+ claims (`owned_via='membership'`) — the cancel-PS+
+ * confirm's number without a whole-tracking read (Story 8.6). */
+export async function countMembershipClaimsForUser(
+	db: Db,
+	userId: string,
+): Promise<number> {
+	const rows = await db
+		.select({ n: count() })
+		.from(gameTracking)
+		.where(
+			and(
+				eq(gameTracking.userId, userId),
+				eq(gameTracking.owned, true),
+				eq(gameTracking.ownedVia, 'membership'),
+				eq(gameTracking.discarded, false),
+			),
+		);
+	return rows[0]?.n ?? 0;
 }
