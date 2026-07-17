@@ -2,7 +2,7 @@
 title: 'Story 8.0: Foundation — auth model & data-scoping design gate'
 type: 'chore'
 created: '2026-07-17'
-status: 'blocked'
+status: 'done'
 baseline_revision: '14ae6d2'
 final_revision: 'd2b13a1'
 review_loop_iteration: 0
@@ -105,8 +105,7 @@ Story 7.0 is the template: its "done" was signed-off artifacts (spine AD-24..28 
 
 ## Auto Run Result
 
-Status: blocked
-Blocking condition: awaiting design sign-off (story 8.0 gate) — Luca must review and sign off AD-29..33 before any 8.2+ code merges.
+Status: done — **SIGNED OFF by Luca 2026-07-17** with two rulings: (1) registration is OPEN ("invite" = sharing the URL) — AD-29 rewritten from the invite-table proposal to proven-email-control at every door, no de-admission concept; (2) diff-upserts DROPPED — AD-33 §5's rejection stands, epics 8.6's diff-upsert AC amended out. AD-29..33 are ADOPTED; the 8.2+ gate is open.
 
 **Implemented:** The Epic 8 design gate (Story 7.0 pattern) — five PROPOSED ADs added to `ARCHITECTURE-SPINE.md` plus amendments, distilled from the 2026-07-17 sprint change proposal + capacity research + deferred-work admission items:
 - **AD-29** admission = invite-shaped stored allowlist, one function at five doors, migration-seeded (no bootstrap lockout), self/last-row removal refused, WAF rate limiting, session revocation on de-admission.

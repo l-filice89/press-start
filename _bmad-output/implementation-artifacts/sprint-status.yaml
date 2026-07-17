@@ -120,13 +120,13 @@ development_status:
 
   # Epic 8: Multi-user Readiness — POST-v1.0.0, demand-driven (after Epic 7)
   epic-8: backlog
-  8-0-foundation-auth-model-data-scoping-design-gate: blocked # 2026-07-17 (dev-auto): AD-29..33 drafted + adversarially reviewed (17 patches, 6 high) — AWAITING LUCA SIGN-OFF; spec-8-0, commit d2b13a1. Gate holds: no 8.2+ code before sign-off
+  8-0-foundation-auth-model-data-scoping-design-gate: done # 2026-07-17 (dev-auto): AD-29..33 SIGNED OFF by Luca — open registration (invite proposal overturned), diff-upserts dropped. Gate open for 8.2+
   8-1-sign-in-with-google-b1a: done # 2026-07-13 (dev-auto): Google alongside magic link; allowlist enforced on the OAuth path via a databaseHooks create gate (+ requireAuth re-check); 6 review patches incl. 1 HIGH (the rejection code never reached the browser); followup_review_recommended:true (forced by the HIGH)
   8-2-real-users-can-register-b1b: backlog
   8-3-per-user-ps-facts-region-and-catalog-flag-b2-b3: backlog
   8-4-the-scheduled-refresh-serves-every-region-b4: backlog # reworked 2026-07-17 per-region (B5 retired by Epic 11) — sprint-change-proposal-2026-07-17-epic8-capacity.md
   8-5-backfill-legacy-owned-via-rows-b6: backlog
-  8-6-free-tier-read-budget-hardening: blocked # 2026-07-17 (dev-auto): AC conflict — epics mandates diff-upserts, proposed AD-33 rejects them (AD-28 generation integrity); ETag/delivery ACs consume unsigned 8.0 rulings. Arbitrate at 8.0 sign-off, then re-run
+  8-6-free-tier-read-budget-hardening: backlog # 2026-07-17: unblocked by 8.0 sign-off — diff-upsert AC dropped (AD-33 §5); runs before/parallel to 8.2
   epic-8-retrospective: optional
 
   # Epic 9: The PSN Record — Trophies (and maybe Wishlist) — v1.x
