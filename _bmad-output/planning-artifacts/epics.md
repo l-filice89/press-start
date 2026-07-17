@@ -1459,7 +1459,7 @@ So that discovery in the catalog turns into a tracked game (or a claimed one) in
 
 The backlog is **`publication-blockers.md`** (kept as the live source, cross-referenced from `deferred-work.md`) — this epic is its home rather than a second copy of the table. Each blocker is a story.
 
-**Order:** 8.2 (B1b) → 8.3 (B2+B3) → 8.4 (B4+B5) → 8.5 (B6), as `publication-blockers.md` states. **Story 8.1 (B1a, Google OAuth) sits outside that ordering** — single-tenant-safe, gates nothing, and is pullable into v1.x whenever wanted. Story 8.0 gates 8.2 onward, not 8.1.
+**Order:** 8.2 (B1b) → 8.3 (B2+B3) → 8.4 (B4; B5 retired) → 8.5 (B6), as `publication-blockers.md` states. **Stories 8.1 (B1a, Google OAuth) and 8.6 (read-budget hardening) sit outside that ordering** — both single-tenant-safe, gate nothing, and are pullable into v1.x whenever wanted. Story 8.0 gates 8.2 onward, not 8.1/8.6.
 
 ### Story 8.0: Foundation — auth model & data-scoping design gate
 
@@ -1479,7 +1479,7 @@ So that registration, per-user PS+ facts, and a multi-user cron aren't improvise
 
 **Given** the cron must fan out over N users, each with a region and a PSN cookie
 **When** the design lands
-**Then** it names the free-tier subrequest budget per run and the chunking strategy that stays inside it as user count grows [B4, B5; NFR-1, NFR-2, AR-15]
+**Then** it names the free-tier budgets per run — subrequests **and** D1 rows read/written (the binding limits per `research/technical-cloudflare-free-tier-capacity-research-2026-07-17.md`: 5M reads, 100k writes/day) — the **per-region** refresh model (not per-user; the catalog fetch is anonymous post-Epic 11), and the caching strategy (per-active-region, version-keyed on refresh; per-user library version for ETag/304; paged-vs-whole-catalog delivery to the FE) [B4; NFR-1, NFR-2, AR-15; capacity research 2026-07-17]
 
 **Given** the design artifacts exist
 **When** Story 8.2 is picked up
@@ -1579,27 +1579,49 @@ So that another user's catalog check never rewrites what is playable for me.
 **When** the flag becomes per-user
 **Then** all three write the per-user shape — one user's cancel can no longer repaint another user's catalog pills [deferred-work: cancel-PS+ global write; B2, AD-19]
 
+**Given** the per-region catalog snapshot is a shared dataset (AD-24)
+**When** the per-user flag shape is designed
+**Then** the per-user PS+ answer derives from the user's region joined against the region-scoped catalog — no per-user copy of catalog rows [B2; AD-19, AD-24]
+
 > B2 and B3 are one story on purpose: both are "a global fact that must become per-user", and a per-user flag is meaningless without a per-user region.
 
-### Story 8.4: The scheduled refresh serves every user (B4 + B5)
+### Story 8.4: The scheduled refresh serves every region (B4; B5 retired by Epic 11)
 
 As any user of the app,
-I want the monthly PS+ refresh and the sync to run for **my** account, not just the first one,
-So that the automation is not silently single-tenant.
+I want the monthly PS+ refresh to cover **my region's** catalog, not just the first user's,
+So that the automation is not silently single-tenant — without per-user checks that burn the free-tier write budget.
+
+*(Reworked 2026-07-17 — `sprint-change-proposal-2026-07-17-epic8-capacity.md`. The original per-user fan-out cited a per-user `pdccws_p` cookie that Epic 11 deleted, and per-user snapshot writes cap the app at ~100 users/day on D1's write budget. The catalog fetch is anonymous and per-region, so the refresh is per-region and shared.)*
 
 **Acceptance Criteria:**
 
 **Given** `runScheduledPsPlusCheck` (`src/services/psplus.ts:140`) resolves exactly one user by `AUTH_ALLOWED_EMAIL`
 **When** this story lands
-**Then** the cron loops **all** users, each with their own region (8.3) and their own `pdccws_p` cookie from SETTING (`getPsnCookie`) [B4, B5]
+**Then** the cron fans out over the **distinct regions of registered users** — one anonymous fetch + shared snapshot per region, never per-user [B4; capacity research 2026-07-17]
 
-**Given** the free-tier subrequest budget named in Story 8.0
-**When** the user count grows
-**Then** the run chunks to stay inside it rather than failing the whole cron [NFR-1, NFR-2, AR-15]
+**Given** a user signs in and their region's snapshot is older than 35 days (a reviving region, a fully failed month, or the first user of a new region)
+**When** the sign-in completes
+**Then** a refresh for that region is triggered via `waitUntil`, and the UI shows a "PS+ catalog updating…" notice beside the FR-40 as-of timestamp [FR-40]
 
-**Given** one user's refresh fails (expired cookie, unset region)
-**When** the run continues
-**Then** the other users still refresh, and that user's failure surfaces to **that user** on next app open — never a silent skip, never a poisoned run [NFR-4, AR-14, FR-40]
+**Given** a region's refresh fails
+**When** the run records the outcome
+**Then** a region-state row (`last_success`, `last_attempt`, `failure_count`, cycle-complete) captures it, and each cron fire retries failed/stale regions **first** — recovery is automatic; no user action exists or is needed
+
+**Given** a region with no user sign-in for 60 days, or one already cycle-complete (membership pass + leaving sweep both succeeded since this month's rotation date)
+**When** the cron fires
+**Then** it skips that region and the freed budget goes to failed/stale regions — exact skip conditions are named by Story 8.0's design gate
+
+**Given** multi-user is live (8.2)
+**When** this story lands
+**Then** the manual ps-plus-check trigger is **removed** — snapshot writes come only from the cron and the sign-in guard above (single-user keeps its button until then)
+
+**Given** a scheduled refresh failed
+**When** users of that region next open the app
+**Then** no attention banner fires — staleness surfaces via the FR-40 timestamp (plus the updating notice when a refresh is in flight), and failure detail goes to Worker logs [NFR-4 passive; FR-40]
+
+**Given** the budgets named in Story 8.0 (subrequests **and** D1 rows read/written)
+**When** the region count grows
+**Then** the run chunks to stay inside them rather than failing the whole cron [NFR-1, NFR-2, AR-15]
 
 ### Story 8.5: Backfill legacy `owned_via` rows (B6)
 
@@ -1618,6 +1640,35 @@ So that `owned_via` means something on every row instead of being NULL on the ol
 **Then** no user-entered data (status, milestones, dates) is touched — this is a hygiene pass over one column [AR-10]
 
 > Lowest priority in the epic; data hygiene, not a correctness gate.
+
+### Story 8.6: Free-tier read-budget hardening — _added 2026-07-17, capacity research_
+
+As the maintainer,
+I want the hot routes to stop scanning the whole library per hit,
+So that the free-tier DAU ceiling rises from ~550 toward the request cap (~6,600) before multi-user opens.
+
+**Acceptance Criteria:** (each traces to the Headroom table in `research/technical-cloudflare-free-tier-capacity-research-2026-07-17.md`)
+
+**Given** `GET /api/games/:id` loads the entire library to return one game (`shelf.ts:158-168`, ponytail-flagged)
+**When** this story lands
+**Then** it does a single-row `WHERE id = ?` lookup (~1,500 → ~10 rows/hit)
+
+**Given** `GET /api/settings` runs two whole-library scans for counts (`settings.ts:42-62`)
+**Then** it uses SQL `COUNT(*)` instead
+
+**Given** `GET /api/ps-plus-catalog` reads all ~490 rows then slices in memory (`psplus-browse.ts:35`)
+**Then** it pages via `LIMIT/OFFSET` in SQL
+
+**Given** the catalog snapshot write rewrites all ~490 rows per refresh
+**Then** it upserts diff-based — only changed rows (write cliff ~100 → ~2,000 runs/day, independent of 8.4's per-region model)
+
+**Given** shelf refetches re-read the whole library even when nothing changed
+**Then** shelf responses carry a per-user library-version ETag (304 on unchanged), and catalog responses are cached per active region, version-keyed, invalidated by refresh — paged-vs-whole FE delivery decided by Story 8.0
+
+**Given** every authenticated request pays a D1 session lookup
+**Then** (optional) better-auth `session.cookieCache` is enabled
+
+> Single-tenant-safe, no schema migration — pullable into v1.x like 8.1, outside 8.0's gate. When Epic 8 activates: before or parallel to 8.2.
 
 ## Epic 9: The PSN Record — Trophies (and maybe Wishlist)
 

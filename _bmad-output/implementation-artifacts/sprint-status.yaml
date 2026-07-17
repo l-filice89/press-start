@@ -124,8 +124,9 @@ development_status:
   8-1-sign-in-with-google-b1a: done # 2026-07-13 (dev-auto): Google alongside magic link; allowlist enforced on the OAuth path via a databaseHooks create gate (+ requireAuth re-check); 6 review patches incl. 1 HIGH (the rejection code never reached the browser); followup_review_recommended:true (forced by the HIGH)
   8-2-real-users-can-register-b1b: backlog
   8-3-per-user-ps-facts-region-and-catalog-flag-b2-b3: backlog
-  8-4-the-scheduled-refresh-serves-every-user-b4-b5: backlog
+  8-4-the-scheduled-refresh-serves-every-region-b4: backlog # reworked 2026-07-17 per-region (B5 retired by Epic 11) — sprint-change-proposal-2026-07-17-epic8-capacity.md
   8-5-backfill-legacy-owned-via-rows-b6: backlog
+  8-6-free-tier-read-budget-hardening: backlog # added 2026-07-17 (capacity research); single-tenant-safe, pullable into v1.x like 8.1
   epic-8-retrospective: optional
 
   # Epic 9: The PSN Record — Trophies (and maybe Wishlist) — v1.x

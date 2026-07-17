@@ -131,8 +131,8 @@ Three doors into the library. All of them record lifecycle dates silently (§4.5
 ### 4.3 PS+ Extra check
 
 - **FR-38** — Sets/clears the PS+ Extra flag on **tracked, non-owned games only**. Catalog games are never auto-added to the library; a refresh updates flags in both directions (games leave the catalog too). The catalog is **per-region** — the check runs against the user's account region. The flag is ignored and hidden from the moment a game becomes owned.
-- **FR-39** — Triggered by a **button and a scheduled job** aligned to Sony's predictable monthly catalog update. (The scheduled job must fit the stateless free-tier constraint — architecture concern.)
-- **FR-40** — The shelf shows a **"PS+ catalog as of {date}"** timestamp, and a failed scheduled refresh surfaces a notice on next app open — NFR-4's "failures surface" bar holds even when nobody is watching the run.
+- **FR-39** — Triggered by a **button and a scheduled job** aligned to Sony's predictable monthly catalog update. (The scheduled job must fit the stateless free-tier constraint — architecture concern.) *Amended 2026-07-17 (Epic 8, `sprint-change-proposal-2026-07-17-epic8-capacity.md`): in multi-user the refresh becomes per-region and cron-driven, plus a stale-snapshot sign-in guard; the manual button is removed (single-user keeps it until story 8.4 lands).*
+- **FR-40** — The shelf shows a **"PS+ catalog as of {date}"** timestamp, and a failed scheduled refresh surfaces a notice on next app open — NFR-4's "failures surface" bar holds even when nobody is watching the run. *Amended 2026-07-17 (Epic 8): in multi-user, failed scheduled refreshes surface via the as-of timestamp plus a "catalog updating…" notice when a refresh is in flight — not attention banners; recovery is automatic (story 8.4) and no user action exists.*
 
 ### 4.4 Add-by-name
 
