@@ -7,6 +7,7 @@ import {
 	getTracking,
 	listExternalLinks,
 	listGenresForGame,
+	listLibraryForUser,
 	listStragglers,
 	listTrackingForUser,
 } from '../../src/repositories';
@@ -102,7 +103,7 @@ describe('runSeedImport (integration, real workerd + local D1)', () => {
 		userId = await seedUser(USER_EMAIL);
 	});
 
-	it('imports a PS+ claim as owned digital too, flagged ps_plus_extra (never excluded)', async () => {
+	it('imports a PS+ claim as owned digital too, tagged ownedVia membership (never excluded)', async () => {
 		const ps = csv(PS_HEADER, [
 			{
 				name: 'Owned One',
@@ -137,20 +138,27 @@ describe('runSeedImport (integration, real workerd + local D1)', () => {
 		const owned = await findGameByExternalLink(db(), 'PSN', 'OWN1');
 		expect(owned?.title).toBe('Owned One');
 		expect(owned?.coverUrl).toBe('https://ps/1.png'); // PS cover kept over IGDB null
-		expect(owned?.psPlusExtra).toBe(false);
 
 		const claimed = await findGameByExternalLink(db(), 'PSN', 'CLM1');
 		expect(claimed?.title).toBe('Claimed One');
-		expect(claimed?.psPlusExtra).toBe(true);
 
 		const ownedTracking = await getTracking(db(), userId, must(owned).id);
 		expect(ownedTracking?.owned).toBe(true);
 		expect(ownedTracking?.ownershipType).toBe('digital');
+		expect(ownedTracking?.ownedVia).toBe('purchase');
 		expect(ownedTracking?.playStatus).toBe('Not started');
 
+		// Story 8.3: the claim marker drives `ownedVia: 'membership'` — it no
+		// longer stamps a flag on the shared game row. Membership is a per-region
+		// derivation, and with no catalog seeded here it derives false.
 		const claimedTracking = await getTracking(db(), userId, must(claimed).id);
 		expect(claimedTracking?.owned).toBe(true);
 		expect(claimedTracking?.ownershipType).toBe('digital');
+		expect(claimedTracking?.ownedVia).toBe('membership');
+		const lib = await listLibraryForUser(db(), userId, {});
+		expect(lib.find((row) => row.id === must(claimed).id)?.psPlusExtra).toBe(
+			false,
+		);
 	});
 
 	it('collapses PS4+PS5 to one game with both title_ids linked', async () => {

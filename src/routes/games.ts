@@ -14,6 +14,7 @@ import {
 	searchGamesForResolve,
 	todayForUser,
 } from '../services';
+import { getPsnRegion } from '../services/settings';
 import { type AuthVariables, requireAuth } from './auth';
 import { shelfGameSchema } from './shelf';
 
@@ -170,7 +171,13 @@ gamesRoute.get('/games/search', requireAuth, async (c) => {
  */
 gamesRoute.get('/games/:id', requireAuth, async (c) => {
 	const db = createDb(c.env.DB);
-	const game = await getGameById(db, c.get('userId'), c.req.param('id'));
+	const region = await getPsnRegion(db, c.get('userId'), c.env);
+	const game = await getGameById(
+		db,
+		c.get('userId'),
+		c.req.param('id'),
+		region,
+	);
 	if (!game) return c.json({ error: 'game not found' }, 404);
 	return c.json({ game: shelfGameSchema.parse(game) }, 200);
 });

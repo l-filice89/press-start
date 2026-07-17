@@ -45,8 +45,9 @@ export { OWNERSHIP_TYPES };
  * GAME — shared catalog identity (AD-19). Facts fetched by ingest jobs, not
  * user-editable here. `title_normalized` carries NO uniqueness constraint
  * (AD-18): identity is the `external_link (source, external_id)`, not the
- * title. `ps_plus_extra` is the Structural Seed's single catalog-membership
- * boolean; true per-region storage is an Epic-5 refinement (needs `SETTING`).
+ * title. PS+ membership/departure facts do NOT live here (Story 8.3, AD-30):
+ * membership derives per-user from `ps_plus_catalog` via the user's region;
+ * departure facts live in the region-keyed `ps_plus_departure` ledger.
  */
 export const game = sqliteTable(
 	'game',
@@ -59,9 +60,6 @@ export const game = sqliteTable(
 		releaseDate: text('release_date'),
 		coverUrl: text('cover_url'),
 		storeUrl: text('store_url'),
-		psPlusExtra: integer('ps_plus_extra', { mode: 'boolean' })
-			.notNull()
-			.default(false),
 		unenriched: integer('unenriched', { mode: 'boolean' })
 			.notNull()
 			.default(false),
@@ -77,29 +75,6 @@ export const game = sqliteTable(
 		criticScoreCount: integer('critic_score_count'),
 		userScore: real('user_score'),
 		userScoreCount: integer('user_score_count'),
-		/**
-		 * Date this game LEFT the PS+ Extra catalog (Story 10.2, VR-6) — stamped
-		 * by the flag pass when it clears `ps_plus_extra` on a previously-flagged
-		 * game, NULLed when the game re-enters (so a pruned-then-readded title can
-		 * never read as a fresh departure — DW-13). A shared game fact like the
-		 * flag itself: owned/discarded games carry it too; the UI gates display
-		 * on `!owned` (FR-38).
-		 */
-		psPlusLeftOn: text('ps_plus_left_on'),
-		/**
-		 * Date this game LEAVES the PS+ Extra catalog (Story 10.4, VR-6 rework) —
-		 * the store's own PS_PLUS offer `endTime`, written BOTH directions by the
-		 * chunked leaving sweep (a null endTime clears it) and NULLed atomically
-		 * when the flag pass clears `ps_plus_extra`. Shared game fact; UI gates
-		 * display on `!owned` (FR-38).
-		 */
-		psPlusLeavingOn: text('ps_plus_leaving_on'),
-		/**
-		 * The store concept id behind this game's catalog product (Story 10.4) —
-		 * resolved once via `metGetProductById` and cached so the steady-state
-		 * sweep pays one pricing call per game instead of two.
-		 */
-		psnConceptId: text('psn_concept_id'),
 		/**
 		 * IGDB time-to-beat (Story 10.3, VR-8) — `/game_time_to_beats` values in
 		 * SECONDS, verbatim (rendering rounds to hours): `normally` = the story,
@@ -321,6 +296,40 @@ export const psPlusCatalogGenre = sqliteTable(
 				psPlusCatalog.productId,
 			],
 		}).onDelete('cascade'),
+	],
+);
+
+/**
+ * PS_PLUS_DEPARTURE — the region-keyed departure ledger (Story 8.3, AD-30).
+ * A departed product is precisely the one whose `ps_plus_catalog` row the
+ * prune deleted, so its facts CANNOT live in the snapshot: this ledger
+ * survives every prune. Written by the membership pass's generation diff
+ * (`left_on` on prune; row DELETED on re-entry — DW-13) and the leaving sweep
+ * (`leaving_on`, `psn_concept_id`). No FK to the catalog (it outlives the
+ * rows) and no `user_id` (per-region shared data; per-user answers derive
+ * via the user's region — AD-30). `title_normalized`/`np_title_id` carry the
+ * library join keys, mirroring the browse marker's three-key match.
+ */
+export const psPlusDeparture = sqliteTable(
+	'ps_plus_departure',
+	{
+		region: text('region').notNull(),
+		tier: text('tier').notNull().default('extra'),
+		productId: text('product_id').notNull(),
+		npTitleId: text('np_title_id'),
+		titleNormalized: text('title_normalized').notNull(),
+		/** Date the product left the catalog; null while it is still IN the
+		 * catalog (a leaving date can precede departure). */
+		leftOn: text('left_on'),
+		/** The store's own PS_PLUS offer endTime (Story 10.4 semantics). */
+		leavingOn: text('leaving_on'),
+		/** Cached store concept id — one pricing call instead of two (10.4). */
+		psnConceptId: text('psn_concept_id'),
+	},
+	(table) => [
+		primaryKey({ columns: [table.region, table.tier, table.productId] }),
+		index('ps_plus_departure_title_idx').on(table.titleNormalized),
+		index('ps_plus_departure_np_title_idx').on(table.npTitleId),
 	],
 );
 

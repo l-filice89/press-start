@@ -11,7 +11,9 @@ import {
 	insertGame,
 	listCatalogGenres,
 	listCatalogProducts,
+	listLibraryForUser,
 	setSetting,
+	upsertCatalogProducts,
 	upsertTracking,
 } from '../../src/repositories';
 import { createDb } from '../../src/repositories/db';
@@ -29,7 +31,7 @@ import {
 	PSPLUS_SWEEP_STATE_SETTING_KEY,
 } from '../../src/services/settings';
 import worker from '../../worker/index';
-import { catalogPagePayload } from '../fixtures/psn';
+import { catalogPagePayload, productId } from '../fixtures/psn';
 import { stubStore } from './psn-stub';
 import { establishSession, TEST_EMAIL } from './session';
 
@@ -96,23 +98,41 @@ const stubCatalog = (names: string[], status = 200) =>
 
 let userId: string;
 
-async function seedGame(
-	title: string,
-	{ owned = false, psPlusExtra = false } = {},
-) {
+async function seedGame(title: string, { owned = false } = {}) {
 	const created = await insertGame(db(), {
 		title,
 		titleNormalized: title.toLowerCase(),
-		psPlusExtra,
 	});
 	await upsertTracking(db(), userId, created.id, { owned });
 	return created;
 }
 
-const flagOf = async (id: string) => {
-	const [row] = await db().select().from(game).where(eq(game.id, id));
-	return row.psPlusExtra;
-};
+/** Pre-seed the region snapshot (Story 8.3): "already a member" is a catalog
+ * row now, not a game-column flag. */
+async function seedCatalog(names: string[], region = 'it-it') {
+	await upsertCatalogProducts(
+		db(),
+		{ region },
+		'gen-old',
+		names.map((name) => ({
+			productId: productId(name),
+			npTitleId: null,
+			name,
+			titleNormalized: name.toLowerCase(),
+			coverUrl: null,
+			platforms: ['PS5'],
+			storeClassification: null,
+			storeUrl: 'https://store.example/x',
+		})),
+		'2026-07-01',
+	);
+}
+
+/** Derived membership (Story 8.3) — the cron's region is the env seed. */
+const flagOf = async (id: string, region = 'it-it') =>
+	(
+		await listLibraryForUser(db(), userId, { includeDiscarded: true, region })
+	).find((row) => row.id === id)?.psPlusExtra;
 
 /** A minimal ScheduledController for driving worker.scheduled directly. */
 const controller = {
@@ -303,14 +323,16 @@ describe('scheduled PS+ Extra refresh (Story 5.2)', () => {
 		await setSetting(db(), userId, PSN_REGION_SETTING_KEY, 'it-it');
 	}, 30_000);
 
-	it('sets the failed flag and writes no flags when the catalog fetch fails', async () => {
-		const flagged = await seedGame('Cron Celeste', { psPlusExtra: true });
+	it('sets the failed flag and writes no membership facts when the catalog fetch fails', async () => {
+		const flagged = await seedGame('Cron Celeste');
+		await seedCatalog(['Cron Celeste']); // already a member (region snapshot)
 		stubCatalog([], 500);
 
 		await runScheduledPsPlusCheck(db(), env);
 
 		expect(await isPsPlusRefreshFailed(db(), userId)).toBe(true);
-		// The stale flag stands — a failed refresh never partial-clears.
+		// The snapshot stands (no prune, no departure stamp) — membership still
+		// derives true after a failed refresh.
 		expect(await flagOf(flagged.id)).toBe(true);
 	});
 

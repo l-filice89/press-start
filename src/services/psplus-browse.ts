@@ -30,6 +30,7 @@ import {
 	type LibraryMarkerRow,
 	listCatalogForBrowse,
 	listCatalogGenres,
+	listDeparturesForProducts,
 	listLibraryRowsByNormalizedTitles,
 	listUserGamesByExternalIds,
 	PS_PLUS_TIER,
@@ -217,15 +218,15 @@ export async function browseCatalog(
 	// would false-mark every ''-keyed row. Owned wins on any clash; among
 	// un-owned matches a dated row beats a date-less one (a leaving warning must
 	// not be dropped by insertion order).
-	type Marker = { gameId: string; owned: boolean; leavingOn: string | null };
+	// The leaving date no longer rides the library marker (Story 8.3): the
+	// ledger is keyed (region, product), so the card date reads it DIRECTLY —
+	// simpler and correct for untracked products too.
+	type Marker = { gameId: string; owned: boolean };
 	const better = (a: Marker | undefined, b: LibraryMarkerRow): boolean =>
-		!a ||
-		(b.owned && !a.owned) ||
-		(!a.owned && !a.leavingOn && Boolean(b.psPlusLeavingOn));
+		!a || (b.owned && !a.owned);
 	const toMarker = (row: LibraryMarkerRow): Marker => ({
 		gameId: row.id,
 		owned: row.owned,
-		leavingOn: row.psPlusLeavingOn,
 	});
 	const titleKeys = [
 		...new Set(pageRows.map((r) => r.titleNormalized).filter(Boolean)),
@@ -236,11 +237,16 @@ export async function browseCatalog(
 			pageRows.map((r) => r.npTitleId).filter((v): v is string => Boolean(v)),
 		),
 	];
-	const [titleRows, productLinkRows, npLinkRows] = await Promise.all([
-		listLibraryRowsByNormalizedTitles(db, userId, titleKeys),
-		listUserGamesByExternalIds(db, userId, 'PSN_PRODUCT', productIds),
-		listUserGamesByExternalIds(db, userId, 'PSN', npTitleIds),
-	]);
+	const [titleRows, productLinkRows, npLinkRows, departures] =
+		await Promise.all([
+			listLibraryRowsByNormalizedTitles(db, userId, titleKeys),
+			listUserGamesByExternalIds(db, userId, 'PSN_PRODUCT', productIds),
+			listUserGamesByExternalIds(db, userId, 'PSN', npTitleIds),
+			listDeparturesForProducts(db, scope, productIds),
+		]);
+	const leavingByProduct = new Map<string, string | null>(
+		departures.map((d) => [d.productId, d.leavingOn]),
+	);
 	const tracked = new Map<string, Marker>();
 	for (const row of titleRows) {
 		if (!row.titleNormalized) continue;
@@ -284,11 +290,10 @@ export async function browseCatalog(
 				inLibrary: match !== undefined,
 				owned: match?.owned ?? false,
 				gameId: match?.gameId ?? null,
-				// A title-key collision (L6 above) would hand an untracked product a
-				// tracked game's date — a stronger false claim than the In-library
-				// marker. Accepted with the same rationale: both sides share one
-				// normalizer, and the exact-link keys are checked first.
-				leavingOn: match?.leavingOn ?? null,
+				// Ledger-direct (Story 8.3): the departure ledger is keyed
+				// (region, product), so the date is exact — no title-collision
+				// hazard, and untracked products carry their date too.
+				leavingOn: leavingByProduct.get(row.productId) ?? null,
 			};
 		}),
 	};

@@ -188,6 +188,9 @@ describe('magic-link auth & user scoping (integration, real workerd + local D1)'
 			'meta',
 			'ps_plus_catalog',
 			'ps_plus_catalog_genre',
+			// Story 8.3's region-keyed departure ledger (AD-30) — per-region shared
+			// data, no user_id: still no roles/sharing/tenancy.
+			'ps_plus_departure',
 			'session',
 			'setting',
 			'user',

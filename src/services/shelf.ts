@@ -133,8 +133,11 @@ function bakeCard(row: LibraryRow, genres: string[]): ShelfGame {
 export async function loadLibrary(
 	db: Db,
 	userId: string,
+	// The user's PSN region (Story 8.3): drives the PS+ membership/leaving
+	// derivations in the read. Null = no region set → honest absence.
+	region: string | null = null,
 ): Promise<ShelfGame[]> {
-	const rows = await listLibraryForUser(db, userId);
+	const rows = await listLibraryForUser(db, userId, { region });
 	const genreRows = await listGenresForGames(
 		db,
 		rows.map((r) => r.id),
@@ -163,8 +166,9 @@ export async function getGameById(
 	db: Db,
 	userId: string,
 	gameId: string,
+	region: string | null = null,
 ): Promise<ShelfGame | null> {
-	const row = await findLibraryRowById(db, userId, gameId);
+	const row = await findLibraryRowById(db, userId, gameId, region);
 	if (!row) return null;
 	const genreRows = await listGenresForGames(db, [row.id]);
 	return bakeCard(
@@ -185,8 +189,9 @@ export async function getShelf(
 	db: Db,
 	userId: string,
 	includeHidden = false,
+	region: string | null = null,
 ): Promise<ShelfGame[]> {
-	const library = await loadLibrary(db, userId);
+	const library = await loadLibrary(db, userId, region);
 	return orderShelf(
 		includeHidden
 			? library

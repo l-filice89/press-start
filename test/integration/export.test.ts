@@ -6,6 +6,7 @@ import {
 	insertGame,
 	insertTrackingIfAbsent,
 	linkGameGenre,
+	upsertCatalogProducts,
 	upsertGenre,
 } from '../../src/repositories';
 import { createDb } from '../../src/repositories/db';
@@ -19,6 +20,33 @@ import { appFetch, establishSession, TEST_EMAIL } from './session';
  */
 
 const db = () => createDb(env.DB);
+
+// The region the export route resolves (`getPsnRegion` seeds the test env's
+// PSN_REGION and persists it). Membership derives from this region's catalog.
+const REGION = 'it-it';
+
+/** Put a title in the region's PS+ catalog — the Story 8.3 way a tracked game
+ * becomes a member (the flag column is gone; membership derives per region). */
+async function seedCatalogRow(name: string) {
+	await upsertCatalogProducts(
+		db(),
+		{ region: REGION },
+		'gen-test',
+		[
+			{
+				productId: `p-${normalizeTitle(name).replace(/\s+/g, '-')}`,
+				npTitleId: null,
+				name,
+				titleNormalized: normalizeTitle(name),
+				coverUrl: null,
+				platforms: ['PS5'],
+				storeClassification: null,
+				storeUrl: 'https://store.example/x',
+			},
+		],
+		'2026-07-17',
+	);
+}
 
 let cookie: string;
 let userId: string;
@@ -104,8 +132,8 @@ describe('CSV export (Story 6.3, through the route)', () => {
 		const g = await insertGame(db(), {
 			title: 'Owned And In The Catalog',
 			titleNormalized: normalizeTitle('Owned And In The Catalog'),
-			psPlusExtra: true,
 		});
+		await seedCatalogRow('Owned And In The Catalog');
 		await insertTrackingIfAbsent(db(), userId, g.id, { owned: true });
 
 		const rows = parseCsv(
@@ -120,8 +148,8 @@ describe('CSV export (Story 6.3, through the route)', () => {
 		const g = await insertGame(db(), {
 			title: 'Claimable From The Catalog',
 			titleNormalized: normalizeTitle('Claimable From The Catalog'),
-			psPlusExtra: true,
 		});
+		await seedCatalogRow('Claimable From The Catalog');
 		await insertTrackingIfAbsent(db(), userId, g.id, { owned: false });
 
 		const rows = parseCsv(

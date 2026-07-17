@@ -88,7 +88,7 @@ function d1(sql: string): { pid: string; name: string }[] {
 // Sample: catalog products matched to FLAGGED tracked games (the sweep's real
 // population), capped to keep the probe cheap.
 const rows = d1(
-	"select c.product_id as pid, c.name as name from ps_plus_catalog c join game g on g.ps_plus_extra = 1 and g.title_normalized = c.title_normalized limit 10",
+	"select c.product_id as pid, c.name as name from ps_plus_catalog c join game g on EXISTS (SELECT 1 FROM ps_plus_catalog c WHERE c.title_normalized = g.title_normalized AND g.title_normalized != '') and g.title_normalized = c.title_normalized limit 10",
 );
 // An explicit --capture target joins the probe even when it is not among the
 // sampled flagged games (e.g. a known-leaving anchor for the fixture).

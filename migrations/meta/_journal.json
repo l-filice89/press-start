@@ -113,6 +113,13 @@
       "when": 1784208217899,
       "tag": "0015_game_ps_plus_leaving",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1784301910778,
+      "tag": "0016_rare_fixer",
+      "breakpoints": true
     }
   ]
 }

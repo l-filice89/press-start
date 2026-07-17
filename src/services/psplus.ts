@@ -27,14 +27,14 @@ import {
 	PsnStoreRejectionError,
 } from '../providers';
 import {
-	deleteCatalogOutsideRegion,
+	clearDeparturesForProducts,
 	findOldestUser,
 	listCatalogProductIds,
 	listCatalogTitleKeys,
 	listLibraryForUser,
 	PS_PLUS_TIER,
 	pruneCatalogGeneration,
-	setPsPlusExtraFlags,
+	stampDepartures,
 	upsertCatalogProducts,
 } from '../repositories';
 import type { Db } from '../repositories/db';
@@ -203,8 +203,12 @@ export async function runPsPlusCheck(
 	const today = await todayForUser(db, userId);
 	const scope = { region, tier: PS_PLUS_TIER };
 	// What the snapshot held BEFORE this run — the sweep state below only resets
-	// when the catalog actually MOVED (see there).
+	// when the catalog actually MOVED (see there), and the button summary diffs
+	// membership across the refresh (old title keys vs new).
 	const before = new Set(await listCatalogProductIds(db, scope));
+	const oldTitleKeys = new Set(
+		(await listCatalogTitleKeys(db, scope)).filter(Boolean),
+	);
 	await upsertCatalogProducts(
 		db,
 		scope,
@@ -216,9 +220,10 @@ export async function runPsPlusCheck(
 		today,
 	);
 	const pruned = await pruneCatalogGeneration(db, scope, generation);
-	// A changed PSN_REGION leaves the old region's rows behind forever otherwise —
-	// the prune above is region-scoped (Story 7.1 review, M6).
-	await deleteCatalogOutsideRegion(db, region);
+	// deleteCatalogOutsideRegion DIED here (Story 8.3 review, H1): under AD-30,
+	// membership IS the region's snapshot — wiping other regions on every check
+	// would blank every other user's shelf. Regions now coexist; pruning IDLE
+	// regions (snapshot + ledger) is Story 8.4's region-state ledger job.
 
 	// The sweep state (M1/M2/M5): this row carries the AUTHORITATIVE generation.
 	//
@@ -252,51 +257,51 @@ export async function runPsPlusCheck(
 		done: false,
 	});
 
-	// The flag pass reads the TABLE, not the fetch (AD-27) — one source of truth,
-	// so the shelf pill and the catalog grid can never give opposite answers.
-	// Titles that normalize to '' (™/edition-only noise) are dropped so they
-	// can't collide with a tracked game whose title also normalizes to ''.
-	const catalog = new Set(
-		(await listCatalogTitleKeys(db, scope)).filter(Boolean),
+	// THE DEPARTURE LEDGER (Story 8.3, AD-30) replaces the game-column flag
+	// pass: membership is now DERIVED per user region at read time, so the only
+	// facts this pass owns are departures. The pruned rows ARE the departures —
+	// stamp them (leaving date nulled in the same statement, 10.4 rule); every
+	// product PRESENT in the new generation clears a prior stamp (DW-13
+	// re-entry; the row and its sweep-owned fields survive). Runs strictly
+	// after the wipe guard — a degenerate response never mass-stamps.
+	// Second fence (review, M6): the write phase is many awaits long, and a run
+	// that lost its lock mid-phase must not fabricate DURABLE departure history
+	// in the shared ledger (the snapshot self-heals next pass; ledger stamps
+	// persist until a DW-13 clear).
+	if (lockToken && !(await holdsPsnLock(db, userId, lockToken))) {
+		console.error('ps+ check: lock lost before ledger writes — stopping');
+		return { ok: false, reason: 'conflict' };
+	}
+	await stampDepartures(db, scope, pruned, today);
+	await clearDeparturesForProducts(
+		db,
+		scope,
+		products.map((product) => product.productId),
 	);
 
-	// EVERY tracked game is a candidate — owned included (AD-27), DISCARDED
-	// included (DW-12): the flag lives on the shared game row and describes
-	// catalog membership, not user visibility, so a pass that skips tombstones
-	// froze a discarded game's flag forever — stale the moment it was revived.
-	// The old `!row.owned` filter is what left owned catalog games permanently
-	// unflagged. The check's READOUT below still reports visible games only —
-	// "Flagged: <a game you deleted>" is noise.
+	// The button summary (flagged/cleared) is now a VIEW for the acting user:
+	// their library titles diffed across the refresh, on the same title keys
+	// the old flag pass matched. Discarded rows still count as members
+	// (DW-12 semantics) but are not REPORTED.
+	const newTitleKeys = new Set(
+		products.map((product) => normalizeTitle(product.name)).filter(Boolean),
+	);
+	// region: null on purpose (review, M5) — the summary diffs TITLE KEYS only
+	// (parity with the old flag pass); paying six derivation probes per row for
+	// columns this diff never reads would be the budget bug AD-32 names.
 	const candidates = await listLibraryForUser(db, userId, {
 		includeDiscarded: true,
 	});
-
+	const keyOf = (row: { title: string }) => normalizeTitle(row.title);
 	const toFlag = candidates.filter(
-		(row) => !row.psPlusExtra && catalog.has(normalizeTitle(row.title)),
+		(row) => !oldTitleKeys.has(keyOf(row)) && newTitleKeys.has(keyOf(row)),
 	);
 	const toClear = candidates.filter(
-		(row) => row.psPlusExtra && !catalog.has(normalizeTitle(row.title)),
+		(row) => oldTitleKeys.has(keyOf(row)) && !newTitleKeys.has(keyOf(row)),
 	);
-
-	// Story 10.2 (VR-6): the flag transition IS the departure diff, and the
-	// stamp rides IN the flag statement (atomic per chunk — review): a set
-	// NULLs `ps_plus_left_on` so a pruned-then-readded title can never read as
-	// a fresh departure (DW-13); a clear stamps the run's user-zone date. Runs
-	// strictly after the wipe guard above — a degenerate response never
-	// mass-stamps.
-	await setPsPlusExtraFlags(
-		db,
-		toFlag.map((row) => row.id),
-		true,
-	);
-	await setPsPlusExtraFlags(
-		db,
-		toClear.map((row) => row.id),
-		false,
-		today,
-	);
-	// Shared `game` facts changed → every user's shelf ETag rotates (8.6).
-	if (toFlag.length > 0 || toClear.length > 0) {
+	// The catalog moved (or departures stamped) → every user's shelf derives a
+	// new answer; rotate every ETag (8.6).
+	if (moved) {
 		await bumpAllLibraryVersions(db);
 	}
 

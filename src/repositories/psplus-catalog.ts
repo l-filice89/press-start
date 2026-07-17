@@ -112,8 +112,12 @@ export async function pruneCatalogGeneration(
 	db: Db,
 	{ region, tier = PS_PLUS_TIER }: Scope,
 	generation: string,
-): Promise<string[]> {
-	const rows = await db
+): Promise<
+	{ productId: string; npTitleId: string | null; titleNormalized: string }[]
+> {
+	// Full identity returned (Story 8.3): the pruned rows ARE the departures,
+	// and the ledger stamp needs their join keys after the row is gone.
+	return db
 		.delete(psPlusCatalog)
 		.where(
 			and(
@@ -122,8 +126,11 @@ export async function pruneCatalogGeneration(
 				ne(psPlusCatalog.generation, generation),
 			),
 		)
-		.returning({ productId: psPlusCatalog.productId });
-	return rows.map((row) => row.productId);
+		.returning({
+			productId: psPlusCatalog.productId,
+			npTitleId: psPlusCatalog.npTitleId,
+			titleNormalized: psPlusCatalog.titleNormalized,
+		});
 }
 
 /**
@@ -149,11 +156,14 @@ export async function listCatalogTitleKeys(
 export async function listCatalogTitleProducts(
 	db: Db,
 	{ region, tier = PS_PLUS_TIER }: Scope,
-): Promise<{ titleNormalized: string; productId: string }[]> {
+): Promise<
+	{ titleNormalized: string; productId: string; npTitleId: string | null }[]
+> {
 	return db
 		.select({
 			titleNormalized: psPlusCatalog.titleNormalized,
 			productId: psPlusCatalog.productId,
+			npTitleId: psPlusCatalog.npTitleId,
 		})
 		.from(psPlusCatalog)
 		.where(and(eq(psPlusCatalog.region, region), eq(psPlusCatalog.tier, tier)));
@@ -176,19 +186,6 @@ export async function listCatalogProductIds(
 		.from(psPlusCatalog)
 		.where(and(eq(psPlusCatalog.region, region), eq(psPlusCatalog.tier, tier)));
 	return rows.map((row) => row.productId);
-}
-
-/**
- * Delete every snapshot row belonging to a region OTHER than the active one
- * (Story 7.1 review, M6). The prune is region-scoped, so flipping `PSN_REGION`
- * would otherwise strand the old region's ~490 rows forever — and 7.2's grid
- * reads by region, so they are invisible garbage that never dies.
- */
-export async function deleteCatalogOutsideRegion(
-	db: Db,
-	region: string,
-): Promise<void> {
-	await db.delete(psPlusCatalog).where(ne(psPlusCatalog.region, region));
 }
 
 /**

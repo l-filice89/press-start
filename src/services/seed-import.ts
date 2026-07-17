@@ -146,7 +146,6 @@ export async function runSeedImport({
 				coverUrl: candidate.psCoverUrl ?? enrichment?.coverUrl ?? null,
 				storeUrl: candidate.psStoreUrl ?? null,
 				unenriched,
-				psPlusExtra: candidate.psPlusExtra,
 				// Reception scores ride the same enrichment call (Story 10.1).
 				criticScore: enrichment?.criticScore ?? null,
 				criticScoreCount: enrichment?.criticScoreCount ?? null,

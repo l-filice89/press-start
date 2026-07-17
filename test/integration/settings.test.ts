@@ -4,10 +4,11 @@ import { beforeAll, describe, expect, inject, it } from 'vitest';
 import { todayInZone } from '../../src/core';
 import {
 	deleteSetting,
-	findGamesByNormalizedTitle,
 	getSetting,
 	getTracking,
 	insertGame,
+	listLibraryForUser,
+	upsertCatalogProducts,
 	upsertTracking,
 } from '../../src/repositories';
 import { createDb } from '../../src/repositories/db';
@@ -294,7 +295,6 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 		const hidden = await insertGame(db(), {
 			title: 'Discarded Claim',
 			titleNormalized: 'discarded claim',
-			psPlusExtra: false,
 		});
 		await upsertTracking(db(), userId, hidden.id, {
 			owned: true,
@@ -325,20 +325,18 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 	// purchases untouched, tracking/milestones/dates/status intact, the count is
 	// named first.
 	//
-	// AND IT NEVER TOUCHES `ps_plus_extra` (Epic 7 cross-story review, H2). It used
-	// to force the flag TRUE on every claim, on a premise Story 7.1 deleted: the
-	// flag is now a faithful cache of `ps_plus_catalog` for EVERY tracked row,
-	// owned included. Re-flagging lit the ◈ PS+ pill (and the filter, and the CSV)
-	// for a PS+ ESSENTIAL monthly game that is not in the Extra catalog at all —
-	// for up to a month, until the next refresh.
-	it('cancel PS+ un-owns claims only: purchases + milestones/dates/status intact, count named, and ps_plus_extra is LEFT ALONE (hazard)', async () => {
+	// AND IT NEVER TOUCHES PS+ MEMBERSHIP (Epic 7 cross-story review, H2 —
+	// Story 8.3 made this structural: membership is DERIVED from the region's
+	// `ps_plus_catalog` at read time, never stored on `game`, so cancel cannot
+	// invent a membership for a PS+ ESSENTIAL monthly game that is not in the
+	// Extra catalog at all).
+	it('cancel PS+ un-owns claims only: purchases + milestones/dates/status intact, count named, and PS+ membership is LEFT ALONE (hazard)', async () => {
 		// A sync-ingested claim carrying a live status, a milestone, and lifecycle
-		// dates. It is an ESSENTIAL monthly game: NOT in the Extra snapshot, so 7.1
-		// left its flag false — and cancelling must not invent a membership for it.
+		// dates. It is an ESSENTIAL monthly game: NOT in the Extra snapshot, so
+		// membership derives false — and cancelling must not invent one for it.
 		const claimA = await insertGame(db(), {
 			title: 'Claim With History',
 			titleNormalized: 'claim with history',
-			psPlusExtra: false,
 		});
 		await upsertTracking(db(), userId, claimA.id, {
 			owned: true,
@@ -349,13 +347,31 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 			completedOn: '2024-06-01',
 			wishlistedOn: '2024-01-01',
 		});
-		// …and a claim that IS in the Extra catalog: 7.1 flagged it (owned rows
-		// included), so its pill returns on cancel with no write at all.
+		// …and a claim that IS in the Extra catalog (a seeded region snapshot row —
+		// membership derives from it, owned rows included), so its pill returns on
+		// cancel with no write at all.
 		const claimB = await insertGame(db(), {
 			title: 'Plain Claim',
 			titleNormalized: 'plain claim',
-			psPlusExtra: true,
 		});
+		await upsertCatalogProducts(
+			db(),
+			{ region: 'it-it' },
+			'gen-test',
+			[
+				{
+					productId: 'p-plain-claim',
+					npTitleId: null,
+					name: 'Plain Claim',
+					titleNormalized: 'plain claim',
+					coverUrl: null,
+					platforms: ['PS5'],
+					storeClassification: null,
+					storeUrl: 'https://store.example/x',
+				},
+			],
+			'2026-07-17',
+		);
 		await upsertTracking(db(), userId, claimB.id, {
 			owned: true,
 			ownedVia: 'membership',
@@ -365,7 +381,6 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 		const purchase = await insertGame(db(), {
 			title: 'Real Purchase',
 			titleNormalized: 'real purchase',
-			psPlusExtra: false,
 		});
 		await upsertTracking(db(), userId, purchase.id, {
 			owned: true,
@@ -415,16 +430,17 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 		expect(p?.boughtOn).toBe('2023-12-01');
 		expect(p?.playStatus).toBe('Paused');
 
-		// THE FLAG IS THE CATALOG'S CACHE, and cancel writes NOTHING to it (H2). The
-		// Essential-only claim stays false — un-owning it must not hand it a ◈ PS+
-		// pill, a place in the PS+ filter and a `yes` in the export for a month. The
-		// Extra claim keeps the true 7.1 gave it, so its pill returns on its own.
-		const [ga] = await findGamesByNormalizedTitle(db(), 'claim with history');
-		const [gb] = await findGamesByNormalizedTitle(db(), 'plain claim');
-		const [gp] = await findGamesByNormalizedTitle(db(), 'real purchase');
-		expect(ga.psPlusExtra).toBe(false);
-		expect(gb.psPlusExtra).toBe(true);
-		expect(gp.psPlusExtra).toBe(false);
+		// MEMBERSHIP IS THE CATALOG'S DERIVATION, and cancel writes NOTHING to it
+		// (H2, structural since 8.3). The Essential-only claim derives false —
+		// un-owning it must not hand it a ◈ PS+ pill, a place in the PS+ filter
+		// and a `yes` in the export for a month. The Extra claim still derives
+		// true from its snapshot row, so its pill returns on its own.
+		const lib = await listLibraryForUser(db(), userId, { region: 'it-it' });
+		const derived = (id: string) =>
+			lib.find((row) => row.id === id)?.psPlusExtra;
+		expect(derived(claimA.id)).toBe(false);
+		expect(derived(claimB.id)).toBe(true);
+		expect(derived(purchase.id)).toBe(false);
 
 		// The count is back to zero — the claims are gone.
 		const after = (await (

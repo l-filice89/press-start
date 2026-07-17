@@ -5,6 +5,7 @@ import { createDb } from '../repositories/db';
 import { OWNERSHIP_TYPES } from '../schema/catalog';
 import { getShelf } from '../services';
 import { readLibraryVersion } from '../services/library-version';
+import { getPsnRegion } from '../services/settings';
 import { type AuthVariables, requireAuth } from './auth';
 
 /**
@@ -72,7 +73,11 @@ shelfRoute.get('/shelf', requireAuth, async (c) => {
 	// guarantee is semantic equivalence, not byte identity across serializers.
 	// An unconditional GET always answers 200 + body.
 	const version = await readLibraryVersion(db, c.get('userId'));
-	const etag = `W/"${version}"`;
+	// Region rides IN the tag (Story 8.3): the body derives from the user's
+	// region, so a region change must miss the validator — otherwise a
+	// conditional GET would 304 the OLD region's answer.
+	const region = await getPsnRegion(db, c.get('userId'), c.env);
+	const etag = `W/"${version}:${region ?? ''}"`;
 	// RFC 9110 list form: `If-None-Match` may carry several tags or `*`. A miss
 	// only costs a spurious 200 (safe direction), but an aggregating proxy would
 	// otherwise silently defeat the whole optimization.
@@ -88,6 +93,6 @@ shelfRoute.get('/shelf', requireAuth, async (c) => {
 	// `?include=hidden` (Story 3.2): the whole ordered library, so the client's
 	// reveal pills can OR hidden states into the visible set. Default unchanged.
 	const includeHidden = c.req.query('include') === 'hidden';
-	const games = await getShelf(db, c.get('userId'), includeHidden);
+	const games = await getShelf(db, c.get('userId'), includeHidden, region);
 	return c.json(shelfResponseSchema.parse({ games }), 200, headers);
 });

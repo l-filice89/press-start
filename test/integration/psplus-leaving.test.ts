@@ -1,9 +1,15 @@
 import { applyD1Migrations, env } from 'cloudflare:test';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeAll, describe, expect, inject, it, vi } from 'vitest';
-import { insertGame, upsertTracking } from '../../src/repositories';
+import {
+	insertGame,
+	listDeparturesForProducts,
+	listLedgerForProducts,
+	listLibraryForUser,
+	upsertTracking,
+} from '../../src/repositories';
 import { createDb } from '../../src/repositories/db';
-import { game, user } from '../../src/schema';
+import { psPlusDeparture, user } from '../../src/schema';
 import { runScheduledPsPlusCheck } from '../../src/services/psplus';
 import { runLeavingSweep } from '../../src/services/psplus-leaving';
 import {
@@ -94,10 +100,39 @@ async function seedGame(title: string, { owned = false } = {}) {
 	return created;
 }
 
-const rowOf = async (id: string) => {
-	const [row] = await db().select().from(game).where(eq(game.id, id));
-	return row;
-};
+const REGION = 'it-it';
+const scope = { region: REGION };
+
+/** Derived library row (Story 8.3): membership + leaving via the region. */
+const rowOf = async (id: string) =>
+	(
+		await listLibraryForUser(db(), userId, {
+			includeDiscarded: true,
+			region: REGION,
+		})
+	).find((row) => row.id === id);
+
+/** The LEDGER's cached concept id for a fixture title (null when absent). */
+const conceptOf = async (name: string) =>
+	(await listLedgerForProducts(db(), scope, [productId(name)])).get(
+		productId(name),
+	)?.psnConceptId ?? null;
+
+/** The ledger row (left_on/leaving_on) for a fixture title, or undefined. */
+const ledgerOf = async (name: string) =>
+	(await listDeparturesForProducts(db(), scope, [productId(name)]))[0];
+
+/** Seed a stale leaving date on the LEDGER (Story 8.3 — dates live there). */
+const seedLeavingDate = (name: string, leavingOn: string) =>
+	db()
+		.insert(psPlusDeparture)
+		.values({
+			region: REGION,
+			productId: productId(name),
+			npTitleId: null,
+			titleNormalized: name.toLowerCase(),
+			leavingOn,
+		});
 
 /** The rotation hands invocations to a pending GENRE sweep first — park it. */
 async function markGenreSweepDone() {
@@ -121,11 +156,9 @@ describe('PS+ leaving sweep (Story 10.4)', () => {
 	it('persists a leaving date, clears a stale one, and caches concept ids — BOTH directions, one chunk', async () => {
 		const leaver = await seedGame('Sweep Leaver');
 		const stayer = await seedGame('Sweep Stayer');
-		// A stale date from a previous window — the reprieve must CLEAR it.
-		await db()
-			.update(game)
-			.set({ psPlusLeavingOn: '2026-06-30' })
-			.where(eq(game.id, stayer.id));
+		// A stale date from a previous window (on the LEDGER, 8.3) — the reprieve
+		// must CLEAR it.
+		await seedLeavingDate('Sweep Stayer', '2026-06-30');
 
 		const calls = stubSweepStore(['Sweep Leaver', 'Sweep Stayer'], {
 			'Sweep Leaver': END_JUL_21,
@@ -143,12 +176,11 @@ describe('PS+ leaving sweep (Story 10.4)', () => {
 		expect(await rowOf(leaver.id)).toMatchObject({
 			psPlusExtra: true, // STILL in the catalog — that is the point
 			psPlusLeavingOn: '2026-07-21',
-			psnConceptId: conceptFor('Sweep Leaver'),
 		});
-		expect(await rowOf(stayer.id)).toMatchObject({
-			psPlusLeavingOn: null,
-			psnConceptId: conceptFor('Sweep Stayer'),
-		});
+		expect(await rowOf(stayer.id)).toMatchObject({ psPlusLeavingOn: null });
+		// Concept ids cache on the LEDGER now (8.3).
+		expect(await conceptOf('Sweep Leaver')).toBe(conceptFor('Sweep Leaver'));
+		expect(await conceptOf('Sweep Stayer')).toBe(conceptFor('Sweep Stayer'));
 
 		// Steady state (budget claim): a SECOND sweep over cached concepts pays
 		// ONE pricing call per game and ZERO product resolves.
@@ -167,10 +199,7 @@ describe('PS+ leaving sweep (Story 10.4)', () => {
 	it('a game whose pricing FAILS keeps its stored date and the sweep steps past it — no banner', async () => {
 		const poison = await seedGame('Sweep Poison');
 		const healthy = await seedGame('Sweep Healthy');
-		await db()
-			.update(game)
-			.set({ psPlusLeavingOn: '2026-07-01' })
-			.where(eq(game.id, poison.id));
+		await seedLeavingDate('Sweep Poison', '2026-07-01');
 
 		stubSweepStore(
 			['Sweep Poison', 'Sweep Healthy'],
@@ -186,13 +215,13 @@ describe('PS+ leaving sweep (Story 10.4)', () => {
 		});
 
 		// Fail-closed: the stored date SURVIVES the refused reply.
-		expect((await rowOf(poison.id)).psPlusLeavingOn).toBe('2026-07-01');
-		expect((await rowOf(healthy.id)).psPlusLeavingOn).toBe('2026-07-21');
+		expect((await rowOf(poison.id))?.psPlusLeavingOn).toBe('2026-07-01');
+		expect((await rowOf(healthy.id))?.psPlusLeavingOn).toBe('2026-07-21');
 		expect(await isPsPlusRefreshFailed(db(), userId)).toBe(false);
 	});
 
 	it('a WHOLE-CHUNK failure retries ONCE, then steps past the poison chunk — never a livelock (review)', async () => {
-		const outageA = await seedGame('Sweep Outage A');
+		await seedGame('Sweep Outage A');
 		await seedGame('Sweep Outage B');
 		stubSweepStore(
 			['Sweep Outage A', 'Sweep Outage B'],
@@ -221,7 +250,7 @@ describe('PS+ leaving sweep (Story 10.4)', () => {
 		});
 		expect((await getPsPlusLeavingState(db(), userId))?.done).toBe(true);
 		// A stale cached concept id was dropped so the next re-arm re-resolves.
-		expect((await rowOf(outageA.id)).psnConceptId).toBeNull();
+		expect(await conceptOf('Sweep Outage A')).toBeNull();
 	});
 
 	it('the scheduled rotation ENDS the invocation on a failed chunk — the membership pass never stacks on spent budget', async () => {
@@ -254,7 +283,7 @@ describe('PS+ leaving sweep (Story 10.4)', () => {
 		stubSweepStore(['Sweep Departing'], { 'Sweep Departing': END_JUL_21 });
 		await postCheck(cookie);
 		await runLeavingSweep(db(), userId, env);
-		expect((await rowOf(departing.id)).psPlusLeavingOn).toBe('2026-07-21');
+		expect((await rowOf(departing.id))?.psPlusLeavingOn).toBe('2026-07-21');
 
 		// Next window: the game is GONE from the catalog.
 		vi.unstubAllGlobals();
@@ -262,9 +291,12 @@ describe('PS+ leaving sweep (Story 10.4)', () => {
 		await postCheck(cookie);
 
 		const row = await rowOf(departing.id);
-		expect(row.psPlusExtra).toBe(false);
-		expect(row.psPlusLeavingOn).toBeNull(); // no future-dated warning on a departed game
-		expect(row.psPlusLeftOn).toMatch(/^\d{4}-\d{2}-\d{2}$/); // 10.2 untouched
+		expect(row?.psPlusExtra).toBe(false);
+		expect(row?.psPlusLeavingOn).toBeNull(); // no future-dated warning on a departed game
+		// 10.2 semantics live on the LEDGER now: departure stamps left_on there.
+		const ledger = await ledgerOf('Sweep Departing');
+		expect(ledger?.leftOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+		expect(ledger?.leavingOn).toBeNull();
 	});
 
 	it('the scheduled rotation drives ONE leaving chunk once the genre sweep is done', async () => {
@@ -288,7 +320,7 @@ describe('PS+ leaving sweep (Story 10.4)', () => {
 		expect(
 			invocation.filter((c) => c.operation === 'categoryGridRetrieve'),
 		).toHaveLength(0);
-		expect((await rowOf(scheduled.id)).psPlusLeavingOn).toBe('2026-07-21');
+		expect((await rowOf(scheduled.id))?.psPlusLeavingOn).toBe('2026-07-21');
 		expect((await getPsPlusLeavingState(db(), userId))?.done).toBe(true);
 	});
 
@@ -315,6 +347,6 @@ describe('PS+ leaving sweep (Story 10.4)', () => {
 		stubSweepStore(['Sweep Owned'], { 'Sweep Owned': END_JUL_21 });
 		await postCheck(cookie);
 		await runLeavingSweep(db(), userId, env);
-		expect((await rowOf(ownedGame.id)).psPlusLeavingOn).toBe('2026-07-21');
+		expect((await rowOf(ownedGame.id))?.psPlusLeavingOn).toBe('2026-07-21');
 	});
 });

@@ -130,16 +130,42 @@ const sqNum = (value: number | null): string =>
 
 const seedSql = (game: SeedGame): string[] => {
 	const t = game.tracking;
-	return [
-		`INSERT INTO game (id, title, title_normalized, release_date, cover_url, store_url, ps_plus_extra, unenriched,
-		   critic_score, critic_score_count, user_score, user_score_count, ps_plus_leaving_on,
+	const key = normalizeTitle(game.title);
+	const statements = [
+		`INSERT INTO game (id, title, title_normalized, release_date, cover_url, store_url, unenriched,
+		   critic_score, critic_score_count, user_score, user_score_count,
 		   ttb_story_seconds, ttb_complete_seconds, ttb_count)
-		 VALUES (${sq(game.id)}, ${sq(game.title)}, ${sq(normalizeTitle(game.title))}, ${sq(game.releaseDate)}, ${sq(game.coverUrl)}, ${sq(game.storeUrl)}, ${game.psPlusExtra ? 1 : 0}, 0,
-		   ${sqNum(game.criticScore)}, ${sqNum(game.criticScoreCount)}, ${sqNum(game.userScore)}, ${sqNum(game.userScoreCount)}, ${sq(game.psPlusLeavingOn)},
+		 VALUES (${sq(game.id)}, ${sq(game.title)}, ${sq(key)}, ${sq(game.releaseDate)}, ${sq(game.coverUrl)}, ${sq(game.storeUrl)}, 0,
+		   ${sqNum(game.criticScore)}, ${sqNum(game.criticScoreCount)}, ${sqNum(game.userScore)}, ${sqNum(game.userScoreCount)},
 		   ${sqNum(game.ttbStorySeconds)}, ${sqNum(game.ttbCompleteSeconds)}, ${sqNum(game.ttbCount)});`,
 		`INSERT INTO game_tracking (user_id, game_id, owned, owned_via, play_status, completed_on, platinum_on, wishlisted_on)
 		 SELECT id, ${sq(game.id)}, ${t.owned ? 1 : 0}, ${sq(t.ownedVia)}, ${sq(t.playStatus)}, ${sq(t.completedOn)}, ${sq(t.platinumOn)}, ${sq(t.wishlistedOn)} FROM user LIMIT 1;`,
 	];
+	// Story 8.3: membership/leaving are DERIVED from region-scoped data, so the
+	// factory contract (`psPlusExtra`/`psPlusLeavingOn` on SeedGame) is honored
+	// by seeding the DERIVATION SOURCES — a catalog row for membership, a
+	// departure-ledger row for the leaving date — instead of dead game columns.
+	// Spec files stay untouched; the same normalizer keys the join (L6 rule).
+	// A LEAVING game is by definition still a member (review): seeding a date
+	// without the catalog row would derive a UI state no real flow produces.
+	if (game.psPlusExtra || game.psPlusLeavingOn) {
+		statements.push(
+			`INSERT OR REPLACE INTO ps_plus_catalog
+			   (region, tier, product_id, np_title_id, name, title_normalized, cover_url, platforms,
+			    store_classification, store_url, generation, first_seen_at, last_seen_at)
+			 VALUES (${sq(E2E_REGION)}, 'extra', ${sq(`e2e-${game.id}`)}, NULL, ${sq(game.title)},
+			   ${sq(key)}, NULL, '["PS5"]', NULL, ${sq(`https://store.playstation.com/${E2E_REGION}/product/e2e-${game.id}`)},
+			   'e2e', '2026-07-01', '2026-07-01');`,
+		);
+	}
+	if (game.psPlusLeavingOn) {
+		statements.push(
+			`INSERT OR REPLACE INTO ps_plus_departure
+			   (region, tier, product_id, np_title_id, title_normalized, left_on, leaving_on, psn_concept_id)
+			 VALUES (${sq(E2E_REGION)}, 'extra', ${sq(`e2e-${game.id}`)}, NULL, ${sq(key)}, NULL, ${sq(game.psPlusLeavingOn)}, NULL);`,
+		);
+	}
+	return statements;
 };
 
 export async function seedGame(game: SeedGame): Promise<void> {

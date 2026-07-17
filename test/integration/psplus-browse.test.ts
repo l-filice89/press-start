@@ -4,21 +4,16 @@ import { beforeAll, beforeEach, describe, expect, inject, it } from 'vitest';
 import { normalizeTitle } from '../../src/core';
 import {
 	addExternalLink,
-	deleteCatalogOutsideRegion,
 	deleteSetting,
 	insertGame,
 	setCatalogGenres,
+	setLeavingOnLedger,
 	setSetting,
 	upsertCatalogProducts,
 	upsertTracking,
 } from '../../src/repositories';
 import { createDb } from '../../src/repositories/db';
-import {
-	game,
-	psPlusCatalog,
-	psPlusCatalogGenre,
-	user,
-} from '../../src/schema';
+import { psPlusCatalog, psPlusCatalogGenre, user } from '../../src/schema';
 import {
 	PSN_REGION_SETTING_KEY,
 	PSPLUS_SWEEP_STATE_SETTING_KEY,
@@ -119,7 +114,6 @@ beforeAll(async () => {
 beforeEach(async () => {
 	await db().delete(psPlusCatalogGenre);
 	await db().delete(psPlusCatalog);
-	await deleteCatalogOutsideRegion(db(), REGION);
 });
 
 describe('GET /api/ps-plus-catalog — ordering', () => {
@@ -423,19 +417,25 @@ describe('GET /api/ps-plus-catalog — the in-library join', () => {
 		expect(row.gameId).toBe(added.id);
 	});
 
-	// Story 10.4 follow-on: the tracked match carries its departure date; an
-	// untracked product answers null (no fabricated data — the sweep never
-	// fans out to the whole catalog).
-	it('carries the tracked match leavingOn; untracked products answer null', async () => {
+	// Story 10.4 follow-on, re-keyed by Story 8.3: the card date reads the
+	// departure LEDGER by (region, product) directly; a product with no ledger
+	// date answers null (no fabricated data — the sweep never fans out to the
+	// whole catalog).
+	it('carries the ledger leavingOn per product; products without a date answer null', async () => {
 		const leaving = await insertGame(db(), {
 			title: 'Vanishing Act',
 			titleNormalized: normalizeTitle('Vanishing Act'),
 		});
 		await upsertTracking(db(), userId, leaving.id, { owned: false });
-		await db()
-			.update(game)
-			.set({ psPlusLeavingOn: '2099-07-21' })
-			.where(eq(game.id, leaving.id));
+		await setLeavingOnLedger(db(), scope, [
+			{
+				productId: 'p-vanish',
+				npTitleId: null,
+				titleNormalized: normalizeTitle('Vanishing Act'),
+				leavingOn: '2099-07-21',
+				psnConceptId: 'c-vanish',
+			},
+		]);
 
 		await seedProducts([
 			['p-vanish', 'Vanishing Act'],
@@ -458,10 +458,15 @@ describe('GET /api/ps-plus-catalog — the in-library join', () => {
 			titleNormalized: normalizeTitle('Owned Vanisher'),
 		});
 		await upsertTracking(db(), userId, ownedLeaving.id, { owned: true });
-		await db()
-			.update(game)
-			.set({ psPlusLeavingOn: '2099-07-21' })
-			.where(eq(game.id, ownedLeaving.id));
+		await setLeavingOnLedger(db(), scope, [
+			{
+				productId: 'p-ownvanish',
+				npTitleId: null,
+				titleNormalized: normalizeTitle('Owned Vanisher'),
+				leavingOn: '2099-07-21',
+				psnConceptId: 'c-ownvanish',
+			},
+		]);
 
 		await seedProducts([['p-ownvanish', 'Owned Vanisher']]);
 		const [row] = (await browse()).games;

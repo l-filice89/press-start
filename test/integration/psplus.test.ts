@@ -7,8 +7,10 @@ import {
 	insertGame,
 	listCatalogGenres,
 	listCatalogProducts,
+	listLibraryForUser,
 	setCatalogGenres,
 	setSetting,
+	upsertCatalogProducts,
 	upsertTracking,
 } from '../../src/repositories';
 import { createDb } from '../../src/repositories/db';
@@ -65,21 +67,48 @@ let userId: string;
 
 async function seedGame(
 	title: string,
-	{ owned = false, psPlusExtra = false, discarded = false } = {},
+	{ owned = false, discarded = false } = {},
 ) {
 	const created = await insertGame(db(), {
 		title,
 		titleNormalized: title.toLowerCase(),
-		psPlusExtra,
 	});
 	await upsertTracking(db(), userId, created.id, { owned, discarded });
 	return created;
 }
 
-const flagOf = async (id: string) => {
-	const [row] = await db().select().from(game).where(eq(game.id, id));
-	return row.psPlusExtra;
-};
+/**
+ * Put titles in the region's snapshot under a PRE-RUN generation (Story 8.3):
+ * "previously a member" is now a catalog fact, not a game-column flag — the
+ * next check diffs (and prunes) against these rows.
+ */
+async function seedOldCatalog(names: string[]) {
+	await upsertCatalogProducts(
+		db(),
+		scope,
+		'gen-old',
+		names.map((name) => ({
+			productId: productId(name),
+			npTitleId: null,
+			name,
+			titleNormalized: name.toLowerCase(),
+			coverUrl: null,
+			platforms: ['PS5'],
+			storeClassification: null,
+			storeUrl: 'https://store.example/x',
+		})),
+		'2026-07-01',
+	);
+}
+
+/** Derived membership for one library game (Story 8.3) — the region join. */
+const flagOf = async (id: string) =>
+	(
+		await listLibraryForUser(db(), userId, {
+			includeDiscarded: true,
+			region: REGION,
+		})
+	).find((row) => row.id === id)?.psPlusExtra;
 
 const snapshotNames = async () =>
 	(await listCatalogProducts(db(), scope)).map((row) => row.name).sort();
@@ -150,14 +179,14 @@ describe('POST /api/ps-plus-check (integration, real workerd + local D1)', () =>
 
 	it('sets and clears flags in BOTH directions on every tracked game — OWNED ONES INCLUDED (AD-27)', async () => {
 		const nowIn = await seedGame('Hades'); // enters the catalog
-		const left = await seedGame('Bloodborne', { psPlusExtra: true }); // left it
-		// The 7.1 fix: an owned catalog game is a MEMBER, so the stored fact says so.
-		// (The badge stays hidden — every surface renders `psPlusExtra && !owned`.)
+		const left = await seedGame('Bloodborne'); // left it
+		// The 7.1 fix: an owned catalog game is a MEMBER, so the derived fact says
+		// so. (The badge stays hidden — every surface renders `psPlusExtra && !owned`.)
 		const ownedInCatalog = await seedGame('Stray', { owned: true });
-		const ownedLeft = await seedGame('Tunic', {
-			owned: true,
-			psPlusExtra: true,
-		});
+		const ownedLeft = await seedGame('Tunic', { owned: true });
+		// "Previously in the catalog" is a snapshot fact now (8.3): the check
+		// diffs membership across the refresh on the old vs new title keys.
+		await seedOldCatalog(['Bloodborne', 'Tunic']);
 
 		stubCatalog(['Hades', 'Stray', 'Ghost of Tsushima']);
 		const res = await postCheck(cookie);
@@ -182,10 +211,8 @@ describe('POST /api/ps-plus-check (integration, real workerd + local D1)', () =>
 	// the check's readout still reports only visible games, because "Flagged:
 	// <a game you deleted>" is noise.
 	it("updates a DISCARDED game's flag in both directions — without reporting it", async () => {
-		const staleFlag = await seedGame('Outer Wilds', {
-			psPlusExtra: true,
-			discarded: true,
-		}); // left the catalog while discarded
+		const staleFlag = await seedGame('Outer Wilds', { discarded: true }); // left the catalog while discarded
+		await seedOldCatalog(['Outer Wilds']);
 		const nowIn = await seedGame('Returnal', { discarded: true }); // entered it
 		const visible = await seedGame('Hollow Knight'); // proves the readout shape
 
@@ -247,7 +274,7 @@ describe('POST /api/ps-plus-check (integration, real workerd + local D1)', () =>
 	});
 
 	it('writes nothing when the catalog fetch fails', async () => {
-		const flagged = await seedGame('Celeste', { psPlusExtra: true });
+		const flagged = await seedGame('Celeste');
 		stubCatalog(['Celeste']);
 		expect((await postCheck(cookie)).status).toBe(200);
 		const before = await snapshotNames();
@@ -263,7 +290,7 @@ describe('POST /api/ps-plus-check (integration, real workerd + local D1)', () =>
 	// region / de-listed catalog / category-id rot) must never be read as "clear
 	// everything". It now guards two datasets.
 	it('treats an EMPTY 200 catalog as a provider failure — the snapshot AND every flag survive', async () => {
-		const flagged = await seedGame('Journey', { psPlusExtra: true });
+		const flagged = await seedGame('Journey');
 		stubCatalog(['Journey', 'Sifu']);
 		expect((await postCheck(cookie)).status).toBe(200);
 		const before = await snapshotNames();
@@ -290,7 +317,7 @@ describe('POST /api/ps-plus-check (integration, real workerd + local D1)', () =>
 		['a bad region (null grid, empty error message)', BAD_REGION_PAYLOAD],
 		['a bad category id (null grid + errors[])', BAD_CATEGORY_PAYLOAD],
 	])('fails closed on %s — a 200 is not success', async (_label, payload) => {
-		const flagged = await seedGame(`Guard ${_label}`, { psPlusExtra: true });
+		const flagged = await seedGame(`Guard ${_label}`);
 		stubCatalog([`Guard ${_label}`]);
 		expect((await postCheck(cookie)).status).toBe(200);
 		const before = await snapshotNames();
@@ -452,9 +479,11 @@ describe('POST /api/ps-plus-check (integration, real workerd + local D1)', () =>
 		await deleteSetting(db(), userId, PSN_LOCK_SETTING_KEY);
 	});
 
-	// A changed PSN_REGION used to strand the old region's ~490 rows forever — the
-	// prune is region-scoped (review, M6).
-	it('drops the previous region’s rows when the region changes', async () => {
+	// INVERTED by Story 8.3 (review, H1): membership now DERIVES from the
+	// region's snapshot, so regions must COEXIST — one user's check wiping
+	// another region's rows would blank every other user's shelf. The old M6
+	// "strand forever" concern moves to 8.4's idle-region prune.
+	it('a region change leaves the other region’s snapshot INTACT (coexistence)', async () => {
 		stubCatalog(['Old Region Game']);
 		expect((await postCheck(cookie)).status).toBe(200);
 		expect(await listCatalogProducts(db(), scope)).toHaveLength(1);
@@ -463,7 +492,10 @@ describe('POST /api/ps-plus-check (integration, real workerd + local D1)', () =>
 		stubCatalog(['New Region Game']);
 		expect((await postCheck(cookie)).status).toBe(200);
 
-		expect(await listCatalogProducts(db(), scope)).toHaveLength(0);
+		// BOTH regions' snapshots stand — the two-region AC's write-path half.
+		expect((await listCatalogProducts(db(), scope)).map((r) => r.name)).toEqual(
+			['Old Region Game'],
+		);
 		expect(
 			(await listCatalogProducts(db(), { region: 'en-us' })).map((r) => r.name),
 		).toEqual(['New Region Game']);

@@ -19,7 +19,6 @@ export type GameFacts = {
 	releaseDate?: string | null;
 	coverUrl?: string | null;
 	storeUrl?: string | null;
-	psPlusExtra?: boolean;
 	unenriched?: boolean;
 	criticScore?: number | null;
 	criticScoreCount?: number | null;
@@ -196,101 +195,6 @@ export async function backfillGameFacts(
 }
 
 /**
- * Set/clear the PS+ Extra catalog flag on a batch of games (Story 5.1,
- * FR-38). Caller scopes the ids to tracked games — this is a dumb batched write.
- *
- * CHUNKED, like `listGenresForGames`: D1 caps bound parameters per statement at
- * 100, and a real library clears more games than that in one refresh (103 →
- * `D1_ERROR: too many SQL variables`, which failed the whole PS+ check). The
- * `value` bind takes one slot, so the id slice is 99, and the chunks go through
- * one `db.batch` so the write still costs a single binding call (AD-15).
- * 96, not 99: the clear branch binds THREE values beside the ids since Story
- * 10.4 (flag + leaving-date clear + departure stamp) — 96 + 3 = 99 ≤ 100.
- */
-const PS_PLUS_FLAG_CHUNK_SIZE = 96;
-
-/**
- * Story 10.2 (review hardening): the departure date rides IN the flag write —
- * one atomic statement per chunk, so a partially-failed run can never leave a
- * cleared flag without its stamp (departure silently lost) or a re-set flag
- * with a stale stamp (contradictory PS+ + LEFT PS+ pills). Setting the flag
- * NULLs the stamp (the DW-13 returning-game rule); clearing it stamps
- * `departedOn` (the run's user-zone today).
- */
-export async function setPsPlusExtraFlags(
-	db: Db,
-	gameIds: string[],
-	value: boolean,
-	departedOn: string | null = null,
-) {
-	if (gameIds.length === 0) return;
-	const statements = [];
-	for (let i = 0; i < gameIds.length; i += PS_PLUS_FLAG_CHUNK_SIZE) {
-		statements.push(
-			db
-				.update(game)
-				// Setting always NULLs the stamp; clearing stamps only when a date
-				// was given (a dateless clear leaves any existing stamp standing
-				// rather than silently wiping a recorded departure).
-				.set(
-					value
-						? { psPlusExtra: true, psPlusLeftOn: null }
-						: {
-								psPlusExtra: false,
-								// A departed game must not keep a future-dated LEAVING
-								// warning (Story 10.4) — cleared in the same atomic statement;
-								// the sweep owns re-setting it.
-								psPlusLeavingOn: null,
-								...(departedOn ? { psPlusLeftOn: departedOn } : {}),
-							},
-				)
-				.where(inArray(game.id, gameIds.slice(i, i + PS_PLUS_FLAG_CHUNK_SIZE))),
-		);
-	}
-	await db.batch(statements as [(typeof statements)[0], ...typeof statements]);
-}
-
-/**
- * Persist one leaving-sweep chunk's answers (Story 10.4). One `db.batch` = one
- * D1 subrequest (Epic 9 budget lesson). Values differ per row (date OR null —
- * BOTH directions are writes: a null clears a reprieved game), so per-row
- * statements like `updateGameIgdbFacts`, each binding 3 params. The caller
- * passes ONLY games whose pricing reply was well-formed — a failed fetch keeps
- * its stored value (per-game fail-closed).
- */
-export async function setPsPlusLeaving(
-	db: Db,
-	updates: {
-		gameId: string;
-		leavingOn: string | null;
-		psnConceptId: string;
-	}[],
-) {
-	if (updates.length === 0) return;
-	const statements = updates.map(({ gameId, leavingOn, psnConceptId }) =>
-		db
-			.update(game)
-			.set({ psPlusLeavingOn: leavingOn, psnConceptId })
-			.where(eq(game.id, gameId)),
-	);
-	await db.batch(statements as [(typeof statements)[0], ...typeof statements]);
-}
-
-/**
- * Drop cached store concept ids (Story 10.4 review) — a cached id that failed
- * a pricing query may be remapped/delisted; clearing it makes the next sweep
- * re-resolve from the product id instead of failing identically forever.
- * Leaves `ps_plus_leaving_on` untouched (fail-closed keeps the stored date).
- */
-export async function clearPsnConceptIds(db: Db, gameIds: string[]) {
-	if (gameIds.length === 0) return;
-	await db
-		.update(game)
-		.set({ psnConceptId: null })
-		.where(inArray(game.id, gameIds));
-}
-
-/**
  * Persist refreshed reception scores on a batch of games (Story 10.1). One
  * `db.batch` call — one D1 subrequest however many rows (the Epic 9
  * BUDGET-COUNTS-EVERY-SUBREQUEST lesson: a per-row loop of UPDATEs is N
@@ -375,18 +279,17 @@ export type LibraryRow = {
 	releaseDate: string | null;
 	coverUrl: string | null;
 	storeUrl: string | null;
+	/** DERIVED per user region (Story 8.3, AD-30): any of the three identity
+	 * keys hits the region's `ps_plus_catalog`. Never stored on `game`. */
 	psPlusExtra: boolean;
 	unenriched: boolean;
 	criticScore: number | null;
 	criticScoreCount: number | null;
 	userScore: number | null;
 	userScoreCount: number | null;
-	/** Date the game left the PS+ Extra catalog; null = in catalog or never was. */
-	psPlusLeftOn: string | null;
-	/** Date the game LEAVES PS+ (Story 10.4, store `endTime`); null = staying. */
+	/** Date the game LEAVES PS+ (10.4 semantics) — DERIVED from the
+	 * `ps_plus_departure` ledger via the same three keys (Story 8.3). */
 	psPlusLeavingOn: string | null;
-	/** Cached store concept id (Story 10.4) — sweep resolves once, reuses after. */
-	psnConceptId: string | null;
 	/** Time-to-beat in seconds (Story 10.3): story / 100% / submission count. */
 	ttbStorySeconds: number | null;
 	ttbCompleteSeconds: number | null;
@@ -417,49 +320,82 @@ export type LibraryRow = {
  * rows to skip them (the Epic 4 sync — deleted by Epic 11; a future sync
  * writer MUST also bump the library version, services/library-version.ts).
  */
-/** The shelf's tracking-joined column set — shared by the whole-library read
- * and the single-row by-id read so the two can never drift apart. */
-const librarySelection = {
-	id: game.id,
-	title: game.title,
-	titleNormalized: game.titleNormalized,
-	releaseDate: game.releaseDate,
-	coverUrl: game.coverUrl,
-	storeUrl: game.storeUrl,
-	psPlusExtra: game.psPlusExtra,
-	unenriched: game.unenriched,
-	criticScore: game.criticScore,
-	criticScoreCount: game.criticScoreCount,
-	userScore: game.userScore,
-	userScoreCount: game.userScoreCount,
-	psPlusLeftOn: game.psPlusLeftOn,
-	psPlusLeavingOn: game.psPlusLeavingOn,
-	psnConceptId: game.psnConceptId,
-	ttbStorySeconds: game.ttbStorySeconds,
-	ttbCompleteSeconds: game.ttbCompleteSeconds,
-	ttbCount: game.ttbCount,
-	playStatus: gameTracking.playStatus,
-	completedOn: gameTracking.completedOn,
-	platinumOn: gameTracking.platinumOn,
-	startedOn: gameTracking.startedOn,
-	boughtOn: gameTracking.boughtOn,
-	wishlistedOn: gameTracking.wishlistedOn,
-	owned: gameTracking.owned,
-	ownershipType: gameTracking.ownershipType,
-	ownedVia: gameTracking.ownedVia,
-	discarded: gameTracking.discarded,
-} as const;
+/**
+ * The shelf's tracking-joined column set — shared by the whole-library read
+ * and the single-row by-id read so the two can never drift apart.
+ *
+ * PS+ facts are DERIVATIONS (Story 8.3, AD-30), not columns: membership is an
+ * EXISTS against the REGION's `ps_plus_catalog` on the three identity keys —
+ * `external_link('PSN_PRODUCT') ↔ product_id`, `external_link('PSN') ↔
+ * np_title_id`, then `title_normalized` (empty title joins nothing — the M7
+ * guard) — and the leaving date is a COALESCE over the `ps_plus_departure`
+ * ledger in exact-key-first precedence (the browse marker's rules). All are
+ * index probes (title/np-title/PK indexes), never a catalog scan. A null
+ * region (no setting, no seed) derives false/null — honest absence.
+ */
+function librarySelection(region: string | null) {
+	const r = region ?? '';
+	const memberByProduct = sql`EXISTS (SELECT 1 FROM external_link el JOIN ps_plus_catalog c ON c.product_id = el.external_id AND c.region = ${r} AND c.tier = 'extra' WHERE el.game_id = ${game.id} AND el.source = 'PSN_PRODUCT')`;
+	const memberByNpTitle = sql`EXISTS (SELECT 1 FROM external_link el JOIN ps_plus_catalog c ON c.np_title_id = el.external_id AND c.region = ${r} AND c.tier = 'extra' WHERE el.game_id = ${game.id} AND el.source = 'PSN')`;
+	const memberByTitle = sql`(${game.titleNormalized} != '' AND EXISTS (SELECT 1 FROM ps_plus_catalog c WHERE c.region = ${r} AND c.tier = 'extra' AND c.title_normalized = ${game.titleNormalized}))`;
+	// EXACT KEY IS AUTHORITATIVE (review, M2): a bare COALESCE cannot tell "no
+	// ledger row" from "row with a NULL date" — a product-keyed reprieve would
+	// fall through to a title-colliding product's stale date. CASE stops at the
+	// first key that HAS a row, whatever its date says. Title legs order by
+	// product_id so a multi-row title collision answers deterministically.
+	const rowByProduct = sql`EXISTS (SELECT 1 FROM external_link el JOIN ps_plus_departure d ON d.product_id = el.external_id AND d.region = ${r} AND d.tier = 'extra' WHERE el.game_id = ${game.id} AND el.source = 'PSN_PRODUCT')`;
+	const rowByNpTitle = sql`EXISTS (SELECT 1 FROM external_link el JOIN ps_plus_departure d ON d.np_title_id = el.external_id AND d.region = ${r} AND d.tier = 'extra' WHERE el.game_id = ${game.id} AND el.source = 'PSN')`;
+	const leavingByProduct = sql`(SELECT d.leaving_on FROM external_link el JOIN ps_plus_departure d ON d.product_id = el.external_id AND d.region = ${r} AND d.tier = 'extra' WHERE el.game_id = ${game.id} AND el.source = 'PSN_PRODUCT' ORDER BY d.product_id LIMIT 1)`;
+	const leavingByNpTitle = sql`(SELECT d.leaving_on FROM external_link el JOIN ps_plus_departure d ON d.np_title_id = el.external_id AND d.region = ${r} AND d.tier = 'extra' WHERE el.game_id = ${game.id} AND el.source = 'PSN' ORDER BY d.product_id LIMIT 1)`;
+	const leavingByTitle = sql`(SELECT d.leaving_on FROM ps_plus_departure d WHERE d.region = ${r} AND d.tier = 'extra' AND ${game.titleNormalized} != '' AND d.title_normalized = ${game.titleNormalized} ORDER BY d.product_id LIMIT 1)`;
+	return {
+		id: game.id,
+		title: game.title,
+		titleNormalized: game.titleNormalized,
+		releaseDate: game.releaseDate,
+		coverUrl: game.coverUrl,
+		storeUrl: game.storeUrl,
+		psPlusExtra:
+			sql<boolean>`(${memberByProduct} OR ${memberByNpTitle} OR ${memberByTitle})`.mapWith(
+				Boolean,
+			),
+		unenriched: game.unenriched,
+		criticScore: game.criticScore,
+		criticScoreCount: game.criticScoreCount,
+		userScore: game.userScore,
+		userScoreCount: game.userScoreCount,
+		psPlusLeavingOn: sql<
+			string | null
+		>`CASE WHEN ${rowByProduct} THEN ${leavingByProduct} WHEN ${rowByNpTitle} THEN ${leavingByNpTitle} ELSE ${leavingByTitle} END`,
+		ttbStorySeconds: game.ttbStorySeconds,
+		ttbCompleteSeconds: game.ttbCompleteSeconds,
+		ttbCount: game.ttbCount,
+		playStatus: gameTracking.playStatus,
+		completedOn: gameTracking.completedOn,
+		platinumOn: gameTracking.platinumOn,
+		startedOn: gameTracking.startedOn,
+		boughtOn: gameTracking.boughtOn,
+		wishlistedOn: gameTracking.wishlistedOn,
+		owned: gameTracking.owned,
+		ownershipType: gameTracking.ownershipType,
+		ownedVia: gameTracking.ownedVia,
+		discarded: gameTracking.discarded,
+	} as const;
+}
 
 export async function listLibraryForUser(
 	db: Db,
 	userId: string,
-	// DW-12: the PS+ flag pass needs the tombstones too — `game.psPlusExtra`
-	// describes catalog membership, not user visibility, and a pass that skips
-	// discarded rows freezes their flag forever (wrong the moment one is revived).
-	{ includeDiscarded = false }: { includeDiscarded?: boolean } = {},
+	// DW-12: sweep-style callers need the tombstones too — catalog membership
+	// describes the region's catalog, not user visibility.
+	// `region` drives the PS+ derivations (Story 8.3); null derives absence.
+	{
+		includeDiscarded = false,
+		region = null,
+	}: { includeDiscarded?: boolean; region?: string | null } = {},
 ): Promise<LibraryRow[]> {
 	return db
-		.select(librarySelection)
+		.select(librarySelection(region))
 		.from(gameTracking)
 		.innerJoin(game, eq(gameTracking.gameId, game.id))
 		.where(
@@ -480,9 +416,10 @@ export async function findLibraryRowById(
 	db: Db,
 	userId: string,
 	gameId: string,
+	region: string | null = null,
 ): Promise<LibraryRow | null> {
 	const rows = await db
-		.select(librarySelection)
+		.select(librarySelection(region))
 		.from(gameTracking)
 		.innerJoin(game, eq(gameTracking.gameId, game.id))
 		.where(
@@ -502,7 +439,6 @@ export type LibraryMarkerRow = {
 	id: string;
 	titleNormalized: string;
 	owned: boolean;
-	psPlusLeavingOn: string | null;
 };
 
 const MARKER_CHUNK = 90; // D1's ~100-bind cap, with headroom for the fixed binds
@@ -527,7 +463,6 @@ export async function listLibraryRowsByNormalizedTitles(
 					id: game.id,
 					titleNormalized: game.titleNormalized,
 					owned: gameTracking.owned,
-					psPlusLeavingOn: game.psPlusLeavingOn,
 				})
 				.from(gameTracking)
 				.innerJoin(game, eq(gameTracking.gameId, game.id))
@@ -565,7 +500,6 @@ export async function listUserGamesByExternalIds(
 					id: game.id,
 					titleNormalized: game.titleNormalized,
 					owned: gameTracking.owned,
-					psPlusLeavingOn: game.psPlusLeavingOn,
 				})
 				.from(externalLink)
 				.innerJoin(game, eq(externalLink.gameId, game.id))
