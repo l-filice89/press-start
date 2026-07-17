@@ -126,7 +126,7 @@ development_status:
   8-3-per-user-ps-facts-region-and-catalog-flag-b2-b3: backlog
   8-4-the-scheduled-refresh-serves-every-region-b4: backlog # reworked 2026-07-17 per-region (B5 retired by Epic 11) — sprint-change-proposal-2026-07-17-epic8-capacity.md
   8-5-backfill-legacy-owned-via-rows-b6: backlog
-  8-6-free-tier-read-budget-hardening: backlog # 2026-07-17: unblocked by 8.0 sign-off — diff-upsert AC dropped (AD-33 §5); runs before/parallel to 8.2
+  8-6-free-tier-read-budget-hardening: done # 2026-07-17 (dev-auto): single-row reads, SQL counts, paged catalog, shelf ETag/304, cookieCache — DAU ~550→~2,000; 13 review patches (2 HIGH: missed shared-fact bumps); followup_review_recommended:true (forced by the HIGHs)
   epic-8-retrospective: optional
 
   # Epic 9: The PSN Record — Trophies (and maybe Wishlist) — v1.x
