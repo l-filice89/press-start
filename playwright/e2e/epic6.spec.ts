@@ -794,7 +794,12 @@ test.describe('Story 6.4 ownership source', () => {
 					owned_via: string | null;
 					ps_plus_extra: number;
 				}>(
-					`SELECT t.owned, t.owned_via, g.ps_plus_extra
+					// Story 8.3: membership DERIVES from the region catalog (the
+					// column is gone) — the same title-key EXISTS the shelf read uses.
+					`SELECT t.owned, t.owned_via,
+					        EXISTS (SELECT 1 FROM ps_plus_catalog c
+					                WHERE c.title_normalized = g.title_normalized
+					                  AND g.title_normalized != '') AS ps_plus_extra
 					 FROM game_tracking t JOIN game g ON g.id = t.game_id
 					 WHERE t.game_id = '${gameId}'`,
 				).then((rows) => rows[0]);
