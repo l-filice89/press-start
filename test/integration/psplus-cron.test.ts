@@ -23,7 +23,7 @@ import {
 } from '../../src/repositories';
 import { createDb } from '../../src/repositories/db';
 import { game, user } from '../../src/schema';
-import { runScheduledPsPlusCheck } from '../../src/services/psplus';
+import { runScheduledPsPlusCheck, windowOf } from '../../src/services/psplus';
 import {
 	getPsPlusLeavingState,
 	getPsPlusSweepState,
@@ -34,7 +34,7 @@ import {
 import worker from '../../worker/index';
 import { catalogPagePayload, productId } from '../fixtures/psn';
 import { stubStore } from './psn-stub';
-import { establishSession, TEST_EMAIL } from './session';
+import { appFetch, establishSession, TEST_EMAIL } from './session';
 
 /**
  * Scheduled PS+ Extra refresh (Story 5.2, FR-39/40). Drives the same catalog
@@ -400,5 +400,58 @@ describe('scheduled PS+ Extra refresh (Story 5.2)', () => {
 		// Re-seed so a test appended after this one doesn't inherit an empty
 		// user table (review: order landmine).
 		await establishSession();
+	});
+});
+
+describe('8.4 follow-up review hazards — window arithmetic and the guard day gate', () => {
+	it('windowOf maps days 1-14 to the PREVIOUS month (the cron window is [15th, next 15th))', () => {
+		expect(windowOf('2026-07-14')).toBe('2026-06');
+		expect(windowOf('2026-07-15')).toBe('2026-07');
+		expect(windowOf('2026-07-28')).toBe('2026-07');
+		expect(windowOf('2026-01-05')).toBe('2025-12'); // year boundary
+	});
+
+	it('an uncounted outcome stamps the attempt WITHOUT feeding the quarantine counter', async () => {
+		const today = new Date().toISOString().slice(0, 10);
+		await recordRegionOutcome(db(), 'zz-zz', {
+			attemptedOn: today,
+			succeeded: false,
+			window: WINDOW,
+		});
+		await recordRegionOutcome(db(), 'zz-zz', {
+			attemptedOn: today,
+			succeeded: false,
+			counted: false,
+			window: WINDOW,
+		});
+		const state = await getRegionState(db(), 'zz-zz');
+		expect(state?.lastAttempt).toBe(today);
+		expect(state?.failureCount).toBe(1); // the counted one, not two
+	});
+
+	it('a store-refused locale costs ONE guard fetch per day, not one per shelf GET (H1)', async () => {
+		const cookie = await establishSession();
+		const [row] = await db()
+			.select({ id: user.id })
+			.from(user)
+			.where(eq(user.email, TEST_EMAIL));
+		// Shape-valid locale the store refuses; no ledger row → stale → guard fires.
+		await setSetting(db(), row.id, PSN_REGION_SETTING_KEY, 'uk-uk');
+		const seen = stubStore(() => ({
+			body: { data: null, errors: [{ message: 'refused' }] },
+		}));
+
+		const first = await appFetch('/api/shelf', { headers: { cookie } });
+		expect(first.status).toBe(200);
+		const fired = seen.length;
+		expect(fired).toBeGreaterThan(0); // the guard DID try once
+
+		const second = await appFetch('/api/shelf', { headers: { cookie } });
+		expect(second.status).toBe(200);
+		expect(seen.length).toBe(fired); // day gate: no second store fetch
+
+		const state = await getRegionState(db(), 'uk-uk');
+		expect(state?.lastAttempt).toBe(new Date().toISOString().slice(0, 10));
+		expect(state?.failureCount).toBe(0); // a typo never quarantines
 	});
 });

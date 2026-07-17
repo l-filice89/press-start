@@ -36,7 +36,7 @@ import {
 	PS_PLUS_TIER,
 	pruneCatalogGeneration,
 	recordRegionOutcome,
-	resetRegionWindow,
+	resetStaleRegionWindows,
 	stampDepartures,
 	upsertCatalogProducts,
 } from '../repositories';
@@ -106,7 +106,10 @@ const CATALOG_DRIFT_TOLERANCE = 2;
  *   (worker/index.ts skips scores on any sweep invocation; sweep ledger:
  *   psplus-leaving.ts, ≤44).
  *   The stale-snapshot guard's waitUntil pass runs in a REQUEST context that
- *   already spent ~5 calls: 34 + 5 ≈ 39 of 50 — fits (8.4).
+ *   already spent ~5-6 calls (session read, version read, region read, shelf
+ *   read): guard pass ≈35 (region-state read, activity touch, ensure+claim,
+ *   membership, release, outcome ensure+update) + 5-6 ≈ 40-41 of 50 — fits,
+ *   margin ~9 (8.4; restated by the follow-up review).
  * A GENRE-SWEEP CHUNK NO LONGER RIDES ALONG (H3): 34 + a chunk (~25) busts the
  * budget, and the resulting mid-sweep "Too many subrequests" throw was
  * self-perpetuating — see `runScheduledPsPlusCheck`.
@@ -270,13 +273,13 @@ export async function runPsPlusCheck(
 		products.map((product) => product.productId),
 	);
 
-	// The catalog moved (or departures stamped) → every user's shelf derives a
-	// new answer; rotate every ETag (8.6). The old per-user summary and the
-	// freshness/failure setting writes died with the manual button (8.4):
-	// freshness is the region ledger's last_success, failures are logs.
-	if (moved) {
-		await bumpAllLibraryVersions(db);
-	}
+	// Every user's shelf may derive a new answer; rotate every ETag (8.6).
+	// UNCONDITIONALLY (epic-8 seam review, M): `moved` compares product-id sets
+	// only, but the upsert also refreshes `title_normalized`/`np_title_id` —
+	// the exact keys the membership derivation joins on — so a rename-only
+	// snapshot would flip a pill behind a permanent 304. A spurious rotate
+	// costs one 200; a missed one is forever (library-version.ts).
+	await bumpAllLibraryVersions(db);
 
 	return {
 		ok: true,
@@ -311,9 +314,20 @@ const QUARANTINE_AT = 3;
 const isoDaysAgo = (days: number) =>
 	new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
 
-/** The rotation window a date belongs to: `YYYY-MM` (the 15-28 cron only
- * fires inside one calendar month's window). */
-const windowOf = (isoDate: string) => isoDate.slice(0, 7);
+/**
+ * The rotation window a date belongs to. The cron fires days 15-28, so the
+ * window is [the 15th, the next 15th) — days 1-14 belong to the PREVIOUS
+ * month's window, NOT the calendar month (8.4 follow-up review, M2/M3): a
+ * plain `slice(0, 7)` let a shelf-guard attempt on day 3 stamp the NEW
+ * window before the cron ever fired, so guard failures burned the window's
+ * one quarantine retry weeks early, and a guard success pre-satisfied
+ * cycle-complete and skipped the mid-month store rotation entirely.
+ */
+export const windowOf = (isoDate: string) => {
+	const d = new Date(`${isoDate}T00:00:00Z`);
+	if (d.getUTCDate() < 15) d.setUTCMonth(d.getUTCMonth() - 1);
+	return d.toISOString().slice(0, 7);
+};
 
 export async function pickCronRegion(db: Db): Promise<string | null> {
 	const regions = await listDistinctUserRegions(db);
@@ -323,14 +337,18 @@ export async function pickCronRegion(db: Db): Promise<string | null> {
 	const states = new Map(
 		(await listRegionStates(db)).map((row) => [row.region, row]),
 	);
-	// A new window re-admits everyone: reset counters lazily on first sight.
-	for (const region of regions) {
-		const state = states.get(region);
-		if (state && state.window !== window) {
-			await resetRegionWindow(db, region, window);
-			state.window = window;
-			state.cycleComplete = false;
-			state.failureCount = 0;
+	// A new window re-admits everyone: reset counters lazily on first sight —
+	// ONE statement for all stale rows, not one per region (8.4 follow-up
+	// review, M4: the window-opening fire also runs a full membership pass at
+	// near-zero subrequest headroom; a per-region reset loop scaled 2N).
+	if ([...states.values()].some((s) => s.window !== window)) {
+		await resetStaleRegionWindows(db, window);
+		for (const state of states.values()) {
+			if (state.window !== window) {
+				state.window = window;
+				state.cycleComplete = false;
+				state.failureCount = 0;
+			}
 		}
 	}
 	const idleCutoff = isoDaysAgo(IDLE_SKIP_DAYS);

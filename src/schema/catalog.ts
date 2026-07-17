@@ -267,6 +267,10 @@ export const psPlusCatalog = sqliteTable(
 	(table) => [
 		primaryKey({ columns: [table.region, table.tier, table.productId] }),
 		index('ps_plus_catalog_title_normalized_idx').on(table.titleNormalized),
+		// The membership derivation's np-title leg (8.3 follow-up review, M1):
+		// without this, that EXISTS probe walks the regional catalog per library
+		// row — ~10^5 rows read on a full shelf, not the budgeted ~2,000.
+		index('ps_plus_catalog_np_title_id_idx').on(table.npTitleId),
 	],
 );
 
@@ -304,7 +308,8 @@ export const psPlusCatalogGenre = sqliteTable(
  * A departed product is precisely the one whose `ps_plus_catalog` row the
  * prune deleted, so its facts CANNOT live in the snapshot: this ledger
  * survives every prune. Written by the membership pass's generation diff
- * (`left_on` on prune; row DELETED on re-entry — DW-13) and the leaving sweep
+ * (`left_on` on prune; on re-entry the row is KEPT and `left_on` cleared —
+ * DW-13, corrected in the 8.3 spec change log) and the leaving sweep
  * (`leaving_on`, `psn_concept_id`). No FK to the catalog (it outlives the
  * rows) and no `user_id` (per-region shared data; per-user answers derive
  * via the user's region — AD-30). `title_normalized`/`np_title_id` carry the

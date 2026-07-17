@@ -88,6 +88,10 @@ export async function recordRegionOutcome(
 		attemptedOn: string;
 		succeeded: boolean;
 		window: string;
+		/** `false` = stamp the attempt (day gate) WITHOUT counting a failure —
+		 * config gaps (`bad-region`) must engage the guard's once-a-day gate but
+		 * never quarantine on a typo (8.4 follow-up review, H1). Default true. */
+		counted?: boolean;
 	},
 ) {
 	await ensureRegionState(db, region);
@@ -100,9 +104,13 @@ export async function recordRegionOutcome(
 			cycleComplete: sql`CASE WHEN ${crossed} = 1 THEN 0 ELSE ${psPlusRegionState.cycleComplete} END`,
 			...(outcome.succeeded
 				? { lastSuccess: outcome.attemptedOn, failureCount: 0 }
-				: {
-						failureCount: sql`CASE WHEN ${crossed} = 1 THEN 1 ELSE ${psPlusRegionState.failureCount} + 1 END`,
-					}),
+				: outcome.counted === false
+					? {
+							failureCount: sql`CASE WHEN ${crossed} = 1 THEN 0 ELSE ${psPlusRegionState.failureCount} END`,
+						}
+					: {
+							failureCount: sql`CASE WHEN ${crossed} = 1 THEN 1 ELSE ${psPlusRegionState.failureCount} + 1 END`,
+						}),
 		})
 		.where(
 			and(
@@ -126,20 +134,17 @@ export async function markRegionCycleComplete(db: Db, region: string) {
 		);
 }
 
-/** A new rotation window opened: reset the counters that belong to a window. */
-export async function resetRegionWindow(
-	db: Db,
-	region: string,
-	window: string,
-) {
-	await ensureRegionState(db, region);
+/** A new rotation window opened: reset every stale row's window-scoped
+ * counters in ONE statement (subrequest budget — the opening cron fire also
+ * runs a full membership pass). Rows already on `window` are untouched. */
+export async function resetStaleRegionWindows(db: Db, window: string) {
 	await db
 		.update(psPlusRegionState)
 		.set({ window, cycleComplete: false, failureCount: 0 })
 		.where(
 			and(
-				eq(psPlusRegionState.region, region),
 				eq(psPlusRegionState.tier, TIER),
+				sql`COALESCE(${psPlusRegionState.window}, '') != ${window}`,
 			),
 		);
 }

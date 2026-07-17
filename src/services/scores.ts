@@ -168,7 +168,11 @@ export async function runScheduledScoreRefresh(
 	db: Db,
 	igdb: IgdbScoreFetch | null,
 ): Promise<void> {
-	// ponytail: interim single-tenant bridge (8.2) — 8.4 owns the real model.
+	// ponytail: interim single-tenant bridge (8.2) — 8.4 scoped it OUT; the
+	// carrier is the deferred-work ledger (2026-07-17 seam-review entry): the
+	// failure/freshness flags are written for user #1 only, so every other
+	// user's FR-40 banner is blind. Land the multi-user model before a second
+	// real user relies on the scores banner.
 	const user = await findOldestUser(db);
 	if (!user) return;
 	if (!igdb) {

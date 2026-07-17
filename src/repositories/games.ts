@@ -346,9 +346,13 @@ function librarySelection(region: string | null) {
 	// product_id so a multi-row title collision answers deterministically.
 	const rowByProduct = sql`EXISTS (SELECT 1 FROM external_link el JOIN ps_plus_departure d ON d.product_id = el.external_id AND d.region = ${r} AND d.tier = 'extra' WHERE el.game_id = ${game.id} AND el.source = 'PSN_PRODUCT')`;
 	const rowByNpTitle = sql`EXISTS (SELECT 1 FROM external_link el JOIN ps_plus_departure d ON d.np_title_id = el.external_id AND d.region = ${r} AND d.tier = 'extra' WHERE el.game_id = ${game.id} AND el.source = 'PSN')`;
-	const leavingByProduct = sql`(SELECT d.leaving_on FROM external_link el JOIN ps_plus_departure d ON d.product_id = el.external_id AND d.region = ${r} AND d.tier = 'extra' WHERE el.game_id = ${game.id} AND el.source = 'PSN_PRODUCT' ORDER BY d.product_id LIMIT 1)`;
-	const leavingByNpTitle = sql`(SELECT d.leaving_on FROM external_link el JOIN ps_plus_departure d ON d.np_title_id = el.external_id AND d.region = ${r} AND d.tier = 'extra' WHERE el.game_id = ${game.id} AND el.source = 'PSN' ORDER BY d.product_id LIMIT 1)`;
-	const leavingByTitle = sql`(SELECT d.leaving_on FROM ps_plus_departure d WHERE d.region = ${r} AND d.tier = 'extra' AND ${game.titleNormalized} != '' AND d.title_normalized = ${game.titleNormalized} ORDER BY d.product_id LIMIT 1)`;
+	// DATED ROWS FIRST (8.3 follow-up review, M2): sibling editions share keys,
+	// and a delisted sibling's stamped row carries `leaving_on NULL` by design —
+	// bare product-id order let it permanently mask the surviving sibling's live
+	// date. `leaving_on IS NULL` sorts dated rows ahead; product_id tiebreaks.
+	const leavingByProduct = sql`(SELECT d.leaving_on FROM external_link el JOIN ps_plus_departure d ON d.product_id = el.external_id AND d.region = ${r} AND d.tier = 'extra' WHERE el.game_id = ${game.id} AND el.source = 'PSN_PRODUCT' ORDER BY d.leaving_on IS NULL, d.product_id LIMIT 1)`;
+	const leavingByNpTitle = sql`(SELECT d.leaving_on FROM external_link el JOIN ps_plus_departure d ON d.np_title_id = el.external_id AND d.region = ${r} AND d.tier = 'extra' WHERE el.game_id = ${game.id} AND el.source = 'PSN' ORDER BY d.leaving_on IS NULL, d.product_id LIMIT 1)`;
+	const leavingByTitle = sql`(SELECT d.leaving_on FROM ps_plus_departure d WHERE d.region = ${r} AND d.tier = 'extra' AND ${game.titleNormalized} != '' AND d.title_normalized = ${game.titleNormalized} ORDER BY d.leaving_on IS NULL, d.product_id LIMIT 1)`;
 	return {
 		id: game.id,
 		title: game.title,

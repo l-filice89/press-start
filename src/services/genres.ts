@@ -18,7 +18,7 @@ import {
 	upsertGenre,
 } from '../repositories';
 import type { Db } from '../repositories/db';
-import { bumpLibraryVersion } from './library-version';
+import { bumpAllLibraryVersions } from './library-version';
 
 function normalizeGenreName(raw: string): string {
 	return raw.trim().replace(/\s+/g, ' ');
@@ -50,7 +50,9 @@ export async function addGenreToGame(
 	const existing = await findGenreByNameInsensitive(db, name);
 	const row = existing ?? (await upsertGenre(db, name));
 	await linkGameGenre(db, gameId, row.id);
-	await bumpLibraryVersion(db, userId);
+	// `game_genre` is a shared game fact (see header) — every co-tracker's shelf
+	// renders the new list, so EVERY version rotates (8.6 follow-up review, H1).
+	await bumpAllLibraryVersions(db);
 
 	return genreNames(db, gameId);
 }
@@ -72,7 +74,7 @@ export async function removeGenreFromGame(
 		const existing = await findGenreByNameInsensitive(db, name);
 		if (existing) {
 			await unlinkGameGenre(db, gameId, existing.id);
-			await bumpLibraryVersion(db, userId);
+			await bumpAllLibraryVersions(db);
 		}
 	}
 

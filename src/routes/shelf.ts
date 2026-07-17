@@ -11,7 +11,7 @@ import { OWNERSHIP_TYPES } from '../schema/catalog';
 import { getShelf } from '../services';
 import { readLibraryVersion } from '../services/library-version';
 import { withRegionLock } from '../services/psn-lock';
-import { runPsPlusCheck } from '../services/psplus';
+import { runPsPlusCheck, windowOf } from '../services/psplus';
 import { getPsnRegion } from '../services/settings';
 import { type AuthVariables, requireAuth } from './auth';
 
@@ -124,14 +124,23 @@ shelfRoute.get('/shelf', requireAuth, async (c) => {
 				);
 				if (held.busy) return;
 				const outcome = held.result;
-				// Config gaps (`bad-region`/`no-region`) and lock races
-				// (`conflict`) are not provider failures — counting them would
-				// quarantine on a typo (review, EC#3/L11).
+				// Config gaps (`bad-region`/`no-region`) are not provider failures —
+				// counting them would quarantine on a typo (review, EC#3/L11) — but
+				// they DO stamp the attempt, else the day gate never engages and a
+				// store-refused locale re-fires a real fetch on EVERY GET (follow-up
+				// review, H1). Only lock races (`conflict`) record nothing.
 				if (outcome.ok || outcome.reason === 'provider') {
 					await recordRegionOutcome(db, region, {
 						attemptedOn: today,
 						succeeded: outcome.ok,
-						window: today.slice(0, 7),
+						window: windowOf(today),
+					});
+				} else if (outcome.reason !== 'conflict') {
+					await recordRegionOutcome(db, region, {
+						attemptedOn: today,
+						succeeded: false,
+						counted: false,
+						window: windowOf(today),
 					});
 				}
 			})().catch((error) =>

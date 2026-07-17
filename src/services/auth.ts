@@ -67,6 +67,11 @@ export function createAuth(env: Env, options: CreateAuthOptions) {
 		// The WAF edge rule remains the distributed backstop; this stops one
 		// isolate being an email cannon. `AUTH_RATE_LIMIT=off` (.dev.vars) turns
 		// it off for tests, which hammer the magic-link route by design.
+		// Key the limiter on Cloudflare's own connecting-IP header (8.2 follow-up
+		// review): the default `x-forwarded-for` only fails safe as long as CF
+		// keeps appending to a client-forged XFF — `cf-connecting-ip` is minted
+		// by the edge and cannot be client-supplied.
+		advanced: { ipAddress: { ipAddressHeaders: ['cf-connecting-ip'] } },
 		rateLimit: {
 			enabled: env.AUTH_RATE_LIMIT !== 'off',
 			window: 60,

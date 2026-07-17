@@ -274,6 +274,15 @@ describe('8.6c — the version-bump bypass suite', () => {
 		// fine: the point is the EXISTING-shared-row branch ran, and it bumps.
 		expect(added).toMatchObject({ kind: 'duplicate' });
 		expect(await readLibraryVersion(db(), userId)).not.toBe(mine);
+
+		// genre add writes shared `game_genre` → bump-all (follow-up review, H1:
+		// the actor-only bump left every co-tracker on a permanent stale 304).
+		mine = await readLibraryVersion(db(), userId);
+		theirs = await readLibraryVersion(db(), other);
+		const tagged = await addGenreToGame(db(), other, shared, 'Soulslike');
+		expect(tagged).toContain('Soulslike');
+		expect(await readLibraryVersion(db(), userId)).not.toBe(mine);
+		expect(await readLibraryVersion(db(), other)).not.toBe(theirs);
 	});
 });
 

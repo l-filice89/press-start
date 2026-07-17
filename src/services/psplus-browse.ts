@@ -340,7 +340,9 @@ export async function listCatalogGenreFacets(
 	const byKey = new Map(
 		[...taggedRows].map(([key, list]) => [key, collapseEditions(list).length]),
 	);
-	const state = await getPsPlusSweepState(db, userId);
+	// Region-keyed since 8.4 (follow-up review, L: this call passed the userId
+	// after the re-key — both `string`, compiled silently, always missed).
+	const state = await getPsPlusSweepState(db, region);
 	const keys =
 		state?.region === region
 			? [...new Set([...state.keys, ...byKey.keys()])]

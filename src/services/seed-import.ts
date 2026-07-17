@@ -26,7 +26,10 @@ import {
 	upsertTracking,
 } from '../repositories';
 import type { Db } from '../repositories/db';
-import { bumpLibraryVersion } from './library-version';
+import {
+	bumpAllLibraryVersions,
+	bumpLibraryVersion,
+} from './library-version';
 
 export interface SeedSummary {
 	gamesCreated: number;
@@ -78,6 +81,7 @@ export async function runSeedImport({
 		skippedWebApp: plan.skippedWebApp,
 		unenriched: 0,
 	};
+	let sharedFactTouched = false;
 
 	// Re-run idempotency for stragglers: a straggler already recorded under the
 	// same source title is not re-inserted (source titles are unique per import).
@@ -173,8 +177,13 @@ export async function runSeedImport({
 			// Recover any links a prior partial run left unattached.
 			for (const externalId of candidate.psLinks) {
 				const found = await findGameByExternalLink(db, 'PSN', externalId);
-				if (!found)
+				if (!found) {
 					await addExternalLink(db, { gameId, source: 'PSN', externalId });
+					// A PSN link on an EXISTING row is a shared game fact — the
+					// membership derivation joins on it, so a co-tracker's pill can
+					// flip (8.6 follow-up review, M): rotate everyone below.
+					sharedFactTouched = true;
+				}
 			}
 		}
 
@@ -200,6 +209,8 @@ export async function runSeedImport({
 	}
 
 	// One rotate for the whole bulk write (8.6) — the seed is out-of-band.
-	await bumpLibraryVersion(db, userRow.id);
+	// Bump-all when a shared fact changed (link recovery), else actor-only.
+	if (sharedFactTouched) await bumpAllLibraryVersions(db);
+	else await bumpLibraryVersion(db, userRow.id);
 	return summary;
 }
