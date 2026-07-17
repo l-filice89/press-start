@@ -1,21 +1,21 @@
-import {
-	applyD1Migrations,
-	createExecutionContext,
-	env,
-	waitOnExecutionContext,
-} from 'cloudflare:test';
+import { applyD1Migrations, env } from 'cloudflare:test';
+import { handleOAuthUserInfo } from 'better-auth/oauth2';
 import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, inject, it } from 'vitest';
+import {
+	deleteExpiredVerifications,
+	insertGame,
+	upsertTracking,
+} from '../../src/repositories';
 import { createDb } from '../../src/repositories/db';
 import { user } from '../../src/schema';
 import { createAuth } from '../../src/services/auth';
-import worker from '../../worker/index';
 import {
-	ALLOWED_EMAIL,
 	appFetch,
 	BASE,
 	establishSession,
 	requestMagicLink,
+	TEST_EMAIL,
 } from './session';
 
 /**
@@ -38,19 +38,21 @@ describe('magic-link auth & user scoping (integration, real workerd + local D1)'
 	});
 
 	it('sends a magic link for the allowed email', async () => {
-		const { response, sent } = await requestMagicLink(ALLOWED_EMAIL);
+		const { response, sent } = await requestMagicLink(TEST_EMAIL);
 		expect(response.status).toBe(200);
 		expect(sent).toHaveLength(1);
-		expect(sent[0].to).toBe(ALLOWED_EMAIL);
+		expect(sent[0].to).toBe(TEST_EMAIL);
 		expect(sent[0].url).toContain('/api/auth/magic-link/verify?token=');
 	});
 
-	it('silently skips non-allowlisted emails — same response, no email, no user row', async () => {
+	it('sends a magic link to ANY address — registration is open (Story 8.2, AD-29)', async () => {
 		const stranger = 'stranger@example.com';
 		const { response, sent } = await requestMagicLink(stranger);
 		expect(response.status).toBe(200);
-		expect(sent).toHaveLength(0);
+		expect(sent).toHaveLength(1);
+		expect(sent[0].to).toBe(stranger);
 
+		// No user row yet — a link REQUEST proves nothing; following it does.
 		const rows = await createDb(env.DB)
 			.select()
 			.from(user)
@@ -62,13 +64,13 @@ describe('magic-link auth & user scoping (integration, real workerd + local D1)'
 		const response = await appFetch('/api/auth/sign-in/magic-link', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json', Origin: BASE },
-			body: JSON.stringify({ email: ALLOWED_EMAIL, callbackURL: '/' }),
+			body: JSON.stringify({ email: TEST_EMAIL, callbackURL: '/' }),
 		});
 		expect(response.status).toBe(200);
 		expect(await response.json()).toEqual({ status: true });
 	});
 
-	it('gates non-allowlisted sign-ins at the route: same response, no verification-token residue', async () => {
+	it('a stranger sign-in writes a verification row — bounded residue, swept once expired (AD-29)', async () => {
 		const stranger = 'intruder@example.com';
 		const response = await appFetch('/api/auth/sign-in/magic-link', {
 			method: 'POST',
@@ -78,23 +80,41 @@ describe('magic-link auth & user scoping (integration, real workerd + local D1)'
 		expect(response.status).toBe(200);
 		expect(await response.json()).toEqual({ status: true });
 
-		// better-auth writes the magic-link token to `verification` BEFORE the
-		// send callback runs, so only the route-level gate prevents strangers
-		// from growing the table — assert no residue at all.
+		// The residue is EXPECTED under open registration (the pre-gate died);
+		// the WAF rate limit bounds the growth, and the TTL sweep deletes what
+		// expires — proven here by expiring the row and running the sweep, while
+		// a live row survives it.
 		const { results } = await env.DB.prepare(
-			"SELECT value FROM verification WHERE value LIKE '%intruder@example.com%'",
+			"SELECT id FROM verification WHERE value LIKE '%intruder@example.com%'",
+		).all<{ id: string }>();
+		expect(results.length).toBeGreaterThan(0);
+
+		await env.DB.prepare('UPDATE verification SET expires_at = 0 WHERE id = ?')
+			.bind(results[0].id)
+			.run();
+		await requestMagicLink('still-live@example.com');
+		await deleteExpiredVerifications(createDb(env.DB), new Date());
+		const swept = await env.DB.prepare(
+			'SELECT id FROM verification WHERE id = ?',
+		)
+			.bind(results[0].id)
+			.all();
+		expect(swept.results).toHaveLength(0);
+		const live = await env.DB.prepare(
+			"SELECT id FROM verification WHERE value LIKE '%still-live@example.com%'",
 		).all();
-		expect(results).toHaveLength(0);
+		expect(live.results.length).toBeGreaterThan(0);
 	});
 
-	it('gates a malformed sign-in body without a 500', async () => {
+	it('a malformed sign-in body is refused without a 500', async () => {
 		const response = await appFetch('/api/auth/sign-in/magic-link', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json', Origin: BASE },
 			body: 'not-json',
 		});
-		expect(response.status).toBe(200);
-		expect(await response.json()).toEqual({ status: true });
+		// The pre-gate that used to swallow this died with the allowlist —
+		// better-auth's own body validation answers now.
+		expect(response.status).toBe(400);
 	});
 
 	it('establishes a session from the emailed link and scopes /api/me to that user (AD-13 seam)', async () => {
@@ -103,12 +123,12 @@ describe('magic-link auth & user scoping (integration, real workerd + local D1)'
 		const response = await appFetch('/api/me', { headers: { cookie } });
 		expect(response.status).toBe(200);
 		const body = await response.json<{ id: string; email: string }>();
-		expect(body.email).toBe(ALLOWED_EMAIL);
+		expect(body.email).toBe(TEST_EMAIL);
 
 		const rows = await createDb(env.DB)
 			.select()
 			.from(user)
-			.where(eq(user.email, ALLOWED_EMAIL));
+			.where(eq(user.email, TEST_EMAIL));
 		expect(rows).toHaveLength(1);
 		expect(body.id).toBe(rows[0].id);
 	});
@@ -177,14 +197,14 @@ describe('magic-link auth & user scoping (integration, real workerd + local D1)'
 });
 
 /**
- * Story 8.1 (B1a): Google sits alongside magic link, and the FR-48 allowlist
- * governs the OAuth path too. Google's consent screen can't be driven here (no
- * creds, no browser), so these tests hit the exact seam the callback uses:
- * better-auth's `internalAdapter.createOAuthUser` runs the same
- * `databaseHooks.user.create.before` gate that a real callback runs, and it is
- * the ONLY thing standing between a stranger's Google account and a user row.
+ * Stories 8.1 + 8.2: Google sits alongside magic link, and admission is
+ * PROVEN EMAIL CONTROL (AD-29, open registration). Google's consent screen
+ * can't be driven here (no creds, no browser), so these tests hit the exact
+ * seams the callback uses: `internalAdapter.createOAuthUser` runs the same
+ * `databaseHooks.user.create.before` hook a real callback runs, and
+ * `handleOAuthUserInfo` is the LINK path itself (better-auth's own module).
  */
-describe('Google OAuth allowlist gate (Story 8.1 / B1a)', () => {
+describe('open registration & the verified-email rule (Story 8.2 / B1b)', () => {
 	beforeAll(async () => {
 		await applyD1Migrations(env.DB, inject('migrations'));
 	});
@@ -195,123 +215,169 @@ describe('Google OAuth allowlist gate (Story 8.1 / B1a)', () => {
 		accessToken: 'test-token',
 	});
 
-	async function createOAuthUser(email: string, accountId: string) {
+	async function createOAuthUser(
+		email: string,
+		accountId: string,
+		emailVerified = true,
+	) {
 		const auth = createAuth(env, { baseURL: BASE });
 		const ctx = await auth.$context;
 		return ctx.internalAdapter.createOAuthUser(
-			{ email, name: 'OAuth User', emailVerified: true },
+			{ email, name: 'OAuth User', emailVerified },
 			oauthAccount(accountId),
 		);
 	}
 
 	/**
-	 * HAZARD (caught in review): better-auth's `handleOAuthUserInfo` CATCHES an
-	 * APIError from the create hook and returns `{ error: e.message }`; the
-	 * callback then redirects to `?error=${message.split(' ').join('_')}`. The
-	 * `code` never reaches the browser — the MESSAGE does. So the message must
-	 * BE the code, or `Login.tsx` shows the wrong copy for a rejected sign-in.
-	 * This test is the contract; it goes red if the message ever becomes prose.
+	 * HAZARD (8.1 review, still the contract): better-auth's
+	 * `handleOAuthUserInfo` CATCHES an APIError from the create hook and
+	 * returns `{ error: e.message }`; the callback then redirects to
+	 * `?error=${message.split(' ').join('_')}`. The `code` never reaches the
+	 * browser — the MESSAGE does. So the message must BE the code, or
+	 * `Login.tsx` shows the wrong copy. Red if it ever becomes prose.
 	 */
-	it('rejects with the exact code the login screen matches (message IS the wire)', async () => {
+	it('rejects an UNVERIFIED email with the exact code the login screen matches', async () => {
 		const error = await createOAuthUser(
 			'wire-contract@example.com',
 			'google-wire',
+			false,
 		).catch((e: Error) => e);
 
 		expect(error).toBeInstanceOf(Error);
-		expect((error as Error).message).toBe('ACCESS_DENIED');
-		// What the browser would actually land on.
+		expect((error as Error).message).toBe('EMAIL_NOT_VERIFIED');
 		expect(`/?error=${(error as Error).message.split(' ').join('_')}`).toBe(
-			'/?error=ACCESS_DENIED',
+			'/?error=EMAIL_NOT_VERIFIED',
 		);
+
+		// …and no residue: no user row, no account row.
+		const users = await createDb(env.DB)
+			.select()
+			.from(user)
+			.where(eq(user.email, 'wire-contract@example.com'));
+		expect(users).toHaveLength(0);
+		const { results } = await env.DB.prepare(
+			"SELECT id FROM account WHERE account_id = 'google-wire'",
+		).all();
+		expect(results).toHaveLength(0);
 	});
 
-	it('rejects an unverified email even when it matches the allowlist', async () => {
-		// The allowlist compares a provider-supplied string; an unverified one is
-		// an unproven claim to that address.
-		const auth = createAuth(env, { baseURL: BASE });
-		const ctx = await auth.$context;
-		await expect(
-			ctx.internalAdapter.createOAuthUser(
-				{ email: ALLOWED_EMAIL, name: 'Unverified', emailVerified: false },
-				oauthAccount('google-unverified'),
-			),
-		).rejects.toThrow(/ACCESS_DENIED/);
-	});
-
-	it('rejects a non-allowlisted Google account — no user row, no account row', async () => {
-		const stranger = 'someone-else@gmail.com';
-
-		await expect(createOAuthUser(stranger, 'google-stranger')).rejects.toThrow(
-			/ACCESS_DENIED/,
-		);
+	it('admits ANY verified Google account — registration is open', async () => {
+		const stranger = 'total-stranger@gmail.com';
+		const result = await createOAuthUser(stranger, 'google-stranger');
+		expect(result.user.email).toBe(stranger);
 
 		const users = await createDb(env.DB)
 			.select()
 			.from(user)
 			.where(eq(user.email, stranger));
-		expect(users).toHaveLength(0);
-		const { results } = await env.DB.prepare(
-			"SELECT id FROM account WHERE account_id = 'google-stranger'",
-		).all();
-		expect(results).toHaveLength(0);
+		expect(users).toHaveLength(1);
 	});
 
-	it('admits the allowlisted Google account (the gate is not a blanket no)', async () => {
-		// A real callback only reaches createOAuthUser when no user exists yet
-		// (an existing one is looked up and linked instead) — the magic-link
-		// tests above already signed this email up, so clear it to hit signup.
-		await env.DB.prepare('DELETE FROM user WHERE email = ?')
-			.bind(ALLOWED_EMAIL.toLowerCase())
-			.run();
+	it('two registered users are scoped server-side: own shelf, own /api/me, no cross-user writes', async () => {
+		const cookieA = await establishSession();
+		const cookieB = await establishSession('second-user@press-start.test');
 
-		const result = await createOAuthUser(ALLOWED_EMAIL, 'google-owner');
-		expect(result.user.email).toBe(ALLOWED_EMAIL.toLowerCase());
+		const meA = await appFetch('/api/me', { headers: { cookie: cookieA } });
+		const meB = await appFetch('/api/me', { headers: { cookie: cookieB } });
+		const a = await meA.json<{ id: string; email: string }>();
+		const b = await meB.json<{ id: string; email: string }>();
+		expect(a.email).toBe(TEST_EMAIL);
+		expect(b.email).toBe('second-user@press-start.test');
+		expect(a.id).not.toBe(b.id);
 
-		const users = await createDb(env.DB)
-			.select()
-			.from(user)
-			.where(eq(user.email, ALLOWED_EMAIL.toLowerCase()));
-		expect(users.length).toBeGreaterThan(0);
+		// Seed one game for A, none for B.
+		const db = createDb(env.DB);
+		const g = await insertGame(db, {
+			title: 'Scoped Game',
+			titleNormalized: 'scoped game',
+		});
+		await upsertTracking(db, a.id, g.id, {
+			owned: true,
+			playStatus: 'Playing',
+		});
+
+		const shelfA = await appFetch('/api/shelf?include=hidden', {
+			headers: { cookie: cookieA },
+		});
+		const shelfB = await appFetch('/api/shelf?include=hidden', {
+			headers: { cookie: cookieB },
+		});
+		const gamesA = (await shelfA.json<{ games: { id: string }[] }>()).games;
+		const gamesB = (await shelfB.json<{ games: { id: string }[] }>()).games;
+		expect(gamesA.some((row) => row.id === g.id)).toBe(true);
+		expect(gamesB.some((row) => row.id === g.id)).toBe(false);
+
+		// B cannot write A's tracking: the row simply isn't B's (404), and A's
+		// state is untouched — server-side scoping, not UI hiding (AD-13).
+		const attack = await appFetch(`/api/games/${g.id}/play-status`, {
+			method: 'PATCH',
+			headers: {
+				cookie: cookieB,
+				'Content-Type': 'application/json',
+				Origin: BASE,
+			},
+			body: JSON.stringify({ playStatus: 'Dropped' }),
+		});
+		expect(attack.status).toBe(404);
+		const after = await appFetch(`/api/games/${g.id}`, {
+			headers: { cookie: cookieA },
+		});
+		expect(
+			(await after.json<{ game: { playStatus: string } }>()).game.playStatus,
+		).toBe('Playing');
 	});
 
-	it('fails closed when the allowlist is unset — nobody, not everybody', async () => {
-		const auth = createAuth(
-			{ ...env, AUTH_ALLOWED_EMAIL: '' } as unknown as Env,
-			{ baseURL: BASE },
-		);
+	/**
+	 * THE LINK PATH (deferred-work: OAuth link gate — the takeover door).
+	 * better-auth links a provider identity into an EXISTING user by email
+	 * match without the create hook running. With open registration anyone can
+	 * pre-register a victim's address, so linking must demand the provider-
+	 * verified matching email — `trustedProviders` is empty (a trusted
+	 * provider would link even unverified). This drives better-auth's own
+	 * `handleOAuthUserInfo` (the exact callback seam) both ways.
+	 */
+	it('LINK path: an UNVERIFIED matching email is refused; a verified one links (TEST-THE-BYPASS)', async () => {
+		const victim = 'link-victim@press-start.test';
+		await establishSession(victim); // the existing account
+
+		const auth = createAuth(env, { baseURL: BASE });
 		const ctx = await auth.$context;
-		await expect(
-			ctx.internalAdapter.createOAuthUser(
-				{
-					email: ALLOWED_EMAIL,
-					name: 'OAuth User',
-					emailVerified: true,
-				},
-				oauthAccount('google-noallowlist'),
-			),
-		).rejects.toThrow(/ACCESS_DENIED/);
-	});
+		const endpointCtx = { context: ctx } as unknown as Parameters<
+			typeof handleOAuthUserInfo
+		>[0];
 
-	it('strands a session whose user is no longer allowlisted (401 on every protected route)', async () => {
-		const cookie = await establishSession();
-		// Sanity: the session works while the allowlist admits it.
-		const ok = await appFetch('/api/me', { headers: { cookie } });
-		expect(ok.status).toBe(200);
+		const refused = await handleOAuthUserInfo(endpointCtx, {
+			userInfo: {
+				id: 'prov-1',
+				email: victim,
+				emailVerified: false,
+				name: 'Attacker Provider',
+			} as Parameters<typeof handleOAuthUserInfo>[1]['userInfo'],
+			account: oauthAccount('google-link-attack'),
+		});
+		// Pin the refusal literal: a different refusal reason (or a library
+		// change) should be a visible event, not silently absorbed.
+		expect(refused.error).toBe('account not linked');
+		const attacked = await env.DB.prepare(
+			// linkAccount stores userInfo.id as account_id — query the id a
+			// REGRESSED link would actually write, or this assert can never fail.
+			"SELECT id FROM account WHERE account_id = 'prov-1'",
+		).all();
+		expect(attacked.results).toHaveLength(0);
 
-		// The allowlist changes; the old user row (and its live session) outlives
-		// it. requireAuth must refuse it rather than leave a stale key in play.
-		const ctx = createExecutionContext();
-		const response = await worker.fetch(
-			new Request(`${BASE}/api/me`, { headers: { cookie } }),
-			{
-				...env,
-				AUTH_ALLOWED_EMAIL: 'someone-new@example.com',
-			} as unknown as Env,
-			ctx,
-		);
-		await waitOnExecutionContext(ctx);
-		expect(response.status).toBe(401);
-		expect(await response.json()).toEqual({ error: 'unauthorized' });
+		const linked = await handleOAuthUserInfo(endpointCtx, {
+			userInfo: {
+				id: 'prov-2',
+				email: victim,
+				emailVerified: true,
+				name: 'Real Owner',
+			} as Parameters<typeof handleOAuthUserInfo>[1]['userInfo'],
+			account: oauthAccount('google-link-real'),
+		});
+		expect(linked.error).toBeNull();
+		const real = await env.DB.prepare(
+			"SELECT id FROM account WHERE account_id = 'prov-2'", // linkAccount stores userInfo.id, not opts.account.accountId
+		).all();
+		expect(real.results).toHaveLength(1);
 	});
 });

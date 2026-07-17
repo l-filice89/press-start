@@ -15,7 +15,8 @@ import worker from '../../worker/index';
  */
 
 export const BASE = 'http://example.com';
-export const ALLOWED_EMAIL = env.AUTH_ALLOWED_EMAIL;
+// Registration is open (Story 8.2, AD-29) — the suite's default identity.
+export const TEST_EMAIL = 'owner@press-start.test';
 
 export function capturingEmailProvider() {
 	const sent: MagicLinkEmail[] = [];
@@ -54,8 +55,8 @@ export async function requestMagicLink(email: string) {
 }
 
 /** Follow a captured magic-link URL; returns the session cookie pair. */
-export async function establishSession() {
-	const { response, sent } = await requestMagicLink(ALLOWED_EMAIL);
+export async function establishSession(email: string = TEST_EMAIL) {
+	const { response, sent } = await requestMagicLink(email);
 	expect(response.status).toBe(200);
 	expect(sent).toHaveLength(1);
 

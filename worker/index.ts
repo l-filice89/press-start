@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { deleteExpiredVerifications } from '../src/repositories';
 import { createDb } from '../src/repositories/db';
 import { apiRoutes } from '../src/routes';
 import { igdbFromEnv } from '../src/routes/games';
@@ -40,6 +41,15 @@ export default {
 	fetch: app.fetch,
 	async scheduled(_controller, env: Env, _ctx) {
 		const db = createDb(env.DB);
+		// Story 8.2 (AD-29), re-gated by review: the verification TTL sweep runs
+		// on EVERY invocation — the old spentFanOut gating made it unreachable
+		// exactly when needed most (zero users → spentFanOut is false forever;
+		// steady state → sweeps are rare). One D1 call; the combined worst case
+		// (membership 38 + scores 11 + this) sits AT ~50 — zero headroom, the
+		// next addition to this invocation must re-budget or split.
+		await deleteExpiredVerifications(db, new Date()).catch((error) =>
+			console.error('verification TTL sweep failed', error),
+		);
 		// Isolated (review): runScheduledPsPlusCheck catches its own body, but a
 		// throw from its pre-try user lookup (or a flag write inside its catch)
 		// would otherwise abort the invocation and starve the score refresh below.
@@ -60,7 +70,7 @@ export default {
 		// Same isolation as PS+ above (follow-up review): its pre-try user lookup
 		// can throw past its own catch, and an unhandled throw errors the cron.
 		if (!psPlus.spentFanOut) {
-			await runScheduledScoreRefresh(db, env, igdbFromEnv(env)).catch((error) =>
+			await runScheduledScoreRefresh(db, igdbFromEnv(env)).catch((error) =>
 				console.error(
 					'scheduled score refresh escaped its own handling',
 					error,

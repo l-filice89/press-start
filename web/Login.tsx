@@ -31,20 +31,22 @@ function verifyErrorFromUrl(): string | null {
 		'',
 		`${window.location.pathname}${rest ? `?${rest}` : ''}`,
 	);
-	// INVALID_TOKEN, ACCESS_DENIED and Google's own access_denied are the codes
-	// with a specific, user-actionable meaning; anything else gets a generic
-	// message rather than a wrong-specific one.
-	//
-	// The two are NOT the same event, and the casing is the only thing that
-	// tells them apart: OUR allowlist rejection arrives as the uppercase
-	// `ACCESS_DENIED` this app throws (Story 8.1), while a user who cancels at
-	// Google's consent screen is bounced back with OAuth 2.0's lowercase
-	// `access_denied`. Calling a cancelled consent a ban would be a lie.
-	if (error === 'ACCESS_DENIED') {
-		return "That account isn't allowed to sign in to this app.";
+	// INVALID_TOKEN, EMAIL_NOT_VERIFIED and Google's own access_denied are the
+	// codes with a specific, user-actionable meaning; anything else gets a
+	// generic message rather than a wrong-specific one. (The allowlist's
+	// uppercase ACCESS_DENIED died with the allowlist — registration is open,
+	// AD-29; the lowercase `access_denied` is OAuth 2.0's cancelled-consent
+	// bounce and stays.)
+	if (error === 'EMAIL_NOT_VERIFIED') {
+		return "Google hasn't verified that email address, so it can't be used to sign in. Use the email link below instead.";
 	}
 	if (error === 'access_denied') {
 		return 'Google sign-in was cancelled.';
+	}
+	// better-auth's LINK-path refusal (an unverified provider email matching an
+	// existing account) arrives as its own literal, not our hook's code.
+	if (error === 'account_not_linked') {
+		return "That Google account couldn't be linked — its email address isn't verified. Sign in with the email link below instead.";
 	}
 	return error === 'INVALID_TOKEN'
 		? 'That sign-in link is no longer valid — it may have expired or already been used. Request a new one below.'

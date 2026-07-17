@@ -4,7 +4,7 @@
 interface __BaseEnv_Env {
 	DB: D1Database;
 	ASSETS: Fetcher;
-	AUTH_ALLOWED_EMAIL: "e2e@press-start.local" | "l.filice.89@gmail.com";
+	AUTH_RATE_LIMIT?: string;
 	AUTH_EMAIL_FROM: "" | "PRESS START <onboarding@resend.dev>";
 	PSN_REGION: "it-it";
 	E2E_TEST_HOOKS?: "1";
@@ -22,7 +22,6 @@ declare namespace Cloudflare {
 	interface E2eEnv {
 		DB: D1Database;
 		ASSETS: Fetcher;
-		AUTH_ALLOWED_EMAIL: "e2e@press-start.local";
 		AUTH_EMAIL_FROM: "";
 		PSN_REGION: "it-it";
 		E2E_TEST_HOOKS: "1";
@@ -40,7 +39,7 @@ type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
 };
 declare namespace NodeJS {
-	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "AUTH_ALLOWED_EMAIL" | "AUTH_EMAIL_FROM" | "PSN_REGION" | "E2E_TEST_HOOKS" | "BETTER_AUTH_SECRET" | "RESEND_API_KEY" | "IGDB_CLIENT_ID" | "IGDB_CLIENT_SECRET" | "GOOGLE_CLIENT_ID" | "GOOGLE_CLIENT_SECRET">> {}
+	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "AUTH_EMAIL_FROM" | "PSN_REGION" | "E2E_TEST_HOOKS" | "BETTER_AUTH_SECRET" | "RESEND_API_KEY" | "IGDB_CLIENT_ID" | "IGDB_CLIENT_SECRET" | "GOOGLE_CLIENT_ID" | "GOOGLE_CLIENT_SECRET">> {}
 }
 
 // Begin runtime types

@@ -23,7 +23,7 @@
  */
 import type { IgdbScoreFetch, IgdbScores, IgdbTimeToBeat } from '../providers';
 import {
-	findUserByEmail,
+	findOldestUser,
 	type GameScores,
 	listExternalLinksBySource,
 	updateGameIgdbFacts,
@@ -158,18 +158,18 @@ export async function runScoreRefresh(
 }
 
 /**
- * Cron entry (mirrors `runScheduledPsPlusCheck`): resolve THE single-tenant
- * user, skip while fresh, run, and persist the FR-40 failure flag on any
+ * Cron entry (mirrors `runScheduledPsPlusCheck`): resolve the oldest
+ * registered user (interim, 8.2), skip while fresh, run, and persist the FR-40 failure flag on any
  * genuine provider failure or throw. Missing IGDB creds are a CONFIG gap, not
  * a transient failure — same posture as PS+'s `no-region` (the banner would
  * point at a retry that can never succeed), so it logs and leaves quietly.
  */
 export async function runScheduledScoreRefresh(
 	db: Db,
-	env: { AUTH_ALLOWED_EMAIL: string },
 	igdb: IgdbScoreFetch | null,
 ): Promise<void> {
-	const user = await findUserByEmail(db, env.AUTH_ALLOWED_EMAIL);
+	// ponytail: interim single-tenant bridge (8.2) — 8.4 owns the real model.
+	const user = await findOldestUser(db);
 	if (!user) return;
 	if (!igdb) {
 		console.warn('score refresh skipped — IGDB credentials not configured');

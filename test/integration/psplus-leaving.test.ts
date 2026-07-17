@@ -19,7 +19,7 @@ import {
 	productPayload,
 } from '../fixtures/psn';
 import { type StoreCall, stubStore } from './psn-stub';
-import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
+import { appFetch, establishSession, TEST_EMAIL } from './session';
 
 /**
  * Story 10.4 (VR-6 rework): the leaving sweep — per-game departure dates from
@@ -111,7 +111,7 @@ beforeAll(async () => {
 	const [row] = await db()
 		.select({ id: user.id })
 		.from(user)
-		.where(eq(user.email, ALLOWED_EMAIL));
+		.where(eq(user.email, TEST_EMAIL));
 	userId = row.id;
 });
 
@@ -236,7 +236,6 @@ describe('PS+ leaving sweep (Story 10.4)', () => {
 
 		const before = calls.length;
 		await runScheduledPsPlusCheck(db(), {
-			AUTH_ALLOWED_EMAIL: ALLOWED_EMAIL,
 			PSN_REGION: env.PSN_REGION,
 		});
 		const invocation = calls.slice(before);
@@ -278,7 +277,6 @@ describe('PS+ leaving sweep (Story 10.4)', () => {
 
 		const membershipCalls = calls.length;
 		await runScheduledPsPlusCheck(db(), {
-			AUTH_ALLOWED_EMAIL: ALLOWED_EMAIL,
 			PSN_REGION: env.PSN_REGION,
 		});
 

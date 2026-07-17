@@ -25,7 +25,7 @@ import {
 	productId,
 } from '../fixtures/psn';
 import { stubStore } from './psn-stub';
-import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
+import { appFetch, establishSession, TEST_EMAIL } from './session';
 
 /**
  * PS+ catalog ingest (Story 5.1 + 7.1; FR-38/39/50, AD-24/27) against the real
@@ -90,7 +90,7 @@ beforeAll(async () => {
 	const [row] = await db()
 		.select({ id: user.id })
 		.from(user)
-		.where(eq(user.email, ALLOWED_EMAIL));
+		.where(eq(user.email, TEST_EMAIL));
 	userId = row.id;
 });
 

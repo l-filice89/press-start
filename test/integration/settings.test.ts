@@ -16,7 +16,7 @@ import {
 	getPsnRegion,
 	PSN_REGION_SETTING_KEY,
 } from '../../src/services/settings';
-import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
+import { appFetch, establishSession, TEST_EMAIL } from './session';
 
 /**
  * Timezone policy integration tests (Epic 2 retro): the settings endpoint
@@ -47,7 +47,7 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 		const [row] = await db()
 			.select({ id: user.id })
 			.from(user)
-			.where(eq(user.email, ALLOWED_EMAIL));
+			.where(eq(user.email, TEST_EMAIL));
 		userId = row.id;
 	});
 

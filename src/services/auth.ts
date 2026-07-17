@@ -31,20 +31,6 @@ export interface CreateAuthOptions {
 	emailProvider?: EmailProvider;
 }
 
-/**
- * Single-user allowlist (FR-48 "the app is mine today"): only
- * AUTH_ALLOWED_EMAIL may sign in. An unset/empty allowlist means nobody —
- * fail closed. Enforced at the route boundary (before better-auth writes a
- * verification token, see `routes/auth.ts`) and again in `sendMagicLink`
- * as defense-in-depth.
- */
-export function isAllowedEmail(email: string, env: Env): boolean {
-	return (
-		Boolean(env.AUTH_ALLOWED_EMAIL) &&
-		email.toLowerCase() === env.AUTH_ALLOWED_EMAIL.toLowerCase()
-	);
-}
-
 export function createAuth(env: Env, options: CreateAuthOptions) {
 	if (!env.BETTER_AUTH_SECRET) {
 		// Fail loud (AD-14): without a secret better-auth falls back to a
@@ -75,6 +61,20 @@ export function createAuth(env: Env, options: CreateAuthOptions) {
 			schema,
 		}),
 		telemetry: { enabled: false },
+		// In-code burst damping (8.2 review): better-auth's built-in limiter on a
+		// module-scope in-memory store — per-isolate best-effort, NO D1 writes
+		// (AD-29/AD-32: a D1-metered limiter hands an attacker a write per hit).
+		// The WAF edge rule remains the distributed backstop; this stops one
+		// isolate being an email cannon. `AUTH_RATE_LIMIT=off` (.dev.vars) turns
+		// it off for tests, which hammer the magic-link route by design.
+		rateLimit: {
+			enabled: env.AUTH_RATE_LIMIT !== 'off',
+			window: 60,
+			max: 60,
+			customRules: {
+				'/sign-in/magic-link': { window: 60, max: 5 },
+			},
+		},
 		// Story 8.6 (AD-33 §6): a signed cookie cache skips the per-request D1
 		// session read. TTL is capped at 5 minutes — that is the revocation
 		// latency bound (a revoked session stays live until the cache expires).
@@ -92,25 +92,18 @@ export function createAuth(env: Env, options: CreateAuthOptions) {
 					},
 				}
 			: {}),
-		// THE allowlist gate for the OAuth path (FR-48 stays intact; dropping the
-		// allowlist is Story 8.2). It cannot live at the route boundary the way
-		// the magic-link pre-gate does: the email only exists AFTER better-auth
-		// exchanges the authorization code. This hook runs inside that exchange,
-		// before the user row is written, so a rejected account leaves NO
-		// database residue.
+		// Registration is OPEN (AD-29, signed off 2026-07-17): admission is
+		// PROVEN CONTROL OF THE EMAIL, not a list. Magic link proves it by
+		// construction; this hook is the OAuth half — it cannot live at the
+		// route boundary because the email only exists AFTER better-auth
+		// exchanges the authorization code. It runs before the user row is
+		// written, so a rejected account leaves NO database residue.
 		//
 		// The MESSAGE is the wire contract, not the `code`: better-auth's
 		// `handleOAuthUserInfo` catches an APIError from this hook and returns
 		// `{ error: e.message }`, and the callback then redirects to
-		// `?error=${message.split(' ').join('_')}`. A prose message would arrive
-		// at the login screen as `?error=That_account_is_not_allowed…`. So the
-		// message IS the code — `ACCESS_DENIED`, no spaces — and `web/Login.tsx`
-		// matches it. `code` is kept for the paths that rethrow the APIError.
-		//
-		// Scope note: this gates user CREATION. Linking a Google account to an
-		// EXISTING user row never runs it — safe today because the allowlist is a
-		// single exact email (an unallowed address has no row to link into), but
-		// Story 8.2 (real registration) must gate the link path too.
+		// `?error=${message.split(' ').join('_')}`. So the message IS the code —
+		// `EMAIL_NOT_VERIFIED`, no spaces — and `web/Login.tsx` matches it.
 		databaseHooks: {
 			user: {
 				create: {
@@ -119,17 +112,31 @@ export function createAuth(env: Env, options: CreateAuthOptions) {
 						emailVerified: boolean;
 					}) => {
 						// An unverified provider-supplied email is an unproven claim to
-						// that address — the allowlist compares a string, so admitting an
-						// unverified one would let a provider hand us the owner's address
-						// without the owner ever proving control of it.
-						if (!isAllowedEmail(newUser.email, env) || !newUser.emailVerified) {
+						// that address — admitting it would let a provider hand us
+						// someone's address without the owner ever proving control.
+						// Strict boolean: a provider serializing the OIDC claim as the
+						// string "false" must not read as verified.
+						if (newUser.emailVerified !== true) {
 							throw new APIError('FORBIDDEN', {
-								code: 'ACCESS_DENIED',
-								message: 'ACCESS_DENIED',
+								code: 'EMAIL_NOT_VERIFIED',
+								message: 'EMAIL_NOT_VERIFIED',
 							});
 						}
 					},
 				},
+			},
+		},
+		// The account-LINK path is the takeover door (deferred-work, closed by
+		// Story 8.2): better-auth links a provider identity into an EXISTING user
+		// by email match without the create hook ever running, and a provider in
+		// `trustedProviders` links even when the provider says the email is
+		// UNVERIFIED. With open registration, anyone can pre-register a victim's
+		// address — so no provider is trusted past its own verification: linking
+		// requires the provider-verified matching email, nothing less.
+		account: {
+			accountLinking: {
+				enabled: true,
+				trustedProviders: [],
 			},
 		},
 		plugins: [
@@ -138,11 +145,6 @@ export function createAuth(env: Env, options: CreateAuthOptions) {
 				// silently drift from the real TTL on a library-default change.
 				expiresIn: MAGIC_LINK_TTL_MINUTES * 60,
 				sendMagicLink: async ({ email, url }) => {
-					// Defense-in-depth re-check of the route-level gate: even if a
-					// non-allowlisted request reached this far, no email leaves.
-					if (!isAllowedEmail(email, env)) {
-						return;
-					}
 					await emailProvider.sendMagicLinkEmail({ to: email, url });
 				},
 			}),

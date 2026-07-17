@@ -31,7 +31,7 @@ import {
 import worker from '../../worker/index';
 import { catalogPagePayload } from '../fixtures/psn';
 import { stubStore } from './psn-stub';
-import { ALLOWED_EMAIL, establishSession } from './session';
+import { establishSession, TEST_EMAIL } from './session';
 
 /**
  * Scheduled PS+ Extra refresh (Story 5.2, FR-39/40). Drives the same catalog
@@ -123,12 +123,13 @@ const controller = {
 
 beforeAll(async () => {
 	await applyD1Migrations(env.DB, inject('migrations'));
-	// establishSession creates the AUTH_ALLOWED_EMAIL user the cron resolves.
+	// establishSession creates the suite's default user; the cron resolves the
+	// oldest registered user (8.2 interim bridge).
 	await establishSession();
 	const [row] = await db()
 		.select({ id: user.id })
 		.from(user)
-		.where(eq(user.email, ALLOWED_EMAIL));
+		.where(eq(user.email, TEST_EMAIL));
 	userId = row.id;
 });
 
@@ -323,25 +324,29 @@ describe('scheduled PS+ Extra refresh (Story 5.2)', () => {
 		await clearPsPlusRefreshFailed(db(), userId);
 		const seen = stubCatalog(['x']);
 
-		await runScheduledPsPlusCheck(db(), {
-			AUTH_ALLOWED_EMAIL: env.AUTH_ALLOWED_EMAIL,
-		});
+		await runScheduledPsPlusCheck(db(), {});
 
 		expect(seen.length).toBe(0); // no region → never fetched
 		// A config gap must not light a banner the button can't clear.
 		expect(await isPsPlusRefreshFailed(db(), userId)).toBe(false);
 	});
 
-	it('no-ops (no throw, no writes) when the allowlist email has no user row', async () => {
+	it('no-ops (no throw, no writes) when NO user is registered (Story 8.2: fresh deploy)', async () => {
+		// Last test in the file on purpose: registration is open (AD-29) and the
+		// cron resolves the OLDEST user — zero users = clean no-op. The cascade
+		// takes sessions/settings/tracking with it.
+		await db().delete(user);
 		const before = (await db().select({ id: game.id }).from(game)).length;
 		const seen = stubCatalog(['Whatever']);
 
 		await runScheduledPsPlusCheck(db(), {
 			...env,
-			AUTH_ALLOWED_EMAIL: 'nobody@press-start.local',
 		});
 
 		expect(seen.length).toBe(0); // never fetched — no user to check
 		expect((await db().select({ id: game.id }).from(game)).length).toBe(before);
+		// Re-seed so a test appended after this one doesn't inherit an empty
+		// user table (review: order landmine).
+		await establishSession();
 	});
 });

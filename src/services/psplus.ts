@@ -28,7 +28,7 @@ import {
 } from '../providers';
 import {
 	deleteCatalogOutsideRegion,
-	findUserByEmail,
+	findOldestUser,
 	listCatalogProductIds,
 	listCatalogTitleKeys,
 	listLibraryForUser,
@@ -95,7 +95,7 @@ const CATALOG_DRIFT_TOLERANCE = 2;
  * off by 5 — Epic 7 cross-story review, H3):
  *   external: 5 catalog pages (490 / 100), 0 auth legs (this endpoint is public)
  *   D1, on the CRON path:
- *             findUserByEmail 1 · lock claim 1 · region read 1 · fence
+ *             findOldestUser 1 · lock claim 1 · region read 1 · fence
  *             (holdsPsnLock) 1 · timezone read (todayForUser) 1 · pre-run product
  *             ids 1 · snapshot upsert ceil(490/50) = 10 · prune 1 · stale-region
  *             delete 1 · sweep-state read 1 + write 1 · leaving-state re-arm
@@ -114,7 +114,7 @@ const CATALOG_DRIFT_TOLERANCE = 2;
  *   (worker/index.ts skips scores on any sweep invocation; sweep ledger:
  *   psplus-leaving.ts, ≤44).
  *   The HTTP button pays the auth middleware (3) on top instead of
- *   findUserByEmail (1), and none of the rotation reads: 37 of 50.
+ *   findOldestUser (1), and none of the rotation reads: 37 of 50.
  * A GENRE-SWEEP CHUNK NO LONGER RIDES ALONG (H3): 34 + a chunk (~25) busts the
  * budget, and the resulting mid-sweep "Too many subrequests" throw was
  * self-perpetuating — see `runScheduledPsPlusCheck`.
@@ -362,17 +362,23 @@ export async function runPsPlusCheck(
 export async function runScheduledPsPlusCheck(
 	db: Db,
 	env: {
-		AUTH_ALLOWED_EMAIL: string;
 		PSN_REGION?: string;
 	},
 	// `spentFanOut` = this invocation already paid a sweep chunk's external
 	// fan-out (or died mid-chunk) — the caller must NOT stack the score refresh
 	// on top (review, H3 sibling: a leaving chunk ≈42 + scores ≈10 busts 50).
 ): Promise<{ spentFanOut: boolean }> {
-	// ponytail: single-tenant — resolve THE user by the allowlist email. Loop
-	// over users here if AUTH_ALLOWED_EMAIL ever becomes multi-value.
-	const user = await findUserByEmail(db, env.AUTH_ALLOWED_EMAIL);
+	// ponytail: interim single-tenant bridge (Story 8.2 — the allowlist is
+	// gone): the OLDEST registered user stands in until Story 8.4's per-region
+	// model deletes user-identity from the cron entirely.
+	const user = await findOldestUser(db);
 	if (!user) return { spentFanOut: false };
+	// Loud on purpose (review): under open registration the FIRST registrant
+	// owns this identity — if this ever names a stranger, that's the 8.4
+	// per-region model's cue to land.
+	console.log(
+		`scheduled ps+ check: cron identity = oldest user ${user.email} (8.2 interim)`,
+	);
 	let spentFanOut = false;
 
 	try {

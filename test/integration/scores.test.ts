@@ -25,7 +25,7 @@ import {
 	markScoresRefreshFailed,
 	SCORES_REFRESHED_AT_SETTING_KEY,
 } from '../../src/services/settings';
-import { ALLOWED_EMAIL, establishSession } from './session';
+import { establishSession, TEST_EMAIL } from './session';
 
 /**
  * Story 10.1 integration tests: the scheduled score refresh against real D1.
@@ -94,7 +94,7 @@ describe('score refresh (Story 10.1)', () => {
 		const [row] = await db()
 			.select({ id: user.id })
 			.from(user)
-			.where(eq(user.email, ALLOWED_EMAIL))
+			.where(eq(user.email, TEST_EMAIL))
 			.limit(1);
 		userId = row.id;
 	});
@@ -251,17 +251,13 @@ describe('score refresh (Story 10.1)', () => {
 				'2020-01-01',
 			);
 			await clearScoresRefreshFailed(db(), userId);
-			await runScheduledScoreRefresh(
-				db(),
-				{ AUTH_ALLOWED_EMAIL: ALLOWED_EMAIL },
-				{
-					fetchScoresByIds: async (ids) =>
-						ids.map((id) => ({ igdbId: id, ...HADES_SCORES })),
-					fetchTimeToBeatByIds: async () => {
-						throw new Error('ttb down');
-					},
+			await runScheduledScoreRefresh(db(), {
+				fetchScoresByIds: async (ids) =>
+					ids.map((id) => ({ igdbId: id, ...HADES_SCORES })),
+				fetchTimeToBeatByIds: async () => {
+					throw new Error('ttb down');
 				},
-			);
+			});
 			expect(await isScoresRefreshFailed(db(), userId)).toBe(true);
 		});
 
@@ -311,16 +307,12 @@ describe('score refresh (Story 10.1)', () => {
 			SCORES_REFRESHED_AT_SETTING_KEY,
 			'2020-01-01',
 		);
-		await runScheduledScoreRefresh(
-			db(),
-			{ AUTH_ALLOWED_EMAIL: ALLOWED_EMAIL },
-			{
-				fetchScoresByIds: async () => {
-					throw new Error('IGDB down');
-				},
-				fetchTimeToBeatByIds: async () => [],
+		await runScheduledScoreRefresh(db(), {
+			fetchScoresByIds: async () => {
+				throw new Error('IGDB down');
 			},
-		);
+			fetchTimeToBeatByIds: async () => [],
+		});
 		expect(await isScoresRefreshFailed(db(), userId)).toBe(true);
 	});
 
@@ -333,17 +325,13 @@ describe('score refresh (Story 10.1)', () => {
 			SCORES_REFRESHED_AT_SETTING_KEY,
 			new Date().toISOString().slice(0, 10),
 		);
-		await runScheduledScoreRefresh(
-			db(),
-			{ AUTH_ALLOWED_EMAIL: ALLOWED_EMAIL },
-			{
-				fetchScoresByIds: async () => {
-					calls++;
-					return [];
-				},
-				fetchTimeToBeatByIds: async () => [],
+		await runScheduledScoreRefresh(db(), {
+			fetchScoresByIds: async () => {
+				calls++;
+				return [];
 			},
-		);
+			fetchTimeToBeatByIds: async () => [],
+		});
 		expect(calls).toBe(0);
 	});
 
@@ -356,11 +344,7 @@ describe('score refresh (Story 10.1)', () => {
 		);
 		// Clear any flag left by earlier rows in this file.
 		await clearScoresRefreshFailed(db(), userId);
-		await runScheduledScoreRefresh(
-			db(),
-			{ AUTH_ALLOWED_EMAIL: ALLOWED_EMAIL },
-			null,
-		);
+		await runScheduledScoreRefresh(db(), null);
 		expect(await isScoresRefreshFailed(db(), userId)).toBe(false);
 	});
 });

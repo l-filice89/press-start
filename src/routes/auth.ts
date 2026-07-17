@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import { z } from 'zod';
-import { createAuth, isAllowedEmail } from '../services/auth';
+import { createAuth } from '../services/auth';
 
 /**
  * Auth boundary (FR-47/FR-48). Two exports:
@@ -24,29 +24,10 @@ type AuthEnv = { Bindings: Env; Variables: AuthVariables };
 
 export const authRoute = new Hono<{ Bindings: Env }>();
 
-/**
- * Allowlist gate ahead of better-auth: the library writes a live
- * verification token to D1 *before* it calls `sendMagicLink`, so gating only
- * inside the send callback would let any unauthenticated request grow the
- * `verification` table. Short-circuiting here means non-allowlisted sign-in
- * requests leave no database residue at all, while returning better-auth's
- * exact success shape (no account enumeration).
- */
-authRoute.post('/auth/sign-in/magic-link', async (c, next) => {
-	const body = await c.req.raw
-		.clone()
-		.json()
-		.catch(() => null);
-	const email =
-		body && typeof body === 'object' && 'email' in body
-			? String((body as { email: unknown }).email)
-			: '';
-	if (!isAllowedEmail(email, c.env)) {
-		return c.json({ status: true }, 200);
-	}
-	await next();
-});
-
+// Registration is open (AD-29): no pre-gate — any email may request a magic
+// link, and following it proves control of the address. The `verification`
+// rows unauthenticated requests write are bounded by the WAF rate limit on
+// /api/auth/* (edge rule, deploy note) and swept by the cron once expired.
 authRoute.on(['GET', 'POST'], '/auth/*', (c) => {
 	const auth = createAuth(c.env, { baseURL: new URL(c.req.url).origin });
 	return auth.handler(c.req.raw);
@@ -55,12 +36,11 @@ authRoute.on(['GET', 'POST'], '/auth/*', (c) => {
 export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
 	const auth = createAuth(c.env, { baseURL: new URL(c.req.url).origin });
 	const session = await auth.api.getSession({ headers: c.req.raw.headers });
-	// The allowlist is re-checked on every protected request, not just at
-	// sign-in: a `user` row outlives the allowlist that admitted it, so a
-	// changed (or emptied) AUTH_ALLOWED_EMAIL strands the old session (within
-	// the ≤5-min cookieCache TTL, AD-33 §6)
-	// rather than leave a stale account with a live key to the library.
-	if (!session || !isAllowedEmail(session.user.email, c.env)) {
+	// A valid session alone gates (AD-29, open registration — no allowlist to
+	// re-check). There is no ban/de-admission tooling (AD-29): the only
+	// revocation paths are sign-out and manual session-row deletion, and either
+	// takes effect within the ≤5-min cookieCache TTL (AD-33 §6).
+	if (!session) {
 		return c.json({ error: 'unauthorized' }, 401);
 	}
 	c.set('userId', session.user.id);

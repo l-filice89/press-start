@@ -11,7 +11,7 @@ import { game, user } from '../../src/schema';
 import { todayForUser } from '../../src/services/settings';
 import { catalogPagePayload, EMPTY_CATALOG_PAYLOAD } from '../fixtures/psn';
 import { stubStore } from './psn-stub';
-import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
+import { appFetch, establishSession, TEST_EMAIL } from './session';
 
 /**
  * Story 10.2 (VR-6): the departure diff — `ps_plus_left_on` stamped when the
@@ -65,7 +65,7 @@ beforeAll(async () => {
 	const [row] = await db()
 		.select({ id: user.id })
 		.from(user)
-		.where(eq(user.email, ALLOWED_EMAIL));
+		.where(eq(user.email, TEST_EMAIL));
 	userId = row.id;
 });
 

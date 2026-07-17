@@ -9,7 +9,7 @@ import {
 import { createDb } from '../../src/repositories/db';
 import { user } from '../../src/schema';
 import { changePlayStatus, getShelf, logMilestone } from '../../src/services';
-import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
+import { appFetch, establishSession, TEST_EMAIL } from './session';
 
 /**
  * Story 2.1 integration tests: the play-status write path against real workerd +
@@ -239,7 +239,7 @@ describe('play-status writes (integration, real workerd + local D1)', () => {
 			const [row] = await db()
 				.select()
 				.from(user)
-				.where(eq(user.email, ALLOWED_EMAIL))
+				.where(eq(user.email, TEST_EMAIL))
 				.limit(1);
 			sessionUser = row.id;
 		});
@@ -406,7 +406,7 @@ describe('milestone writes (integration, real workerd + local D1)', () => {
 			const [row] = await db()
 				.select()
 				.from(user)
-				.where(eq(user.email, ALLOWED_EMAIL))
+				.where(eq(user.email, TEST_EMAIL))
 				.limit(1);
 			sessionUser = row.id;
 		});
@@ -523,7 +523,7 @@ describe('ownership writes (Story 2.4, through the route with a real session)', 
 		const [row] = await db()
 			.select()
 			.from(user)
-			.where(eq(user.email, ALLOWED_EMAIL))
+			.where(eq(user.email, TEST_EMAIL))
 			.limit(1);
 		sessionUser = row.id;
 	});
@@ -710,7 +710,7 @@ describe('lifecycle-date edits (Story 2.4, through the route with a real session
 		const [row] = await db()
 			.select()
 			.from(user)
-			.where(eq(user.email, ALLOWED_EMAIL))
+			.where(eq(user.email, TEST_EMAIL))
 			.limit(1);
 		sessionUser = row.id;
 	});

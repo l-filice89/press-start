@@ -27,7 +27,7 @@ import {
 	productId,
 } from '../fixtures/psn';
 import { stubStore } from './psn-stub';
-import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
+import { appFetch, establishSession, TEST_EMAIL } from './session';
 
 /**
  * The PS+ genre sweep (Story 7.1, AD-26/28) — chunked, resumable, additive.
@@ -146,7 +146,7 @@ beforeAll(async () => {
 	const [row] = await db()
 		.select({ id: user.id })
 		.from(user)
-		.where(eq(user.email, ALLOWED_EMAIL));
+		.where(eq(user.email, TEST_EMAIL));
 	userId = row.id;
 	await setSetting(db(), userId, PSN_REGION_SETTING_KEY, REGION);
 });

@@ -10,7 +10,7 @@ import {
 } from '../../src/repositories';
 import { createDb } from '../../src/repositories/db';
 import { user } from '../../src/schema';
-import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
+import { appFetch, establishSession, TEST_EMAIL } from './session';
 
 /**
  * Story 6.3 CSV export: the whole library downloads as a user-held second copy.
@@ -30,7 +30,7 @@ describe('CSV export (Story 6.3, through the route)', () => {
 		const [row] = await db()
 			.select({ id: user.id })
 			.from(user)
-			.where(eq(user.email, ALLOWED_EMAIL))
+			.where(eq(user.email, TEST_EMAIL))
 			.limit(1);
 		userId = row.id;
 	});

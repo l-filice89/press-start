@@ -11,7 +11,7 @@ import {
 } from '../../src/services/psn-lock';
 import { catalogPagePayload } from '../fixtures/psn';
 import { stubStore } from './psn-stub';
-import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
+import { appFetch, establishSession, TEST_EMAIL } from './session';
 
 /**
  * Single-flight over the PSN long-ops (Story 9.5, deferred since Epic 4). The
@@ -40,7 +40,7 @@ beforeAll(async () => {
 	const [row] = await db()
 		.select({ id: user.id })
 		.from(user)
-		.where(eq(user.email, ALLOWED_EMAIL));
+		.where(eq(user.email, TEST_EMAIL));
 	userId = row.id;
 });
 

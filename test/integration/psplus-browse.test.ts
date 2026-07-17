@@ -24,7 +24,7 @@ import {
 	PSPLUS_SWEEP_STATE_SETTING_KEY,
 	setPsPlusSweepState,
 } from '../../src/services/settings';
-import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
+import { appFetch, establishSession, TEST_EMAIL } from './session';
 
 /**
  * The catalog BROWSE read (Story 7.2 review) against the real Worker + local D1.
@@ -111,7 +111,7 @@ beforeAll(async () => {
 	const [row] = await db()
 		.select({ id: user.id })
 		.from(user)
-		.where(eq(user.email, ALLOWED_EMAIL));
+		.where(eq(user.email, TEST_EMAIL));
 	userId = row.id;
 	await setSetting(db(), userId, PSN_REGION_SETTING_KEY, REGION);
 });
