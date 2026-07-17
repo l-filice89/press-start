@@ -38,7 +38,10 @@ const COPY: Record<EmptyVariant, { headline: string; subtext: string }> = {
 	},
 	'empty-catalog': {
 		headline: 'EMPTY CATALOG',
-		subtext: 'Run Check PS+ Extra to load the catalog for your region.',
+		// Passive (8.4): refreshes are automatic — the cron and the shelf's
+		// stale-snapshot guard fill this; there is no button to offer.
+		subtext:
+			'The catalog for your region updates automatically — check back soon.',
 	},
 	// A resolved 404 on `/game/:id` (Story 7.2 review, H4). It is NOT `no-match`:
 	// no filter is involved, and "no games match the current filters" on a pasted

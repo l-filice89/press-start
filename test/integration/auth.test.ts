@@ -5,6 +5,7 @@ import { beforeAll, describe, expect, inject, it } from 'vitest';
 import {
 	deleteExpiredVerifications,
 	insertGame,
+	recordRegionOutcome,
 	upsertTracking,
 } from '../../src/repositories';
 import { createDb } from '../../src/repositories/db';
@@ -191,6 +192,8 @@ describe('magic-link auth & user scoping (integration, real workerd + local D1)'
 			// Story 8.3's region-keyed departure ledger (AD-30) — per-region shared
 			// data, no user_id: still no roles/sharing/tenancy.
 			'ps_plus_departure',
+			// Story 8.4's region-state ledger (AD-31) — same owner class.
+			'ps_plus_region_state',
 			'session',
 			'setting',
 			'user',
@@ -210,6 +213,14 @@ describe('magic-link auth & user scoping (integration, real workerd + local D1)'
 describe('open registration & the verified-email rule (Story 8.2 / B1b)', () => {
 	beforeAll(async () => {
 		await applyD1Migrations(env.DB, inject('migrations'));
+		// Story 8.4: /api/shelf's waitUntil stale-snapshot guard would otherwise
+		// hit the REAL store (nothing stubs fetch here) — a fresh ledger row for
+		// the env-seeded region keeps it dormant.
+		await recordRegionOutcome(createDb(env.DB), 'it-it', {
+			attemptedOn: new Date().toISOString().slice(0, 10),
+			succeeded: true,
+			window: new Date().toISOString().slice(0, 7),
+		});
 	});
 
 	const oauthAccount = (id: string) => ({

@@ -3,11 +3,15 @@ import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, inject, it } from 'vitest';
 import { todayInZone } from '../../src/core';
 import {
+	claimRegionLock,
 	deleteSetting,
+	ensureRegionState,
 	getSetting,
 	getTracking,
 	insertGame,
 	listLibraryForUser,
+	recordRegionOutcome,
+	releaseRegionLock,
 	upsertCatalogProducts,
 	upsertTracking,
 } from '../../src/repositories';
@@ -85,7 +89,9 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 			await (await appFetch('/api/settings', { headers: { cookie } })).json(),
 		).toEqual({
 			timezone: 'Europe/Berlin',
-			psPlusRefreshFailed: false,
+			// Story 8.4: the failure banner died — the field is the region's
+			// "refresh in flight" readout now.
+			catalogRefreshing: false,
 			psPlusRefreshedAt: null,
 			scoresRefreshFailed: false,
 			stragglerCount: 0,
@@ -157,17 +163,18 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 			'en-us',
 		);
 
-		// A REAL region change clears the old region's refresh stamps (review
-		// 2026-07-15) — the header must not date a catalog this region never had.
-		// Re-saving the SAME region clears nothing.
-		const {
-			stampPsPlusRefreshedAt,
-			markPsPlusRefreshFailed,
-			isPsPlusRefreshFailed,
-			getPsPlusRefreshedAt,
-		} = await import('../../src/services/settings');
-		await stampPsPlusRefreshedAt(db(), userId);
-		await markPsPlusRefreshFailed(db(), userId);
+		// Story 8.4: freshness is per-REGION (the ledger's last_success) — a
+		// region change clears NOTHING, the readout simply follows the new
+		// region's ledger row. The header still can't date a catalog the new
+		// region never had, because the new region reads its OWN (empty) row.
+		const { getPsPlusRefreshedAt } = await import(
+			'../../src/services/settings'
+		);
+		await recordRegionOutcome(db(), 'en-us', {
+			attemptedOn: '2026-07-10',
+			succeeded: true,
+			window: '2026-07',
+		});
 
 		const resaved = await appFetch('/api/settings/psn-region', {
 			method: 'PUT',
@@ -175,10 +182,10 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 			body: JSON.stringify({ region: 'en-us' }),
 		});
 		expect(resaved.status).toBe(200);
-		expect(await getPsPlusRefreshedAt(db(), userId)).not.toBeNull();
-		expect(await isPsPlusRefreshFailed(db(), userId)).toBe(true);
+		expect(await getPsPlusRefreshedAt(db(), 'en-us')).toBe('2026-07-10');
 
-		// A 3-part Sony locale is accepted — and the change wipes both stamps.
+		// A 3-part Sony locale is accepted — the old region's stamp SURVIVES
+		// (per-region fact) while the new region reads null until its own refresh.
 		const changed = await appFetch('/api/settings/psn-region', {
 			method: 'PUT',
 			headers: { 'content-type': 'application/json', cookie },
@@ -186,8 +193,8 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 		});
 		expect(changed.status).toBe(200);
 		expect(await changed.json()).toEqual({ region: 'zh-hans-hk' });
-		expect(await getPsPlusRefreshedAt(db(), userId)).toBeNull();
-		expect(await isPsPlusRefreshFailed(db(), userId)).toBe(false);
+		expect(await getPsPlusRefreshedAt(db(), 'zh-hans-hk')).toBeNull();
+		expect(await getPsPlusRefreshedAt(db(), 'en-us')).toBe('2026-07-10');
 
 		// No setting and no seed reads as unset (the route reports null).
 		expect(await getPsnRegion(db(), 'user-with-no-region', {})).toBeUndefined();
@@ -220,31 +227,36 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 		expect(unauthed.status).toBe(401);
 	});
 
-	it('PS+ refresh failure (5.2): GET exposes psPlusRefreshFailed, cleared on resolve', async () => {
-		const { markPsPlusRefreshFailed, clearPsPlusRefreshFailed } = await import(
-			'../../src/services/settings'
-		);
-
-		await markPsPlusRefreshFailed(db(), userId);
+	// The 5.2 failure banner is structurally gone (Story 8.4, AD-31: refresh
+	// failures are passive) — the field's replacement is the per-region
+	// "refresh in flight" flag, read off the region lock.
+	it('GET exposes catalogRefreshing while the region lock is held (8.4)', async () => {
+		const region = 'it-it'; // the user's effective region at this point
+		const token = `${Date.now() + 60_000}:catalog-refresh:settings-test`;
+		await ensureRegionState(db(), region);
+		expect(await claimRegionLock(db(), region, token, Date.now())).toBe(true);
+		try {
+			expect(
+				await (await appFetch('/api/settings', { headers: { cookie } })).json(),
+			).toMatchObject({ catalogRefreshing: true });
+		} finally {
+			await releaseRegionLock(db(), region, token);
+		}
 		expect(
 			await (await appFetch('/api/settings', { headers: { cookie } })).json(),
-		).toMatchObject({ psPlusRefreshFailed: true });
-
-		await clearPsPlusRefreshFailed(db(), userId);
-		expect(
-			await (await appFetch('/api/settings', { headers: { cookie } })).json(),
-		).toMatchObject({ psPlusRefreshFailed: false });
+		).toMatchObject({ catalogRefreshing: false });
 	});
 
-	it('PS+ refreshed-at (5.3): GET exposes the stamped date', async () => {
-		const { stampPsPlusRefreshedAt } = await import(
-			'../../src/services/settings'
-		);
-		await stampPsPlusRefreshedAt(db(), userId);
+	it('PS+ refreshed-at (5.3, region ledger since 8.4): GET exposes the region last_success', async () => {
+		await recordRegionOutcome(db(), 'it-it', {
+			attemptedOn: '2026-07-10',
+			succeeded: true,
+			window: '2026-07',
+		});
 		const body = (await (
 			await appFetch('/api/settings', { headers: { cookie } })
 		).json()) as { psPlusRefreshedAt: string | null };
-		expect(body.psPlusRefreshedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+		expect(body.psPlusRefreshedAt).toBe('2026-07-10');
 	});
 
 	it('FAB handedness: defaults right, PUT persists, bad value 400 (Story 6.3)', async () => {

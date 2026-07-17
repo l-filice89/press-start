@@ -10,14 +10,14 @@ import {
 } from '../../src/repositories';
 import { createDb } from '../../src/repositories/db';
 import { user } from '../../src/schema';
-import { todayForUser } from '../../src/services/settings';
+import { runPsPlusCheck } from '../../src/services/psplus';
 import {
 	catalogPagePayload,
 	EMPTY_CATALOG_PAYLOAD,
 	productId,
 } from '../fixtures/psn';
 import { stubStore } from './psn-stub';
-import { appFetch, establishSession, TEST_EMAIL } from './session';
+import { establishSession, TEST_EMAIL } from './session';
 
 /**
  * Story 10.2 (VR-6), migrated to the Story 8.3 departure LEDGER: departures
@@ -46,10 +46,13 @@ const stubCatalog = (names: string[]) =>
 		}),
 	}));
 
-const postCheck = (cookie: string) =>
-	appFetch('/api/ps-plus-check', { method: 'POST', headers: { cookie } });
+// Story 8.4: the POST route is gone — the membership pass is the service.
+const check = () => runPsPlusCheck(db(), REGION);
 
-let cookie: string;
+// Departure stamps are a per-REGION shared fact and stamp in UTC (8.4) — not
+// in any one user's zone.
+const todayUTC = () => new Date().toISOString().slice(0, 10);
+
 let userId: string;
 
 async function seedGame(title: string, { owned = false } = {}) {
@@ -76,7 +79,7 @@ const ledgerOf = async (name: string) =>
 
 beforeAll(async () => {
 	await applyD1Migrations(env.DB, inject('migrations'));
-	cookie = await establishSession();
+	await establishSession();
 	const [row] = await db()
 		.select({ id: user.id })
 		.from(user)
@@ -93,20 +96,20 @@ describe('PS+ departure ledger (Story 10.2 semantics on the 8.3 ledger, two-run 
 
 		// Run 1: both titles present — both derive as members, no stamps.
 		stubCatalog(['Departure Kept', 'Departure Leaver']);
-		expect((await postCheck(cookie)).status).toBe(200);
+		expect((await check()).ok).toBe(true);
 		expect((await libRowOf(leaver.id))?.psPlusExtra).toBe(true);
 		expect((await ledgerOf('Departure Leaver'))?.leftOn ?? null).toBeNull();
 
 		// Run 2: the leaver is gone. Present-before + absent-now = departed.
 		vi.unstubAllGlobals();
 		stubCatalog(['Departure Kept']);
-		expect((await postCheck(cookie)).status).toBe(200);
+		expect((await check()).ok).toBe(true);
 
 		expect((await libRowOf(leaver.id))?.psPlusExtra).toBe(false);
-		// The exact user-zone date, not just any ISO string — a UTC-vs-user-zone
-		// regression must fail this (review).
+		// The exact UTC date, not just any ISO string (8.4: per-region stamps
+		// must not carry one user's zone).
 		const stamped = await ledgerOf('Departure Leaver');
-		expect(stamped?.leftOn).toBe(await todayForUser(db(), userId));
+		expect(stamped?.leftOn).toBe(todayUTC());
 		// A departed game's future "leaving" warning is moot (10.4 rule).
 		expect(stamped?.leavingOn).toBeNull();
 		// The stayer is untouched: still a member, no ledger stamp.
@@ -118,7 +121,7 @@ describe('PS+ departure ledger (Story 10.2 semantics on the 8.3 ledger, two-run 
 		const firstStamp = stamped?.leftOn;
 		vi.unstubAllGlobals();
 		stubCatalog(['Departure Kept']);
-		expect((await postCheck(cookie)).status).toBe(200);
+		expect((await check()).ok).toBe(true);
 		expect((await ledgerOf('Departure Leaver'))?.leftOn).toBe(firstStamp);
 	});
 
@@ -126,19 +129,19 @@ describe('PS+ departure ledger (Story 10.2 semantics on the 8.3 ledger, two-run 
 		const boomerang = await seedGame('Departure Boomerang');
 
 		stubCatalog(['Departure Boomerang']);
-		await postCheck(cookie);
+		await check();
 		// Leaves — via a catalog that still has SOMETHING in it (an empty
 		// result would fail closed at the wipe guard, covered below).
 		vi.unstubAllGlobals();
 		stubCatalog(['Departure Some Other Game']);
-		await postCheck(cookie);
+		await check();
 		expect((await ledgerOf('Departure Boomerang'))?.leftOn).not.toBeNull();
 
 		// …and returns (the prune deleted its catalog row meanwhile, so its
 		// first_seen_at restamps — the warning must NOT key off that).
 		vi.unstubAllGlobals();
 		stubCatalog(['Departure Boomerang', 'Departure Some Other Game']);
-		await postCheck(cookie);
+		await check();
 
 		expect((await libRowOf(boomerang.id))?.psPlusExtra).toBe(true);
 		// The re-entry CLEARS the stamp; the ledger row may persist (DW-13 — the
@@ -151,20 +154,19 @@ describe('PS+ departure ledger (Story 10.2 semantics on the 8.3 ledger, two-run 
 		// read it.
 		const products = await listCatalogProducts(db(), scope);
 		const returned = products.find((p) => p.name === 'Departure Boomerang');
-		expect(returned?.firstSeenAt).toBe(await todayForUser(db(), userId));
+		expect(returned?.firstSeenAt).toBe(todayUTC());
 	});
 
 	it('HAZARD (degenerate response): the empty-catalog wipe guard stamps NOTHING and the snapshot-derived membership survives', async () => {
 		const flagged = await seedGame('Departure Guarded');
 		// A real prior run makes it a member (the snapshot is the membership truth).
 		stubCatalog(['Departure Guarded']);
-		expect((await postCheck(cookie)).status).toBe(200);
+		expect((await check()).ok).toBe(true);
 		expect((await libRowOf(flagged.id))?.psPlusExtra).toBe(true);
 
 		vi.unstubAllGlobals();
 		stubStore(() => ({ body: EMPTY_CATALOG_PAYLOAD }));
-		const res = await postCheck(cookie);
-		expect(res.status).not.toBe(200); // fails closed
+		expect((await check()).ok).toBe(false); // fails closed
 
 		// Membership survives (no prune) and no phantom departure was stamped.
 		expect((await libRowOf(flagged.id))?.psPlusExtra).toBe(true);
@@ -175,10 +177,10 @@ describe('PS+ departure ledger (Story 10.2 semantics on the 8.3 ledger, two-run 
 		const ownedGame = await seedGame('Departure Owned', { owned: true });
 
 		stubCatalog(['Departure Owned']);
-		await postCheck(cookie);
+		await check();
 		vi.unstubAllGlobals();
 		stubCatalog(['Departure Anything Else']);
-		await postCheck(cookie);
+		await check();
 
 		expect((await libRowOf(ownedGame.id))?.psPlusExtra).toBe(false);
 		expect((await ledgerOf('Departure Owned'))?.leftOn).toMatch(

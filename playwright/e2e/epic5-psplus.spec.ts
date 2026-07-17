@@ -5,9 +5,8 @@ import {
 } from '../support/factories/game-factory';
 import {
 	deleteGames,
-	deleteSetting,
 	seedGames,
-	seedSetting,
+	seedRegionFreshness,
 } from '../support/helpers/d1';
 import { loadAllPages } from '../support/helpers/shelf';
 import { expect, test } from '../support/merged-fixtures';
@@ -81,31 +80,15 @@ test('a flagged non-owned released game is Playable now; owned games hide the fl
 	}
 });
 
-test('a failed monthly refresh surfaces the failed-refresh attention banner (5.2c)', async ({
-	page,
-}) => {
-	try {
-		// The cron persists this flag on a failed scheduled refresh (Story 5.2).
-		await seedSetting('psplus_refresh_failed', 'failed');
-		await page.goto('/');
-		await expect(
-			page.getByTestId('attention-banner-failed-refresh'),
-		).toBeVisible();
-		await expect(
-			page.getByTestId('attention-banner-failed-refresh'),
-		).toContainText('PS+ Extra');
-	} finally {
-		// Restore the deterministic baseline (auth-journey asserts it exact).
-		await deleteSetting('psplus_refresh_failed');
-	}
-});
+// The failed-refresh banner died with Story 8.4 (AD-31: refresh failures are
+// passive — logs + as-of staleness; users have no action to take).
 
 test('the header shows "PS+ CATALOG AS OF {date}" after a refresh (5.3)', async ({
 	page,
 }) => {
 	try {
-		// Story 5.3 stamps this on a successful check; seed it to drive the readout.
-		await seedSetting('psplus_refreshed_at', '2026-07-11');
+		// Story 8.4: freshness is the region ledger's last_success.
+		await seedRegionFreshness('2026-07-11');
 		await page.goto('/');
 		const readout = page.getByTestId('readout');
 		await expect(readout).toContainText('PS+ CATALOG AS OF');
@@ -116,7 +99,10 @@ test('the header shows "PS+ CATALOG AS OF {date}" after a refresh (5.3)', async 
 		await expect(readout).toContainText('11');
 		await expect(readout).not.toContainText('2026-07-11');
 	} finally {
-		await deleteSetting('psplus_refreshed_at');
+		// Restore the guard-dormant baseline (fresh last_success), not a bare
+		// delete — an absent ledger row re-arms the stale-snapshot guard for
+		// every later spec's shelf GET.
+		await seedRegionFreshness(new Date().toISOString().slice(0, 10));
 	}
 });
 

@@ -1,24 +1,18 @@
 import {
 	keepPreviousData,
 	useInfiniteQuery,
-	useMutation,
 	useQuery,
-	useQueryClient,
 } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { EmptyState } from '../components/EmptyState';
 import { useAnnounce } from '../components/LiveRegion';
 import { SkeletonGrid } from '../components/Skeleton';
-import { useToast } from '../components/Toast';
-import { runPsPlusCheck } from '../settings/api';
-import { serverMessage } from '../shelf/api';
 import {
 	type CatalogGenre,
 	fetchCatalogGenres,
 	fetchCatalogPage,
 	genreLabel,
-	startGenreSweep,
 } from './api';
 import { CatalogCard } from './CatalogCard';
 import './catalog.css';
@@ -47,8 +41,6 @@ export function Catalog({ onOpenSettings }: { onOpenSettings?: () => void }) {
 	// is a place you can link to and come Back to.
 	const genreKeys = searchParams.getAll('genre');
 	const announce = useAnnounce();
-	const { toast } = useToast();
-	const queryClient = useQueryClient();
 
 	const { data: genres = [], isError: genresFailed } = useQuery({
 		queryKey: ['catalog-genres'],
@@ -56,8 +48,8 @@ export function Catalog({ onOpenSettings }: { onOpenSettings?: () => void }) {
 	});
 
 	// The snapshot generation the pages were cut from (review, M3). Offset paging
-	// tears when the snapshot moves under it — and it does move: this destination
-	// runs Check PS+ Extra itself, and the cron fires several times a month. A page
+	// tears when the snapshot moves under it — and it does move: the cron and the
+	// stale-snapshot guard both refresh it (8.4). A page
 	// from a NEWER generation re-keys the query, which restarts the paging cleanly
 	// instead of splicing two snapshots together (one row twice, one row never).
 	const [generation, setGeneration] = useState<string | null>(null);
@@ -82,26 +74,6 @@ export function Catalog({ onOpenSettings }: { onOpenSettings?: () => void }) {
 		const torn = pageList.find((page) => page.generation !== first);
 		if (torn) setGeneration(torn.generation);
 	}, [pageList]);
-
-	// Running the check right here is the EMPTY CATALOG state's own way out — the
-	// same ingest the FAB fires, so the destination is never a dead end.
-	const check = useMutation({
-		mutationFn: runPsPlusCheck,
-		onSuccess: (result) => {
-			announce('PS plus check complete.');
-			queryClient.invalidateQueries({ queryKey: ['catalog'] });
-			queryClient.invalidateQueries({ queryKey: ['catalog-genres'] });
-			queryClient.invalidateQueries({ queryKey: ['shelf'] });
-			queryClient.invalidateQueries({ queryKey: ['settings'] });
-			// The snapshot is in; now tag it — otherwise the genre filter stays
-			// empty until the monthly cron converges (Story 7.1's "do it now" loop).
-			startGenreSweep(queryClient, result.generation);
-		},
-		onError: (error: Error) =>
-			toast({
-				message: serverMessage(error) ?? 'PS+ check failed — try again later.',
-			}),
-	});
 
 	// `{replace: true}`, like the search box (review, L3): a filter is a VIEW of
 	// this destination, not a place. Pushing an entry per chip made Back walk the
@@ -209,19 +181,9 @@ export function Catalog({ onOpenSettings }: { onOpenSettings?: () => void }) {
 	// refresh, is the shell's attention banner PLUS the stale grid below — a stale
 	// catalog beats no catalog, as long as it says so.)
 	if (first.snapshotTotal === 0) {
-		return (
-			<EmptyState
-				variant="empty-catalog"
-				actions={[
-					{
-						label: check.isPending ? 'Checking…' : 'Check PS+ Extra',
-						onClick: () => {
-							if (!check.isPending) check.mutate();
-						},
-					},
-				]}
-			/>
-		);
+		// Passive (Story 8.4, AD-31): the manual check died — the cron and the
+		// shelf's stale-snapshot guard load the catalog automatically.
+		return <EmptyState variant="empty-catalog" />;
 	}
 
 	return (

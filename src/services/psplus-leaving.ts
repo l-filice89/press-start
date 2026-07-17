@@ -48,18 +48,14 @@ import {
 	clearLedgerConceptIds,
 	listCatalogTitleProducts,
 	listLedgerForProducts,
-	listLibraryForUser,
+	listRegionTrackedGames,
 	PS_PLUS_TIER,
 	setLeavingOnLedger,
 } from '../repositories';
 import type { Db } from '../repositories/db';
 import { bumpAllLibraryVersions } from './library-version';
-import { holdsPsnLock } from './psn-lock';
-import {
-	getPsnRegion,
-	getPsPlusLeavingState,
-	setPsPlusLeavingState,
-} from './settings';
+import { holdsRegionLock } from './psn-lock';
+import { getPsPlusLeavingState, setPsPlusLeavingState } from './settings';
 
 const LEAVING_CHUNK_SIZE = 15;
 
@@ -69,14 +65,13 @@ export type LeavingSweepOutcome =
 
 export async function runLeavingSweep(
 	db: Db,
-	userId: string,
-	env: { PSN_REGION?: string },
+	// Region-first (Story 8.4): per-region op, region-ledger state and lock.
+	region: string | null,
 	{ lockToken }: { lockToken?: string } = {},
 ): Promise<LeavingSweepOutcome> {
-	const region = await getPsnRegion(db, userId, env);
 	if (!region) return { ok: false, reason: 'no-region' };
 
-	const state = await getPsPlusLeavingState(db, userId);
+	const state = await getPsPlusLeavingState(db, region);
 	// No pending sweep: the membership pass has not (re)armed one for this
 	// region. The rotation checks `done` before calling, but the state is the
 	// authority, not the caller.
@@ -85,13 +80,12 @@ export async function runLeavingSweep(
 
 	// Deterministic order + keyset cursor, exactly like the genre sweep's frozen
 	// key list: the id ordering cannot shift under the cursor mid-sweep.
-	// Membership is DERIVED per region now (Story 8.3) — the read joins the
-	// region's catalog, so "flagged" is the same truth the shelf shows.
-	const flagged = (
-		await listLibraryForUser(db, userId, { includeDiscarded: true, region })
-	)
-		.filter((row) => row.psPlusExtra)
-		.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+	// The target universe is PER-REGION now (Story 8.4): distinct games tracked
+	// by ANY user of this region; membership = the title→product join below
+	// (the same key the 8.3 derivation's title leg uses).
+	const flagged = (await listRegionTrackedGames(db, region)).sort((a, b) =>
+		a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
+	);
 	// Sorted before the Map so a duplicate title key (two catalog products,
 	// one normalized name — observed live) resolves to the SAME product every
 	// sweep instead of flapping with query order.
@@ -112,7 +106,7 @@ export async function runLeavingSweep(
 	);
 	const scope = { region, tier: PS_PLUS_TIER };
 	if (pending.length === 0) {
-		await setPsPlusLeavingState(db, userId, { ...state, done: true });
+		await setPsPlusLeavingState(db, region, { ...state, done: true });
 		return { ok: true, result: { swept: 0, failed: 0, done: true } };
 	}
 	const chunk = pending.slice(0, LEAVING_CHUNK_SIZE);
@@ -182,7 +176,7 @@ export async function runLeavingSweep(
 	// steps the cursor past the chunk; its games retry on the next re-arm.
 	if (queried > 0 && failed === queried) {
 		if ((state.attempts ?? 0) < 1) {
-			await setPsPlusLeavingState(db, userId, {
+			await setPsPlusLeavingState(db, region, {
 				...state,
 				attempts: (state.attempts ?? 0) + 1,
 			});
@@ -190,7 +184,7 @@ export async function runLeavingSweep(
 		}
 		await clearLedgerConceptIds(db, scope, staleConcepts);
 		const done = pending.length <= chunk.length;
-		await setPsPlusLeavingState(db, userId, {
+		await setPsPlusLeavingState(db, region, {
 			...state,
 			cursor: chunk[chunk.length - 1].id,
 			attempts: 0,
@@ -204,7 +198,7 @@ export async function runLeavingSweep(
 
 	// The fence (same as the membership pass and genre sweep): a chunk that
 	// stalled past the lock TTL may have been preempted — it writes nothing.
-	if (lockToken && !(await holdsPsnLock(db, userId, lockToken))) {
+	if (lockToken && !(await holdsRegionLock(db, region, lockToken))) {
 		console.error('ps+ leaving sweep: lock lost — refusing to write');
 		return { ok: false, reason: 'conflict' };
 	}
@@ -216,7 +210,7 @@ export async function runLeavingSweep(
 	// statement only when something actually failed).
 	await clearLedgerConceptIds(db, scope, staleConcepts);
 	const done = pending.length <= chunk.length;
-	await setPsPlusLeavingState(db, userId, {
+	await setPsPlusLeavingState(db, region, {
 		...state,
 		cursor: chunk[chunk.length - 1].id,
 		attempts: 0,

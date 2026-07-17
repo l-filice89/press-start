@@ -2,20 +2,25 @@ import { applyD1Migrations, env } from 'cloudflare:test';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeAll, describe, expect, inject, it, vi } from 'vitest';
 import {
+	getRegionState,
 	insertGame,
 	listDeparturesForProducts,
 	listLedgerForProducts,
 	listLibraryForUser,
+	setSetting,
 	upsertTracking,
 } from '../../src/repositories';
 import { createDb } from '../../src/repositories/db';
 import { psPlusDeparture, user } from '../../src/schema';
-import { runScheduledPsPlusCheck } from '../../src/services/psplus';
+import {
+	runPsPlusCheck,
+	runScheduledPsPlusCheck,
+} from '../../src/services/psplus';
 import { runLeavingSweep } from '../../src/services/psplus-leaving';
 import {
 	getPsPlusLeavingState,
 	getPsPlusSweepState,
-	isPsPlusRefreshFailed,
+	PSN_REGION_SETTING_KEY,
 	setPsPlusSweepState,
 } from '../../src/services/settings';
 import {
@@ -25,7 +30,7 @@ import {
 	productPayload,
 } from '../fixtures/psn';
 import { type StoreCall, stubStore } from './psn-stub';
-import { appFetch, establishSession, TEST_EMAIL } from './session';
+import { establishSession, TEST_EMAIL } from './session';
 
 /**
  * Story 10.4 (VR-6 rework): the leaving sweep — per-game departure dates from
@@ -82,13 +87,12 @@ function stubSweepStore(
 	});
 }
 
-const postCheck = (cookie: string) =>
-	appFetch('/api/ps-plus-check', { method: 'POST', headers: { cookie } });
+// Story 8.4: the POST route is gone — the membership pass is the service.
+const check = () => runPsPlusCheck(db(), REGION);
 
 // 2026-07-21T08:00Z — Risk of Rain 2's captured endTime.
 const END_JUL_21 = '1784620800000';
 
-let cookie: string;
 let userId: string;
 
 async function seedGame(title: string, { owned = false } = {}) {
@@ -136,18 +140,21 @@ const seedLeavingDate = (name: string, leavingOn: string) =>
 
 /** The rotation hands invocations to a pending GENRE sweep first — park it. */
 async function markGenreSweepDone() {
-	const state = await getPsPlusSweepState(db(), userId);
-	if (state) await setPsPlusSweepState(db(), userId, { ...state, done: true });
+	const state = await getPsPlusSweepState(db(), REGION);
+	if (state) await setPsPlusSweepState(db(), REGION, { ...state, done: true });
 }
 
 beforeAll(async () => {
 	await applyD1Migrations(env.DB, inject('migrations'));
-	cookie = await establishSession();
+	await establishSession();
 	const [row] = await db()
 		.select({ id: user.id })
 		.from(user)
 		.where(eq(user.email, TEST_EMAIL));
 	userId = row.id;
+	// Story 8.4: the leaving sweep's target list is the region's tracked games
+	// — games tracked by users whose psn_region SETTING equals the region.
+	await setSetting(db(), userId, PSN_REGION_SETTING_KEY, REGION);
 });
 
 afterEach(() => vi.unstubAllGlobals());
@@ -164,10 +171,10 @@ describe('PS+ leaving sweep (Story 10.4)', () => {
 			'Sweep Leaver': END_JUL_21,
 			'Sweep Stayer': null,
 		});
-		expect((await postCheck(cookie)).status).toBe(200); // membership arms the sweep
-		expect((await getPsPlusLeavingState(db(), userId))?.done).toBe(false);
+		expect((await check()).ok).toBe(true); // membership arms the sweep
+		expect((await getPsPlusLeavingState(db(), REGION))?.done).toBe(false);
 
-		const outcome = await runLeavingSweep(db(), userId, env);
+		const outcome = await runLeavingSweep(db(), REGION);
 		expect(outcome).toMatchObject({
 			ok: true,
 			result: { swept: 2, failed: 0, done: true },
@@ -184,9 +191,9 @@ describe('PS+ leaving sweep (Story 10.4)', () => {
 
 		// Steady state (budget claim): a SECOND sweep over cached concepts pays
 		// ONE pricing call per game and ZERO product resolves.
-		expect((await postCheck(cookie)).status).toBe(200); // re-arms
+		expect((await check()).ok).toBe(true); // re-arms
 		const before = calls.length;
-		expect((await runLeavingSweep(db(), userId, env)).ok).toBe(true);
+		expect((await runLeavingSweep(db(), REGION)).ok).toBe(true);
 		const secondSweep = calls.slice(before);
 		expect(
 			secondSweep.filter((c) => c.operation === 'metGetProductById'),
@@ -206,9 +213,9 @@ describe('PS+ leaving sweep (Story 10.4)', () => {
 			{ 'Sweep Poison': null, 'Sweep Healthy': END_JUL_21 },
 			{ failPricingFor: ['Sweep Poison'] },
 		);
-		await postCheck(cookie);
+		await check();
 
-		const outcome = await runLeavingSweep(db(), userId, env);
+		const outcome = await runLeavingSweep(db(), REGION);
 		expect(outcome).toMatchObject({
 			ok: true,
 			result: { failed: 1, done: true },
@@ -217,7 +224,8 @@ describe('PS+ leaving sweep (Story 10.4)', () => {
 		// Fail-closed: the stored date SURVIVES the refused reply.
 		expect((await rowOf(poison.id))?.psPlusLeavingOn).toBe('2026-07-01');
 		expect((await rowOf(healthy.id))?.psPlusLeavingOn).toBe('2026-07-21');
-		expect(await isPsPlusRefreshFailed(db(), userId)).toBe(false);
+		// Banner died (8.4): a sweep failure records NOTHING on the region ledger.
+		expect((await getRegionState(db(), REGION))?.failureCount ?? 0).toBe(0);
 	});
 
 	it('a WHOLE-CHUNK failure retries ONCE, then steps past the poison chunk — never a livelock (review)', async () => {
@@ -228,27 +236,28 @@ describe('PS+ leaving sweep (Story 10.4)', () => {
 			{},
 			{ failPricingFor: ['Sweep Outage A', 'Sweep Outage B'] },
 		);
-		await postCheck(cookie);
+		await check();
 
 		// First wholesale failure: cursor held, attempt recorded — an outage gets
 		// exactly one retry.
-		const first = await runLeavingSweep(db(), userId, env);
+		const first = await runLeavingSweep(db(), REGION);
 		expect(first).toMatchObject({ ok: false, reason: 'provider' });
-		expect(await getPsPlusLeavingState(db(), userId)).toMatchObject({
+		expect(await getPsPlusLeavingState(db(), REGION)).toMatchObject({
 			cursor: null,
 			attempts: 1,
 			done: false,
 		});
-		expect(await isPsPlusRefreshFailed(db(), userId)).toBe(false);
+		// Banner died (8.4): a sweep failure records NOTHING on the region ledger.
+		expect((await getRegionState(db(), REGION))?.failureCount ?? 0).toBe(0);
 
 		// Second wholesale failure: poison, not outage — the cursor STEPS PAST so
 		// the rotation (and the membership pass behind it) can never starve.
-		const second = await runLeavingSweep(db(), userId, env);
+		const second = await runLeavingSweep(db(), REGION);
 		expect(second).toMatchObject({
 			ok: true,
 			result: { swept: 0, done: true },
 		});
-		expect((await getPsPlusLeavingState(db(), userId))?.done).toBe(true);
+		expect((await getPsPlusLeavingState(db(), REGION))?.done).toBe(true);
 		// A stale cached concept id was dropped so the next re-arm re-resolves.
 		expect(await conceptOf('Sweep Outage A')).toBeNull();
 	});
@@ -260,7 +269,7 @@ describe('PS+ leaving sweep (Story 10.4)', () => {
 			{},
 			{ failPricingFor: ['Sweep Budget Guard'] },
 		);
-		await postCheck(cookie);
+		await check();
 		await markGenreSweepDone();
 
 		const before = calls.length;
@@ -281,14 +290,14 @@ describe('PS+ leaving sweep (Story 10.4)', () => {
 		const departing = await seedGame('Sweep Departing');
 
 		stubSweepStore(['Sweep Departing'], { 'Sweep Departing': END_JUL_21 });
-		await postCheck(cookie);
-		await runLeavingSweep(db(), userId, env);
+		await check();
+		await runLeavingSweep(db(), REGION);
 		expect((await rowOf(departing.id))?.psPlusLeavingOn).toBe('2026-07-21');
 
 		// Next window: the game is GONE from the catalog.
 		vi.unstubAllGlobals();
 		stubSweepStore(['Sweep Something Else'], {});
-		await postCheck(cookie);
+		await check();
 
 		const row = await rowOf(departing.id);
 		expect(row?.psPlusExtra).toBe(false);
@@ -304,7 +313,7 @@ describe('PS+ leaving sweep (Story 10.4)', () => {
 		const calls = stubSweepStore(['Sweep Scheduled'], {
 			'Sweep Scheduled': END_JUL_21,
 		});
-		await postCheck(cookie); // membership + arm
+		await check(); // membership + arm
 		await markGenreSweepDone();
 
 		const membershipCalls = calls.length;
@@ -321,7 +330,7 @@ describe('PS+ leaving sweep (Story 10.4)', () => {
 			invocation.filter((c) => c.operation === 'categoryGridRetrieve'),
 		).toHaveLength(0);
 		expect((await rowOf(scheduled.id))?.psPlusLeavingOn).toBe('2026-07-21');
-		expect((await getPsPlusLeavingState(db(), userId))?.done).toBe(true);
+		expect((await getPsPlusLeavingState(db(), REGION))?.done).toBe(true);
 	});
 
 	it('a library past the chunk size converges over TWO sweeps — cursor advances, then done (budget)', async () => {
@@ -331,22 +340,29 @@ describe('PS+ leaving sweep (Story 10.4)', () => {
 		);
 		for (const name of names) await seedGame(name);
 		stubSweepStore(names, { [names[0]]: END_JUL_21 });
-		await postCheck(cookie);
+		await check();
 
-		const first = await runLeavingSweep(db(), userId, env);
+		const first = await runLeavingSweep(db(), REGION);
 		expect(first).toMatchObject({ ok: true, result: { done: false } });
-		const mid = await getPsPlusLeavingState(db(), userId);
+		const mid = await getPsPlusLeavingState(db(), REGION);
 		expect(mid?.cursor).not.toBeNull();
 
-		const second = await runLeavingSweep(db(), userId, env);
+		const second = await runLeavingSweep(db(), REGION);
 		expect(second).toMatchObject({ ok: true, result: { done: true } });
 	}, 20000);
 
 	it('an OWNED game gets the fact too (shared game fact; the FR-38 gate is the UI test)', async () => {
 		const ownedGame = await seedGame('Sweep Owned', { owned: true });
 		stubSweepStore(['Sweep Owned'], { 'Sweep Owned': END_JUL_21 });
-		await postCheck(cookie);
-		await runLeavingSweep(db(), userId, env);
+		await check();
+		// The 8.4 target list spans EVERY game this region's users track (the
+		// suite has seeded ~25 by now, in random-UUID id order) — run the sweep
+		// to completion, as the cron rotation would across fires.
+		for (let i = 0; i < 5; i++) {
+			const outcome = await runLeavingSweep(db(), REGION);
+			expect(outcome.ok).toBe(true);
+			if (outcome.ok && outcome.result.done) break;
+		}
 		expect((await rowOf(ownedGame.id))?.psPlusLeavingOn).toBe('2026-07-21');
 	});
 });

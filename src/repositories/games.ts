@@ -10,6 +10,7 @@ import {
 	externalLink,
 	game,
 	gameTracking,
+	setting,
 } from '../schema/catalog';
 import type { Db } from './db';
 
@@ -560,4 +561,28 @@ export async function countMembershipClaimsForUser(
 			),
 		);
 	return rows[0]?.n ?? 0;
+}
+
+/**
+ * Distinct games tracked by ANY user of `region` (Story 8.4): the leaving
+ * sweep's target universe — per-region, user-independent, tombstones included
+ * (DW-12: membership facts don't care about user visibility). Only id + title
+ * ride out; membership itself is the title→product join the sweep already does.
+ */
+export async function listRegionTrackedGames(
+	db: Db,
+	region: string,
+): Promise<{ id: string; title: string }[]> {
+	return db
+		.selectDistinct({ id: game.id, title: game.title })
+		.from(gameTracking)
+		.innerJoin(game, eq(gameTracking.gameId, game.id))
+		.innerJoin(
+			setting,
+			and(
+				eq(setting.userId, gameTracking.userId),
+				eq(setting.key, 'psn_region'),
+				eq(setting.value, region),
+			),
+		);
 }

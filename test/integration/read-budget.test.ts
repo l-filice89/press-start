@@ -6,6 +6,7 @@ import {
 	insertGame,
 	listCatalogForBrowse,
 	PS_PLUS_TIER,
+	recordRegionOutcome,
 	upsertCatalogProducts,
 	upsertTracking,
 } from '../../src/repositories';
@@ -51,6 +52,14 @@ const db = () => createDb(env.DB);
 
 beforeAll(async () => {
 	await applyD1Migrations(env.DB, inject('migrations'));
+	// Story 8.4: /api/shelf's waitUntil stale-snapshot guard would otherwise
+	// hit the REAL store (nothing stubs fetch here) and rotate library versions
+	// mid-test — a fresh ledger row for the env-seeded region keeps it dormant.
+	await recordRegionOutcome(db(), 'it-it', {
+		attemptedOn: new Date().toISOString().slice(0, 10),
+		succeeded: true,
+		window: new Date().toISOString().slice(0, 7),
+	});
 });
 
 async function seedUser(email: string) {

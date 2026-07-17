@@ -333,6 +333,44 @@ export const psPlusDeparture = sqliteTable(
 	],
 );
 
+/**
+ * PS_PLUS_REGION_STATE — the region-state ledger (Story 8.4, AD-31). One row
+ * per region the cron has ever served: retry/quarantine bookkeeping, the
+ * cycle-complete flag, activity for the idle-skip, and the per-region HOMES of
+ * the genre-sweep and leaving-sweep state JSONs (moved verbatim from per-user
+ * SETTING rows — a userless cron cannot key state by user). `last_success` is
+ * also the region's "PS+ catalog as of" fact.
+ */
+export const psPlusRegionState = sqliteTable(
+	'ps_plus_region_state',
+	{
+		region: text('region').notNull(),
+		tier: text('tier').notNull().default('extra'),
+		/** ISO date of the last successful membership pass — the as-of fact. */
+		lastSuccess: text('last_success'),
+		lastAttempt: text('last_attempt'),
+		failureCount: integer('failure_count').notNull().default(0),
+		/** All three passes done since this window's rotation opened. */
+		cycleComplete: integer('cycle_complete', { mode: 'boolean' })
+			.notNull()
+			.default(false),
+		/** ISO date of the last authenticated request by a user of this region —
+		 * feeds the 60-day idle skip; written at most once per region per day. */
+		lastUserActivity: text('last_user_activity'),
+		/** The `15-28` window this row's cycle/failure counters belong to
+		 * (`YYYY-MM`); a new window resets them. */
+		window: text('window'),
+		/** Genre-sweep state JSON (same shape as the old per-user setting). */
+		sweepState: text('sweep_state'),
+		/** Leaving-sweep state JSON (same shape as the old per-user setting). */
+		leavingState: text('leaving_state'),
+		/** Region-keyed single-flight lock: `<expiry-ms>:<op>:<uuid>` (Story 8.4
+		 * — the catalog refresh is region-scoped, so its lock is too). */
+		lock: text('lock'),
+	},
+	(table) => [primaryKey({ columns: [table.region, table.tier] })],
+);
+
 export const importStraggler = sqliteTable('import_straggler', {
 	id: text('id')
 		.primaryKey()

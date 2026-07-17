@@ -26,7 +26,15 @@
  * catalog; a sweep chunk renews the TTL every chunk), and the fence stops a
  * stale run from pruning the winner's snapshot.
  */
-import { acquireLock, getSetting, releaseLock } from '../repositories';
+import {
+	acquireLock,
+	claimRegionLock,
+	ensureRegionState,
+	getRegionState,
+	getSetting,
+	releaseLock,
+	releaseRegionLock,
+} from '../repositories';
 import type { Db } from '../repositories/db';
 
 export const PSN_LOCK_SETTING_KEY = 'psn_op_lock';
@@ -143,4 +151,53 @@ export async function withPsnLock<T>(
 			console.error('psn lock release failed', error),
 		);
 	}
+}
+
+/**
+ * REGION-keyed single-flight (Story 8.4): the catalog refresh is a per-region
+ * op now (AD-31), so its lock lives on the region-state ledger row — the same
+ * `<expiry>:<op>:<uuid>` value and TTL-takeover CAS discipline as the per-user
+ * lock, minus the user. Guards the cron slot and the stale-snapshot guard's
+ * `waitUntil` refresh against racing each other (or themselves across
+ * concurrent same-region requests).
+ */
+export async function withRegionLock<T>(
+	db: Db,
+	region: string,
+	fn: (token: string) => Promise<T>,
+): Promise<{ busy: true } | { busy: false; result: T }> {
+	const token = mintToken('catalog-refresh');
+	const now = Date.now();
+	await ensureRegionState(db, region);
+	const claimed = await claimRegionLock(db, region, token, now);
+	if (!claimed) return { busy: true };
+	try {
+		return { busy: false, result: await fn(token) };
+	} finally {
+		// A throwing release must not convert a successful refresh into a
+		// failure (review, L12) — the TTL clears an orphaned lock.
+		await releaseRegionLock(db, region, token).catch((error) =>
+			console.error('region lock release failed', error),
+		);
+	}
+}
+
+/** The write-phase fence, region flavor. */
+export async function holdsRegionLock(
+	db: Db,
+	region: string,
+	token: string,
+): Promise<boolean> {
+	return (await getRegionState(db, region))?.lock === token;
+}
+
+/** Is a refresh in flight for this region? (Feeds the "updating…" readout.) */
+export async function isRegionRefreshing(
+	db: Db,
+	region: string,
+): Promise<boolean> {
+	const lock = (await getRegionState(db, region))?.lock;
+	if (!lock) return false;
+	const expiry = Number.parseInt(lock, 10);
+	return Number.isFinite(expiry) && expiry > Date.now();
 }

@@ -8,6 +8,7 @@ export * from './games';
 export * from './genres';
 export * from './psplus-catalog';
 export * from './psplus-departure';
+export * from './psplus-region';
 export * from './settings';
 export * from './stragglers';
 export * from './tracking';

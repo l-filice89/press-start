@@ -232,10 +232,17 @@ export async function deleteCatalog(productIds: string[]): Promise<void> {
 
 /** Deletes games in one call; game_tracking rows cascade. */
 export async function deleteGames(gameIds: string[]): Promise<void> {
-	if (gameIds.length > 0)
-		await d1Execute(
-			`DELETE FROM game WHERE id IN (${gameIds.map(sq).join(', ')});`,
-		);
+	if (gameIds.length === 0) return;
+	const ids = gameIds.map(sq).join(', ');
+	// The seed derives PS+ membership/leaving from catalog + ledger rows keyed
+	// `e2e-<gameId>` (Story 8.3/8.4) — delete them with the game, or the
+	// "empty snapshot" specs inherit ghost products.
+	const productIds = gameIds.map((id) => sq(`e2e-${id}`)).join(', ');
+	await d1Execute(
+		`DELETE FROM game WHERE id IN (${ids});`,
+		`DELETE FROM ps_plus_catalog WHERE product_id IN (${productIds});`,
+		`DELETE FROM ps_plus_departure WHERE product_id IN (${productIds});`,
+	);
 }
 
 export async function deleteGame(gameId: string): Promise<void> {
@@ -319,4 +326,22 @@ export const BASELINE_GAMES: SeedGame[] = [
 /** Runs after the server + auth bootstrap, so it can use the Worker hook. */
 export async function seedBaseline(): Promise<void> {
 	await seedGames(BASELINE_GAMES);
+	// Story 8.4: a FRESH region-ledger row keeps the shelf route's
+	// stale-snapshot guard dormant — otherwise every shelf GET in the run would
+	// waitUntil a REAL PlayStation store fetch (the e2e Worker has live
+	// network) and fill the "empty" catalog under the empty-state specs.
+	await seedRegionFreshness(new Date().toISOString().slice(0, 10));
+}
+
+/** Seed the region ledger's freshness fact (Story 8.4) — the as-of readout. */
+export async function seedRegionFreshness(
+	lastSuccess: string,
+	region = E2E_REGION,
+): Promise<void> {
+	// Targeted upsert (review): REPLACE would wipe lock/sweep columns mid-run.
+	await d1Execute(
+		`INSERT INTO ps_plus_region_state (region, tier, last_success)
+		 VALUES (${sq(region)}, 'extra', ${sq(lastSuccess)})
+		 ON CONFLICT(region, tier) DO UPDATE SET last_success = excluded.last_success;`,
+	);
 }

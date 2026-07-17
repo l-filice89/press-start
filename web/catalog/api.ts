@@ -1,4 +1,3 @@
-import type { QueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { callApi } from '../shelf/api';
 
@@ -84,86 +83,6 @@ export async function fetchCatalogGenres(
 ): Promise<CatalogGenre[]> {
 	const body = await callApi('/api/ps-plus-catalog/genres', { signal });
 	return catalogGenresSchema.parse(body).genres;
-}
-
-const sweepChunkSchema = z.object({
-	/** The snapshot generation these tags belong to — presented back each chunk. */
-	generation: z.string(),
-	nextCursor: z.string().nullable(),
-	/** Rides back only while the loop continues — the last chunk released it. */
-	lockToken: z.string().optional(),
-});
-
-/**
- * Drive the chunked genre sweep to completion (Story 7.1's "do it now" client
- * loop — the piece 7.2 owed). Without it `ps_plus_catalog_genre` fills only
- * when the monthly cron converges, so a fresh check left the genre filter
- * empty for days (and forever in local dev). Re-posts cursor + generation +
- * lockToken until the cursor comes back null, exactly the contract the chunk
- * endpoint documents.
- */
-export async function sweepCatalogGenres(generation?: string): Promise<void> {
-	// The check response's generation is optional; the chunk response's is not —
-	// adopt it from the first chunk so the server's torn-sweep fence stays armed
-	// on every continuation even when the caller had none (review #3).
-	let gen = generation;
-	let cursor: string | undefined;
-	let lockToken: string | undefined;
-	try {
-		// ponytail: hard stop far past the ~5 chunks a 20-key region needs — a
-		// server bug must not turn this background loop into an infinite poster.
-		// Ceiling: 25 × CHUNK_SIZE(4) = 100 facet keys; raise it if a region ever
-		// names more.
-		for (let i = 0; i < 25; i++) {
-			const params = new URLSearchParams();
-			if (gen) params.set('generation', gen);
-			if (cursor) params.set('cursor', cursor);
-			if (lockToken) params.set('lockToken', lockToken);
-			const body = await callApi(`/api/ps-plus-catalog/genres?${params}`, {
-				method: 'POST',
-			});
-			const chunk = sweepChunkSchema.parse(body);
-			gen ??= chunk.generation;
-			if (chunk.nextCursor === null) return;
-			cursor = chunk.nextCursor;
-			lockToken = chunk.lockToken;
-		}
-		throw new Error('genre sweep did not terminate');
-	} catch (error) {
-		// Abandoning mid-loop with a live token keeps every other PSN op 409ing
-		// for the whole lock TTL — the endpoint's release=1 exists for exactly
-		// this (review #1). A server-side failure already released; releasing
-		// again is a no-op.
-		if (lockToken) {
-			const release = new URLSearchParams({ release: '1', lockToken });
-			await callApi(`/api/ps-plus-catalog/genres?${release}`, {
-				method: 'POST',
-			}).catch(() => {});
-		}
-		throw error;
-	}
-}
-
-/**
- * Fire-and-forget wrapper for the check button's onSuccess: the sweep is ~5
- * chunks of live store queries, so it must not hold the check's own readout
- * hostage. When it lands, the genre vocabulary (and the counts on the chips)
- * refetch. A failure is logged, not surfaced — the membership snapshot is
- * valid either way (AD-28) and the cron re-drives the persisted cursor.
- * ponytail: no stale-generation restart here — the cron converges it.
- */
-export function startGenreSweep(
-	queryClient: QueryClient,
-	generation?: string,
-): void {
-	void sweepCatalogGenres(generation)
-		.then(() => {
-			queryClient.invalidateQueries({ queryKey: ['catalog-genres'] });
-			queryClient.invalidateQueries({ queryKey: ['catalog'] });
-		})
-		.catch((error: unknown) =>
-			console.warn('genre sweep did not finish — the cron converges it', error),
-		);
 }
 
 /**

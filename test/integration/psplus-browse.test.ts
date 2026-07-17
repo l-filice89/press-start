@@ -4,10 +4,10 @@ import { beforeAll, beforeEach, describe, expect, inject, it } from 'vitest';
 import { normalizeTitle } from '../../src/core';
 import {
 	addExternalLink,
-	deleteSetting,
 	insertGame,
 	setCatalogGenres,
 	setLeavingOnLedger,
+	setRegionSweepState,
 	setSetting,
 	upsertCatalogProducts,
 	upsertTracking,
@@ -16,7 +16,6 @@ import { createDb } from '../../src/repositories/db';
 import { psPlusCatalog, psPlusCatalogGenre, user } from '../../src/schema';
 import {
 	PSN_REGION_SETTING_KEY,
-	PSPLUS_SWEEP_STATE_SETTING_KEY,
 	setPsPlusSweepState,
 } from '../../src/services/settings';
 import { appFetch, establishSession, TEST_EMAIL } from './session';
@@ -348,7 +347,8 @@ describe('GET /api/ps-plus-catalog/genres — facet counts', () => {
 		await seedProducts([['p-c', 'Crow Country']]);
 		await setCatalogGenres(db(), scope, 'HORROR', ['p-c']);
 		// The sweep state names ARCADE, but nothing is tagged with it yet.
-		await setPsPlusSweepState(db(), userId, {
+		// (Region-homed since 8.4.)
+		await setPsPlusSweepState(db(), REGION, {
 			region: REGION,
 			generation: GENERATION,
 			keys: ['ARCADE', 'HORROR'],
@@ -361,7 +361,7 @@ describe('GET /api/ps-plus-catalog/genres — facet counts', () => {
 		} finally {
 			// beforeEach only wipes the catalog tables — the state row must not
 			// leak the frozen vocabulary into the tests around this one.
-			await deleteSetting(db(), userId, PSPLUS_SWEEP_STATE_SETTING_KEY);
+			await setRegionSweepState(db(), REGION, null);
 		}
 	});
 });

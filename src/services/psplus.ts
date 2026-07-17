@@ -28,39 +28,31 @@ import {
 } from '../providers';
 import {
 	clearDeparturesForProducts,
-	findOldestUser,
+	getRegionState,
 	listCatalogProductIds,
-	listCatalogTitleKeys,
-	listLibraryForUser,
+	listDistinctUserRegions,
+	listRegionStates,
+	markRegionCycleComplete,
 	PS_PLUS_TIER,
 	pruneCatalogGeneration,
+	recordRegionOutcome,
+	resetRegionWindow,
 	stampDepartures,
 	upsertCatalogProducts,
 } from '../repositories';
 import type { Db } from '../repositories/db';
 import { bumpAllLibraryVersions } from './library-version';
-import { holdsPsnLock, withPsnLock } from './psn-lock';
+import { holdsRegionLock, withRegionLock } from './psn-lock';
 import { runGenreSweep } from './psplus-genres';
 import { runLeavingSweep } from './psplus-leaving';
 import {
-	clearPsPlusRefreshFailed,
-	getPsnRegion,
 	getPsPlusLeavingState,
 	getPsPlusSweepState,
-	markPsPlusRefreshFailed,
 	setPsPlusLeavingState,
 	setPsPlusSweepState,
-	stampPsPlusRefreshedAt,
-	todayForUser,
 } from './settings';
 
 export interface PsPlusCheckResult {
-	/** Titles newly flagged as in the catalog this run. */
-	flagged: string[];
-	/** Titles whose flag was cleared this run (left the catalog). */
-	cleared: string[];
-	/** Tracked games examined — ALL of them now, owned included (AD-27). */
-	checked: number;
 	/** The region the catalog was fetched for. */
 	region: string;
 	/** Products stored in the snapshot this run. */
@@ -94,8 +86,8 @@ const CATALOG_DRIFT_TOLERANCE = 2;
  * (the pre-fix ledger subtracted the auth middleware and the lock twice and was
  * off by 5 — Epic 7 cross-story review, H3):
  *   external: 5 catalog pages (490 / 100), 0 auth legs (this endpoint is public)
- *   D1, on the CRON path:
- *             findOldestUser 1 · lock claim 1 · region read 1 · fence
+ *   D1, on the CRON path (8.4: region picker replaces user resolution):
+ *             regions+states+window reads ≈3 · region-lock claim 1 · fence
  *             (holdsPsnLock) 1 · timezone read (todayForUser) 1 · pre-run product
  *             ids 1 · snapshot upsert ceil(490/50) = 10 · prune 1 · stale-region
  *             delete 1 · sweep-state read 1 + write 1 · leaving-state re-arm
@@ -113,19 +105,20 @@ const CATALOG_DRIFT_TOLERANCE = 2;
  *   shares an invocation with the membership pass OR the score refresh
  *   (worker/index.ts skips scores on any sweep invocation; sweep ledger:
  *   psplus-leaving.ts, ≤44).
- *   The HTTP button pays the auth middleware (3) on top instead of
- *   findOldestUser (1), and none of the rotation reads: 37 of 50.
+ *   The stale-snapshot guard's waitUntil pass runs in a REQUEST context that
+ *   already spent ~5 calls: 34 + 5 ≈ 39 of 50 — fits (8.4).
  * A GENRE-SWEEP CHUNK NO LONGER RIDES ALONG (H3): 34 + a chunk (~25) busts the
  * budget, and the resulting mid-sweep "Too many subrequests" throw was
  * self-perpetuating — see `runScheduledPsPlusCheck`.
  */
 export async function runPsPlusCheck(
 	db: Db,
-	userId: string,
-	env: { PSN_REGION?: string },
+	region: string | null,
 	lockToken?: string,
 ): Promise<PsPlusCheckOutcome> {
-	const region = await getPsnRegion(db, userId, env);
+	// De-usered (Story 8.4): the refresh is a per-region op — the caller
+	// resolves the region (cron picker, or the stale-snapshot guard from the
+	// user's setting) and the fence is the REGION lock.
 	if (!region) return { ok: false, reason: 'no-region' };
 
 	// The catalog endpoint is public — the provider carries no credential at all.
@@ -190,7 +183,7 @@ export async function runPsPlusCheck(
 	// "everything that is not MY generation" on top of THAT deletes every row the
 	// winner just wrote and clears every flag. A run that no longer holds its lock
 	// writes nothing at all: no upsert, no prune, no flag pass.
-	if (lockToken && !(await holdsPsnLock(db, userId, lockToken))) {
+	if (lockToken && !(await holdsRegionLock(db, region, lockToken))) {
 		console.error('ps+ check: lock lost mid-run — refusing to write or prune');
 		return { ok: false, reason: 'conflict' };
 	}
@@ -200,15 +193,13 @@ export async function runPsPlusCheck(
 	// cascade). Generation-stamped so a cron prune cannot corrupt an in-flight
 	// genre sweep (AD-28).
 	const generation = crypto.randomUUID();
-	const today = await todayForUser(db, userId);
+	// UTC date (8.4): a per-region shared fact must not carry one user's zone.
+	const today = new Date().toISOString().slice(0, 10);
 	const scope = { region, tier: PS_PLUS_TIER };
 	// What the snapshot held BEFORE this run — the sweep state below only resets
 	// when the catalog actually MOVED (see there), and the button summary diffs
 	// membership across the refresh (old title keys vs new).
 	const before = new Set(await listCatalogProductIds(db, scope));
-	const oldTitleKeys = new Set(
-		(await listCatalogTitleKeys(db, scope)).filter(Boolean),
-	);
 	await upsertCatalogProducts(
 		db,
 		scope,
@@ -236,8 +227,8 @@ export async function runPsPlusCheck(
 	const moved =
 		pruned.length > 0 ||
 		products.some((product) => !before.has(product.productId));
-	const sweep = moved ? null : await getPsPlusSweepState(db, userId);
-	await setPsPlusSweepState(db, userId, {
+	const sweep = moved ? null : await getPsPlusSweepState(db, region);
+	await setPsPlusSweepState(db, region, {
 		region,
 		generation,
 		keys: sweep?.keys ?? [],
@@ -249,7 +240,7 @@ export async function runPsPlusCheck(
 	// the genre cursor above, departure dates move with the store's monthly
 	// announcements even while the catalog membership is perfectly still, so
 	// "reset only when moved" would refresh dates exactly when they matter least.
-	await setPsPlusLeavingState(db, userId, {
+	await setPsPlusLeavingState(db, region, {
 		region,
 		generation,
 		cursor: null,
@@ -268,7 +259,7 @@ export async function runPsPlusCheck(
 	// that lost its lock mid-phase must not fabricate DURABLE departure history
 	// in the shared ledger (the snapshot self-heals next pass; ledger stamps
 	// persist until a DW-13 clear).
-	if (lockToken && !(await holdsPsnLock(db, userId, lockToken))) {
+	if (lockToken && !(await holdsRegionLock(db, region, lockToken))) {
 		console.error('ps+ check: lock lost before ledger writes — stopping');
 		return { ok: false, reason: 'conflict' };
 	}
@@ -279,52 +270,17 @@ export async function runPsPlusCheck(
 		products.map((product) => product.productId),
 	);
 
-	// The button summary (flagged/cleared) is now a VIEW for the acting user:
-	// their library titles diffed across the refresh, on the same title keys
-	// the old flag pass matched. Discarded rows still count as members
-	// (DW-12 semantics) but are not REPORTED.
-	const newTitleKeys = new Set(
-		products.map((product) => normalizeTitle(product.name)).filter(Boolean),
-	);
-	// region: null on purpose (review, M5) — the summary diffs TITLE KEYS only
-	// (parity with the old flag pass); paying six derivation probes per row for
-	// columns this diff never reads would be the budget bug AD-32 names.
-	const candidates = await listLibraryForUser(db, userId, {
-		includeDiscarded: true,
-	});
-	const keyOf = (row: { title: string }) => normalizeTitle(row.title);
-	const toFlag = candidates.filter(
-		(row) => !oldTitleKeys.has(keyOf(row)) && newTitleKeys.has(keyOf(row)),
-	);
-	const toClear = candidates.filter(
-		(row) => oldTitleKeys.has(keyOf(row)) && !newTitleKeys.has(keyOf(row)),
-	);
 	// The catalog moved (or departures stamped) → every user's shelf derives a
-	// new answer; rotate every ETag (8.6).
+	// new answer; rotate every ETag (8.6). The old per-user summary and the
+	// freshness/failure setting writes died with the manual button (8.4):
+	// freshness is the region ledger's last_success, failures are logs.
 	if (moved) {
 		await bumpAllLibraryVersions(db);
-	}
-
-	// Post-write bookkeeping (5.2 failed-flag clear + 5.3 freshness stamp) is
-	// non-critical: the flags above already applied, so a write failure here
-	// must NOT flip a genuine success to failed (which would light the cron
-	// banner and 502 the button). Same posture as sync.ts's attention persist.
-	try {
-		// A successful refresh — by ANY trigger — resolves a prior failed-cron
-		// notice (Story 5.2, AR-14): the button is thus also a resolution path.
-		await clearPsPlusRefreshFailed(db, userId);
-		// Record freshness for the header "PS+ CATALOG AS OF {date}" readout (5.3).
-		await stampPsPlusRefreshedAt(db, userId);
-	} catch (error) {
-		console.error('ps+ check: post-success bookkeeping write failed', error);
 	}
 
 	return {
 		ok: true,
 		result: {
-			flagged: toFlag.filter((row) => !row.discarded).map((row) => row.title),
-			cleared: toClear.filter((row) => !row.discarded).map((row) => row.title),
-			checked: candidates.filter((row) => !row.discarded).length,
 			region,
 			products: products.length,
 			pruned: pruned.length,
@@ -334,69 +290,106 @@ export async function runPsPlusCheck(
 }
 
 /**
- * The monthly Cron Trigger entry (Story 5.2, FR-39/40): runs the SAME
- * `runPsPlusCheck` for the single account user statelessly. A failed run (or a
- * throw) persists the `psplus_refresh_failed` flag that lights the attention
- * banner; success clears it inside `runPsPlusCheck`. No user row yet → no-op.
+ * The Cron Trigger entry, per-region (Story 8.4, AD-31/32). Each fire spends
+ * ONE rotation slot on ONE region:
+ *   pick region -> (genre sweep pending -> genre chunk) -> (leaving pending ->
+ *   leaving chunk) -> membership pass — the same H3 one-slot-per-invocation
+ *   rotation as before, now against per-REGION state.
  *
- * THE CRON TAKES THE LOCK TOO (Story 7.1). The cron and the button fan out to
- * the same store host for the same account and now write the same snapshot, so
- * they are one op, not two: a cron landing while the user has the button (or a
- * genre sweep) running would double the fan-out and race the prune. Busy is NOT
- * a failure — a refresh IS in progress — so it never lights the banner.
- *
- * THE CRON ALSO DRIVES THE GENRE SWEEP (Story 7.1 review, M1). Nothing else
- * would: the chunk endpoint exists for 7.2's client loop, and with no caller
- * `ps_plus_catalog_genre` would simply stay EMPTY in production and 7.2 would
- * filter against nothing.
- *
- * ONE OR THE OTHER PER INVOCATION, NEVER BOTH (Epic 7 cross-story review, H3).
- * The membership pass alone is 34 of the 50 subrequests a Worker invocation gets
- * (AD-15), and a sweep chunk is ~25 more: run together they THROW "Too many
- * subrequests" mid-sweep, which never persists the cursor — so every cron run for
- * the rest of the month re-swept the same first keys, died in the same place, and
- * left most genre chips at 0 permanently. So a cron run with a sweep still
- * pending drives ONLY the sweep chunk; the membership pass runs when the sweep is
- * done (or when it cannot run at all). The cron fires 28× a month
- * (`0 9,21 15-28 * *`) and a 20-key region is 5 chunks, so a refresh + a full sweep
- * still converge inside one monthly window.
- *
- * A sweep failure is NOT a refresh failure — the membership snapshot is valid and
- * complete either way (AD-28), so it never lights the banner.
+ * REGION PICKER: distinct regions of registered users, minus regions idle
+ * >60 days (`last_user_activity`) and regions already cycle-complete this
+ * window. Quarantined regions (3+ consecutive failures) sort LAST and retry
+ * at most once per window — a poison region can never starve the rotation it
+ * would otherwise sort ahead of. The `15-28` window of each calendar month is
+ * the rotation unit: a new window resets cycle/failure counters (re-admitting
+ * quarantined regions). Failures are PASSIVE (logs + ledger; no banner —
+ * users have no action to take).
  */
+const IDLE_SKIP_DAYS = 60;
+const QUARANTINE_AT = 3;
+
+const isoDaysAgo = (days: number) =>
+	new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+
+/** The rotation window a date belongs to: `YYYY-MM` (the 15-28 cron only
+ * fires inside one calendar month's window). */
+const windowOf = (isoDate: string) => isoDate.slice(0, 7);
+
+export async function pickCronRegion(db: Db): Promise<string | null> {
+	const regions = await listDistinctUserRegions(db);
+	if (regions.length === 0) return null;
+	const today = new Date().toISOString().slice(0, 10);
+	const window = windowOf(today);
+	const states = new Map(
+		(await listRegionStates(db)).map((row) => [row.region, row]),
+	);
+	// A new window re-admits everyone: reset counters lazily on first sight.
+	for (const region of regions) {
+		const state = states.get(region);
+		if (state && state.window !== window) {
+			await resetRegionWindow(db, region, window);
+			state.window = window;
+			state.cycleComplete = false;
+			state.failureCount = 0;
+		}
+	}
+	const idleCutoff = isoDaysAgo(IDLE_SKIP_DAYS);
+	const candidates = regions.filter((region) => {
+		const state = states.get(region);
+		if (state?.cycleComplete) return false;
+		// Idle skip: no state row yet = a brand-new region (someone set it) —
+		// serve it; a row whose activity is stale = skip.
+		const activity = state?.lastUserActivity;
+		if (activity && activity < idleCutoff) return false;
+		return true;
+	});
+	if (candidates.length === 0) return null;
+	candidates.sort((a, b) => {
+		const sa = states.get(a);
+		const sb = states.get(b);
+		const qa = (sa?.failureCount ?? 0) >= QUARANTINE_AT ? 1 : 0;
+		const qb = (sb?.failureCount ?? 0) >= QUARANTINE_AT ? 1 : 0;
+		if (qa !== qb) return qa - qb; // healthy first
+		// Then stalest success first (never-succeeded = stalest of all).
+		return (sa?.lastSuccess ?? '') < (sb?.lastSuccess ?? '') ? -1 : 1;
+	});
+	// Quarantined picks that already burned their one window attempt are
+	// SKIPPED, not a bail (review, M6): a sibling that still holds its retry
+	// must not be starved by the stalest one having spent its slot.
+	for (const pick of candidates) {
+		const st = states.get(pick);
+		const burned =
+			st &&
+			st.failureCount >= QUARANTINE_AT &&
+			st.lastAttempt &&
+			windowOf(st.lastAttempt) === window;
+		if (!burned) return pick;
+	}
+	return null;
+}
+
 export async function runScheduledPsPlusCheck(
 	db: Db,
-	env: {
-		PSN_REGION?: string;
-	},
+	_env: { PSN_REGION?: string },
 	// `spentFanOut` = this invocation already paid a sweep chunk's external
 	// fan-out (or died mid-chunk) — the caller must NOT stack the score refresh
-	// on top (review, H3 sibling: a leaving chunk ≈42 + scores ≈10 busts 50).
+	// on top (review, H3 sibling: a leaving chunk ~42 + scores ~10 busts 50).
 ): Promise<{ spentFanOut: boolean }> {
-	// ponytail: interim single-tenant bridge (Story 8.2 — the allowlist is
-	// gone): the OLDEST registered user stands in until Story 8.4's per-region
-	// model deletes user-identity from the cron entirely.
-	const user = await findOldestUser(db);
-	if (!user) return { spentFanOut: false };
-	// Loud on purpose (review): under open registration the FIRST registrant
-	// owns this identity — if this ever names a stranger, that's the 8.4
-	// per-region model's cue to land.
-	console.log(
-		`scheduled ps+ check: cron identity = oldest user ${user.email} (8.2 interim)`,
-	);
+	const region = await pickCronRegion(db);
+	if (!region) return { spentFanOut: false };
 	let spentFanOut = false;
+	const today = new Date().toISOString().slice(0, 10);
+	const window = windowOf(today);
 
 	try {
-		const held = await withPsnLock(
+		const held = await withRegionLock(
 			db,
-			user.id,
-			'catalog-refresh',
+			region,
 			async (token): Promise<PsPlusCheckOutcome | null> => {
-				// A pending sweep OWNS this invocation (H3). `null` = no membership pass
-				// ran, so there is nothing to light (or clear) the banner with.
-				const state = await getPsPlusSweepState(db, user.id);
+				// A pending sweep OWNS this invocation (H3).
+				const state = await getPsPlusSweepState(db, region);
 				if (state && !state.done) {
-					const sweep = await runGenreSweep(db, user.id, env, {
+					const sweep = await runGenreSweep(db, region, {
 						lockToken: token,
 					}).catch((error: unknown) => {
 						console.error('ps+ scheduled genre sweep threw', error);
@@ -407,35 +400,17 @@ export async function runScheduledPsPlusCheck(
 						return null;
 					}
 					spentFanOut = true; // a failed chunk still fanned out
-					// A sweep that cannot run AT ALL (no catalog, a stale/steamrolled
-					// state, a dead facet probe) must not starve the membership pass
-					// forever — it fails within a handful of calls, so the pass still
-					// fits. A per-KEY failure is not this: that is an `ok` chunk.
 					console.warn('ps+ scheduled genre sweep did not complete a chunk');
 				}
-				// Third in the rotation (Story 10.4): a pending LEAVING sweep owns
-				// the invocation once the genre sweep is done — same H3 rule, a
-				// chunk (≤41 subrequests) cannot share the invocation with the
-				// membership pass (34). Fall-through discipline differs from the
-				// genre sweep's: a `provider`/`conflict` failure (or a throw) has
-				// already BURNED up to a chunk's worth of subrequests, so running
-				// the membership pass on top would bust the 50 cap mid-write —
-				// the invocation ends and the next fire retries. Only the cheap,
-				// immediate refusals (`no-state`, `no-region` — a couple of D1
-				// reads, no fan-out) fall through to the membership pass.
-				const leaving = await getPsPlusLeavingState(db, user.id);
+				// Leaving sweep third in the rotation — same fall-through rules.
+				const leaving = await getPsPlusLeavingState(db, region);
 				if (leaving && !leaving.done) {
-					const chunk = await runLeavingSweep(db, user.id, env, {
+					const chunk = await runLeavingSweep(db, region, {
 						lockToken: token,
 					}).catch((error: unknown) => {
 						console.error('ps+ scheduled leaving sweep threw', error);
 						return null;
 					});
-					// An EMPTY chunk (no game was actually queried — zero external
-					// fan-out, whatever the cursor did) hands the invocation on to
-					// the membership pass instead of burning a cron fire on
-					// bookkeeping (review: a chunk of all-unmatched titles is empty
-					// too, not only the final no-pending one).
 					if (
 						chunk?.ok &&
 						!(chunk.result.swept === 0 && chunk.result.failed === 0)
@@ -459,26 +434,52 @@ export async function runScheduledPsPlusCheck(
 							'ps+ scheduled leaving sweep could not run — falling through',
 						);
 				}
-				return await runPsPlusCheck(db, user.id, env, token);
+				return await runPsPlusCheck(db, region, token);
 			},
 		);
 		if (held.busy) {
-			console.warn('ps+ scheduled refresh skipped — a PSN op holds the lock');
+			console.warn('ps+ scheduled refresh skipped — the region lock is held');
 			return { spentFanOut };
 		}
 		const outcome = held.result;
-		// A sweep invocation — no membership verdict to act on.
-		if (!outcome) return { spentFanOut };
-		// Only a genuine provider failure (a retry may fix) lights the banner.
-		// `no-region` and `bad-region` are config gaps, not transient refresh
-		// failures: the banner tells the user to run the button, but the button
-		// hits the same wall — lighting it would be a permanent dead-end.
-		if (!outcome.ok && outcome.reason === 'provider') {
-			await markPsPlusRefreshFailed(db, user.id);
+		// Sweep invocations are progress, not a membership verdict — no outcome
+		// row, but cycle-complete may have just been reached.
+		if (!outcome) {
+			await maybeMarkCycleComplete(db, region, window);
+			return { spentFanOut };
 		}
+		// `conflict` = a lock-takeover race — a refresh IS running; recording it
+		// as a failure would quarantine a healthy region (review, L11).
+		if (outcome.ok || outcome.reason !== 'conflict') {
+			await recordRegionOutcome(db, region, {
+				attemptedOn: today,
+				succeeded: outcome.ok,
+				window,
+			});
+		}
+		if (outcome.ok) await maybeMarkCycleComplete(db, region, window);
+		else console.warn(`ps+ scheduled refresh failed for ${region}`, outcome);
 	} catch (error) {
 		console.error('ps+ scheduled refresh threw', error);
-		await markPsPlusRefreshFailed(db, user.id);
+		await recordRegionOutcome(db, region, {
+			attemptedOn: today,
+			succeeded: false,
+			window,
+		});
 	}
 	return { spentFanOut };
+}
+
+/** Cycle-complete = membership succeeded this window AND both sweeps report
+ * done (their state rows are re-armed by each membership pass). Sets the flag
+ * DIRECTLY — never through a success outcome, which would forge
+ * `last_success` on a day nothing was fetched (review, M4). */
+async function maybeMarkCycleComplete(db: Db, region: string, window: string) {
+	const state = await getRegionState(db, region);
+	if (!state?.lastSuccess || windowOf(state.lastSuccess) !== window) return;
+	const sweep = await getPsPlusSweepState(db, region);
+	const leaving = await getPsPlusLeavingState(db, region);
+	if (sweep?.done && leaving?.done) {
+		await markRegionCycleComplete(db, region);
+	}
 }
