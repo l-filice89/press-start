@@ -2,6 +2,7 @@ import { applyD1Migrations, env } from 'cloudflare:test';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeAll, describe, expect, inject, it, vi } from 'vitest';
 import {
+	addExternalLink,
 	getRegionState,
 	insertGame,
 	listDeparturesForProducts,
@@ -201,6 +202,31 @@ describe('PS+ leaving sweep (Story 10.4)', () => {
 		expect(
 			secondSweep.filter((c) => c.operation === 'metGetPricingDataByConceptId'),
 		).toHaveLength(2);
+	});
+
+	it('a catalog-added game (PSN_PRODUCT link, IGDB-retitled) gets its date through the LINK leg (deferred-work 2026-07-19)', async () => {
+		// The add path re-seeds the title from the IGDB candidate, so the stored
+		// title routinely differs from the store's name — a title-only join
+		// skipped exactly these games and their leaving date could never
+		// populate. The sweep must resolve products through the same three legs
+		// as the 8.3 membership derivation.
+		const retitled = await seedGame('Totally Different IGDB Name');
+		await addExternalLink(db(), {
+			gameId: retitled.id,
+			source: 'PSN_PRODUCT',
+			externalId: productId('Sweep Linked'),
+		});
+
+		stubSweepStore(['Sweep Linked'], { 'Sweep Linked': END_JUL_21 });
+		expect((await check()).ok).toBe(true); // membership arms the sweep
+
+		const outcome = await runLeavingSweep(db(), REGION);
+		expect(outcome.ok).toBe(true);
+
+		expect(await rowOf(retitled.id)).toMatchObject({
+			psPlusExtra: true, // membership already worked via the link leg (8.3)
+			psPlusLeavingOn: '2026-07-21', // …and now the date does too
+		});
 	});
 
 	it('a game whose pricing FAILS keeps its stored date and the sweep steps past it — no banner', async () => {

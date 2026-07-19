@@ -101,7 +101,7 @@ describe('score refresh (Story 10.1)', () => {
 
 	it('persists fetched scores, stamps the date, and clears the failure flag', async () => {
 		const gameId = await seedLinkedGame('Hades', '113112');
-		await markScoresRefreshFailed(db(), userId);
+		await markScoresRefreshFailed(db());
 
 		const outcome = await runScoreRefresh(
 			db(),
@@ -250,7 +250,7 @@ describe('score refresh (Story 10.1)', () => {
 				SCORES_REFRESHED_AT_SETTING_KEY,
 				'2020-01-01',
 			);
-			await clearScoresRefreshFailed(db(), userId);
+			await clearScoresRefreshFailed(db());
 			await runScheduledScoreRefresh(db(), {
 				fetchScoresByIds: async (ids) =>
 					ids.map((id) => ({ igdbId: id, ...HADES_SCORES })),
@@ -299,7 +299,21 @@ describe('score refresh (Story 10.1)', () => {
 		});
 	});
 
-	it('scheduled entry: a provider throw persists the FR-40 failure flag', async () => {
+	it('scheduled entry: a provider throw persists the FR-40 failure flag for EVERY user', async () => {
+		// Scores are shared `game` rows — one failed refresh is every user's
+		// failure (deferred-work 2026-07-19), including a user with no prior
+		// settings rows at all.
+		const now = new Date();
+		const [second] = await db()
+			.insert(user)
+			.values({
+				id: crypto.randomUUID(),
+				name: 'Second User',
+				email: 'second-user@example.com',
+				createdAt: now,
+				updatedAt: now,
+			})
+			.returning({ id: user.id });
 		// Force staleness so the gate doesn't skip the run.
 		await setSetting(
 			db(),
@@ -314,6 +328,7 @@ describe('score refresh (Story 10.1)', () => {
 			fetchTimeToBeatByIds: async () => [],
 		});
 		expect(await isScoresRefreshFailed(db(), userId)).toBe(true);
+		expect(await isScoresRefreshFailed(db(), second.id)).toBe(true);
 	});
 
 	it('scheduled entry: skips while fresh (once-per-window cadence)', async () => {
@@ -343,7 +358,7 @@ describe('score refresh (Story 10.1)', () => {
 			'2020-01-01',
 		);
 		// Clear any flag left by earlier rows in this file.
-		await clearScoresRefreshFailed(db(), userId);
+		await clearScoresRefreshFailed(db());
 		await runScheduledScoreRefresh(db(), null);
 		expect(await isScoresRefreshFailed(db(), userId)).toBe(false);
 	});

@@ -570,15 +570,26 @@ export async function countMembershipClaimsForUser(
 /**
  * Distinct games tracked by ANY user of `region` (Story 8.4): the leaving
  * sweep's target universe — per-region, user-independent, tombstones included
- * (DW-12: membership facts don't care about user visibility). Only id + title
- * ride out; membership itself is the title→product join the sweep already does.
+ * (DW-12: membership facts don't care about user visibility). Carries the
+ * game's PSN link ids too (deferred-work 2026-07-19): the sweep must resolve
+ * its catalog product through the SAME three legs as the 8.3 membership
+ * derivation (product link, np-title link, normalized title) — a catalog-added
+ * game is IGDB-retitled on add, so a title-only join silently skipped exactly
+ * the games the catalog created, and their leaving date could never populate.
  */
 export async function listRegionTrackedGames(
 	db: Db,
 	region: string,
-): Promise<{ id: string; title: string }[]> {
-	return db
-		.selectDistinct({ id: game.id, title: game.title })
+): Promise<
+	{ id: string; title: string; psnProductIds: string[]; npTitleIds: string[] }[]
+> {
+	const rows = await db
+		.selectDistinct({
+			id: game.id,
+			title: game.title,
+			linkSource: externalLink.source,
+			linkExternalId: externalLink.externalId,
+		})
 		.from(gameTracking)
 		.innerJoin(game, eq(gameTracking.gameId, game.id))
 		.innerJoin(
@@ -588,5 +599,37 @@ export async function listRegionTrackedGames(
 				eq(setting.key, 'psn_region'),
 				eq(setting.value, region),
 			),
+		)
+		.leftJoin(
+			externalLink,
+			and(
+				eq(externalLink.gameId, game.id),
+				inArray(externalLink.source, ['PSN_PRODUCT', 'PSN']),
+			),
 		);
+	const byId = new Map<
+		string,
+		{ id: string; title: string; psnProductIds: string[]; npTitleIds: string[] }
+	>();
+	for (const row of rows) {
+		const entry = byId.get(row.id) ?? {
+			id: row.id,
+			title: row.title,
+			psnProductIds: [],
+			npTitleIds: [],
+		};
+		if (row.linkExternalId !== null) {
+			if (row.linkSource === 'PSN_PRODUCT')
+				entry.psnProductIds.push(row.linkExternalId);
+			else if (row.linkSource === 'PSN')
+				entry.npTitleIds.push(row.linkExternalId);
+		}
+		byId.set(row.id, entry);
+	}
+	// Sorted link ids → a multi-link game resolves the same product every sweep.
+	for (const entry of byId.values()) {
+		entry.psnProductIds.sort();
+		entry.npTitleIds.sort();
+	}
+	return [...byId.values()];
 }

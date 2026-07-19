@@ -36,7 +36,7 @@ import {
 	PS_PLUS_TIER,
 } from '../repositories';
 import type { Db } from '../repositories/db';
-import { getPsnRegion, getPsPlusSweepState } from './settings';
+import { getPsnRegion } from './settings';
 
 /** Games per page — the grid pulls the next one as its sentinel scrolls in. */
 const PAGE_SIZE = 60;
@@ -302,9 +302,10 @@ export async function browseCatalog(
 /**
  * The region's genre facet keys with counts (AD-26 — store enum keys, never the
  * shelf's IGDB genres; the localized label is rendered client-side, never
- * stored). The sweep's FROZEN key list (7.1 state) is the vocabulary — keys the
- * tag table knows are unioned in — but only keys with at least one card make
- * the response (UX sweep 2026-07-16): a dead pill filters to NO MATCH.
+ * stored). Only keys with at least one card make the response (UX sweep
+ * 2026-07-16): a dead pill filters to NO MATCH. The sweep-state vocabulary
+ * union that used to precede that filter was dead by construction (every
+ * unioned key mapped to count 0 and was dropped) — deleted 2026-07-19.
  *
  * COUNTS ARE CARDS, NOT SKUs (DW-11): a chip's number must equal what the grid
  * says when that chip is pressed, and the grid collapses PS4/PS5 edition pairs
@@ -337,23 +338,10 @@ export async function listCatalogGenreFacets(
 		list.push(row);
 		taggedRows.set(tag.genreKey, list);
 	}
-	const byKey = new Map(
-		[...taggedRows].map(([key, list]) => [key, collapseEditions(list).length]),
-	);
-	// Region-keyed since 8.4 (follow-up review, L: this call passed the userId
-	// after the re-key — both `string`, compiled silently, always missed).
-	const state = await getPsPlusSweepState(db, region);
-	const keys =
-		state?.region === region
-			? [...new Set([...state.keys, ...byKey.keys()])]
-			: [...byKey.keys()];
-	return (
-		keys
-			.map((key) => ({ key, count: byKey.get(key) ?? 0 }))
-			// Zero-count keys are dropped by product decision (UX sweep 2026-07-16):
-			// this also hides keys the sweep has not reached yet — acceptable, they
-			// surface as the sweep converges rather than as pills that match nothing.
-			.filter(({ count }) => count > 0)
-			.sort((a, b) => a.key.localeCompare(b.key))
-	);
+	// Every key here has ≥1 tagged card by construction, so the zero-count drop
+	// (product decision, UX sweep 2026-07-16) needs no explicit filter: keys the
+	// sweep has not reached yet simply aren't tagged and surface as it converges.
+	return [...taggedRows]
+		.map(([key, list]) => ({ key, count: collapseEditions(list).length }))
+		.sort((a, b) => a.key.localeCompare(b.key));
 }

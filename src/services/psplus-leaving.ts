@@ -81,25 +81,42 @@ export async function runLeavingSweep(
 	// Deterministic order + keyset cursor, exactly like the genre sweep's frozen
 	// key list: the id ordering cannot shift under the cursor mid-sweep.
 	// The target universe is PER-REGION now (Story 8.4): distinct games tracked
-	// by ANY user of this region; membership = the title→product join below
-	// (the same key the 8.3 derivation's title leg uses).
+	// by ANY user of this region; membership = the three-leg product resolution
+	// below (the same legs as the 8.3 derivation).
 	const flagged = (await listRegionTrackedGames(db, region)).sort((a, b) =>
 		a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
 	);
-	// Sorted before the Map so a duplicate title key (two catalog products,
-	// one normalized name — observed live) resolves to the SAME product every
-	// sweep instead of flapping with query order.
-	const products = new Map(
-		(await listCatalogTitleProducts(db, { region, tier: PS_PLUS_TIER }))
-			.sort((a, b) => (a.productId < b.productId ? -1 : 1))
-			.map(
-				(row) =>
-					[
-						row.titleNormalized,
-						{ productId: row.productId, npTitleId: row.npTitleId },
-					] as const,
-			),
+	// Sorted before the Maps so a duplicate key (two catalog products, one
+	// normalized name / np id — observed live) resolves to the SAME product
+	// every sweep instead of flapping with query order. Three lookup legs
+	// (deferred-work 2026-07-19), mirroring the 8.3 membership derivation:
+	// product link > np-title link > normalized title — a catalog-added game is
+	// IGDB-retitled on add, so the title leg alone silently skipped it forever.
+	const catalogProducts = (
+		await listCatalogTitleProducts(db, { region, tier: PS_PLUS_TIER })
+	).sort((a, b) => (a.productId < b.productId ? -1 : 1));
+	const byTitle = new Map(
+		catalogProducts.map((row) => [row.titleNormalized, row] as const),
 	);
+	const byProductId = new Map(
+		catalogProducts.map((row) => [row.productId, row] as const),
+	);
+	const byNpTitleId = new Map(
+		catalogProducts.flatMap((row) =>
+			row.npTitleId ? [[row.npTitleId, row] as const] : [],
+		),
+	);
+	const resolveProduct = (row: {
+		title: string;
+		psnProductIds: string[];
+		npTitleIds: string[];
+	}) =>
+		row.psnProductIds.map((id) => byProductId.get(id)).find(Boolean) ??
+		row.npTitleIds.map((id) => byNpTitleId.get(id)).find(Boolean) ??
+		// Joined on the RECOMPUTED key, exactly like the flag pass (review, M: a
+		// stored title_normalized predating a normalizeTitle change would be
+		// flagged yet silently never swept).
+		byTitle.get(normalizeTitle(row.title));
 
 	const pending = flagged.filter(
 		(row) => state.cursor === null || row.id > state.cursor,
@@ -114,7 +131,7 @@ export async function runLeavingSweep(
 	const provider = createPsnProvider();
 	// Concept cache now lives on the LEDGER (region, product) — Story 8.3.
 	const chunkProducts = chunk
-		.map((row) => products.get(normalizeTitle(row.title))?.productId)
+		.map((row) => resolveProduct(row)?.productId)
 		.filter((v): v is string => Boolean(v));
 	const ledger = await listLedgerForProducts(db, scope, chunkProducts);
 	const updates: {
@@ -131,13 +148,10 @@ export async function runLeavingSweep(
 	let failed = 0;
 	let queried = 0;
 	for (const row of chunk) {
-		// A flagged game absent from the snapshot join is mid-transition (the next
-		// membership pass clears its flag, which also clears any leaving date) —
-		// stepped past, never an error. Joined on the RECOMPUTED key, exactly
-		// like the flag pass (review, M: a stored title_normalized predating a
-		// normalizeTitle change would be flagged yet silently never swept).
-		const titleKey = normalizeTitle(row.title);
-		const product = products.get(titleKey);
+		// A flagged game absent from all three snapshot legs is mid-transition
+		// (the next membership pass clears its flag, which also clears any
+		// leaving date) — stepped past, never an error.
+		const product = resolveProduct(row);
 		if (!product) continue;
 		const { productId, npTitleId } = product;
 		queried++;
@@ -153,7 +167,10 @@ export async function runLeavingSweep(
 				// Thread the catalog's np id (review, M3): a game linked only via
 				// 'PSN' must find its date through the np-key derivation leg.
 				npTitleId,
-				titleNormalized: titleKey,
+				// The CATALOG's normalized title, not the game's (deferred-work
+				// 2026-07-19): the ledger row describes the product, and a
+				// link-resolved game carries a drifted title anyway.
+				titleNormalized: product.titleNormalized,
 				leavingOn: answer.leavingOn,
 				psnConceptId: answer.conceptId,
 			});

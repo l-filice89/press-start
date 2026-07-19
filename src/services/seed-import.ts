@@ -26,10 +26,7 @@ import {
 	upsertTracking,
 } from '../repositories';
 import type { Db } from '../repositories/db';
-import {
-	bumpAllLibraryVersions,
-	bumpLibraryVersion,
-} from './library-version';
+import { bumpAllLibraryVersions, bumpLibraryVersion } from './library-version';
 
 export interface SeedSummary {
 	gamesCreated: number;

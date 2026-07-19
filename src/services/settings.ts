@@ -6,12 +6,13 @@
  */
 import { todayInZone } from '../core';
 import {
-	deleteSetting,
+	deleteSettingForAllUsers,
 	getRegionState,
 	getSetting,
 	setRegionLeavingState,
 	setRegionSweepState,
 	setSetting,
+	setSettingForAllUsers,
 } from '../repositories';
 import type { Db } from '../repositories/db';
 
@@ -102,24 +103,28 @@ export async function getPsPlusRefreshedAt(
 /**
  * IGDB score refresh bookkeeping (Story 10.1, FR-40/AR-14 posture — the exact
  * shape of the PS+ pair above). `scores_refreshed_at` is stamped on every
- * successful refresh and gates the once-a-window cadence (the cron fires 28×
- * a month; the refresh runs when the stamp is stale). `scores_refresh_failed`
+ * successful refresh and gates the refresh cadence. `scores_refresh_failed`
  * lights the attention banner; any successful refresh clears it.
+ *
+ * The FLAG is all-users (deferred-work 2026-07-19): scores live on the shared
+ * `game` rows, so one refresh outcome is every user's outcome — writing it for
+ * the driving user only left every other user's FR-40 banner blind. The STAMP
+ * stays keyed to the driving user: it is cron cadence bookkeeping, read back by
+ * the same scheduler that wrote it.
  */
 export const SCORES_REFRESH_FAILED_SETTING_KEY = 'scores_refresh_failed';
 const SCORES_REFRESH_FAILED = 'failed';
 
-export async function markScoresRefreshFailed(db: Db, userId: string) {
-	await setSetting(
+export async function markScoresRefreshFailed(db: Db) {
+	await setSettingForAllUsers(
 		db,
-		userId,
 		SCORES_REFRESH_FAILED_SETTING_KEY,
 		SCORES_REFRESH_FAILED,
 	);
 }
 
-export async function clearScoresRefreshFailed(db: Db, userId: string) {
-	await deleteSetting(db, userId, SCORES_REFRESH_FAILED_SETTING_KEY);
+export async function clearScoresRefreshFailed(db: Db) {
+	await deleteSettingForAllUsers(db, SCORES_REFRESH_FAILED_SETTING_KEY);
 }
 
 export async function isScoresRefreshFailed(

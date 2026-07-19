@@ -37,45 +37,42 @@ app.all('*', (c) => c.env.ASSETS.fetch(c.req.raw));
  * `waitUntil`-detached) so a failure is caught and persisted as the
  * failed-refresh flag rather than lost.
  */
+/** The daily scores trigger (wrangler.jsonc). The other trigger is the monthly
+ * PS+ window; routing by `controller.cron` keeps the two workloads in separate
+ * invocations, each with the 50-subrequest budget to itself. */
+const SCORES_CRON = '0 3 * * *';
+
 export default {
 	fetch: app.fetch,
-	async scheduled(_controller, env: Env, _ctx) {
+	async scheduled(controller, env: Env, _ctx) {
 		const db = createDb(env.DB);
 		// Story 8.2 (AD-29), re-gated by review: the verification TTL sweep runs
 		// on EVERY invocation — the old spentFanOut gating made it unreachable
 		// exactly when needed most (zero users → spentFanOut is false forever;
-		// steady state → sweeps are rare). One D1 call; the combined worst case
-		// (membership 38 + scores 11 + this) sits AT ~50 — zero headroom, the
-		// next addition to this invocation must re-budget or split.
+		// steady state → sweeps are rare). One D1 call.
 		await deleteExpiredVerifications(db, new Date()).catch((error) =>
 			console.error('verification TTL sweep failed', error),
 		);
-		// Isolated (review): runScheduledPsPlusCheck catches its own body, but a
-		// throw from its pre-try user lookup (or a flag write inside its catch)
-		// would otherwise abort the invocation and starve the score refresh below.
-		const psPlus = await runScheduledPsPlusCheck(db, env).catch((error) => {
-			console.error('scheduled ps+ check escaped its own handling', error);
-			// Unknown how much the failed invocation spent — be conservative.
-			return { spentFanOut: true };
-		});
-		// Story 10.1: IGDB score refresh rides the SAME cron — sequential, after
-		// the PS+ work, inside one invocation's budget (Epic 9 rule, arithmetic
-		// in services/scores.ts: PS+ membership pass ≤36 + scores/TTB ≤10 ≈ 46 of
-		// 50, and the scores stale-gate fires it once per monthly window). BUT
-		// never on top of a SWEEP chunk (Story 10.4 review): a genre or leaving
-		// chunk's fan-out (≈34/≈42) + scores ≈10 busts the 50 cap mid-write —
-		// the stale-gate simply fires it on a later fire in the window (14/month).
-		// Its failures persist their own FR-40 flag inside, so a throw here never
-		// masks the PS+ outcome above.
-		// Same isolation as PS+ above (follow-up review): its pre-try user lookup
-		// can throw past its own catch, and an unhandled throw errors the cron.
-		if (!psPlus.spentFanOut) {
+		if (controller.cron === SCORES_CRON) {
+			// IGDB score refresh on its OWN daily cron (deferred-work 2026-07-19,
+			// was: piggybacked on the PS+ window, so a failure on the window's last
+			// day left the FR-40 banner lit ~3 weeks). Stale-gated inside (~weekly
+			// run; a failure retries the next day). Isolated (follow-up review): its
+			// pre-try user lookup can throw past its own catch, and an unhandled
+			// throw errors the cron.
 			await runScheduledScoreRefresh(db, igdbFromEnv(env)).catch((error) =>
 				console.error(
 					'scheduled score refresh escaped its own handling',
 					error,
 				),
 			);
+			return;
 		}
+		// Isolated (review): runScheduledPsPlusCheck catches its own body, but a
+		// throw from its pre-try user lookup (or a flag write inside its catch)
+		// would otherwise abort the invocation.
+		await runScheduledPsPlusCheck(db, env).catch((error) =>
+			console.error('scheduled ps+ check escaped its own handling', error),
+		);
 	},
 } satisfies ExportedHandler<Env>;

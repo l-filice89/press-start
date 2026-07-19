@@ -13,13 +13,11 @@
  *             library-version rotate (8.6 ETag) 1 + the stamp
  *             (1 timezone read via todayForUser + 1 write) + failed-flag
  *             clear (1) — or, on the failure path, the flag mark (1) = ≤8.
- *   Total ≈ 11 of 50 — and the worker runs it AFTER `runScheduledPsPlusCheck`
- *   in the same invocation, whose heaviest path (the membership pass — the
- *   Story 10.2 departure stamp rides inside its flag statements) is 38 with
- *   the 8.6 version rotate: the
- *   stale-gate means the two only combine once per monthly window, worst
- *   case ~49 of 50 (matches the psplus.ts ledger: 38 + 11). No cursor machinery at this scale (65 linked games
- *   today); the chunked provider fetch is the only paging.
+ *   Total ≈ 11 of 50 — and since deferred-work 2026-07-19 the refresh rides its
+ *   OWN daily cron (worker/index.ts routes by `controller.cron`), so it never
+ *   shares an invocation with the PS+ work and has the budget to itself. No
+ *   cursor machinery at this scale (65 linked games today); the chunked
+ *   provider fetch is the only paging.
  */
 import type { IgdbScoreFetch, IgdbScores, IgdbTimeToBeat } from '../providers';
 import {
@@ -37,9 +35,11 @@ import {
 	stampScoresRefreshedAt,
 } from './settings';
 
-/** Refresh when the last success is at least this old (or absent). The cron
- * window is 7 consecutive days a month, so >6 days guarantees exactly one
- * refresh per window while letting a mid-window failure retry the next day. */
+/** Refresh when the last success is at least this old (or absent). Scores ride
+ * their own DAILY cron (deferred-work 2026-07-19, was: once per monthly PS+
+ * window), so this is a weekly cadence — and a FAILED run never stamps, so it
+ * retries the next day instead of leaving the banner lit until the next
+ * monthly window. */
 const STALE_AFTER_DAYS = 7;
 
 export type ScoreRefreshOutcome =
@@ -81,7 +81,7 @@ export async function runScoreRefresh(
 	if (queryable.length === 0) {
 		// Nothing queryable = nothing to refresh; a real success, not a failure.
 		await stampScoresRefreshedAt(db, userId);
-		await clearScoresRefreshFailed(db, userId);
+		await clearScoresRefreshFailed(db);
 		return { ok: true, updated: 0 };
 	}
 
@@ -153,7 +153,7 @@ export async function runScoreRefresh(
 		return { ok: false, reason: 'provider' };
 	}
 	await stampScoresRefreshedAt(db, userId);
-	await clearScoresRefreshFailed(db, userId);
+	await clearScoresRefreshFailed(db);
 	return { ok: true, updated: updates.length };
 }
 
@@ -168,11 +168,10 @@ export async function runScheduledScoreRefresh(
 	db: Db,
 	igdb: IgdbScoreFetch | null,
 ): Promise<void> {
-	// ponytail: interim single-tenant bridge (8.2) — 8.4 scoped it OUT; the
-	// carrier is the deferred-work ledger (2026-07-17 seam-review entry): the
-	// failure/freshness flags are written for user #1 only, so every other
-	// user's FR-40 banner is blind. Land the multi-user model before a second
-	// real user relies on the scores banner.
+	// The oldest user only DRIVES the run (score data is shared `game` rows;
+	// one pass serves everyone). The failure flag is written for ALL users
+	// (deferred-work 2026-07-19) — only the freshness stamp stays keyed to the
+	// driving user, as scheduler bookkeeping.
 	const user = await findOldestUser(db);
 	if (!user) return;
 	if (!igdb) {
@@ -183,12 +182,12 @@ export async function runScheduledScoreRefresh(
 		const refreshedAt = await getScoresRefreshedAt(db, user.id);
 		if (refreshedAt && !isStale(refreshedAt)) return;
 		const outcome = await runScoreRefresh(db, user.id, igdb);
-		if (!outcome.ok) await markScoresRefreshFailed(db, user.id);
+		if (!outcome.ok) await markScoresRefreshFailed(db);
 	} catch (error) {
 		console.error('scheduled score refresh threw', error);
 		// The flag write itself can fail (it's a D1 call inside a catch) — a
 		// rethrow here would error the whole cron invocation for a lost flag.
-		await markScoresRefreshFailed(db, user.id).catch((flagError) =>
+		await markScoresRefreshFailed(db).catch((flagError) =>
 			console.error('score refresh: failed to persist failure flag', flagError),
 		);
 	}

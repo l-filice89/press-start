@@ -42,7 +42,7 @@ describe('clearDeparturesForProducts', () => {
 });
 
 describe('stampDepartures', () => {
-	it('one statement per product, each under the bind cap', async () => {
+	it('one statement per product, chunked under the per-batch ceiling, each under the bind cap', async () => {
 		const db = createDb({} as D1Database);
 		const batch = vi.spyOn(db, 'batch').mockResolvedValue([] as never);
 
@@ -57,10 +57,12 @@ describe('stampDepartures', () => {
 			'2026-07-17',
 		);
 
-		expect(batch).toHaveBeenCalledTimes(1);
-		const statements = batch.mock.calls[0][0] as unknown as readonly {
-			toSQL(): { params: unknown[] };
-		}[];
+		// 120 statements chunk at 90/batch (D1 per-batch ceiling) → two calls.
+		expect(batch).toHaveBeenCalledTimes(2);
+		const statements = batch.mock.calls.flatMap(
+			(call) =>
+				call[0] as unknown as readonly { toSQL(): { params: unknown[] } }[],
+		);
 		expect(statements).toHaveLength(120);
 		for (const statement of statements) {
 			expect(statement.toSQL().params.length).toBeLessThanOrEqual(100);

@@ -107,6 +107,30 @@ export async function updateSettingForAllUsers(
 	await db.update(setting).set({ value }).where(eq(setting.key, key));
 }
 
+/**
+ * Write one key for EVERY registered user, creating missing rows (deferred-work
+ * 2026-07-19: `updateSettingForAllUsers` above only rewrites rows that exist,
+ * which is right for the lazily-initialized library version but wrong for the
+ * score-refresh failure flag — a user without the row would never get it, so
+ * their FR-40 banner could never light).
+ */
+export async function setSettingForAllUsers(
+	db: Db,
+	key: string,
+	value: string,
+) {
+	await db.run(
+		// `where true` is load-bearing: SQLite's parser needs it to disambiguate
+		// the ON CONFLICT clause from a join when the INSERT source is a SELECT.
+		sql`insert into setting (user_id, key, value) select id, ${key}, ${value} from user where true on conflict(user_id, key) do update set value = excluded.value`,
+	);
+}
+
+/** Remove one key's rows for EVERY user (the all-users clear). */
+export async function deleteSettingForAllUsers(db: Db, key: string) {
+	await db.delete(setting).where(eq(setting.key, key));
+}
+
 export async function setSetting(
 	db: Db,
 	userId: string,

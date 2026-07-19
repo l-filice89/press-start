@@ -42,9 +42,16 @@
 	 * Jul 21 group slipped to Aug 18) — a 15-21-only sweep sees none of that
 	 * until the next month, possibly days before (or after) the departure.
 	 * Per-invocation budget is untouched; extra days are just extra fires.
+	 *
+	 * Second trigger (deferred-work 2026-07-19): the IGDB score refresh rides
+	 * its own DAILY cron instead of piggybacking the PS+ window — the stale-gate
+	 * (7 days, services/scores.ts) makes most fires a no-op read, and a FAILED
+	 * refresh now retries the next morning instead of leaving the FR-40 banner
+	 * lit until the next monthly window. worker/index.ts routes by
+	 * `controller.cron`.
 	 */
 	"triggers": {
-		"crons": ["0 9,21 15-28 * *"]
+		"crons": ["0 9,21 15-28 * *", "0 3 * * *"]
 	},
 	"upload_source_maps": true,
 	"compatibility_flags": ["nodejs_compat"],
