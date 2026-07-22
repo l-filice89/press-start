@@ -7,12 +7,10 @@ import {
 	d1Query,
 	deleteCatalog,
 	deleteGames,
-	deleteSetting,
 	E2E_REGION,
 	type SeedCatalogProduct,
 	seedCatalog,
 	seedGames,
-	seedSetting,
 	sq,
 } from '../support/helpers/d1';
 import { expect, test } from '../support/merged-fixtures';
@@ -425,35 +423,18 @@ test('an unknown URL is a not-found destination, not the shelf', async ({
 test.describe('catalog empty + stale states', () => {
 	test.describe.configure({ mode: 'serial' });
 
-	test('a region with an EMPTY snapshot offers Check PS+ Extra — never a blank grid', async ({
+	test('a region with an EMPTY snapshot explains the automatic refresh — never a blank grid', async ({
 		page,
 	}) => {
+		// Story 8.4: the manual check died; the empty state is passive copy.
 		await page.goto('/catalog');
 		await expect(page.getByText('EMPTY CATALOG')).toBeVisible();
-		await expect(
-			page.getByRole('button', { name: 'Check PS+ Extra' }),
-		).toBeVisible();
+		await expect(page.getByText(/updates automatically/)).toBeVisible();
 		await expect(page.getByTestId('catalog-grid')).toHaveCount(0);
 	});
 
-	test('a FAILED refresh shows the attention banner AND the stale grid (a stale catalog beats no catalog)', async ({
-		page,
-	}) => {
-		const id = run();
-		const products = catalogFixture(id);
-		try {
-			await seedCatalog(products);
-			await seedSetting('psplus_refresh_failed', 'failed');
-			await page.goto('/catalog');
-
-			await expect(
-				page.getByText(/monthly PS\+ Extra catalog refresh/),
-			).toBeVisible();
-			// The stale grid is still there, and it says so via the banner above it.
-			await expect(catalogCards(page).filter({ hasText: id })).toHaveCount(3);
-		} finally {
-			await deleteCatalog(products.map((p) => p.productId));
-			await deleteSetting('psplus_refresh_failed');
-		}
-	});
+	// The failed-refresh attention banner died with Story 8.4 (AD-31: refresh
+	// failures are passive — logs + the as-of staleness, no banner). The
+	// stale-grid-beats-no-catalog behavior needs no spec: the grid renders from
+	// the snapshot regardless of refresh outcomes.
 });

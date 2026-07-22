@@ -1,18 +1,16 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { isValidTimeZone } from '../core';
-import { deleteSetting, getSetting, setSetting } from '../repositories';
+import { getSetting, setSetting } from '../repositories';
 import { createDb } from '../repositories/db';
+import { isRegionRefreshing } from '../services/psn-lock';
 import {
-	clearPsPlusRefreshFailed,
 	FAB_HANDEDNESS_SETTING_KEY,
 	getPsnRegion,
 	getPsPlusRefreshedAt,
-	isPsPlusRefreshFailed,
 	isScoresRefreshFailed,
 	normalizePsnRegion,
 	PSN_REGION_SETTING_KEY,
-	PSPLUS_REFRESHED_AT_SETTING_KEY,
 	readFabHandedness,
 	TIMEZONE_SETTING_KEY,
 } from '../services/settings';
@@ -39,32 +37,33 @@ export const settingsRoute = new Hono<SettingsEnv>();
 settingsRoute.get('/settings', requireAuth, async (c) => {
 	const db = createDb(c.env.DB);
 	const userId = c.get('userId');
+	// Region first: freshness and the updating flag are per-REGION facts (8.4).
+	const region = await getPsnRegion(db, userId, c.env);
 	const [
 		timezone,
-		psPlusRefreshFailed,
 		psPlusRefreshedAt,
 		stragglerCount,
 		fabHandedness,
 		psPlusClaimCount,
-		region,
 		scoresRefreshFailed,
+		catalogRefreshing,
 	] = await Promise.all([
 		getSetting(db, userId, TIMEZONE_SETTING_KEY),
-		isPsPlusRefreshFailed(db, userId),
-		getPsPlusRefreshedAt(db, userId),
+		getPsPlusRefreshedAt(db, region ?? null),
 		countStragglers(db, userId),
 		readFabHandedness(db, userId),
 		countMembershipClaims(db, userId),
-		// Effective region (saved setting or the PSN_REGION seed) — presence of
-		// the working value, not just the stored row.
-		getPsnRegion(db, userId, c.env),
 		isScoresRefreshFailed(db, userId),
+		region ? isRegionRefreshing(db, region) : Promise.resolve(false),
 	]);
 	return c.json(
 		{
 			timezone: timezone ?? null,
-			psPlusRefreshFailed,
 			psPlusRefreshedAt,
+			// A guard-triggered refresh is in flight for this region (8.4) — the
+			// as-of readout suffixes "updating…". No failure flag exists any more:
+			// refresh failures are passive (AD-31).
+			catalogRefreshing,
 			// Story 10.1: lights the score-refresh attention banner (FR-40).
 			scoresRefreshFailed,
 			// Drives the amber "needs a match" banner (Story 6.2, AR-22).
@@ -131,15 +130,10 @@ settingsRoute.put('/settings/psn-region', requireAuth, async (c) => {
 	const userId = c.get('userId');
 	const previous = await getSetting(db, userId, PSN_REGION_SETTING_KEY);
 	await setSetting(db, userId, PSN_REGION_SETTING_KEY, body.data.region);
-	// A REAL region change orphans the old region's refresh stamps: the header
-	// would date a catalog the new region never had. Clear both; the next check
-	// (button or cron) restamps them. Re-saving the same region clears nothing.
-	if (previous && previous !== body.data.region) {
-		await Promise.all([
-			deleteSetting(db, userId, PSPLUS_REFRESHED_AT_SETTING_KEY),
-			clearPsPlusRefreshFailed(db, userId),
-		]);
-	}
+	// Freshness is per-region now (8.4): nothing to clear on a change — the
+	// readout follows the new region's ledger row automatically, and the next
+	// shelf GET's stale-snapshot guard refreshes a region that has none.
+	void previous;
 	return c.json({ region: body.data.region }, 200);
 });
 

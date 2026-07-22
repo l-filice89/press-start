@@ -6,3 +6,5 @@ BETTER_AUTH_SECRET=e2e-local-only-secret-never-used-in-production
 
 GOOGLE_CLIENT_ID=""
 GOOGLE_CLIENT_SECRET=""
+# Tests hammer the magic-link route by design; the in-code limiter is prod-only.
+AUTH_RATE_LIMIT=off

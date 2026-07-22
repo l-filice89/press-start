@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { toCsv } from '../core';
 import { createDb } from '../repositories/db';
 import { loadLibrary } from '../services';
+import { getPsnRegion } from '../services/settings';
 import { type AuthVariables, requireAuth } from './auth';
 
 /**
@@ -46,7 +47,8 @@ const escapeFormula = (cell: string) =>
 
 exportRoute.get('/export.csv', requireAuth, async (c) => {
 	const db = createDb(c.env.DB);
-	const games = await loadLibrary(db, c.get('userId'));
+	const region = await getPsnRegion(db, c.get('userId'), c.env);
+	const games = await loadLibrary(db, c.get('userId'), region);
 	const rows: string[][] = [
 		[...COLUMNS],
 		...games.map((g) => [

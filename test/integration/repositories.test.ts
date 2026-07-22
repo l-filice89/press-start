@@ -61,7 +61,8 @@ describe('catalog + tracking repositories (integration, real workerd + local D1)
 		});
 		expect(row.id).toBeTruthy();
 		expect(row.title).toBe('Bloodborne');
-		expect(row.psPlusExtra).toBe(false);
+		// `ps_plus_extra` left the game table (Story 8.3) — membership derives
+		// per region at read time, so there is no stored flag to default.
 		expect(row.unenriched).toBe(false);
 	});
 

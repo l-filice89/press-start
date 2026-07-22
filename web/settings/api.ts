@@ -10,10 +10,11 @@ import { callApi } from '../shelf/api';
 
 export const settingsSchema = z.object({
 	timezone: z.string().nullable(),
-	// Story 5.2: the last monthly PS+ Extra cron refresh failed. Defaulted: a
+	// Story 8.4: a PS+ catalog refresh is running for the user's region right
+	// now — feeds the header readout's "updating…" suffix. Defaulted: a
 	// deploy-skewed/cached response without the field must not reject the whole
 	// settings payload.
-	psPlusRefreshFailed: z.boolean().default(false),
+	catalogRefreshing: z.boolean().default(false),
 	// Story 5.3: date (YYYY-MM-DD, user zone) of the last successful refresh,
 	// null until the first one. Feeds the header "PS+ CATALOG AS OF" readout.
 	psPlusRefreshedAt: z.string().nullable().default(null),
@@ -69,26 +70,4 @@ export async function savePsnRegion(region: string): Promise<void> {
 		headers: { 'content-type': 'application/json' },
 		body: JSON.stringify({ region }),
 	});
-}
-
-/** Result of a PS+ Extra catalog check (Story 5.1, FR-38). */
-export const psPlusCheckResultSchema = z.object({
-	/** Titles newly flagged as in the catalog this run. */
-	flagged: z.array(z.string()),
-	/** Titles whose flag was cleared (left the catalog). */
-	cleared: z.array(z.string()),
-	/** Tracked games examined — ALL of them since 7.1, owned included (AD-27). */
-	checked: z.number(),
-	region: z.string(),
-	/** The snapshot generation this refresh stamped — 7.2's genre-sweep loop presents it back. */
-	generation: z.string().optional(),
-});
-
-export type PsPlusCheckResult = z.infer<typeof psPlusCheckResultSchema>;
-
-/** Trigger the in-Worker PS+ Extra catalog check. */
-export async function runPsPlusCheck(): Promise<PsPlusCheckResult> {
-	return psPlusCheckResultSchema.parse(
-		await callApi('/api/ps-plus-check', { method: 'POST' }),
-	);
 }

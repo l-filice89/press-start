@@ -86,6 +86,7 @@ export function Header({
 	signOutFailed = false,
 	search,
 	psPlusRefreshedAt = null,
+	catalogRefreshing = false,
 }: {
 	email: string;
 	onSignOut: () => void;
@@ -94,6 +95,8 @@ export function Header({
 	search?: ReactNode;
 	/** Date (YYYY-MM-DD) of the last successful PS+ Extra refresh, or null. */
 	psPlusRefreshedAt?: string | null;
+	/** A guard-triggered refresh is in flight (Story 8.4) — suffix the readout. */
+	catalogRefreshing?: boolean;
 }) {
 	// `||` (not `??`) so an empty/blank stored value also falls back to the dash.
 	// Localize the ISO date so it can't be misread month-first (Story 5.3 fix).
@@ -122,11 +125,19 @@ export function Header({
 
 			<div className="app-header__meta">
 				{/* Freshness readout (5.3) — em-dash until the first successful refresh. */}
-				<span className="app-header__readout" data-testid="readout">
+				<span
+					className="app-header__readout"
+					data-testid="readout"
+					aria-live="polite"
+				>
 					<span className="app-header__readout-full">
 						PS+ CATALOG AS OF {refreshedAt}
+						{catalogRefreshing ? ' — updating…' : ''}
 					</span>
-					<span className="app-header__readout-compact">PS+ {refreshedAt}</span>
+					<span className="app-header__readout-compact">
+						PS+ {refreshedAt}
+						{catalogRefreshing ? ' — updating…' : ''}
+					</span>
 				</span>
 
 				{signOutFailed && (

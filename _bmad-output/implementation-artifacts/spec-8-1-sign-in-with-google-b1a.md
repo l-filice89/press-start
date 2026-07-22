@@ -151,3 +151,7 @@ Status: done
 **Verification:** `vitest run test/integration` → 194 passed; `vitest run test/integration/auth.test.ts web/Login.test.tsx` → 21 passed; `playwright test auth-journey.spec.ts` → 3 passed; `tsc -b` and `biome check` clean; `grep -rn "GOOGLE_CLIENT" wrangler.jsonc` → a comment, no values.
 
 **Residual risks:** the real Google round-trip is not automatable here (no credentials, no consent screen) — after deploy, sign in once with the allowlisted account and once with another (expect the ACCESS_DENIED screen and no new `user` row). One full-integration run showed a single failure that did not reproduce on two subsequent runs; CI is the arbiter.
+
+## Follow-up Review Record (FOLLOW-UP-REVIEW CONTRACT — auto-forced on HIGH)
+
+2026-07-17 — obligation discharged BY the 8.2 independent pass, not a separate reviewer, because 8.2 REWROTE this story's flagged surface (the allowlist-era OAuth gate this story built was deleted; the hook became the verified-email admission rule). The 8.2 pass verified the SUPERSEDING code at every door against better-auth 1.6.23 internals — including this story's exact HIGH class: the rejection-message wire contract (`EMAIL_NOT_VERIFIED`, `account_not_linked`, `access_denied`) was traced end to end from the hook/link internals to `web/Login.tsx` copy, confirming every rejection reaches the login screen with human copy, never a blank bounce. Reviewing this story's pre-8.2 diff in isolation would review dead code. Merge gate clear for this story.

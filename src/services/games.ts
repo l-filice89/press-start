@@ -32,6 +32,7 @@ import {
 	upsertGenre,
 } from '../repositories';
 import type { Db } from '../repositories/db';
+import { bumpAllLibraryVersions, bumpLibraryVersion } from './library-version';
 
 export interface AddGamePreview {
 	/** False = IGDB unreachable/unconfigured — the client offers name-only save. */
@@ -384,6 +385,11 @@ export async function addGame(
 			);
 		}
 		await applyCatalogOrigin(db, existing.id, product);
+		// EXISTING row = shared by definition (another user may track it), and
+		// `applyCatalogOrigin` may have backfilled its cover/store URL (review,
+		// H2) — rotate EVERY tracker's ETag, not just the actor's. Over-bumping
+		// a plain duplicate costs one spurious 200; the safe direction.
+		await bumpAllLibraryVersions(db);
 		return { kind: tracked ? 'duplicate' : 'created', gameId: existing.id };
 	}
 
@@ -420,6 +426,8 @@ export async function addGame(
 			gameId,
 			newTracking(input.owned ?? false, today),
 		);
+		// Converged onto ANOTHER existing (shared) row — same H2 rule as above.
+		await bumpAllLibraryVersions(db);
 		return { kind: 'created', gameId };
 	}
 	if (input.igdbId) {
@@ -439,6 +447,7 @@ export async function addGame(
 		gameId,
 		newTracking(input.owned ?? false, today),
 	);
+	await bumpLibraryVersion(db, userId);
 	return { kind: 'created', gameId };
 }
 
@@ -516,5 +525,8 @@ export async function rematchGame(
 	await clearGameGenres(db, gameId);
 	await linkGenresByName(db, gameId, input.genres);
 
+	// Rematch rewrites SHARED game facts — every user tracking it sees the
+	// change, so every shelf ETag rotates (one UPDATE, Story 8.6).
+	await bumpAllLibraryVersions(db);
 	return { kind: 'rematched', gameId };
 }

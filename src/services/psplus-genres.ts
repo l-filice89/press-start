@@ -43,12 +43,8 @@ import {
 	setCatalogGenres,
 } from '../repositories';
 import type { Db } from '../repositories/db';
-import { holdsPsnLock } from './psn-lock';
-import {
-	getPsnRegion,
-	getPsPlusSweepState,
-	setPsPlusSweepState,
-} from './settings';
+import { holdsRegionLock } from './psn-lock';
+import { getPsPlusSweepState, setPsPlusSweepState } from './settings';
 
 /**
  * Genre keys per invocation. The Workers free tier allows 50 subrequests and D1
@@ -98,20 +94,20 @@ export type GenreSweepOutcome =
 
 export async function runGenreSweep(
 	db: Db,
-	userId: string,
-	env: { PSN_REGION?: string },
+	// Region-first (Story 8.4): the sweep is a per-region op; state and the
+	// single-flight lock live on the region ledger.
+	region: string | null,
 	{
 		cursor,
 		generation,
 		lockToken,
 	}: { cursor?: string; generation?: string; lockToken?: string } = {},
 ): Promise<GenreSweepOutcome> {
-	const region = await getPsnRegion(db, userId, env);
 	if (!region) return { ok: false, reason: 'no-region' };
 
 	// The AUTHORITATIVE state (review, M5): generation, frozen key list, cursor.
 	// Never re-derived by sniffing an unordered catalog row.
-	const state = await getPsPlusSweepState(db, userId);
+	const state = await getPsPlusSweepState(db, region);
 	// Nothing to tag: the membership pass has never run for this region.
 	if (!state || state.region !== region)
 		return { ok: false, reason: 'no-catalog' };
@@ -128,7 +124,7 @@ export async function runGenreSweep(
 	// over by the cron, which prunes and mints a new generation — and the stalled
 	// chunk, waking up, would overwrite the state with its own stale generation +
 	// cursor, naming a snapshot that no longer exists.
-	if (lockToken && !(await holdsPsnLock(db, userId, lockToken))) {
+	if (lockToken && !(await holdsRegionLock(db, region, lockToken))) {
 		console.error(
 			'ps+ genre sweep: lock lost — refusing to tag or write state',
 		);
@@ -210,7 +206,7 @@ export async function runGenreSweep(
 			done = key;
 		}
 	} finally {
-		await persistProgress(db, userId, state.generation, {
+		await persistProgress(db, region, state.generation, {
 			keys,
 			cursor: done ?? from ?? null,
 			// `done` only when the chunk walked its whole plan to the end of the list.
@@ -235,7 +231,7 @@ export async function runGenreSweep(
  */
 async function persistProgress(
 	db: Db,
-	userId: string,
+	region: string,
 	generation: string,
 	{
 		keys,
@@ -249,14 +245,14 @@ async function persistProgress(
 		skipped: string[];
 	},
 ): Promise<void> {
-	const fresh = await getPsPlusSweepState(db, userId);
+	const fresh = await getPsPlusSweepState(db, region);
 	if (!fresh || fresh.generation !== generation) {
 		console.warn(
 			'ps+ genre sweep: the snapshot moved under this chunk — discarding its cursor',
 		);
 		return;
 	}
-	await setPsPlusSweepState(db, userId, {
+	await setPsPlusSweepState(db, region, {
 		...fresh,
 		keys,
 		cursor: complete ? null : cursor,

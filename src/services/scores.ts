@@ -9,24 +9,25 @@
  *             fetches + ceil(links/500) time-to-beat fetches (Story 10.3,
  *             same pass) = 3 for any library under 500 linked games;
  *   D1:       1 user lookup + 1 stale-stamp read + 1 link list + 1 batched
- *             score write (one `db.batch`, however many rows) + the stamp
+ *             score write (one `db.batch`, however many rows) + the
+ *             library-version rotate (8.6 ETag) 1 + the stamp
  *             (1 timezone read via todayForUser + 1 write) + failed-flag
- *             clear (1) — or, on the failure path, the flag mark (1) = ≤7.
- *   Total ≈ 10 of 50 — and the worker runs it AFTER `runScheduledPsPlusCheck`
- *   in the same invocation, whose heaviest path (the membership pass — the
- *   Story 10.2 departure stamp rides inside its flag statements) is 34: the
- *   stale-gate means the two only combine once per monthly window, worst
- *   case ~44 of 50. No cursor machinery at this scale (65 linked games
- *   today); the chunked provider fetch is the only paging.
+ *             clear (1) — or, on the failure path, the flag mark (1) = ≤8.
+ *   Total ≈ 11 of 50 — and since deferred-work 2026-07-19 the refresh rides its
+ *   OWN daily cron (worker/index.ts routes by `controller.cron`), so it never
+ *   shares an invocation with the PS+ work and has the budget to itself. No
+ *   cursor machinery at this scale (65 linked games today); the chunked
+ *   provider fetch is the only paging.
  */
 import type { IgdbScoreFetch, IgdbScores, IgdbTimeToBeat } from '../providers';
 import {
-	findUserByEmail,
+	findOldestUser,
 	type GameScores,
 	listExternalLinksBySource,
 	updateGameIgdbFacts,
 } from '../repositories';
 import type { Db } from '../repositories/db';
+import { bumpAllLibraryVersions } from './library-version';
 import {
 	clearScoresRefreshFailed,
 	getScoresRefreshedAt,
@@ -34,9 +35,11 @@ import {
 	stampScoresRefreshedAt,
 } from './settings';
 
-/** Refresh when the last success is at least this old (or absent). The cron
- * window is 7 consecutive days a month, so >6 days guarantees exactly one
- * refresh per window while letting a mid-window failure retry the next day. */
+/** Refresh when the last success is at least this old (or absent). Scores ride
+ * their own DAILY cron (deferred-work 2026-07-19, was: once per monthly PS+
+ * window), so this is a weekly cadence — and a FAILED run never stamps, so it
+ * retries the next day instead of leaving the banner lit until the next
+ * monthly window. */
 const STALE_AFTER_DAYS = 7;
 
 export type ScoreRefreshOutcome =
@@ -78,7 +81,7 @@ export async function runScoreRefresh(
 	if (queryable.length === 0) {
 		// Nothing queryable = nothing to refresh; a real success, not a failure.
 		await stampScoresRefreshedAt(db, userId);
-		await clearScoresRefreshFailed(db, userId);
+		await clearScoresRefreshFailed(db);
 		return { ok: true, updated: 0 };
 	}
 
@@ -144,27 +147,32 @@ export async function runScoreRefresh(
 		];
 	});
 	await updateGameIgdbFacts(db, updates);
+	// Shared `game` facts changed → every user's shelf ETag rotates (8.6).
+	if (updates.length > 0) await bumpAllLibraryVersions(db);
 	if (ttbRows === null) {
 		return { ok: false, reason: 'provider' };
 	}
 	await stampScoresRefreshedAt(db, userId);
-	await clearScoresRefreshFailed(db, userId);
+	await clearScoresRefreshFailed(db);
 	return { ok: true, updated: updates.length };
 }
 
 /**
- * Cron entry (mirrors `runScheduledPsPlusCheck`): resolve THE single-tenant
- * user, skip while fresh, run, and persist the FR-40 failure flag on any
+ * Cron entry (mirrors `runScheduledPsPlusCheck`): resolve the oldest
+ * registered user (interim, 8.2), skip while fresh, run, and persist the FR-40 failure flag on any
  * genuine provider failure or throw. Missing IGDB creds are a CONFIG gap, not
  * a transient failure — same posture as PS+'s `no-region` (the banner would
  * point at a retry that can never succeed), so it logs and leaves quietly.
  */
 export async function runScheduledScoreRefresh(
 	db: Db,
-	env: { AUTH_ALLOWED_EMAIL: string },
 	igdb: IgdbScoreFetch | null,
 ): Promise<void> {
-	const user = await findUserByEmail(db, env.AUTH_ALLOWED_EMAIL);
+	// The oldest user only DRIVES the run (score data is shared `game` rows;
+	// one pass serves everyone). The failure flag is written for ALL users
+	// (deferred-work 2026-07-19) — only the freshness stamp stays keyed to the
+	// driving user, as scheduler bookkeeping.
+	const user = await findOldestUser(db);
 	if (!user) return;
 	if (!igdb) {
 		console.warn('score refresh skipped — IGDB credentials not configured');
@@ -174,12 +182,12 @@ export async function runScheduledScoreRefresh(
 		const refreshedAt = await getScoresRefreshedAt(db, user.id);
 		if (refreshedAt && !isStale(refreshedAt)) return;
 		const outcome = await runScoreRefresh(db, user.id, igdb);
-		if (!outcome.ok) await markScoresRefreshFailed(db, user.id);
+		if (!outcome.ok) await markScoresRefreshFailed(db);
 	} catch (error) {
 		console.error('scheduled score refresh threw', error);
 		// The flag write itself can fail (it's a D1 call inside a catch) — a
 		// rethrow here would error the whole cron invocation for a lost flag.
-		await markScoresRefreshFailed(db, user.id).catch((flagError) =>
+		await markScoresRefreshFailed(db).catch((flagError) =>
 			console.error('score refresh: failed to persist failure flag', flagError),
 		);
 	}

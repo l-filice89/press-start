@@ -5,7 +5,7 @@ import { Catalog } from '../catalog/Catalog';
 import { AttentionBanner } from '../components/AttentionBanner';
 import { EmptyState } from '../components/EmptyState';
 import { ToastHost } from '../components/Toast';
-import { fetchSettings, type PsPlusCheckResult } from '../settings/api';
+import { fetchSettings } from '../settings/api';
 import { SettingsPanel } from '../settings/SettingsPanel';
 import { useActiveDestination } from '../shelf/detail-navigation';
 import { GameDetailRoute } from '../shelf/GameRoute';
@@ -15,7 +15,6 @@ import { StragglersDialog } from '../shelf/StragglersDialog';
 import { Background } from './Background';
 import { Fab } from './Fab';
 import { Header } from './Header';
-import { PsPlusCheckModal } from './PsPlusCheckModal';
 import './app-shell.css';
 
 /**
@@ -63,11 +62,6 @@ export function AppShell({
 	const destination = useActiveDestination();
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [stragglersOpen, setStragglersOpen] = useState(false);
-	// The PS+ check readout (5.1) — snapshots its result at open time, so a
-	// background settings refetch never swaps the list under the reader.
-	const [psPlusResult, setPsPlusResult] = useState<PsPlusCheckResult | null>(
-		null,
-	);
 	const { data: settings } = useQuery({
 		queryKey: ['settings'],
 		queryFn: ({ signal }) => fetchSettings(signal),
@@ -87,13 +81,8 @@ export function AppShell({
 					signOutFailed={signOutFailed}
 					search={<SearchBox />}
 					psPlusRefreshedAt={settings?.psPlusRefreshedAt ?? null}
+					catalogRefreshing={settings?.catalogRefreshing ?? false}
 				/>
-				{settings?.psPlusRefreshFailed && (
-					<AttentionBanner
-						variant="failed-refresh"
-						message="The monthly PS+ Extra catalog refresh didn't complete — it'll retry next month, or run Check PS+ Extra from the menu to try now."
-					/>
-				)}
 				{settings?.scoresRefreshFailed && (
 					<AttentionBanner
 						variant="failed-score-refresh"
@@ -148,17 +137,8 @@ export function AppShell({
 					<GameDetailRoute />
 				</main>
 			</div>
-			<Fab
-				handedness={settings?.fabHandedness ?? 'right'}
-				onPsPlusCheckComplete={setPsPlusResult}
-			/>
+			<Fab handedness={settings?.fabHandedness ?? 'right'} />
 			{settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
-			{psPlusResult && (
-				<PsPlusCheckModal
-					result={psPlusResult}
-					onClose={() => setPsPlusResult(null)}
-				/>
-			)}
 			{stragglersOpen && (
 				<StragglersDialog onClose={() => setStragglersOpen(false)} />
 			)}

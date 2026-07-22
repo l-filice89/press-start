@@ -1,17 +1,25 @@
 import { applyD1Migrations, env } from 'cloudflare:test';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeAll, describe, expect, inject, it, vi } from 'vitest';
-import { deleteSetting, getSetting, setSetting } from '../../src/repositories';
+import {
+	claimRegionLock,
+	deleteSetting,
+	ensureRegionState,
+	getRegionState,
+	getSetting,
+} from '../../src/repositories';
 import { createDb } from '../../src/repositories/db';
-import { user } from '../../src/schema';
+import { psPlusRegionState, user } from '../../src/schema';
 import {
 	acquirePsnLock,
 	PSN_LOCK_SETTING_KEY,
 	releasePsnLock,
+	withRegionLock,
 } from '../../src/services/psn-lock';
+import { runPsPlusCheck } from '../../src/services/psplus';
 import { catalogPagePayload } from '../fixtures/psn';
 import { stubStore } from './psn-stub';
-import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
+import { establishSession, TEST_EMAIL } from './session';
 
 /**
  * Single-flight over the PSN long-ops (Story 9.5, deferred since Epic 4). The
@@ -27,20 +35,19 @@ import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
  */
 
 const db = () => createDb(env.DB);
+// Story 8.4: the catalog ops run under the REGION lock (the POST routes died
+// with the manual button) — the per-user lock seam survives for future ops.
+const REGION = 'it-it';
 
-let cookie: string;
 let userId: string;
-
-const post = (path: string) =>
-	appFetch(path, { method: 'POST', headers: { cookie } });
 
 beforeAll(async () => {
 	await applyD1Migrations(env.DB, inject('migrations'));
-	cookie = await establishSession();
+	await establishSession();
 	const [row] = await db()
 		.select({ id: user.id })
 		.from(user)
-		.where(eq(user.email, ALLOWED_EMAIL));
+		.where(eq(user.email, TEST_EMAIL));
 	userId = row.id;
 });
 
@@ -49,6 +56,10 @@ afterEach(async () => {
 	// Never leak a held lock into the next test — DELETE it, so a test that
 	// asserts the row is ABSENT is not quietly passing on leftovers.
 	await deleteSetting(db(), userId, PSN_LOCK_SETTING_KEY);
+	await db()
+		.update(psPlusRegionState)
+		.set({ lock: null })
+		.where(eq(psPlusRegionState.region, REGION));
 });
 
 describe('PSN single-flight lock (integration, real workerd + local D1)', () => {
@@ -99,62 +110,46 @@ describe('PSN single-flight lock (integration, real workerd + local D1)', () => 
 		expect(await getSetting(db(), userId, PSN_LOCK_SETTING_KEY)).toBe(held);
 	});
 
-	it('expires: a lock left behind by a crashed run is taken over after its TTL', async () => {
+	it('expires: a REGION lock left behind by a crashed run is taken over after its TTL', async () => {
 		// A held lock whose expiry is in the past — what a Worker that died mid-run
-		// leaves behind (its release never ran).
-		await setSetting(
-			db(),
-			userId,
-			PSN_LOCK_SETTING_KEY,
-			`${Date.now() - 1}:catalog-refresh:dead-run`,
-		);
+		// leaves behind (its release never ran). Region-homed since 8.4.
+		await ensureRegionState(db(), REGION);
+		await db()
+			.update(psPlusRegionState)
+			.set({ lock: `${Date.now() - 1}:catalog-refresh:dead-run` })
+			.where(eq(psPlusRegionState.region, REGION));
 		stubStore(() => ({ body: catalogPagePayload(['Whatever']) }));
-		expect((await post('/api/ps-plus-check')).status).toBe(200);
+		const held = await withRegionLock(db(), REGION, (token) =>
+			runPsPlusCheck(db(), REGION, token),
+		);
+		expect(held).toMatchObject({ busy: false, result: { ok: true } });
 	});
 
 	/**
-	 * The PS+ catalog ops (Story 7.1). The refresh took NO lock before this story
-	 * — and 7.1 multiplies its fan-out (5 catalog pages + a ~20-key genre sweep)
-	 * and makes it a WRITER of a snapshot a second run would prune underneath it.
+	 * The PS+ catalog ops (Story 7.1, region-homed by 8.4). The refresh is a
+	 * WRITER of a snapshot a second run would prune underneath it — one REGION
+	 * lock, and a refused run must never reach the store.
 	 */
-	it('refuses a second PS+ catalog op with a 409 — and the STORE sees zero calls', async () => {
+	it('refuses a second PS+ catalog op as busy — and the STORE sees zero calls', async () => {
 		const storeCalls = stubStore(() => ({
 			body: catalogPagePayload(['Whatever']),
 		}));
-		expect(await acquirePsnLock(db(), userId, 'catalog-refresh')).toBeTruthy();
+		const token = `${Date.now() + 60_000}:catalog-refresh:holder`;
+		await ensureRegionState(db(), REGION);
+		expect(await claimRegionLock(db(), REGION, token, Date.now())).toBe(true);
 
-		for (const path of ['/api/ps-plus-check', '/api/ps-plus-catalog/genres']) {
-			const res = await post(path);
-			expect(res.status, `expected 409 for ${path}`).toBe(409);
-			expect(((await res.json()) as { error: string }).error).toMatch(
-				/already running/i,
-			);
-		}
+		const held = await withRegionLock(db(), REGION, (t) =>
+			runPsPlusCheck(db(), REGION, t),
+		);
+		expect(held).toEqual({ busy: true });
 		expect(storeCalls).toHaveLength(0);
 	});
 
-	it('a CURSOR is not a capability: a genre-sweep continuation cannot steal a running refresh’s lock (hazard)', async () => {
-		const storeCalls = stubStore(() => ({
-			body: catalogPagePayload(['Whatever']),
-		}));
-		expect(await acquirePsnLock(db(), userId, 'catalog-refresh')).toBeTruthy();
+	// The "a CURSOR is not a capability" HTTP test died with the client-driven
+	// sweep loop (8.4) — the forged-token fence is pinned at the service seam in
+	// psplus-genres.test.ts ("a chunk that LOST the lock writes nothing").
 
-		// The cursor is a GENRE KEY — server-published data (the facet list is
-		// public store data), so anyone can present one. It authorizes nothing.
-		const stolen = await post(
-			'/api/ps-plus-catalog/genres?cursor=ACTION&generation=whatever',
-		);
-		expect(stolen.status).toBe(409);
-		// A stale/forged TOKEN is no better.
-		const forged = await post(
-			'/api/ps-plus-catalog/genres?cursor=ACTION&generation=whatever&lockToken=999:catalog-refresh:not-mine',
-		);
-		expect(forged.status).toBe(409);
-		expect(storeCalls).toHaveLength(0);
-	});
-
-	it('a genre-sweep continuation that presents its OWN token renews (and ROTATES) it and proceeds', async () => {
-		stubStore(() => ({ body: catalogPagePayload([]) }));
+	it('a continuation that presents its OWN token renews (and ROTATES) it — the seam survives 8.4', async () => {
 		const token = await acquirePsnLock(db(), userId, 'catalog-refresh');
 		const renewed = await acquirePsnLock(
 			db(),
@@ -168,38 +163,33 @@ describe('PSN single-flight lock (integration, real workerd + local D1)', () => 
 		expect(
 			await acquirePsnLock(db(), userId, 'catalog-refresh', token as string),
 		).toBeNull();
-
-		// The loop's own chunk is never self-refused. (No catalog is stored for this
-		// user, so the sweep answers 409 `no-catalog` — NOT the busy 409; the point
-		// under test is that it got past the lock. The message tells them apart.)
-		const res = await post(
-			`/api/ps-plus-catalog/genres?cursor=ACTION&generation=x&lockToken=${encodeURIComponent(renewed as string)}`,
-		);
-		expect(((await res.json()) as { error: string }).error).not.toMatch(
-			/already running/i,
-		);
-		// A non-continuing chunk releases: the row is GONE, not merely expired.
+		// Release: the row is GONE, not merely expired.
+		await releasePsnLock(db(), userId, renewed as string);
 		expect(
 			await getSetting(db(), userId, PSN_LOCK_SETTING_KEY),
 		).toBeUndefined();
 	});
 
-	it('the PS+ refresh releases on the way out — a finished run does not block the next one', async () => {
+	it('the PS+ refresh releases the REGION lock on the way out — a finished run does not block the next one', async () => {
 		stubStore(() => ({ body: catalogPagePayload(['Crow Country']) }));
-		expect((await post('/api/ps-plus-check')).status).toBe(200);
-		expect(
-			await getSetting(db(), userId, PSN_LOCK_SETTING_KEY),
-		).toBeUndefined();
+		const held = await withRegionLock(db(), REGION, (token) =>
+			runPsPlusCheck(db(), REGION, token),
+		);
+		expect(held).toMatchObject({ busy: false, result: { ok: true } });
+		expect((await getRegionState(db(), REGION))?.lock).toBeNull();
 	});
 
-	it('releases even when the run FAILS — a store 500 must not lock the user out', async () => {
+	it('releases even when the run FAILS — a store 500 must not lock the region out', async () => {
 		stubStore(() => ({ status: 500, body: { error: 'store down' } }));
-		const res = await post('/api/ps-plus-check');
-		expect(res.status).toBeGreaterThanOrEqual(500);
+		const held = await withRegionLock(db(), REGION, (token) =>
+			runPsPlusCheck(db(), REGION, token),
+		);
+		expect(held).toMatchObject({
+			busy: false,
+			result: { ok: false, reason: 'provider' },
+		});
 		// The failed run's lock is GONE — the next check is not refused for a TTL.
-		expect(
-			await getSetting(db(), userId, PSN_LOCK_SETTING_KEY),
-		).toBeUndefined();
+		expect((await getRegionState(db(), REGION))?.lock).toBeNull();
 	});
 
 	it('a release only ever clears the caller’s OWN lock', async () => {

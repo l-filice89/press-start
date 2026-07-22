@@ -13,6 +13,7 @@ import { normalizeTitle, notionRowToTracking } from '../core';
 import type { IgdbCandidate, IgdbSearch } from '../providers';
 import {
 	addExternalLink,
+	countUnenrichedForUser,
 	deleteStraggler,
 	enrichGame,
 	findGameByExternalLink,
@@ -28,6 +29,7 @@ import {
 	upsertGenre,
 } from '../repositories';
 import type { Db } from '../repositories/db';
+import { bumpAllLibraryVersions } from './library-version';
 
 export interface StragglerView {
 	/** import-row id (kind `import`) or game id (kind `unenriched`). */
@@ -79,9 +81,16 @@ export async function ignoreImportStraggler(
 	return 'ignored';
 }
 
-/** How many stragglers need attention — feeds the amber banner (AR-22). */
+/** How many stragglers need attention — feeds the amber banner (AR-22).
+ * SQL count for the unenriched half (Story 8.6 — the old view walked the whole
+ * library); the import-staging table is small and shrinking, so its full read
+ * stays the honest count. */
 export async function countStragglers(db: Db, userId: string): Promise<number> {
-	return (await listStragglerView(db, userId)).length;
+	const [imports, unenriched] = await Promise.all([
+		listStragglers(db),
+		countUnenrichedForUser(db, userId),
+	]);
+	return imports.length + unenriched;
 }
 
 /** IGDB pick list for the resolve dialog. Failures degrade to `[]` (NFR-4). */
@@ -213,6 +222,10 @@ export async function resolveStraggler(
 			...(hasScoreFields(input) ? { scores: scoresFromInput(input) } : {}),
 		});
 		await ensureGenres(db, input.id, input.genres);
+		// enrich rewrote SHARED game facts (title/cover/scores) — every tracker's
+		// shelf changed, so every ETag rotates (review, H1: a user-only bump left
+		// other trackers 304ing against a renamed game forever).
+		await bumpAllLibraryVersions(db);
 		return { kind: 'resolved', gameId: input.id };
 	}
 
@@ -269,5 +282,7 @@ export async function resolveStraggler(
 			: { owned: false, playStatus: 'Not started' },
 	);
 	await deleteStraggler(db, input.id);
+	// Same H1 rule: the import path may have enriched a PRE-EXISTING shared row.
+	await bumpAllLibraryVersions(db);
 	return { kind: 'resolved', gameId: gameRow.id };
 }

@@ -5,7 +5,15 @@
  * user's captured zone rather than the Worker's UTC clock.
  */
 import { todayInZone } from '../core';
-import { deleteSetting, getSetting, setSetting } from '../repositories';
+import {
+	deleteSettingForAllUsers,
+	getRegionState,
+	getSetting,
+	setRegionLeavingState,
+	setRegionSweepState,
+	setSetting,
+	setSettingForAllUsers,
+} from '../repositories';
 import type { Db } from '../repositories/db';
 
 export const TIMEZONE_SETTING_KEY = 'timezone';
@@ -79,85 +87,44 @@ export async function getPsnRegion(
 }
 
 /**
- * Scheduled PS+ Extra refresh failure (Story 5.2, FR-40/AR-14). `'failed'`
- * while the last MONTHLY cron run could not refresh the catalog; absent
- * otherwise. Only the stateless cron sets it (a button failure is a toast,
- * 5.1); any successful `runPsPlusCheck` — cron or button — clears it, so the
- * banner self-resolves the moment the catalog is refreshed by any path.
+ * Regional freshness (Story 8.4): the "PS+ CATALOG AS OF {date}" readout reads
+ * the region ledger's `last_success` — a per-region fact, not a per-user one.
+ * The failure banner machinery died with the manual button (AD-31: refresh
+ * failures are passive; users have no action to take).
  */
-export const PSPLUS_REFRESH_FAILED_SETTING_KEY = 'psplus_refresh_failed';
-const PSPLUS_REFRESH_FAILED = 'failed';
-
-export async function markPsPlusRefreshFailed(db: Db, userId: string) {
-	await setSetting(
-		db,
-		userId,
-		PSPLUS_REFRESH_FAILED_SETTING_KEY,
-		PSPLUS_REFRESH_FAILED,
-	);
-}
-
-export async function clearPsPlusRefreshFailed(db: Db, userId: string) {
-	await deleteSetting(db, userId, PSPLUS_REFRESH_FAILED_SETTING_KEY);
-}
-
-export async function isPsPlusRefreshFailed(
-	db: Db,
-	userId: string,
-): Promise<boolean> {
-	return (
-		(await getSetting(db, userId, PSPLUS_REFRESH_FAILED_SETTING_KEY)) ===
-		PSPLUS_REFRESH_FAILED
-	);
-}
-
-/**
- * Last successful PS+ Extra refresh date (Story 5.3, FR-40/AR-18). Written on
- * every successful `runPsPlusCheck` (button or cron) as `todayForUser` — the
- * same user-zone date source as every tracking stamp — and read by the header
- * "PS+ CATALOG AS OF {date}" readout. A failed run leaves the prior value.
- */
-export const PSPLUS_REFRESHED_AT_SETTING_KEY = 'psplus_refreshed_at';
-
-export async function stampPsPlusRefreshedAt(db: Db, userId: string) {
-	await setSetting(
-		db,
-		userId,
-		PSPLUS_REFRESHED_AT_SETTING_KEY,
-		await todayForUser(db, userId),
-	);
-}
-
 export async function getPsPlusRefreshedAt(
 	db: Db,
-	userId: string,
+	region: string | null,
 ): Promise<string | null> {
-	return (
-		(await getSetting(db, userId, PSPLUS_REFRESHED_AT_SETTING_KEY)) ?? null
-	);
+	if (!region) return null;
+	return (await getRegionState(db, region))?.lastSuccess ?? null;
 }
 
 /**
  * IGDB score refresh bookkeeping (Story 10.1, FR-40/AR-14 posture — the exact
  * shape of the PS+ pair above). `scores_refreshed_at` is stamped on every
- * successful refresh and gates the once-a-window cadence (the cron fires 28×
- * a month; the refresh runs when the stamp is stale). `scores_refresh_failed`
+ * successful refresh and gates the refresh cadence. `scores_refresh_failed`
  * lights the attention banner; any successful refresh clears it.
+ *
+ * The FLAG is all-users (deferred-work 2026-07-19): scores live on the shared
+ * `game` rows, so one refresh outcome is every user's outcome — writing it for
+ * the driving user only left every other user's FR-40 banner blind. The STAMP
+ * stays keyed to the driving user: it is cron cadence bookkeeping, read back by
+ * the same scheduler that wrote it.
  */
 export const SCORES_REFRESH_FAILED_SETTING_KEY = 'scores_refresh_failed';
 const SCORES_REFRESH_FAILED = 'failed';
 
-export async function markScoresRefreshFailed(db: Db, userId: string) {
-	await setSetting(
+export async function markScoresRefreshFailed(db: Db) {
+	await setSettingForAllUsers(
 		db,
-		userId,
 		SCORES_REFRESH_FAILED_SETTING_KEY,
 		SCORES_REFRESH_FAILED,
 	);
 }
 
-export async function clearScoresRefreshFailed(db: Db, userId: string) {
-	await deleteSetting(db, userId, SCORES_REFRESH_FAILED_SETTING_KEY);
+export async function clearScoresRefreshFailed(db: Db) {
+	await deleteSettingForAllUsers(db, SCORES_REFRESH_FAILED_SETTING_KEY);
 }
 
 export async function isScoresRefreshFailed(
@@ -220,11 +187,13 @@ export interface PsPlusSweepState {
 	done: boolean;
 }
 
+// Story 8.4: sweep state lives on the REGION ledger (a userless cron cannot
+// key state by user). Same JSON shape, same semantics — only the home moved.
 export async function getPsPlusSweepState(
 	db: Db,
-	userId: string,
+	region: string,
 ): Promise<PsPlusSweepState | null> {
-	const raw = await getSetting(db, userId, PSPLUS_SWEEP_STATE_SETTING_KEY);
+	const raw = (await getRegionState(db, region))?.sweepState;
 	if (!raw) return null;
 	try {
 		return JSON.parse(raw) as PsPlusSweepState;
@@ -237,15 +206,10 @@ export async function getPsPlusSweepState(
 
 export async function setPsPlusSweepState(
 	db: Db,
-	userId: string,
+	region: string,
 	state: PsPlusSweepState,
 ) {
-	await setSetting(
-		db,
-		userId,
-		PSPLUS_SWEEP_STATE_SETTING_KEY,
-		JSON.stringify(state),
-	);
+	await setRegionSweepState(db, region, JSON.stringify(state));
 }
 
 /**
@@ -270,11 +234,12 @@ export interface PsPlusLeavingState {
 	done: boolean;
 }
 
+// Story 8.4: region-homed like the sweep state above.
 export async function getPsPlusLeavingState(
 	db: Db,
-	userId: string,
+	region: string,
 ): Promise<PsPlusLeavingState | null> {
-	const raw = await getSetting(db, userId, PSPLUS_LEAVING_STATE_SETTING_KEY);
+	const raw = (await getRegionState(db, region))?.leavingState;
 	if (!raw) return null;
 	try {
 		return JSON.parse(raw) as PsPlusLeavingState;
@@ -285,13 +250,8 @@ export async function getPsPlusLeavingState(
 
 export async function setPsPlusLeavingState(
 	db: Db,
-	userId: string,
+	region: string,
 	state: PsPlusLeavingState,
 ) {
-	await setSetting(
-		db,
-		userId,
-		PSPLUS_LEAVING_STATE_SETTING_KEY,
-		JSON.stringify(state),
-	);
+	await setRegionLeavingState(db, region, JSON.stringify(state));
 }

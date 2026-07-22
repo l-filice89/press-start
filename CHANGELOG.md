@@ -4,6 +4,36 @@ All notable changes to PRESS START are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/); this project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] — 2026-07-22
+
+Multi-User Readiness: the app stops assuming one owner. Anyone with a
+verified email can register, and every PS+ fact is derived per user and
+per region.
+
+### Breaking
+- **Open registration replaces the allowlist.** The email allowlist is
+  deleted; admission is verified-email (magic link or Google), guarded by
+  in-app rate limiting and an account-link gate.
+- **Per-user PS+ facts.** The four PS+ columns on `games` are dropped
+  (destructive migration 0016); membership is now derived per user + region
+  from the catalog, and departures live in a `ps_plus_departure` ledger.
+- **Manual PS+ refresh removed.** The check button and failed-refresh banner
+  are gone — the scheduled per-region refresh owns the data.
+
+### Added
+- **Per-region scheduled refresh.** The PS+ cron walks every region with
+  users via a `ps_plus_region_state` ledger (quarantine, idle, and monthly
+  window rules); a stale-snapshot guard keeps the shelf honest between runs.
+- **Score refresh on its own daily cron** (`0 3 * * *`), separate from the
+  PS+ schedule; a failed run flags all users and retries the next day.
+- **Free-tier read-budget hardening.** Shelf ETag/304, single-row reads, SQL
+  counts, and a paged catalog lift the sustainable daily-active-user budget
+  from roughly 550 to roughly 2,000 on the D1 free tier.
+
+### Fixed
+- **Legacy `owned_via` rows backfilled** (migration 0018) so ownership
+  provenance is complete before multi-user data arrives.
+
 ## [2.2.0] — 2026-07-17
 
 Fit the Time I Have: filter the shelf by how long a game takes to beat.

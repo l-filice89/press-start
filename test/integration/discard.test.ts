@@ -6,10 +6,11 @@ import {
 	getTracking,
 	insertGame,
 	insertTrackingIfAbsent,
+	recordRegionOutcome,
 } from '../../src/repositories';
 import { createDb } from '../../src/repositories/db';
 import { user } from '../../src/schema';
-import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
+import { appFetch, establishSession, TEST_EMAIL } from './session';
 
 /**
  * Discard (soft-delete tombstone) integration, through the real Worker + local
@@ -60,11 +61,19 @@ async function trackedGame(title: string, unenriched = false) {
 describe('discard (soft-delete tombstone, through the route)', () => {
 	beforeAll(async () => {
 		await applyD1Migrations(env.DB, inject('migrations'));
+		// Story 8.4: /api/shelf's waitUntil stale-snapshot guard would otherwise
+		// hit the REAL store (nothing stubs fetch here) — a fresh ledger row for
+		// the env-seeded region keeps it dormant.
+		await recordRegionOutcome(db(), 'it-it', {
+			attemptedOn: new Date().toISOString().slice(0, 10),
+			succeeded: true,
+			window: new Date().toISOString().slice(0, 7),
+		});
 		cookie = await establishSession();
 		const [row] = await db()
 			.select({ id: user.id })
 			.from(user)
-			.where(eq(user.email, ALLOWED_EMAIL))
+			.where(eq(user.email, TEST_EMAIL))
 			.limit(1);
 		userId = row.id;
 	});

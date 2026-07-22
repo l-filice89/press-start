@@ -19,7 +19,7 @@ import { psPlusCatalog, user } from '../../src/schema';
 import { game, gameTracking, genre } from '../../src/schema/catalog';
 import { addGame, previewAddGame } from '../../src/services';
 import { browseCatalog } from '../../src/services/psplus-browse';
-import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
+import { appFetch, establishSession, TEST_EMAIL } from './session';
 
 /**
  * Story 6.1 integration tests: the add-by-name write path through the real
@@ -61,7 +61,7 @@ describe('add a game by name (Story 6.1, through the route)', () => {
 		const [row] = await db()
 			.select({ id: user.id })
 			.from(user)
-			.where(eq(user.email, ALLOWED_EMAIL))
+			.where(eq(user.email, TEST_EMAIL))
 			.limit(1);
 		sessionUser = row.id;
 	});
@@ -673,7 +673,7 @@ describe('add a game FROM THE CATALOG (Story 7.3, AD-20)', () => {
 		const [row] = await db()
 			.select({ id: user.id })
 			.from(user)
-			.where(eq(user.email, ALLOWED_EMAIL))
+			.where(eq(user.email, TEST_EMAIL))
 			.limit(1);
 		sessionUser = row.id;
 	});

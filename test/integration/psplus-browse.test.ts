@@ -4,27 +4,21 @@ import { beforeAll, beforeEach, describe, expect, inject, it } from 'vitest';
 import { normalizeTitle } from '../../src/core';
 import {
 	addExternalLink,
-	deleteCatalogOutsideRegion,
-	deleteSetting,
 	insertGame,
 	setCatalogGenres,
+	setLeavingOnLedger,
+	setRegionSweepState,
 	setSetting,
 	upsertCatalogProducts,
 	upsertTracking,
 } from '../../src/repositories';
 import { createDb } from '../../src/repositories/db';
-import {
-	game,
-	psPlusCatalog,
-	psPlusCatalogGenre,
-	user,
-} from '../../src/schema';
+import { psPlusCatalog, psPlusCatalogGenre, user } from '../../src/schema';
 import {
 	PSN_REGION_SETTING_KEY,
-	PSPLUS_SWEEP_STATE_SETTING_KEY,
 	setPsPlusSweepState,
 } from '../../src/services/settings';
-import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
+import { appFetch, establishSession, TEST_EMAIL } from './session';
 
 /**
  * The catalog BROWSE read (Story 7.2 review) against the real Worker + local D1.
@@ -111,7 +105,7 @@ beforeAll(async () => {
 	const [row] = await db()
 		.select({ id: user.id })
 		.from(user)
-		.where(eq(user.email, ALLOWED_EMAIL));
+		.where(eq(user.email, TEST_EMAIL));
 	userId = row.id;
 	await setSetting(db(), userId, PSN_REGION_SETTING_KEY, REGION);
 });
@@ -119,7 +113,6 @@ beforeAll(async () => {
 beforeEach(async () => {
 	await db().delete(psPlusCatalogGenre);
 	await db().delete(psPlusCatalog);
-	await deleteCatalogOutsideRegion(db(), REGION);
 });
 
 describe('GET /api/ps-plus-catalog — ordering', () => {
@@ -354,7 +347,8 @@ describe('GET /api/ps-plus-catalog/genres — facet counts', () => {
 		await seedProducts([['p-c', 'Crow Country']]);
 		await setCatalogGenres(db(), scope, 'HORROR', ['p-c']);
 		// The sweep state names ARCADE, but nothing is tagged with it yet.
-		await setPsPlusSweepState(db(), userId, {
+		// (Region-homed since 8.4.)
+		await setPsPlusSweepState(db(), REGION, {
 			region: REGION,
 			generation: GENERATION,
 			keys: ['ARCADE', 'HORROR'],
@@ -367,7 +361,7 @@ describe('GET /api/ps-plus-catalog/genres — facet counts', () => {
 		} finally {
 			// beforeEach only wipes the catalog tables — the state row must not
 			// leak the frozen vocabulary into the tests around this one.
-			await deleteSetting(db(), userId, PSPLUS_SWEEP_STATE_SETTING_KEY);
+			await setRegionSweepState(db(), REGION, null);
 		}
 	});
 });
@@ -423,19 +417,25 @@ describe('GET /api/ps-plus-catalog — the in-library join', () => {
 		expect(row.gameId).toBe(added.id);
 	});
 
-	// Story 10.4 follow-on: the tracked match carries its departure date; an
-	// untracked product answers null (no fabricated data — the sweep never
-	// fans out to the whole catalog).
-	it('carries the tracked match leavingOn; untracked products answer null', async () => {
+	// Story 10.4 follow-on, re-keyed by Story 8.3: the card date reads the
+	// departure LEDGER by (region, product) directly; a product with no ledger
+	// date answers null (no fabricated data — the sweep never fans out to the
+	// whole catalog).
+	it('carries the ledger leavingOn per product; products without a date answer null', async () => {
 		const leaving = await insertGame(db(), {
 			title: 'Vanishing Act',
 			titleNormalized: normalizeTitle('Vanishing Act'),
 		});
 		await upsertTracking(db(), userId, leaving.id, { owned: false });
-		await db()
-			.update(game)
-			.set({ psPlusLeavingOn: '2099-07-21' })
-			.where(eq(game.id, leaving.id));
+		await setLeavingOnLedger(db(), scope, [
+			{
+				productId: 'p-vanish',
+				npTitleId: null,
+				titleNormalized: normalizeTitle('Vanishing Act'),
+				leavingOn: '2099-07-21',
+				psnConceptId: 'c-vanish',
+			},
+		]);
 
 		await seedProducts([
 			['p-vanish', 'Vanishing Act'],
@@ -458,10 +458,15 @@ describe('GET /api/ps-plus-catalog — the in-library join', () => {
 			titleNormalized: normalizeTitle('Owned Vanisher'),
 		});
 		await upsertTracking(db(), userId, ownedLeaving.id, { owned: true });
-		await db()
-			.update(game)
-			.set({ psPlusLeavingOn: '2099-07-21' })
-			.where(eq(game.id, ownedLeaving.id));
+		await setLeavingOnLedger(db(), scope, [
+			{
+				productId: 'p-ownvanish',
+				npTitleId: null,
+				titleNormalized: normalizeTitle('Owned Vanisher'),
+				leavingOn: '2099-07-21',
+				psnConceptId: 'c-ownvanish',
+			},
+		]);
 
 		await seedProducts([['p-ownvanish', 'Owned Vanisher']]);
 		const [row] = (await browse()).games;

@@ -32,9 +32,10 @@
  *   D1, CRON: findUserByEmail 1 · lock claim 1 · genre-state read (rotation) 1
  *             · leaving-state read (rotation) 1 + (sweep's own) 1 · region
  *             read 1 · library read 1 · catalog title→product read 1 · fence
- *             (holdsPsnLock) 1 · batched leaving write 1 · stale-concept
- *             clear ≤1 · state write 1 · lock release 1 = 13.
- *   total ≈ 30 + 13 = 43 of 50 worst case; steady state (concepts cached) ≈ 28.
+ *             (holdsPsnLock) 1 · batched leaving write 1 · library-version
+ *             rotate (8.6 ETag) 1 · stale-concept
+ *             clear ≤1 · state write 1 · lock release 1 = 14.
+ *   total ≈ 30 + 14 = 44 of 50 worst case; steady state (concepts cached) ≈ 29.
  *   The score refresh NEVER stacks on a sweep invocation (worker/index.ts
  *   skips it whenever the rotation spent fan-out).
  * 39 flagged games = 3 chunks; the cron fires 28× a month
@@ -44,19 +45,17 @@
 import { normalizeTitle } from '../core';
 import { createPsnProvider } from '../providers';
 import {
-	clearPsnConceptIds,
+	clearLedgerConceptIds,
 	listCatalogTitleProducts,
-	listLibraryForUser,
+	listLedgerForProducts,
+	listRegionTrackedGames,
 	PS_PLUS_TIER,
-	setPsPlusLeaving,
+	setLeavingOnLedger,
 } from '../repositories';
 import type { Db } from '../repositories/db';
-import { holdsPsnLock } from './psn-lock';
-import {
-	getPsnRegion,
-	getPsPlusLeavingState,
-	setPsPlusLeavingState,
-} from './settings';
+import { bumpAllLibraryVersions } from './library-version';
+import { holdsRegionLock } from './psn-lock';
+import { getPsPlusLeavingState, setPsPlusLeavingState } from './settings';
 
 const LEAVING_CHUNK_SIZE = 15;
 
@@ -66,14 +65,13 @@ export type LeavingSweepOutcome =
 
 export async function runLeavingSweep(
 	db: Db,
-	userId: string,
-	env: { PSN_REGION?: string },
+	// Region-first (Story 8.4): per-region op, region-ledger state and lock.
+	region: string | null,
 	{ lockToken }: { lockToken?: string } = {},
 ): Promise<LeavingSweepOutcome> {
-	const region = await getPsnRegion(db, userId, env);
 	if (!region) return { ok: false, reason: 'no-region' };
 
-	const state = await getPsPlusLeavingState(db, userId);
+	const state = await getPsPlusLeavingState(db, region);
 	// No pending sweep: the membership pass has not (re)armed one for this
 	// region. The rotation checks `done` before calling, but the state is the
 	// authority, not the caller.
@@ -82,32 +80,64 @@ export async function runLeavingSweep(
 
 	// Deterministic order + keyset cursor, exactly like the genre sweep's frozen
 	// key list: the id ordering cannot shift under the cursor mid-sweep.
-	const flagged = (
-		await listLibraryForUser(db, userId, { includeDiscarded: true })
-	)
-		.filter((row) => row.psPlusExtra)
-		.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-	// Sorted before the Map so a duplicate title key (two catalog products,
-	// one normalized name — observed live) resolves to the SAME product every
-	// sweep instead of flapping with query order.
-	const products = new Map(
-		(await listCatalogTitleProducts(db, { region, tier: PS_PLUS_TIER }))
-			.sort((a, b) => (a.productId < b.productId ? -1 : 1))
-			.map((row) => [row.titleNormalized, row.productId] as const),
+	// The target universe is PER-REGION now (Story 8.4): distinct games tracked
+	// by ANY user of this region; membership = the three-leg product resolution
+	// below (the same legs as the 8.3 derivation).
+	const flagged = (await listRegionTrackedGames(db, region)).sort((a, b) =>
+		a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
 	);
+	// Sorted before the Maps so a duplicate key (two catalog products, one
+	// normalized name / np id — observed live) resolves to the SAME product
+	// every sweep instead of flapping with query order. Three lookup legs
+	// (deferred-work 2026-07-19), mirroring the 8.3 membership derivation:
+	// product link > np-title link > normalized title — a catalog-added game is
+	// IGDB-retitled on add, so the title leg alone silently skipped it forever.
+	const catalogProducts = (
+		await listCatalogTitleProducts(db, { region, tier: PS_PLUS_TIER })
+	).sort((a, b) => (a.productId < b.productId ? -1 : 1));
+	const byTitle = new Map(
+		catalogProducts.map((row) => [row.titleNormalized, row] as const),
+	);
+	const byProductId = new Map(
+		catalogProducts.map((row) => [row.productId, row] as const),
+	);
+	const byNpTitleId = new Map(
+		catalogProducts.flatMap((row) =>
+			row.npTitleId ? [[row.npTitleId, row] as const] : [],
+		),
+	);
+	const resolveProduct = (row: {
+		title: string;
+		psnProductIds: string[];
+		npTitleIds: string[];
+	}) =>
+		row.psnProductIds.map((id) => byProductId.get(id)).find(Boolean) ??
+		row.npTitleIds.map((id) => byNpTitleId.get(id)).find(Boolean) ??
+		// Joined on the RECOMPUTED key, exactly like the flag pass (review, M: a
+		// stored title_normalized predating a normalizeTitle change would be
+		// flagged yet silently never swept).
+		byTitle.get(normalizeTitle(row.title));
 
 	const pending = flagged.filter(
 		(row) => state.cursor === null || row.id > state.cursor,
 	);
+	const scope = { region, tier: PS_PLUS_TIER };
 	if (pending.length === 0) {
-		await setPsPlusLeavingState(db, userId, { ...state, done: true });
+		await setPsPlusLeavingState(db, region, { ...state, done: true });
 		return { ok: true, result: { swept: 0, failed: 0, done: true } };
 	}
 	const chunk = pending.slice(0, LEAVING_CHUNK_SIZE);
 
 	const provider = createPsnProvider();
+	// Concept cache now lives on the LEDGER (region, product) — Story 8.3.
+	const chunkProducts = chunk
+		.map((row) => resolveProduct(row)?.productId)
+		.filter((v): v is string => Boolean(v));
+	const ledger = await listLedgerForProducts(db, scope, chunkProducts);
 	const updates: {
-		gameId: string;
+		productId: string;
+		npTitleId: string | null;
+		titleNormalized: string;
 		leavingOn: string | null;
 		psnConceptId: string;
 	}[] = [];
@@ -118,28 +148,35 @@ export async function runLeavingSweep(
 	let failed = 0;
 	let queried = 0;
 	for (const row of chunk) {
-		// A flagged game absent from the snapshot join is mid-transition (the next
-		// membership pass clears its flag, which also clears any leaving date) —
-		// stepped past, never an error. Joined on the RECOMPUTED key, exactly
-		// like the flag pass (review, M: a stored title_normalized predating a
-		// normalizeTitle change would be flagged yet silently never swept).
-		const productId = products.get(normalizeTitle(row.title));
-		if (!productId) continue;
+		// A flagged game absent from all three snapshot legs is mid-transition
+		// (the next membership pass clears its flag, which also clears any
+		// leaving date) — stepped past, never an error.
+		const product = resolveProduct(row);
+		if (!product) continue;
+		const { productId, npTitleId } = product;
 		queried++;
+		const cachedConcept = ledger.get(productId)?.psnConceptId ?? null;
 		try {
 			const answer = await provider.fetchPsPlusOfferEnd(
 				region,
 				productId,
-				row.psnConceptId,
+				cachedConcept,
 			);
 			updates.push({
-				gameId: row.id,
+				productId,
+				// Thread the catalog's np id (review, M3): a game linked only via
+				// 'PSN' must find its date through the np-key derivation leg.
+				npTitleId,
+				// The CATALOG's normalized title, not the game's (deferred-work
+				// 2026-07-19): the ledger row describes the product, and a
+				// link-resolved game carries a drifted title anyway.
+				titleNormalized: product.titleNormalized,
 				leavingOn: answer.leavingOn,
 				psnConceptId: answer.conceptId,
 			});
 		} catch (error) {
 			failed++;
-			if (row.psnConceptId) staleConcepts.push(row.id);
+			if (cachedConcept) staleConcepts.push(productId);
 			console.error(
 				`ps+ leaving sweep: ${row.title} (${productId}) failed — keeping stored date`,
 				error,
@@ -156,15 +193,15 @@ export async function runLeavingSweep(
 	// steps the cursor past the chunk; its games retry on the next re-arm.
 	if (queried > 0 && failed === queried) {
 		if ((state.attempts ?? 0) < 1) {
-			await setPsPlusLeavingState(db, userId, {
+			await setPsPlusLeavingState(db, region, {
 				...state,
 				attempts: (state.attempts ?? 0) + 1,
 			});
 			return { ok: false, reason: 'provider' };
 		}
-		await clearPsnConceptIds(db, staleConcepts);
+		await clearLedgerConceptIds(db, scope, staleConcepts);
 		const done = pending.length <= chunk.length;
-		await setPsPlusLeavingState(db, userId, {
+		await setPsPlusLeavingState(db, region, {
 			...state,
 			cursor: chunk[chunk.length - 1].id,
 			attempts: 0,
@@ -178,17 +215,19 @@ export async function runLeavingSweep(
 
 	// The fence (same as the membership pass and genre sweep): a chunk that
 	// stalled past the lock TTL may have been preempted — it writes nothing.
-	if (lockToken && !(await holdsPsnLock(db, userId, lockToken))) {
+	if (lockToken && !(await holdsRegionLock(db, region, lockToken))) {
 		console.error('ps+ leaving sweep: lock lost — refusing to write');
 		return { ok: false, reason: 'conflict' };
 	}
 
-	await setPsPlusLeaving(db, updates);
+	await setLeavingOnLedger(db, scope, updates);
+	// Shared region facts changed → every user's shelf ETag rotates (8.6).
+	if (updates.length > 0) await bumpAllLibraryVersions(db);
 	// Failed cached concepts re-resolve on the next sweep (one extra batched
 	// statement only when something actually failed).
-	await clearPsnConceptIds(db, staleConcepts);
+	await clearLedgerConceptIds(db, scope, staleConcepts);
 	const done = pending.length <= chunk.length;
-	await setPsPlusLeavingState(db, userId, {
+	await setPsPlusLeavingState(db, region, {
 		...state,
 		cursor: chunk[chunk.length - 1].id,
 		attempts: 0,

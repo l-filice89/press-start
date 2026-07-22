@@ -30,7 +30,8 @@ IGDB_CLIENT_SECRET=""
 # Google OAuth (Story 8.1 / B1a) — "Continue with Google" alongside the magic
 # link. OPTIONAL: when either is absent the provider is simply not registered
 # and magic link is the only path (dev/e2e run this way). The allowlist still
-# applies to the OAuth path — a non-AUTH_ALLOWED_EMAIL account is rejected
+# Registration is open (AD-29): admission is proven email control — an
+# UNVERIFIED provider email is rejected on the OAuth path
 # before any user row is written. Redirect URI to register with Google:
 #   https://<your-host>/api/auth/callback/google
 # Production equivalents (secrets, never wrangler.jsonc vars):
@@ -38,3 +39,6 @@ IGDB_CLIENT_SECRET=""
 #   bunx wrangler secret put GOOGLE_CLIENT_SECRET
 GOOGLE_CLIENT_ID=""
 GOOGLE_CLIENT_SECRET=""
+
+# Optional: set to "off" to disable the in-code auth rate limiter (tests do).
+# AUTH_RATE_LIMIT=off

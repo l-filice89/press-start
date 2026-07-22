@@ -113,6 +113,34 @@
       "when": 1784208217899,
       "tag": "0015_game_ps_plus_leaving",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1784301910778,
+      "tag": "0016_rare_fixer",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1784305254976,
+      "tag": "0017_large_big_bertha",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1784318557314,
+      "tag": "0018_owned_via_backfill",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1784322788955,
+      "tag": "0019_np_title_index_and_version_rotate",
+      "breakpoints": true
     }
   ]
 }

@@ -1537,13 +1537,13 @@ So that the app is no longer one hard-coded email address.
 **When** it hits any tracking read/write path
 **Then** it is refused — the scoping is enforced server-side, not by the UI hiding things [AR-13]
 
-**Given** a user who is no longer admitted (removed from the allowlist, or de-provisioned under whatever replaces it) but still holds a valid session cookie
-**When** they open the app
-**Then** they land on the login screen, not a shell that renders while every data route 401s — the session check the SPA gates on (`/api/auth/get-session`) applies the same admission rule as `requireAuth`, and their `session` rows are revoked [deferred-work: de-allowlisted session; AR-13, NFR-4]
+**Given** registration is open (AD-29, signed off 2026-07-17: no allowlist, no admission table — "invite" is sharing the URL)
+**When** the allowlist is deleted
+**Then** `isAllowedEmail`, `env.AUTH_ALLOWED_EMAIL`, the magic-link pre-gate, and the `requireAuth` allowlist re-check are all removed — a valid session alone gates; the deferred-work "de-allowlisted session" item retires as moot [B1b; AD-29]
 
 **Given** OAuth account linking is at better-auth defaults (a Google identity links into an existing user row by matching email, without `user.create.before` running)
 **When** registration opens the door to real addresses
-**Then** the admission rule gates the LINK path too, not just user creation — no one links a Google identity into an account they weren't admitted to [deferred-work: OAuth link gate; B1a, B1b]
+**Then** the LINK path requires **proven control of the matched email** — a provider identity links only on a verified email match; an unverified match is refused (the account-takeover door) [deferred-work: OAuth link gate; AD-29; B1a, B1b]
 
 **Given** the auth endpoints are reachable by strangers once registration is open (a started-but-never-finished Google sign-in writes an OAuth state row to `verification` before any admission check can run)
 **When** the endpoints are hardened
@@ -1659,8 +1659,7 @@ So that the free-tier DAU ceiling rises from ~550 toward the request cap (~6,600
 **Given** `GET /api/ps-plus-catalog` reads all ~490 rows then slices in memory (`psplus-browse.ts:35`)
 **Then** it pages via `LIMIT/OFFSET` in SQL
 
-**Given** the catalog snapshot write rewrites all ~490 rows per refresh
-**Then** it upserts diff-based — only changed rows (write cliff ~100 → ~2,000 runs/day, independent of 8.4's per-region model)
+~~**Given** the catalog snapshot write rewrites all ~490 rows per refresh **Then** it upserts diff-based~~ *(dropped at the 8.0 sign-off, 2026-07-17: a diff write strands unchanged rows on an old snapshot generation, breaking AD-28's generation-carried sweep/prune, to save ~1% of a day's write budget — AD-33 §5)*
 
 **Given** shelf refetches re-read the whole library even when nothing changed
 **Then** shelf responses carry a per-user library-version ETag (304 on unchanged), and catalog responses are cached per active region, version-keyed, invalidated by refresh — paged-vs-whole FE delivery decided by Story 8.0

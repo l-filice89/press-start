@@ -247,6 +247,32 @@ pinned in `test/integration/auth.test.ts` against real workerd + D1.
 | 8.1d the Google button and the magic-link form both render, on the existing token system | `auth-journey.spec.ts` › the login gate offers Google alongside the magic link; jsdom `Login.test.tsx` › offers both sign-in paths, and the Google button starts the OAuth flow (asserts `signIn.social` is called with the google provider) |
 | 8.1e the Google client secret lives in a Worker secret, never in the repo | no runtime flow — enforced by config: the pair lives in `.dev.vars` / `wrangler secret put` (documented in `.dev.vars.example`), and `wrangler.jsonc` carries only a comment naming them. `grep -rn "GOOGLE_CLIENT" wrangler.jsonc` returns comments only |
 
+Story 8.2 (real users can register, B1b) — registration is OPEN (AD-29): the
+allowlist died, admission is proven email control. The Google half is still
+not browser-drivable (no creds, no consent screen), so the gates are pinned at
+the exact better-auth seams in integration.
+
+| AC | Coverage |
+|----|----------|
+| 8.2a any email can register via magic link or verified Google | `auth-journey.spec.ts` re-run green (the e2e email was never allowlist-special once the gate died — the journey IS an open registration); integration `auth.test.ts` › sends a magic link to ANY address + › admits ANY verified Google account |
+| 8.2b unverified OAuth email refused at creation AND linking, no residue | integration `auth.test.ts` › rejects an UNVERIFIED email with the exact code the login screen matches (message-is-the-wire) + › LINK path: an UNVERIFIED matching email is refused; a verified one links (drives better-auth's own `handleOAuthUserInfo` — TEST-THE-BYPASS); jsdom `Login.test.tsx` › states the unverified-email rejection |
+| 8.2c two-user server-side scoping | no NEW UI flow (the UI is unchanged; scoping is server truth) — integration `auth.test.ts` › two registered users are scoped server-side (own shelf/me; cross-user PATCH 404s and mutates nothing) |
+| 8.2d cron survives the env deletion; verification TTL sweep | no UI flow — integration `psplus-cron.test.ts` › no-ops when NO user is registered; `auth.test.ts` › stranger sign-in writes a verification row … swept once expired; the WAF rate limit is an edge/dashboard rule (deploy note in spec-8-2), not app code |
+
+Story 8.6 (free-tier read-budget hardening) is transport-level: how rows are
+read, never what renders. No AC has a user-observable UI flow, so the UI-parity
+evidence is the EXISTING specs re-run green over the reworked reads
+(`epic1-shelf`, `epic2-detail`, `epic7-catalog` — shelf, by-id detail, catalog
+paging/markers all drive the changed paths).
+
+| AC | Coverage |
+|----|----------|
+| 8.6a `GET /games/:id` is a single-row read, payload unchanged | no NEW UI flow — `epic2-detail.spec.ts` + `epic7-catalog.spec.ts` deep-link specs drive the route; parity + scope-miss pinned in integration `read-budget.test.ts` › 8.6a (card identical to the whole-library bake; unknown/other-user/discarded all null) |
+| 8.6b settings counts via SQL `COUNT(*)` | no UI flow (numbers render as before — `SettingsPanel.test.tsx` unchanged) — integration `read-budget.test.ts` › 8.6b (full-scan truth incl. zero and discarded exclusion) |
+| 8.6c shelf ETag/304 + the version-bump invariant | no UI flow (a 304 renders identically by definition) — integration `read-budget.test.ts` › 8.6c: the route 304s on an unchanged version, answers 200 + a NEW tag after a write, and EVERY writer category rotates the version (the bypass suite); the client 304 path is `callApi`'s retained-body branch, exercised by the route tests' contract |
+| 8.6d catalog SQL paging + page-scoped markers | `epic7-catalog.spec.ts` re-run green over the paged reads (grid, filters, markers, add-flow); page-union/order/filter + non-zero-page markers pinned in integration `read-budget.test.ts` › 8.6d |
+| 8.6e `session.cookieCache` enabled, TTL ≤ 5 min | no UI flow — config pinned in `src/services/auth.ts` (`maxAge: 300`); the auth journey (`auth-journey.spec.ts`) re-runs green with the cache on |
+
 ## Epic 7
 
 Story 7.1 (persist the PS+ catalog as browsable data) is **ingest + schema only** —

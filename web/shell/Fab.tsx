@@ -1,72 +1,34 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
-import { startGenreSweep } from '../catalog/api';
-import { useAnnounce } from '../components/LiveRegion';
 import { useToast } from '../components/Toast';
-import { type PsPlusCheckResult, runPsPlusCheck } from '../settings/api';
-import { serverMessage } from '../shelf/api';
 import { useActiveDestination } from '../shelf/detail-navigation';
 import './fab.css';
 
 /**
  * The FAB drawer (EXPERIENCE.md "chores only"): a fixed bottom-right toggle
- * opening an upward item list. Need-scoped — Check PS+ Extra (5.1) and
- * Export CSV (6.3); the credentialed sync items were severed by Epic 11.
- * Long-op items show a spinner while running (UX-DR10). Escape and
- * outside-click close the drawer; every item shows icon + text on all sizes.
+ * opening an upward item list. Need-scoped — Export CSV (6.3); the credentialed
+ * sync items were severed by Epic 11, and the manual Check PS+ Extra by Story
+ * 8.4 (refreshes are automatic now). Long-op items show a spinner while running
+ * (UX-DR10). Escape and outside-click close the drawer; every item shows
+ * icon + text on all sizes.
  */
 export function Fab({
-	onPsPlusCheckComplete,
 	handedness = 'right',
 }: {
-	/** Receives every completed PS+ check's result — AppShell opens its readout (FR-38). */
-	onPsPlusCheckComplete: (result: PsPlusCheckResult) => void;
 	/** FAB placement (Story 6.3, UX-DR10) — bottom-right (default) or bottom-left. */
 	handedness?: 'left' | 'right';
 }) {
 	const [open, setOpen] = useState(false);
 	const rootRef = useRef<HTMLDivElement>(null);
-	const checkPendingRef = useRef(false);
 	const menuId = useId();
-	const queryClient = useQueryClient();
 	const { toast } = useToast();
-	const announce = useAnnounce();
 	// Export CSV exports the LIBRARY (FR-49) — offering it on the catalog view
 	// misleads. The ACTIVE destination (the background when a detail overlay is
 	// open), not the raw pathname, decides — same rule as the header toggle.
+	// With the manual PS+ check gone (Story 8.4) export is the only chore left,
+	// so on the catalog the whole FAB goes: a toggle over an empty drawer is
+	// worse than no button.
 	const onCatalog = useActiveDestination().pathname.startsWith('/catalog');
-
-	const check = useMutation({
-		mutationFn: runPsPlusCheck,
-		onSuccess: (result: PsPlusCheckResult) => {
-			announce('PS plus check complete.');
-			onPsPlusCheckComplete(result);
-			// Flags feed playableNow — the shelf must re-derive.
-			queryClient.invalidateQueries({ queryKey: ['shelf'] });
-			// A successful check clears any failed-cron flag (5.2) — refetch
-			// settings so the failed-refresh banner disappears without a reload.
-			queryClient.invalidateQueries({ queryKey: ['settings'] });
-			// The check rewrote the snapshot (and its prune cascades genre rows) —
-			// both catalog reads must refetch NOW, not only if the sweep succeeds,
-			// or the FAB path drifts from Catalog.tsx's (review #2).
-			queryClient.invalidateQueries({ queryKey: ['catalog'] });
-			queryClient.invalidateQueries({ queryKey: ['catalog-genres'] });
-			// The snapshot is in; now tag it — otherwise the genre filter stays
-			// empty until the monthly cron converges (Story 7.1's "do it now" loop).
-			startGenreSweep(queryClient, result.generation);
-		},
-		onError: (error: Error) => {
-			// The server's own message when it carries one — a bad-region 409 names
-			// the actual fix; "try again later" would send the user in a circle.
-			toast({
-				message: serverMessage(error) ?? 'PS+ check failed — try again later.',
-			});
-		},
-		onSettled: () => setOpen(false),
-	});
-
-	const psnBusy = check.isPending;
-	checkPendingRef.current = psnBusy;
 
 	const exportCsv = useMutation({
 		// A bare <a download> can't see the HTTP status: a lapsed session would
@@ -92,12 +54,9 @@ export function Fab({
 	useEffect(() => {
 		if (!open) return;
 		const onDocKeyDown = (e: KeyboardEvent) => {
-			if (e.key === 'Escape' && !checkPendingRef.current) setOpen(false);
+			if (e.key === 'Escape') setOpen(false);
 		};
 		const onDocPointerDown = (e: PointerEvent) => {
-			// A stray tap must not hide the running op's spinner (UX-DR10) —
-			// while the PS+ check is pending the drawer stays until it settles.
-			if (checkPendingRef.current) return;
 			if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
 		};
 		document.addEventListener('keydown', onDocKeyDown);
@@ -107,6 +66,8 @@ export function Fab({
 			document.removeEventListener('pointerdown', onDocPointerDown);
 		};
 	}, [open]);
+
+	if (onCatalog) return null;
 
 	return (
 		<div
@@ -119,49 +80,25 @@ export function Fab({
 					<button
 						type="button"
 						className="fab__item tap-target"
-						onClick={() => check.mutate()}
-						disabled={psnBusy}
-						aria-label="Check PS+ Extra"
-						data-testid="fab-psplus-check"
+						onClick={() => exportCsv.mutate()}
+						disabled={exportCsv.isPending}
+						aria-label="Export CSV"
+						data-testid="fab-export"
 					>
 						<span className="fab__item-icon" aria-hidden="true">
-							{check.isPending ? (
+							{exportCsv.isPending ? (
 								<span
 									className="fab__spinner"
-									data-testid="fab-psplus-spinner"
+									data-testid="fab-export-spinner"
 								/>
 							) : (
-								'✦'
+								'⤓'
 							)}
 						</span>
 						<span className="fab__item-label">
-							{check.isPending ? 'Checking…' : 'Check PS+ Extra'}
+							{exportCsv.isPending ? 'Exporting…' : 'Export CSV'}
 						</span>
 					</button>
-					{!onCatalog && (
-						<button
-							type="button"
-							className="fab__item tap-target"
-							onClick={() => exportCsv.mutate()}
-							disabled={exportCsv.isPending}
-							aria-label="Export CSV"
-							data-testid="fab-export"
-						>
-							<span className="fab__item-icon" aria-hidden="true">
-								{exportCsv.isPending ? (
-									<span
-										className="fab__spinner"
-										data-testid="fab-export-spinner"
-									/>
-								) : (
-									'⤓'
-								)}
-							</span>
-							<span className="fab__item-label">
-								{exportCsv.isPending ? 'Exporting…' : 'Export CSV'}
-							</span>
-						</button>
-					)}
 				</div>
 			)}
 			<button

@@ -5,7 +5,7 @@ import { insertGame, upsertTracking } from '../../src/repositories';
 import { createDb } from '../../src/repositories/db';
 import { user } from '../../src/schema';
 import { genre } from '../../src/schema/catalog';
-import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
+import { appFetch, establishSession, TEST_EMAIL } from './session';
 
 /**
  * Story 2.5 integration tests: the genre-editing write path through the real
@@ -79,7 +79,7 @@ describe('genre edits (Story 2.5, through the route with a real session)', () =>
 		const [row] = await db()
 			.select({ id: user.id })
 			.from(user)
-			.where(eq(user.email, ALLOWED_EMAIL))
+			.where(eq(user.email, TEST_EMAIL))
 			.limit(1);
 		sessionUser = row.id;
 		foreignUser = await seedUser('genres-foreign@example.com');

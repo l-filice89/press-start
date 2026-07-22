@@ -15,7 +15,7 @@ import { createDb } from '../../src/repositories/db';
 import { user } from '../../src/schema';
 import { game } from '../../src/schema/catalog';
 import { searchGamesForResolve } from '../../src/services';
-import { ALLOWED_EMAIL, appFetch, establishSession } from './session';
+import { appFetch, establishSession, TEST_EMAIL } from './session';
 
 /**
  * Story 6.2 integration tests: the straggler-resolution write path through the
@@ -55,7 +55,7 @@ describe('straggler resolution (Story 6.2, through the route)', () => {
 		const [row] = await db()
 			.select({ id: user.id })
 			.from(user)
-			.where(eq(user.email, ALLOWED_EMAIL))
+			.where(eq(user.email, TEST_EMAIL))
 			.limit(1);
 		sessionUser = row.id;
 	});

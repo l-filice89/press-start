@@ -65,12 +65,12 @@ describe('Login — Google (Story 8.1)', () => {
 		});
 	});
 
-	it('states the allowlist rejection rather than bouncing silently', async () => {
-		window.history.replaceState(null, '', '/?error=ACCESS_DENIED');
+	it('states the unverified-email rejection rather than bouncing silently', async () => {
+		window.history.replaceState(null, '', '/?error=EMAIL_NOT_VERIFIED');
 		renderLogin();
 
 		expect(await screen.findByRole('alert')).toHaveTextContent(
-			/isn.t allowed to sign in/i,
+			/hasn.t verified that email/i,
 		);
 		// The param is consumed, so a reload can't resurface a stale rejection.
 		expect(window.location.search).toBe('');

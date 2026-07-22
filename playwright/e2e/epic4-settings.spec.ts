@@ -38,11 +38,12 @@ test('Settings renders NO credential surface — the token section is gone (Epic
 	);
 });
 
-test('the FAB drawer offers exactly Check PS+ Extra and Export CSV — no credentialed sync control exists (Epic 11 story 11.1)', async ({
+test('the FAB drawer offers exactly Export CSV — no credentialed sync or manual check control exists (Epic 11 / Story 8.4)', async ({
 	page,
 }) => {
 	// The severed routes' UI entry points must be GONE, not disabled: a chores
-	// drawer with a dead sync item would still read as "this app syncs".
+	// drawer with a dead item would still read as "this app can do that".
+	// Story 8.4 removed the manual PS+ check too — refreshes are automatic.
 	await page.goto('/');
 
 	const toggle = page.getByRole('button', { name: 'Chores' });
@@ -51,10 +52,10 @@ test('the FAB drawer offers exactly Check PS+ Extra and Export CSV — no creden
 
 	const drawer = page.getByTestId('fab-drawer');
 	await expect(drawer).toBeVisible();
-	await expect(page.getByTestId('fab-psplus-check')).toBeVisible();
 	await expect(page.getByTestId('fab-export')).toBeVisible();
-	// Exactly two items — nothing else can trigger anything.
-	await expect(drawer.getByRole('button')).toHaveCount(2);
+	// Exactly one item — nothing else can trigger anything.
+	await expect(drawer.getByRole('button')).toHaveCount(1);
+	await expect(page.getByTestId('fab-psplus-check')).toHaveCount(0);
 	await expect(page.getByTestId('fab-sync')).toHaveCount(0);
 	await expect(page.getByTestId('fab-trophy-sync')).toHaveCount(0);
 });

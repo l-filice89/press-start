@@ -100,13 +100,12 @@ describe('Catalog empty states', () => {
 		expect(screen.queryByTestId('catalog-grid')).not.toBeInTheDocument();
 	});
 
-	it('EMPTY CATALOG — a region, but nothing fetched yet: run the check right here', async () => {
+	it('EMPTY CATALOG — a region, but nothing fetched yet: passive copy, no button (8.4)', async () => {
 		mockCatalog(page({ generation: null }));
 		renderCatalog();
 		expect(await screen.findByText('EMPTY CATALOG')).toBeInTheDocument();
-		expect(
-			screen.getByRole('button', { name: 'Check PS+ Extra' }),
-		).toBeInTheDocument();
+		expect(screen.getByText(/updates automatically/)).toBeInTheDocument();
+		expect(screen.queryByRole('button', { name: /Check PS/ })).toBeNull();
 	});
 
 	it('a filtered miss is NO MATCH, not EMPTY CATALOG (the snapshot is fine)', async () => {

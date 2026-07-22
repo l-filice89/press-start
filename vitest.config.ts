@@ -45,6 +45,11 @@ export default defineConfig({
 								// reach the live API — the preview route degrades instead.
 								IGDB_CLIENT_ID: '',
 								IGDB_ACCESS_TOKEN: '',
+								// The 8.2 in-memory auth limiter must be off for suites that
+								// hammer the magic-link route by design. Forced here (not
+								// left to .dev.vars, which is gitignored) so CI behaves
+								// exactly like a local run.
+								AUTH_RATE_LIMIT: 'off',
 							},
 						},
 					}),
