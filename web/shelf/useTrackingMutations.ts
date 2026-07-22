@@ -456,7 +456,18 @@ export function useTrackingMutations(
 	const discardMutation = useMutation({
 		mutationFn: (discarded: boolean) => setDiscarded(game.id, discarded),
 		onSettled: settleWrite,
-		onSuccess: () => invalidateShelfQueries(),
+		// A discarded game 404s on `/api/games/:id`, so the by-id query must be
+		// REMOVED, not invalidated — invalidating races the panel's unmount and
+		// refetches a guaranteed 404 (CI-visible under load). Un-discard (UNDO)
+		// goes back through the normal invalidation seam.
+		onSuccess: (_state, discarded) => {
+			if (discarded) {
+				queryClient.invalidateQueries({ queryKey: ['shelf'] });
+				queryClient.removeQueries({ queryKey: ['game', game.id] });
+			} else {
+				invalidateShelfQueries();
+			}
+		},
 		onError: () =>
 			toast({ message: `Couldn’t update ${game.title}. Try again.` }),
 	});
