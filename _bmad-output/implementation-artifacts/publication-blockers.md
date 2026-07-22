@@ -14,7 +14,7 @@ Things that are correct while `AUTH_ALLOWED_EMAIL` is one address but **break th
 | — | **8.6** — Free-tier read-budget hardening (added 2026-07-17; not a blocker — capacity headroom, single-tenant-safe like 8.1) |
 | B6 | **8.5** — Backfill legacy `owned_via` rows |
 
-Status: none resolved — B1b–B6 are latent by design; B1a is a v1.x feature not yet built.
+Status: **ALL RESOLVED — Epic 8 complete 2026-07-17** (B5 retired 2026-07-17 by Epic 11's credential removal). Every blocker shipped on `epic/8-multi-user-readiness`; awaiting the main merge + deploy (migration 0016 gate). This doc is now a historical record.
 
 | # | Blocker | Where | Fix |
 |---|---------|-------|-----|

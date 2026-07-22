@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-06
-last_updated: 2026-07-17 # epic-12 retro: retrospective done, action items appended (1-2 shipped in-session)
+last_updated: 2026-07-22 # epic-8 retro: retrospective done, action items appended (1-2 shipped in-session)
 project: ps-game-catalog
 project_key: NOKEY
 tracking_system: file-system
@@ -127,7 +127,7 @@ development_status:
   8-4-the-scheduled-refresh-serves-every-region-b4: done # 2026-07-17 (dev-auto): region-state ledger + per-region cron rotation + stale-snapshot guard; button/banner/client-sweep removed; migration 0017; 12 review patches (3 HIGH); followup_review_recommended:true
   8-5-backfill-legacy-owned-via-rows-b6: done # 2026-07-17 (dev-auto): migration 0018 + honest-scoped decision record + slice-pattern hazard test; 8 review patches (2 HIGH, both in the artifact's truthing)
   8-6-free-tier-read-budget-hardening: done # 2026-07-17 (dev-auto): single-row reads, SQL counts, paged catalog, shelf ETag/304, cookieCache — DAU ~550→~2,000; 13 review patches (2 HIGH: missed shared-fact bumps); followup_review_recommended:true (forced by the HIGHs)
-  epic-8-retrospective: optional
+  epic-8-retrospective: done # 2026-07-22 — epic-8-retro-2026-07-22.md; OPERATOR-SWEEP rule + blockers-doc closeout shipped at the retro; merge dance + 0016 deploy gate = critical path
 
   # Epic 9: The PSN Record — Trophies (and maybe Wishlist) — v1.x
   epic-9: done # 2026-07-14 — 9.1/9.1b/9.1c/9.2/9.3/9.5 done, retro done, merged to main (PR #20). 9.4 stays `future` (dropped per 9.1c, not a blocker).
@@ -385,3 +385,23 @@ action_items:
     action: "Critical path: merge epic/12-ttb-filter to main via PR + CI gate, bump v2.2.0, release + deploy"
     owner: "Luca"
     status: done # 2026-07-17: PR #31 merged (23bdc38), v2.2.0 tagged + released; deploy verified (GitHub run completed per Luca + CF deployment 23:15:10Z with secret sync, deploy.yml sequence)
+  - epic: 8
+    action: "POST-EPIC OPERATOR SWEEP RULE persistent fact in _bmad/custom/bmad-dev-auto.toml: ledger triage + temporal audit + combined budget re-statement before the merge gate"
+    owner: "Winston + Murat"
+    status: done # 2026-07-22: fact added at the retro
+  - epic: 8
+    action: "Housekeeping: publication-blockers.md status line -> ALL RESOLVED; commit the spec-8-2 WAF-ruled-out edit"
+    owner: "Amelia"
+    status: done # 2026-07-22: both shipped at the retro
+  - epic: 8
+    action: "Critical path: merge dance — push + PR epic/8-multi-user-readiness -> main via CI gate"
+    owner: "Luca"
+    status: open
+  - epic: 8
+    action: "Deploy gate: migration 0016 (destructive, drops 4 game columns) — human-approve, then verify both crons live (PS+ rotation + scores 0 3 * * *)"
+    owner: "Luca"
+    status: open
+  - epic: 8
+    action: "Post-deploy minor bug fixes (Luca's queued list once the epic is live)"
+    owner: "Luca + Amelia"
+    status: open

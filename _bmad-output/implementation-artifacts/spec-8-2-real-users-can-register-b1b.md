@@ -124,7 +124,7 @@ The WAF rate limit is deliberately NOT code: Cloudflare's free tier includes one
 - `grep -rn "AUTH_ALLOWED_EMAIL" src worker web test` -- expected: no hits.
 
 **Manual checks (if no CLI):**
-- Post-deploy: add the WAF rate-limiting rule on `/api/auth/*` (e.g. 10 req/min per IP) in the Cloudflare dashboard — record it done in the deploy notes.
+- Post-deploy: ~~add the WAF rate-limiting rule on `/api/auth/*`~~ RULED OUT 2026-07-19: rate-limiting rules are zone-only and cannot attach to workers.dev; the app has no custom domain. The in-code better-auth limiter (shipped in this story's review) is the sole rate defense. Revisit when a custom domain is routed: 1 free rule, per-IP, 10s counting window (free plan cannot express req/min).
 
 ## Auto Run Result
 
