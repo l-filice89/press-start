@@ -68,6 +68,29 @@ async function seedProducts(names: [productId: string, name: string][]) {
 	);
 }
 
+/** Seed same-name SKU rows with explicit ids + platforms (edition-pair cases). */
+async function seedSkus(
+	name: string,
+	skus: [productId: string, npTitleId: string | null, platforms: string[]][],
+) {
+	await upsertCatalogProducts(
+		db(),
+		scope,
+		GENERATION,
+		skus.map(([productId, npTitleId, platforms]) => ({
+			productId,
+			npTitleId,
+			name,
+			titleNormalized: normalizeTitle(name),
+			coverUrl: null,
+			platforms,
+			storeClassification: null,
+			storeUrl: `https://store.playstation.com/${REGION}/product/${productId}`,
+		})),
+		'2026-07-01',
+	);
+}
+
 type CatalogResponse = {
 	total: number;
 	snapshotTotal: number;
@@ -204,6 +227,102 @@ describe('GET /api/ps-plus-catalog — ordering', () => {
 			'p-two',
 		]);
 	});
+
+	// HAZARD (probed prod 2026-07-23): the store often marks BOTH SKUs of a
+	// cross-gen pair ["PS4","PS5"] (Crow Country, GoW Ragnarök, …) — the old
+	// disjoint-platforms predicate saw overlap and rendered the game twice. The
+	// CUSA/PPSA generation prefix is the evidence the platform lists are not.
+	it('collapses an overlapping-platform CUSA/PPSA pair onto ONE card — the PPSA SKU wins', async () => {
+		await seedSkus('Crow Country', [
+			['p-crow-ps4', 'CUSA41307_00', ['PS4', 'PS5']],
+			['p-crow-ps5', 'PPSA18445_00', ['PS4', 'PS5']],
+		]);
+
+		const page = await browse();
+
+		expect(page.total).toBe(1);
+		expect(page.games.map((g) => g.productId)).toEqual(['p-crow-ps5']);
+		expect(page.snapshotTotal).toBe(2);
+	});
+
+	// HAZARD (Concrete Genie): one np_title_id sold as two product_ids — a
+	// shared id IS the store saying "same game", regardless of platform lists.
+	it('collapses two products sharing one np_title_id onto ONE card', async () => {
+		await seedSkus('Concrete Genie', [
+			['p-genie-a', 'CUSA08829_00', ['PS4', 'PS5']],
+			['p-genie-b', 'CUSA08829_00', ['PS4', 'PS5']],
+		]);
+
+		const page = await browse();
+
+		expect(page.total).toBe(1);
+		expect(page.snapshotTotal).toBe(2);
+	});
+
+	// …and the new evidence rules must NOT eat two DIFFERENT games that merely
+	// share a title: both PS5-native (distinct PPSA ids, same platform) = two.
+	it('keeps two same-title PPSA products with distinct ids as two cards', async () => {
+		await seedSkus('Resident Evil 4', [
+			['p-re4-a', 'PPSA07412_00', ['PS5']],
+			['p-re4-b', 'PPSA09999_00', ['PS5']],
+		]);
+
+		const page = await browse();
+
+		expect(page.total).toBe(2);
+	});
+
+	// Matrix: one id null, disjoint platforms — the legacy rule still collapses.
+	it('collapses a same-title pair with one null id on DISJOINT platforms (legacy rule)', async () => {
+		await seedSkus('Legacy Pair', [
+			['p-leg-ps4', null, ['PS4']],
+			['p-leg-ps5', 'PPSA11111_00', ['PS5']],
+		]);
+
+		const page = await browse();
+
+		expect(page.total).toBe(1);
+		expect(page.games.map((g) => g.productId)).toEqual(['p-leg-ps5']);
+	});
+
+	// Null-id + OVERLAPPING platforms: no evidence of the same game — two cards.
+	it('keeps a null-id same-title pair with overlapping platforms as two cards', async () => {
+		await seedSkus('Ambiguous Twin', [
+			['p-twin-a', null, ['PS4', 'PS5']],
+			['p-twin-b', null, ['PS4', 'PS5']],
+		]);
+
+		const page = await browse();
+
+		expect(page.total).toBe(2);
+	});
+
+	// …and one KNOWN id beside one null id, overlapping platforms: still no
+	// evidence — a lone id can't prove cross-generation.
+	it('keeps a one-null-id same-title pair with overlapping platforms as two cards', async () => {
+		await seedSkus('Half Known', [
+			['p-half-a', 'CUSA22222_00', ['PS4', 'PS5']],
+			['p-half-b', null, ['PS4', 'PS5']],
+		]);
+
+		const page = await browse();
+
+		expect(page.total).toBe(2);
+	});
+
+	// The held-PPSA branch of the winner pick: when the PPSA SKU sorts FIRST
+	// (product_id order), the arriving CUSA twin must not displace it.
+	it('keeps the PPSA SKU when it precedes its CUSA twin in row order', async () => {
+		await seedSkus('Order Probe', [
+			['p-order-1', 'PPSA33333_00', ['PS4', 'PS5']],
+			['p-order-2', 'CUSA33333_00', ['PS4', 'PS5']],
+		]);
+
+		const page = await browse();
+
+		expect(page.total).toBe(1);
+		expect(page.games.map((g) => g.productId)).toEqual(['p-order-1']);
+	});
 });
 
 describe('GET /api/ps-plus-catalog — search', () => {
@@ -338,6 +457,21 @@ describe('GET /api/ps-plus-catalog/genres — facet counts', () => {
 		const filtered = await browse('?genre=FIGHTING');
 		expect(filtered.total).toBe(2); // the pair collapsed + Brawlout
 		expect(fighting?.count).toBe(filtered.total);
+	});
+
+	// DW-11 parity over the NEW predicate too: an overlapping-platform CUSA/PPSA
+	// pair (invisible to the old disjointness rule) must count as ONE card.
+	it('counts an overlapping-platform CUSA/PPSA pair as ONE card in the facet', async () => {
+		await seedSkus('Crow Country', [
+			['p-crow-ps4', 'CUSA41307_00', ['PS4', 'PS5']],
+			['p-crow-ps5', 'PPSA18445_00', ['PS4', 'PS5']],
+		]);
+		await setCatalogGenres(db(), scope, 'HORROR', ['p-crow-ps4', 'p-crow-ps5']);
+
+		const horror = (await genres()).genres.find((g) => g.key === 'HORROR');
+		const filtered = await browse('?genre=HORROR');
+		expect(filtered.total).toBe(1);
+		expect(horror?.count).toBe(filtered.total);
 	});
 
 	// UX sweep 2026-07-16: a key in the sweep's frozen vocabulary with zero

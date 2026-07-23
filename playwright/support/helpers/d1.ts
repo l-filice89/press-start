@@ -189,6 +189,10 @@ export async function seedGames(games: SeedGame[]): Promise<void> {
 export interface SeedCatalogProduct {
 	productId: string;
 	name: string;
+	/** Store SKU id (`CUSA…`/`PPSA…`) — the browse collapse's evidence key. */
+	npTitleId?: string | null;
+	/** Store platform list; defaults to `['PS5']`. */
+	platforms?: string[];
 	coverUrl?: string | null;
 	storeUrl?: string | null;
 	/** PS-store facet KEYS (AD-26), e.g. `HORROR` — never IGDB genre names. */
@@ -209,8 +213,8 @@ export async function seedCatalog(
 			`INSERT OR REPLACE INTO ps_plus_catalog
 			   (region, tier, product_id, np_title_id, name, title_normalized, cover_url, platforms,
 			    store_classification, store_url, generation, first_seen_at, last_seen_at)
-			 VALUES (${sq(region)}, 'extra', ${sq(product.productId)}, NULL, ${sq(product.name)},
-			   ${sq(normalizeTitle(product.name))}, ${sq(product.coverUrl ?? null)}, '["PS5"]', NULL,
+			 VALUES (${sq(region)}, 'extra', ${sq(product.productId)}, ${sq(product.npTitleId ?? null)}, ${sq(product.name)},
+			   ${sq(normalizeTitle(product.name))}, ${sq(product.coverUrl ?? null)}, ${sq(JSON.stringify(product.platforms ?? ['PS5']))}, NULL,
 			   ${sq(product.storeUrl ?? `https://store.playstation.com/${region}/product/${product.productId}`)},
 			   'e2e', '2026-07-01', '2026-07-01');`,
 			...(product.genres ?? []).map(

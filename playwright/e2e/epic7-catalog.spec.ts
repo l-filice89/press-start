@@ -124,6 +124,49 @@ test('the catalog is ordered A–Z with no ownership or state tier', async ({
 	}
 });
 
+// The store often marks BOTH SKUs of a cross-gen edition pair ["PS4","PS5"]
+// (probed prod it-it 2026-07-23: Crow Country, GoW Ragnarök, …), so platform
+// disjointness cannot tell the pair apart — the CUSA/PPSA generation prefix
+// does, and the grid must render ONE card, the PS5-native (PPSA) SKU.
+test('a same-title CUSA/PPSA pair with overlapping platforms renders ONE card — the PPSA SKU', async ({
+	page,
+}) => {
+	const id = run();
+	const name = `Crow Country ${id}`;
+	const products: SeedCatalogProduct[] = [
+		{
+			productId: `p-cusa-${id}`,
+			name,
+			npTitleId: 'CUSA41307_00',
+			platforms: ['PS4', 'PS5'],
+		},
+		{
+			productId: `p-ppsa-${id}`,
+			name,
+			npTitleId: 'PPSA18445_00',
+			platforms: ['PS4', 'PS5'],
+		},
+	];
+	try {
+		await seedCatalog(products);
+		await page.goto('/catalog');
+
+		const cards = catalogCards(page).filter({ hasText: id });
+		await expect(cards).toHaveCount(1);
+		// The surviving card is the PPSA SKU — its Claim link carries the product id.
+		await expect(
+			cards.getByRole('link', {
+				name: `Claim ${name} on the PlayStation Store (opens in a new tab)`,
+			}),
+		).toHaveAttribute(
+			'href',
+			`https://store.playstation.com/${E2E_REGION}/product/p-ppsa-${id}`,
+		);
+	} finally {
+		await deleteCatalog(products.map((p) => p.productId));
+	}
+});
+
 test('the genre filter narrows the grid (PS-store facet keys, OR within the group)', async ({
 	page,
 }) => {

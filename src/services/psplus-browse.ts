@@ -91,17 +91,31 @@ export interface CatalogGenre {
  *
  * The snapshot keeps BOTH rows — it is a faithful mirror of the store (AD-24),
  * and the flag pass and the add path need whichever SKU the user's library
- * actually carries. Only the BROWSE VIEW collapses them, and it collapses on
- * title + DISJOINT PLATFORMS: a shared title alone is not an edition pair (NieR
- * and NIER normalize alike and are two different games; so would a remake
- * carrying its original's name). Two products with the same title that both ship
- * on PS5 stay two cards — the safe way to be wrong here is to show too much.
+ * actually carries. Only the BROWSE VIEW collapses them. A shared title alone
+ * is not an edition pair (NieR and NIER normalize alike and are two different
+ * games; so would a remake carrying its original's name), so a same-title pair
+ * collapses only on EVIDENCE it is the same game:
  *
- * The PS5 SKU wins the card: it is the one a PS5 owner wants to claim.
+ *  1. a shared `np_title_id` (the store lists one title as two products —
+ *     Concrete Genie), or
+ *  2. a cross-GENERATION pair — one `CUSA…` (PS4-era) SKU, one `PPSA…`
+ *     (PS5-era): the prefix is the discriminator the store itself uses, and
+ *     every real edition pair in the probed population carries it, or
+ *  3. disjoint platform lists — kept for null-`np_title_id` rows.
+ *
+ * Disjointness alone is NOT reliable: the store often marks BOTH SKUs of a
+ * cross-gen pair `["PS4","PS5"]` (probed prod it-it/extra 2026-07-23 — Crow
+ * Country, GoW Ragnarök, Hotline Miami, …), which is exactly why rule 2 exists.
+ * Two same-title rows that are BOTH PS5-native (distinct `PPSA` ids) stay two
+ * cards — the safe way to be wrong here is to show too much.
+ *
+ * The PS5-native SKU wins the card: the `PPSA`-prefixed id first, else the one
+ * whose platforms include PS5 — it is the one a PS5 owner wants to claim.
  */
 
 /** The column is JSON array TEXT. Unparseable or absent = no known platform, and
- * a row with no known platform is disjoint from nothing, so it never collapses. */
+ * a row with no known platform is disjoint from nothing — it can still collapse
+ * through the id rules, never through the platform one. */
 function platformsOf(row: CatalogBrowseRow): string[] {
 	if (!row.platforms) return [];
 	try {
@@ -114,24 +128,46 @@ function platformsOf(row: CatalogBrowseRow): string[] {
 	}
 }
 
+type Sku = { row: CatalogBrowseRow; on: string[] };
+
+/** Same-title pair is an edition pair on: shared id, CUSA/PPSA cross-gen, or
+ * disjoint (both-known) platform lists — see the block comment above. */
+function isEditionPair(a: Sku, b: Sku): boolean {
+	if (a.row.npTitleId && a.row.npTitleId === b.row.npTitleId) return true;
+	const prefixes = [a.row.npTitleId, b.row.npTitleId].map((id) =>
+		id?.slice(0, 4),
+	);
+	if (prefixes.includes('CUSA') && prefixes.includes('PPSA')) return true;
+	return (
+		a.on.length > 0 &&
+		b.on.length > 0 &&
+		!a.on.some((platform) => b.on.includes(platform))
+	);
+}
+
+/** The PS5-native SKU wins the card: `PPSA…` id first, else PS5 in platforms. */
+function beatsForCard(a: Sku, b: Sku): boolean {
+	const aNative = a.row.npTitleId?.startsWith('PPSA') ?? false;
+	const bNative = b.row.npTitleId?.startsWith('PPSA') ?? false;
+	if (aNative !== bNative) return aNative;
+	return a.on.includes('PS5');
+}
+
 function collapseEditions(rows: CatalogBrowseRow[]): CatalogBrowseRow[] {
-	const byTitle = new Map<string, { row: CatalogBrowseRow; on: string[] }[]>();
+	const byTitle = new Map<string, Sku[]>();
 	const kept: CatalogBrowseRow[] = [];
 	for (const row of rows) {
 		// A title that normalizes to '' is not a key — it would collapse every such
 		// product onto one card (the same hazard the membership join guards, M7).
-		const on = platformsOf(row);
-		if (!row.titleNormalized || on.length === 0) {
+		if (!row.titleNormalized) {
 			kept.push(row);
 			continue;
 		}
+		const sku: Sku = { row, on: platformsOf(row) };
 		const siblings = byTitle.get(row.titleNormalized) ?? [];
-		// The edition it supersedes, if any: same title, no platform in common.
-		const twin = siblings.findIndex(
-			(sibling) => !sibling.on.some((platform) => on.includes(platform)),
-		);
-		if (twin === -1) siblings.push({ row, on });
-		else if (on.includes('PS5')) siblings[twin] = { row, on };
+		const twin = siblings.findIndex((sibling) => isEditionPair(sibling, sku));
+		if (twin === -1) siblings.push(sku);
+		else if (beatsForCard(sku, siblings[twin])) siblings[twin] = sku;
 		byTitle.set(row.titleNormalized, siblings);
 	}
 	return [

@@ -41,6 +41,17 @@ const PLATFORM_TAG_PATTERN = new RegExp(
 	'gi',
 );
 
+// Storefront listings also carry the combined form BARE — "Deliver Us The Moon
+// PS4 & PS5" — with no parentheses at all (probed prod 2026-07-23: only the
+// combined ≥2-token run appears bare, never a lone trailing "PS4"). Stripped
+// only when it TRAILS the string, after whitespace or a `:`/`-`/`–`/`—`
+// separator (space optional after it — storefronts drop it); a lone trailing
+// token is deliberately left alone — it could be part of the name.
+const BARE_PLATFORM_RUN_PATTERN = new RegExp(
+	`(?:\\s*[:\\-–—]\\s*|\\s+)${PLATFORM_TOKEN}(?:\\s*(?:[,&/]|and)\\s*${PLATFORM_TOKEN})+\\s*$`,
+	'i',
+);
+
 const TRADEMARK_GLYPH_PATTERN = /[™®©]/g;
 
 // Cross-source titles disagree on straight vs. curly/typographic apostrophes
@@ -78,15 +89,20 @@ const TRAILING_ROMAN_NUMERAL_PATTERN = new RegExp(
 /**
  * AD-9: the single implementation of the shared cross-source title match
  * key. Strips trademark glyphs, folds apostrophe variants, a curated
- * edition-suffix list, PS4/PS5 platform tags (so both platform releases
- * collapse to one key), diacritics, a trailing Roman-numeral sequel number,
- * and a single leading article, then case/whitespace-folds.
+ * edition-suffix list, PS4/PS5 platform tags and trailing bare combined runs
+ * (so both platform releases collapse to one key), diacritics, a trailing
+ * Roman-numeral sequel number, and a single leading article, then
+ * case/whitespace-folds.
  */
 export function normalizeTitle(rawTitle: string): string {
 	let title = rawTitle.replace(TRADEMARK_GLYPH_PATTERN, '');
 	title = title.replace(APOSTROPHE_PATTERN, "'");
 	title = title.replace(PLATFORM_TAG_PATTERN, ' ');
+	title = title.replace(BARE_PLATFORM_RUN_PATTERN, '');
 	title = title.replace(EDITION_SUFFIX_PATTERN, '');
+	// Stripping the suffix can expose a newly-trailing platform run
+	// ("Maneater PS4 & PS5 Deluxe Edition") — re-check once.
+	title = title.replace(BARE_PLATFORM_RUN_PATTERN, '');
 	// Fold diacritics (e.g. "Yōtei" / "Yotei") after NFD-decomposing each
 	// accented character into base letter + combining mark, then dropping
 	// the marks (Unicode combining-diacriticals block) — cross-source titles
