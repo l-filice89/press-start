@@ -105,6 +105,11 @@ const addBodySchema = z
 		genres: z.array(z.string().max(64)).max(20).optional(),
 		...scoreBodyFields,
 		owned: z.boolean().optional(),
+		// Acquisition source for an owned add (FR-9 amended, sync gone): the
+		// dialog's Purchased/Claimed radio. Refused without `owned: true` (see
+		// the refine below) — same doctrine as H1: the UI never sending the
+		// combination is not a control.
+		via: z.enum(['purchase', 'membership']).optional(),
 		// The PS Store product the add came from (Story 7.3). Resolved against the
 		// stored catalog server-side — a pruned id is ignored, not trusted, and the
 		// store URL is read from the row rather than taken from the client.
@@ -116,11 +121,16 @@ const addBodySchema = z
 			.regex(/^[A-Za-z0-9_-]{1,128}$/)
 			.optional(),
 	})
-	// A catalog add is NEVER an owned add (review, H1). Availability is not
-	// ownership: a PS+ claim is owned only via `owned_via: 'membership'`, and only
-	// once a SYNC observes the entitlement (Story 6.4). Refused at the boundary as
-	// well as in the service — the UI hiding the toggle is not a control.
-	.refine((body) => !(body.owned && body.psnProductId));
+	// A catalog add is NEVER an owned add (review, H1) — with or without a
+	// `via`. Availability is not ownership: claim a catalog title on the store,
+	// then record it from the shelf (buy-vs-claim prompt / detail correction).
+	// Refused at the boundary as well as in the service — the UI hiding the
+	// toggle is not a control.
+	.refine((body) => !(body.owned && body.psnProductId))
+	// A source belongs to an owned add only — a stray `via` on a wishlist add
+	// is a client bug, surfaced as a 400 rather than silently ignored (same
+	// boundary doctrine as H1 above).
+	.refine((body) => body.via === undefined || body.owned === true);
 
 const addResponseSchema = z.object({ gameId: z.string() });
 

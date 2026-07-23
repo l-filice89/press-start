@@ -406,6 +406,9 @@ export interface AddGamePayload extends CandidateScorePayload {
 	releaseDate?: string | null;
 	genres?: string[];
 	owned?: boolean;
+	/** Acquisition source for an owned add (FR-9 amended): `membership` = PS+
+	 * claim, no `bought_on` stamp. Sent only when `owned` is true. */
+	via?: 'purchase' | 'membership';
 	/** The PS Store product id this add came from, if any (Story 7.3, AD-20). */
 	psnProductId?: string;
 }

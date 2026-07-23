@@ -138,8 +138,8 @@ const seedSql = (game: SeedGame): string[] => {
 		 VALUES (${sq(game.id)}, ${sq(game.title)}, ${sq(key)}, ${sq(game.releaseDate)}, ${sq(game.coverUrl)}, ${sq(game.storeUrl)}, 0,
 		   ${sqNum(game.criticScore)}, ${sqNum(game.criticScoreCount)}, ${sqNum(game.userScore)}, ${sqNum(game.userScoreCount)},
 		   ${sqNum(game.ttbStorySeconds)}, ${sqNum(game.ttbCompleteSeconds)}, ${sqNum(game.ttbCount)});`,
-		`INSERT INTO game_tracking (user_id, game_id, owned, owned_via, play_status, completed_on, platinum_on, wishlisted_on)
-		 SELECT id, ${sq(game.id)}, ${t.owned ? 1 : 0}, ${sq(t.ownedVia)}, ${sq(t.playStatus)}, ${sq(t.completedOn)}, ${sq(t.platinumOn)}, ${sq(t.wishlistedOn)} FROM user LIMIT 1;`,
+		`INSERT INTO game_tracking (user_id, game_id, owned, owned_via, bought_on, play_status, completed_on, platinum_on, wishlisted_on)
+		 SELECT id, ${sq(game.id)}, ${t.owned ? 1 : 0}, ${sq(t.ownedVia)}, ${sq(t.boughtOn)}, ${sq(t.playStatus)}, ${sq(t.completedOn)}, ${sq(t.platinumOn)}, ${sq(t.wishlistedOn)} FROM user LIMIT 1;`,
 	];
 	// Story 8.3: membership/leaving are DERIVED from region-scoped data, so the
 	// factory contract (`psPlusExtra`/`psPlusLeavingOn` on SeedGame) is honored

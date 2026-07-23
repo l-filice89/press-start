@@ -134,6 +134,49 @@ test('add-by-name: ＋ Add row → editable preview → Save → toast → on th
 	await deleteGames([saved[0].id]);
 });
 
+// FR-9 amended (sync gone): the add dialog's own buy-vs-claim — an owned add
+// can be recorded as a PS+ claim, flagged membership with NO made-up bought_on.
+test('add-by-name as "Claimed with PS+" writes owned_via=membership, no bought_on', async ({
+	page,
+}) => {
+	const title = `Claimed Add ${randomUUID().slice(0, 8)}`;
+	await page.goto('/');
+	await page
+		.getByRole('searchbox', { name: 'Search your library' })
+		.fill(title);
+	await page.getByTestId('search-add-option').click();
+
+	const dialog = page.getByTestId('add-game-dialog');
+	await expect(dialog).toBeVisible();
+	// The source pair appears only once the owned box is ticked.
+	await expect(dialog.getByLabel('Claimed with PS+')).toBeHidden();
+	await dialog.getByLabel('I own this game').check();
+	await expect(dialog.getByLabel('Purchased')).toBeChecked();
+	await dialog.getByLabel('Claimed with PS+').check();
+	await dialog.getByRole('button', { name: 'Add as owned' }).click();
+
+	await expect(
+		page.getByTestId('toast').getByText(`${title} — added`),
+	).toBeVisible();
+
+	const saved = await d1Query<{
+		id: string;
+		owned: number;
+		owned_via: string | null;
+		bought_on: string | null;
+	}>(
+		`SELECT g.id, t.owned, t.owned_via, t.bought_on
+		 FROM game g JOIN game_tracking t ON t.game_id = g.id
+		 WHERE g.title = '${title}'`,
+	);
+	expect(saved).toHaveLength(1);
+	expect(saved[0].owned).toBe(1);
+	expect(saved[0].owned_via).toBe('membership');
+	expect(saved[0].bought_on).toBeNull();
+
+	await deleteGames([saved[0].id]);
+});
+
 /**
  * Story 6.5 (+ 2026-07-12 redesign): free-text shelf search. Typing narrows the
  * VISIBLE shelf grid by normalized title substring (case/diacritic-insensitive).
@@ -650,15 +693,12 @@ test.describe('Story 6.4 ownership source', () => {
 			tracking: {
 				owned: true,
 				ownedVia: 'purchase',
+				boughtOn: '2023-12-25',
 				playStatus: 'Not started',
 			},
 		});
 		try {
 			await seedGame(bought);
-			// The factory has no bought_on knob — stamp it directly.
-			await d1Execute(
-				`UPDATE game_tracking SET bought_on = '2023-12-25' WHERE game_id = '${bought.id}';`,
-			);
 			await page.goto('/');
 			await openDetailBySearch(page, bought);
 			await expect(page.getByTestId('detail-owned-via')).toHaveText(

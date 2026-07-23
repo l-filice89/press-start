@@ -540,7 +540,9 @@ resolution: done 2026-07-16 (Story 10.2) — DECIDED: `first_seen_at` keeps its 
 - source_spec: `_bmad-output/implementation-artifacts/spec-claimed-via-psplus-option.md`
   summary: AddGameDialog "Add as owned" still writes `owned_via = purchase` silently, bypassing the now-universal buy-vs-claim prompt.
   evidence: `web/shelf/AddGameDialog.tsx` owns its own write path (FR-43), outside the `setOwnership` seam the gate-drop covers; the detail panel's claim-correction button is the fix-up path, so no data is unrecoverable — but it is the one manual-own entry point that never asks.
+  resolution: resolved 2026-07-23 by `spec-deferred-psplus-followups.md` — inline Purchased/Claimed radios + `via` through the add API.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-claimed-via-psplus-option.md`
   summary: Historic `bought_on` seeding in e2e tests uses raw `d1Execute` UPDATEs; the knob belongs in the game factory.
   evidence: `playwright/e2e/epic6.spec.ts` downgrade-hazard test is the second test in the file to hand-write an UPDATE for a stamped date because the factory has no `bought_on` field — third caller pays for the factory knob.
+  resolution: resolved 2026-07-23 by `spec-deferred-psplus-followups.md` — `boughtOn` knob added to the factory + seed INSERT; raw UPDATE deleted.
