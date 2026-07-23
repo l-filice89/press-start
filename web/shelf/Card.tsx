@@ -51,7 +51,8 @@ export function Card({
 
 	// Ownership writes go through the same shared seam as every other tracking
 	// mutation (AR-13) — un-owning toasts with UNDO, owning toasts plainly. A
-	// manual own on a PS+-catalog game opens the buy-vs-claim prompt (Story 6.4).
+	// manual own of any un-owned game opens the buy-vs-claim prompt (Story 6.4,
+	// gate dropped 2026-07-23).
 	const { setOwnership, sourcePrompt, confirmSource, cancelSource } =
 		useTrackingMutations(game);
 

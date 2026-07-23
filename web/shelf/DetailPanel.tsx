@@ -574,6 +574,30 @@ export function DetailPanel({
 										I bought this — mark as purchased
 									</button>
 								)}
+								{/* Purchase→claim correction (sync is gone): a free Essential
+								    title owned before the prompt existed — or mis-recorded as a
+								    purchase — is really a subscription-bound claim. `bought_on`
+								    stays untouched (write-once, server never clears it). */}
+								{game.ownedVia !== 'membership' && (
+									<button
+										type="button"
+										className="detail-panel__own-claimed tap-target"
+										onClick={() =>
+											setOwnership({
+												owned: true,
+												via: 'membership',
+												// A claim is digital by nature; without this a NULL-type
+												// row would take the server's `physical` default. Mirrors
+												// the upgrade button: a manual choice survives.
+												...(game.ownershipType
+													? {}
+													: { ownershipType: 'digital' }),
+											})
+										}
+									>
+										Claimed with PS+ — mark as PS+ claim
+									</button>
+								)}
 								{/* Un-own is a command, not the status. Reversible: UNDO toast. */}
 								<button
 									type="button"
@@ -585,8 +609,9 @@ export function DetailPanel({
 							</>
 						) : (
 							<>
-								{/* Own is a clear CTA, separate from the state above (a PS+
-								    game routes through the buy-vs-claim prompt, Story 6.4). */}
+								{/* Own is a clear CTA, separate from the state above. Every
+								    manual own routes through the buy-vs-claim prompt (Story
+								    6.4, gate dropped 2026-07-23). */}
 								<button
 									type="button"
 									className="detail-panel__own tap-target"

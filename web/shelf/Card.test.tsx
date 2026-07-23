@@ -392,19 +392,25 @@ describe('Card', () => {
 			).toHaveAttribute('aria-pressed', 'false');
 		});
 
-		it('owning PATCHes the ownership route without a confirm', async () => {
+		// Sync is gone, so any game can be a PS+ claim — the source prompt is no
+		// longer gated on `psPlusExtra` (Essential titles are outside the Extra
+		// catalog). Owning always routes through it.
+		it('owning a non-PS+-catalog game opens the source prompt; "Purchased" PATCHes via=purchase', async () => {
 			const fetchMock = stubFetch();
 			const user = userEvent.setup();
-			renderCard(game({ owned: false }));
+			renderCard(game({ owned: false, psPlusExtra: false }));
 
 			await user.click(
 				screen.getByRole('button', { name: 'Owned — Bloodborne' }),
 			);
+			// Gated: no PATCH until the user chooses a source.
+			expect(fetchMock).not.toHaveBeenCalled();
+			await user.click(screen.getByRole('button', { name: 'Purchased' }));
 			await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 			const [url, init] = fetchMock.mock.calls[0];
 			expect(url).toBe('/api/games/g1/ownership');
 			expect(init).toMatchObject({ method: 'PATCH' });
-			expect(JSON.parse(init.body)).toEqual({ owned: true });
+			expect(JSON.parse(init.body)).toEqual({ owned: true, via: 'purchase' });
 			// Owning is not risky — plain toast, no UNDO.
 			expect(await screen.findByTestId('toast')).toHaveTextContent(
 				'Bloodborne — owned',
@@ -468,7 +474,8 @@ describe('Card', () => {
 			await user.click(
 				screen.getByRole('button', { name: 'Owned — Bloodborne' }),
 			);
-			expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+			// The source prompt (a dialog) opens; the detail panel must not.
+			expect(screen.queryByTestId('detail-backdrop')).not.toBeInTheDocument();
 		});
 
 		// Story 6.4 AC1/AC2: owning a PS+-catalog game is ambiguous — gate on the
