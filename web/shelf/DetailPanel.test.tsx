@@ -713,18 +713,23 @@ describe('DetailPanel', () => {
 			expect(screen.getByTestId('detail-owned-via')).not.toHaveTextContent('·');
 		});
 
-		it('owning from the panel PATCHes the ownership route and toasts plainly', async () => {
+		// Sync is gone — every manual own routes through the buy-vs-claim prompt,
+		// PS+ catalog or not (Essential titles are outside the Extra catalog).
+		it('owning from the panel opens the source prompt; the choice PATCHes and toasts plainly', async () => {
 			const user = await openPanel(
 				game({ owned: false, wishlisted: true, ownershipType: null }),
 			);
 
 			await user.click(screen.getByRole('button', { name: 'Mark as owned' }));
+			// Gated: no PATCH until the user chooses a source.
+			expect(writes()).toHaveLength(0);
+			await user.click(screen.getByRole('button', { name: 'Purchased' }));
 
 			await waitFor(() => expect(writes()).toHaveLength(1));
 			const [url, init] = writes()[0];
 			expect(url).toBe('/api/games/g1/ownership');
 			expect(init).toMatchObject({ method: 'PATCH' });
-			expect(JSON.parse(init.body)).toEqual({ owned: true });
+			expect(JSON.parse(init.body)).toEqual({ owned: true, via: 'purchase' });
 			expect(await screen.findByTestId('toast')).toHaveTextContent(
 				'Bloodborne — owned',
 			);
@@ -800,6 +805,61 @@ describe('DetailPanel', () => {
 			await openPanel(game({ owned: true, ownedVia: 'purchase' }));
 			expect(
 				screen.queryByRole('button', { name: /I bought this/ }),
+			).not.toBeInTheDocument();
+		});
+
+		// Purchase→claim correction (sync gone): purchase AND legacy-NULL rows get
+		// the button; a claim gets the upgrade instead, never its own no-op.
+		it('a non-claim game offers "Claimed with PS+", writing via=membership without a type', async () => {
+			const user = await openPanel(
+				game({
+					owned: true,
+					ownedVia: 'purchase',
+					ownershipType: 'physical',
+					boughtOn: '2023-12-25',
+				}),
+			);
+			await user.click(
+				screen.getByRole('button', {
+					name: 'Claimed with PS+ — mark as PS+ claim',
+				}),
+			);
+			await waitFor(() => expect(writes()).toHaveLength(1));
+			// No ownershipType and no date fields: the manual choice and the
+			// write-once bought_on survive server-side.
+			expect(JSON.parse(writes()[0][1].body)).toEqual({
+				owned: true,
+				via: 'membership',
+			});
+			expect(await screen.findByTestId('toast')).toHaveTextContent(
+				'claimed with PS+',
+			);
+		});
+
+		// A NULL-type row must not inherit the server's `physical` default: a
+		// claim is digital by nature, so the button seeds the type — exactly
+		// like the "I bought this" upgrade does in the other direction.
+		it('a legacy NULL-via, NULL-type game corrects to a DIGITAL claim', async () => {
+			const user = await openPanel(
+				game({ owned: true, ownedVia: null, ownershipType: null }),
+			);
+			await user.click(
+				screen.getByRole('button', {
+					name: 'Claimed with PS+ — mark as PS+ claim',
+				}),
+			);
+			await waitFor(() => expect(writes()).toHaveLength(1));
+			expect(JSON.parse(writes()[0][1].body)).toEqual({
+				owned: true,
+				via: 'membership',
+				ownershipType: 'digital',
+			});
+		});
+
+		it('a claim offers no claim correction', async () => {
+			await openPanel(game({ owned: true, ownedVia: 'membership' }));
+			expect(
+				screen.queryByRole('button', { name: /mark as PS\+ claim/ }),
 			).not.toBeInTheDocument();
 		});
 

@@ -592,6 +592,8 @@ describe('Shelf', () => {
 		await user.click(
 			within(panel).getByRole('button', { name: 'Mark as owned' }),
 		);
+		// Every manual own routes through the buy-vs-claim prompt (sync is gone).
+		await user.click(screen.getByRole('button', { name: 'Purchased' }));
 
 		// Apex leaves the Wishlisted grid…
 		await waitFor(() =>

@@ -92,8 +92,9 @@ export function useTrackingMutations(
 ) {
 	// Which milestone the confirm dialog is gating; null = no dialog.
 	const [confirming, setConfirming] = useState<Milestone | null>(null);
-	// True while the buy-vs-claim source prompt is open (Story 6.4): a manual
-	// own on a PS+-catalog game gates here — no write until the user chooses.
+	// True while the buy-vs-claim source prompt is open (Story 6.4, gate
+	// dropped 2026-07-23): EVERY manual own of a not-yet-owned game gates
+	// here — no write until the user chooses.
 	const [sourcePrompt, setSourcePrompt] = useState(false);
 
 	const queryClient = useQueryClient();
@@ -296,12 +297,14 @@ export function useTrackingMutations(
 		}) => {
 			// Same shared race guard as `selectStatus` (Story 3.4, AC5).
 			if (guardPending()) return;
-			// A manual own on a not-yet-owned PS+-catalog game is ambiguous — buy or
-			// claim? Gate on the source prompt (Story 6.4 AC1), mirroring the
-			// milestone `confirming` pattern; the write happens in `confirmSource`.
-			// Every other game (and every un-own / type switch, and a redundant
-			// re-own) writes straight through.
-			if (change.owned === true && !game.owned && game.psPlusExtra) {
+			// A manual own on a not-yet-owned game is ambiguous — buy or claim?
+			// With sync gone, EVERY game can be a PS+ claim (Essential monthly
+			// titles are not in the Extra catalog), so the prompt is no longer
+			// gated on `psPlusExtra`. Gate on the source prompt (Story 6.4 AC1),
+			// mirroring the milestone `confirming` pattern; the write happens in
+			// `confirmSource`. Every un-own / type switch, and a redundant
+			// re-own, writes straight through.
+			if (change.owned === true && !game.owned) {
 				setSourcePrompt(true);
 				return;
 			}
@@ -338,11 +341,14 @@ export function useTrackingMutations(
 					toast({
 						message:
 							change.owned === true
-								? // A via change on an already-owned game is the claim→purchase
-									// upgrade (Story 6.4), not a fresh own — say so.
+								? // A via change on an already-owned game is a provenance
+									// correction (claim→purchase upgrade, or purchase→claim for a
+									// free Essential title), not a fresh own — say so.
 									game.owned && change.via === 'purchase'
 									? `${game.title} — marked as purchased`
-									: `${game.title} — owned`
+									: game.owned && change.via === 'membership'
+										? `${game.title} — claimed with PS+`
+										: `${game.title} — owned`
 								: `${game.title} — ${change.ownershipType}`,
 					});
 				},
@@ -354,7 +360,6 @@ export function useTrackingMutations(
 			game.ownedVia,
 			game.owned,
 			game.id,
-			game.psPlusExtra,
 			mutateOwnership,
 			guardPending,
 			guardStaleUndo,

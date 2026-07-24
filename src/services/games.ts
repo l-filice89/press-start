@@ -9,6 +9,7 @@
  */
 
 import { normalizeTitle } from '../core';
+import type { OwnedVia } from '../core/ownership';
 import type { IgdbCandidate, IgdbSearch } from '../providers';
 import {
 	addExternalLink,
@@ -101,13 +102,17 @@ export interface AddGameInput extends CandidateScoreInput {
 	genres?: string[];
 	/** "Add as owned" (default false = wishlisted, FR-43). */
 	owned?: boolean;
+	/** Acquisition source for an owned add (FR-9 amended): `membership` = a
+	 * PS+ claim — flagged, and never stamped with a made-up `bought_on`.
+	 * Ignored when `owned` is false/absent. Defaults to `purchase`. */
+	via?: OwnedVia;
 	/**
 	 * The PS STORE product id the add came from (Story 7.3) — an `EXTERNAL_LINK`
 	 * in the `PSN_PRODUCT` namespace, never `PSN` (AD-20: that one is
 	 * `np_title_id` only). Adding from the catalog changes NOTHING else: the
-	 * tracking row is still the not-owned default. Availability is not ownership,
-	 * and the app never learns whether the user claimed anything — only a sync
-	 * that observes the real entitlement sets `owned` (Story 6.4).
+	 * tracking row is still the not-owned default. Availability is not ownership
+	 * — a claimed catalog title is recorded from the shelf afterwards
+	 * (buy-vs-claim prompt / detail correction, Story 6.4).
 	 */
 	psnProductId?: string;
 }
@@ -195,17 +200,25 @@ async function linkGenresByName(db: Db, gameId: string, genres?: string[]) {
 	}
 }
 
-/** FR-43 defaults: wishlisted (not owned) or owned-as-purchase, Not started. */
-function newTracking(owned: boolean, today: string): TrackingPatch {
-	return owned
-		? {
-				owned: true,
-				ownershipType: 'digital',
-				playStatus: 'Not started',
-				boughtOn: today,
-				ownedVia: 'purchase',
-			}
-		: { owned: false, playStatus: 'Not started', wishlistedOn: today };
+/** FR-43 defaults: wishlisted (not owned) or owned, Not started. An owned add
+ * is a purchase unless the dialog said `membership` (FR-9 amended) — a PS+
+ * claim is flagged as such and NEVER stamps `bought_on`: a claim is not a
+ * purchase, and the date slot must stay free for a real one later. */
+function newTracking(
+	owned: boolean,
+	today: string,
+	via: OwnedVia = 'purchase',
+): TrackingPatch {
+	if (!owned) {
+		return { owned: false, playStatus: 'Not started', wishlistedOn: today };
+	}
+	return {
+		owned: true,
+		ownershipType: 'digital',
+		playStatus: 'Not started',
+		ownedVia: via,
+		...(via === 'purchase' ? { boughtOn: today } : {}),
+	};
 }
 
 /**
@@ -310,11 +323,11 @@ export async function addGame(
 	const title = input.title.trim();
 	const titleNormalized = normalizeTitle(title);
 	if (!title || !titleNormalized) return 'invalid';
-	// A CATALOG add is never an owned add (review, H1). Availability is not
-	// ownership: a PS+ title counts as owned only via `owned_via: 'membership'`,
-	// and only when a SYNC observes the entitlement (Story 6.4) — the app cannot
-	// see the PS Store tab. `owned: true` here would write a purchase with a made-up
-	// purchase date. The dialog hides the toggle; this is the defence in depth.
+	// A CATALOG add is never an owned add (review, H1) — whatever `via` says.
+	// Availability is not ownership: the app cannot see the PS Store tab, so a
+	// claimed catalog title is recorded from the shelf afterwards (buy-vs-claim
+	// prompt / detail correction, Story 6.4). The dialog hides the toggle; this
+	// is the defence in depth.
 	if (input.owned && input.psnProductId) return 'invalid';
 
 	// ponytail: the duplicate guard below is read-then-write, not transactional
@@ -381,7 +394,7 @@ export async function addGame(
 				db,
 				userId,
 				existing.id,
-				newTracking(input.owned ?? false, today),
+				newTracking(input.owned ?? false, today, input.via),
 			);
 		}
 		await applyCatalogOrigin(db, existing.id, product);
@@ -424,7 +437,7 @@ export async function addGame(
 			db,
 			userId,
 			gameId,
-			newTracking(input.owned ?? false, today),
+			newTracking(input.owned ?? false, today, input.via),
 		);
 		// Converged onto ANOTHER existing (shared) row — same H2 rule as above.
 		await bumpAllLibraryVersions(db);
@@ -445,7 +458,7 @@ export async function addGame(
 		db,
 		userId,
 		gameId,
-		newTracking(input.owned ?? false, today),
+		newTracking(input.owned ?? false, today, input.via),
 	);
 	await bumpLibraryVersion(db, userId);
 	return { kind: 'created', gameId };

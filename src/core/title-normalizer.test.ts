@@ -34,6 +34,48 @@ describe('normalizeTitle (AD-9)', () => {
 		);
 	});
 
+	// HAZARD: bare (unparenthesized) combined runs survive the tag strip — seen
+	// live ("Deliver Us The Moon PS4 & PS5", it-it, 2026-07-23) breaking both the
+	// browse collapse and the library marker's title-key join.
+	it('strips a trailing BARE combined platform run in every separator form', () => {
+		expect(normalizeTitle('Deliver Us The Moon PS4 & PS5')).toBe(
+			'deliver us the moon',
+		);
+		expect(normalizeTitle('Deliver Us The Moon PS4/PS5')).toBe(
+			'deliver us the moon',
+		);
+		expect(normalizeTitle('Deliver Us The Moon PS4, PS5')).toBe(
+			'deliver us the moon',
+		);
+		expect(normalizeTitle('Deliver Us The Moon PlayStation 4 and PS5')).toBe(
+			'deliver us the moon',
+		);
+		// …including after a lead separator, with or without a space after it.
+		expect(normalizeTitle('Deliver Us The Moon - PS4 & PS5')).toBe(
+			'deliver us the moon',
+		);
+		expect(normalizeTitle('Deliver Us The Moon:PS4/PS5')).toBe(
+			'deliver us the moon',
+		);
+	});
+
+	// A stripped edition suffix can expose a newly-trailing run — the pipeline
+	// re-checks once, so both orderings fold to the same key.
+	it('strips a bare run on either side of an edition suffix', () => {
+		expect(normalizeTitle('Maneater PS4 & PS5 Deluxe Edition')).toBe(
+			'maneater',
+		);
+		expect(normalizeTitle('Maneater Deluxe Edition PS4 & PS5')).toBe(
+			'maneater',
+		);
+	});
+
+	// HAZARD: a LONE trailing token can be part of the name — never stripped
+	// (spec boundary: combined-only, ≥2 tokens; prod carries no bare lone form).
+	it('does NOT strip a lone trailing platform token', () => {
+		expect(normalizeTitle("Everybody's Golf PS4")).toBe("everybody's golf ps4");
+	});
+
 	it('folds and collapses whitespace', () => {
 		expect(normalizeTitle('  Bloodborne   ')).toBe('bloodborne');
 	});

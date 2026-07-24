@@ -134,6 +134,49 @@ test('add-by-name: ＋ Add row → editable preview → Save → toast → on th
 	await deleteGames([saved[0].id]);
 });
 
+// FR-9 amended (sync gone): the add dialog's own buy-vs-claim — an owned add
+// can be recorded as a PS+ claim, flagged membership with NO made-up bought_on.
+test('add-by-name as "Claimed with PS+" writes owned_via=membership, no bought_on', async ({
+	page,
+}) => {
+	const title = `Claimed Add ${randomUUID().slice(0, 8)}`;
+	await page.goto('/');
+	await page
+		.getByRole('searchbox', { name: 'Search your library' })
+		.fill(title);
+	await page.getByTestId('search-add-option').click();
+
+	const dialog = page.getByTestId('add-game-dialog');
+	await expect(dialog).toBeVisible();
+	// The source pair appears only once the owned box is ticked.
+	await expect(dialog.getByLabel('Claimed with PS+')).toBeHidden();
+	await dialog.getByLabel('I own this game').check();
+	await expect(dialog.getByLabel('Purchased')).toBeChecked();
+	await dialog.getByLabel('Claimed with PS+').check();
+	await dialog.getByRole('button', { name: 'Add as owned' }).click();
+
+	await expect(
+		page.getByTestId('toast').getByText(`${title} — added`),
+	).toBeVisible();
+
+	const saved = await d1Query<{
+		id: string;
+		owned: number;
+		owned_via: string | null;
+		bought_on: string | null;
+	}>(
+		`SELECT g.id, t.owned, t.owned_via, t.bought_on
+		 FROM game g JOIN game_tracking t ON t.game_id = g.id
+		 WHERE g.title = '${title}'`,
+	);
+	expect(saved).toHaveLength(1);
+	expect(saved[0].owned).toBe(1);
+	expect(saved[0].owned_via).toBe('membership');
+	expect(saved[0].bought_on).toBeNull();
+
+	await deleteGames([saved[0].id]);
+});
+
 /**
  * Story 6.5 (+ 2026-07-12 redesign): free-text shelf search. Typing narrows the
  * VISIBLE shelf grid by normalized title substring (case/diacritic-insensitive).
@@ -599,7 +642,10 @@ test.describe('Story 6.4 ownership source', () => {
 		}
 	});
 
-	test('owning a non-PS+ game is silent — no prompt, owned_via=purchase (6.4b)', async ({
+	// Sync is gone — Essential monthly titles are outside the Extra catalog, so
+	// the prompt fires for EVERY manual own, not just `psPlusExtra` games. A
+	// claim must never stamp bought_on (FR-9 amended).
+	test('owning a non-PS+ game prompts too; "Claimed with PS+" writes owned_via=membership, no bought_on (6.4b)', async ({
 		page,
 	}) => {
 		const game = createGame({
@@ -612,17 +658,72 @@ test.describe('Story 6.4 ownership source', () => {
 			await page.goto('/');
 			await page.getByRole('button', { name: `Owned — ${game.title}` }).click();
 
-			// No prompt for a non-catalog game — it writes straight through.
-			await expect(page.getByTestId('ownership-source-dialog')).toHaveCount(0);
+			const dialog = page.getByTestId('ownership-source-dialog');
+			await expect(dialog).toBeVisible();
+			await dialog.getByRole('button', { name: 'Claimed with PS+' }).click();
+			await expect(dialog).toBeHidden();
+			// The owned toast is the write's completion signal (Story 9.5) — the D1
+			// read below races the PATCH without it.
 			await expect(
 				page.getByTestId('toast').getByText(`${game.title} — owned`),
 			).toBeVisible();
-			const rows = await d1Query<{ owned_via: string | null }>(
-				`SELECT owned_via FROM game_tracking WHERE game_id = '${game.id}'`,
+
+			const rows = await d1Query<{
+				owned: number;
+				owned_via: string | null;
+				bought_on: string | null;
+			}>(
+				`SELECT owned, owned_via, bought_on FROM game_tracking WHERE game_id = '${game.id}'`,
 			);
-			expect(rows[0].owned_via).toBe('purchase');
+			expect(rows[0].owned).toBe(1);
+			expect(rows[0].owned_via).toBe('membership');
+			expect(rows[0].bought_on).toBeNull();
 		} finally {
 			await deleteGames([game.id]);
+		}
+	});
+
+	// The reverse correction: a free Essential title mis-recorded as a purchase
+	// becomes a claim — and the write-once bought_on SURVIVES the downgrade.
+	test('detail "Claimed with PS+" corrects a purchase to a claim, preserving bought_on (6.4b)', async ({
+		page,
+	}) => {
+		const bought = createGame({
+			title: `Downgrade Buy ${randomUUID().slice(0, 8)}`,
+			tracking: {
+				owned: true,
+				ownedVia: 'purchase',
+				boughtOn: '2023-12-25',
+				playStatus: 'Not started',
+			},
+		});
+		try {
+			await seedGame(bought);
+			await page.goto('/');
+			await openDetailBySearch(page, bought);
+			await expect(page.getByTestId('detail-owned-via')).toHaveText(
+				'Owned · purchased',
+			);
+
+			await page
+				.getByRole('button', { name: 'Claimed with PS+ — mark as PS+ claim' })
+				.click();
+
+			// The source line flips to the claim without a reload…
+			await expect(page.getByTestId('detail-owned-via')).toHaveText(
+				'Owned · via PS+',
+			);
+			// …and the row is a claim whose purchase date survived (hazard test).
+			const rows = await d1Query<{
+				owned_via: string | null;
+				bought_on: string | null;
+			}>(
+				`SELECT owned_via, bought_on FROM game_tracking WHERE game_id = '${bought.id}'`,
+			);
+			expect(rows[0].owned_via).toBe('membership');
+			expect(rows[0].bought_on).toBe('2023-12-25');
+		} finally {
+			await deleteGames([bought.id]);
 		}
 	});
 

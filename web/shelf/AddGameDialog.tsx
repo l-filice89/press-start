@@ -51,6 +51,8 @@ export function AddGameDialog({
 	const dialogRef = useRef<HTMLDivElement>(null);
 	const titleRef = useRef<HTMLInputElement>(null);
 	const headingId = useId();
+	// One shared `name` groups the two source radios (native semantics only).
+	const viaName = useId();
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
 	// The destination the dialog was opened OVER — the shelf when the search bar
@@ -81,6 +83,9 @@ export function AddGameDialog({
 	const [genresText, setGenresText] = useState('');
 	const [coverUrl, setCoverUrl] = useState(prefilledCover);
 	const [owned, setOwned] = useState(false);
+	// Acquisition source for an owned add (FR-9 amended): the radio pair below.
+	// Sticky across an uncheck/recheck — harmless, never sent unless owned.
+	const [via, setVia] = useState<'purchase' | 'membership'>('purchase');
 	const seeded = useRef(false);
 	// The candidate the user corrected to (Story 6.6 / PV-6) — it replaces the
 	// auto-match wholesale, including the igdbId Save sends.
@@ -176,6 +181,8 @@ export function AddGameDialog({
 				.map((g) => g.trim())
 				.filter(Boolean),
 			owned,
+			// The source rides only an owned add — a wishlist add has none.
+			...(owned ? { via } : {}),
 		});
 	}
 
@@ -311,22 +318,56 @@ export function AddGameDialog({
 								onChange={(e) => setCoverUrl(e.target.value)}
 							/>
 						</label>
-						{/* NOT offered on a catalog add (Story 7.3 review, H1): ticking it
-						    wrote owned_via 'purchase' + today's bought_on for a PS+ EXTRA
-						    title — wrong twice (it is not a purchase, and there is no
-						    purchase date). A PS+ title counts as owned ONLY via
-						    owned_via: 'membership', and ONLY when a sync observes the real
-						    entitlement — the app cannot see the PS Store tab. The server
-						    refuses `owned` alongside a product id regardless. */}
+						{/* NOT offered on a catalog add (Story 7.3 review, H1): the app
+						    cannot see the PS Store tab, so a claimed catalog title is
+						    recorded from the shelf afterwards (buy-vs-claim prompt /
+						    detail correction). The server refuses `owned` alongside a
+						    product id regardless. */}
 						{!fromProduct && (
 							<label className="add-game__owned">
 								<input
 									type="checkbox"
 									checked={owned}
-									onChange={(e) => setOwned(e.target.checked)}
+									onChange={(e) => {
+										setOwned(e.target.checked);
+										// Re-checking must not resurface a forgotten claim pick:
+										// a silently pre-selected claim is the riskier default.
+										if (!e.target.checked) setVia('purchase');
+									}}
 								/>
 								<span>I own this game</span>
 							</label>
+						)}
+						{/* Buy-vs-claim, inline (FR-9 amended, sync gone): the one manual-
+						    own entry point that can't reuse the shelf's source prompt
+						    without stacking a dialog on a dialog. Native radios, shared
+						    name — the WAI-ARIA radio-group pattern for free. */}
+						{!fromProduct && owned && (
+							<fieldset className="add-game__via">
+								{/* A visible legend serves sighted users too — and `legend`
+								    has broader SR support than aria-label on fieldset. */}
+								<legend className="add-game__via-legend">
+									How do you own it?
+								</legend>
+								<label className="add-game__via-option">
+									<input
+										type="radio"
+										name={viaName}
+										checked={via === 'purchase'}
+										onChange={() => setVia('purchase')}
+									/>
+									<span>Purchased</span>
+								</label>
+								<label className="add-game__via-option">
+									<input
+										type="radio"
+										name={viaName}
+										checked={via === 'membership'}
+										onChange={() => setVia('membership')}
+									/>
+									<span>Claimed with PS+</span>
+								</label>
+							</fieldset>
 						)}
 					</div>
 				</div>

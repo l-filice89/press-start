@@ -231,9 +231,9 @@ describe('AddGameDialog — correct the match before saving (Story 6.6 / PV-6)',
  * Story 7.3 review (H1). Opened from the CATALOG, the dialog used to offer "I own
  * this game" — and ticking it wrote owned:true, owned_via:'purchase', bought_on:
  * today for a PS+ EXTRA title: a purchase that never happened, on a date that
- * means nothing. A PS+ title counts as owned ONLY via owned_via:'membership', and
- * ONLY when a sync observes the real entitlement (Story 6.4) — the app cannot see
- * the PS Store tab. The route refuses the pair regardless (integration).
+ * means nothing. The app cannot see the PS Store tab — a claimed catalog title
+ * is recorded from the shelf afterwards (buy-vs-claim prompt / detail
+ * correction). The route refuses the pair regardless (integration).
  */
 describe('AddGameDialog — a CATALOG add is never an owned add (Story 7.3)', () => {
 	beforeEach(() => {
@@ -297,5 +297,73 @@ describe('AddGameDialog — a CATALOG add is never an owned add (Story 7.3)', ()
 			expect(invalidate).toHaveBeenCalledWith({ queryKey: ['catalog'] }),
 		);
 		expect(invalidate).toHaveBeenCalledWith({ queryKey: ['shelf'] });
+	});
+});
+
+// FR-9 amended (sync gone): the add dialog's inline buy-vs-claim source pair.
+describe('AddGameDialog — owned adds carry a source (Purchased / Claimed with PS+)', () => {
+	beforeEach(() => {
+		vi.mocked(api.fetchAddPreview).mockResolvedValue({
+			available: true,
+			candidate: AUTO,
+		});
+		vi.mocked(api.addGame).mockResolvedValue({ kind: 'created', gameId: 'g1' });
+	});
+
+	it('shows the radios only once owned is checked — never on a catalog add', async () => {
+		const user = userEvent.setup();
+		renderDialog();
+		await waitFor(() =>
+			expect(screen.getByLabelText('Title')).toHaveValue('Spider-Man 2'),
+		);
+		expect(screen.queryByLabelText('Purchased')).not.toBeInTheDocument();
+
+		await user.click(screen.getByLabelText('I own this game'));
+		// Purchased is the default — an untouched pair still means a purchase.
+		expect(screen.getByLabelText('Purchased')).toBeChecked();
+		expect(screen.getByLabelText('Claimed with PS+')).not.toBeChecked();
+	});
+
+	it('a catalog add offers no radios either (no owned toggle at all)', async () => {
+		renderDialog({ psnProductId: 'EP-1' });
+		await waitFor(() =>
+			expect(screen.getByLabelText('Title')).toHaveValue('Spider-Man 2'),
+		);
+		expect(screen.queryByLabelText('Purchased')).not.toBeInTheDocument();
+		expect(screen.queryByLabelText('Claimed with PS+')).not.toBeInTheDocument();
+	});
+
+	it('saving as claimed sends via: membership', async () => {
+		const user = userEvent.setup();
+		renderDialog();
+		await waitFor(() =>
+			expect(screen.getByLabelText('Title')).toHaveValue('Spider-Man 2'),
+		);
+		await user.click(screen.getByLabelText('I own this game'));
+		await user.click(screen.getByLabelText('Claimed with PS+'));
+		await user.click(screen.getByRole('button', { name: 'Add as owned' }));
+		await waitFor(() =>
+			expect(vi.mocked(api.addGame).mock.lastCall?.[0]).toMatchObject({
+				owned: true,
+				via: 'membership',
+			}),
+		);
+	});
+
+	it('unchecking owned drops the via from the payload', async () => {
+		const user = userEvent.setup();
+		renderDialog();
+		await waitFor(() =>
+			expect(screen.getByLabelText('Title')).toHaveValue('Spider-Man 2'),
+		);
+		await user.click(screen.getByLabelText('I own this game'));
+		await user.click(screen.getByLabelText('Claimed with PS+'));
+		await user.click(screen.getByLabelText('I own this game'));
+		await user.click(screen.getByRole('button', { name: 'Add to wishlist' }));
+		await waitFor(() => {
+			const payload = vi.mocked(api.addGame).mock.lastCall?.[0];
+			expect(payload).toMatchObject({ owned: false });
+			expect(payload).not.toHaveProperty('via');
+		});
 	});
 });

@@ -44,6 +44,25 @@ describe('applyOwnershipChange', () => {
 		});
 	});
 
+	// The downgrade hazard (2026-07-23, claimed-via-PS+ correction): flipping a
+	// recorded purchase back to a claim must leave the stamped date alone —
+	// write-once stands in BOTH directions, and a membership write never emits
+	// a bought_on key at all.
+	it('correcting a purchase to a claim flips the source, bought_on untouched', () => {
+		const patch = applyOwnershipChange({
+			next: { owned: true },
+			current: {
+				owned: true,
+				ownershipType: 'digital',
+				boughtOn: '2023-12-25',
+			},
+			today: TODAY,
+			via: 'membership',
+		});
+		expect(patch).toEqual({ owned: true, ownedVia: 'membership' });
+		expect(patch).not.toHaveProperty('boughtOn');
+	});
+
 	it('a later purchase upgrades a claim: source flips, bought_on stamps once', () => {
 		expect(
 			applyOwnershipChange({

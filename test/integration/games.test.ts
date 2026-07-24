@@ -199,6 +199,59 @@ describe('add a game by name (Story 6.1, through the route)', () => {
 		expect(tracking?.boughtOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 	});
 
+	// HAZARD (FR-9 amended, sync gone): the add dialog's claim radio. A claim is
+	// not a purchase — the date slot stays free for a real one later.
+	it('"Add as owned" via membership flags the claim and NEVER stamps bought_on', async () => {
+		const res = await postGame(
+			{ title: 'Claimed By Name', owned: true, via: 'membership' },
+			sessionCookie,
+		);
+		expect(res.status).toBe(201);
+		const { gameId } = (await res.json()) as { gameId: string };
+
+		const tracking = await getTracking(db(), sessionUser, gameId);
+		expect(tracking).toMatchObject({
+			owned: true,
+			ownershipType: 'digital',
+			ownedVia: 'membership',
+			playStatus: 'Not started',
+			boughtOn: null,
+			wishlistedOn: null,
+		});
+	});
+
+	// An explicit `via: 'purchase'` is the same path as the default today —
+	// pinned separately so a later divergence of the two can't go unnoticed.
+	it('an explicit via purchase matches the default: purchase + bought_on stamped', async () => {
+		const res = await postGame(
+			{ title: 'Explicitly Bought', owned: true, via: 'purchase' },
+			sessionCookie,
+		);
+		expect(res.status).toBe(201);
+		const { gameId } = (await res.json()) as { gameId: string };
+
+		const tracking = await getTracking(db(), sessionUser, gameId);
+		expect(tracking).toMatchObject({ owned: true, ownedVia: 'purchase' });
+		expect(tracking?.boughtOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+	});
+
+	// A source without ownership is a client bug — refused at the boundary
+	// (same doctrine as H1: the UI never sending it is not a control).
+	it('refuses a via without owned: true — nothing written', async () => {
+		for (const body of [
+			{ title: 'Stray Via', via: 'membership' as const },
+			{ title: 'Stray Via', owned: false, via: 'membership' as const },
+		]) {
+			const res = await postGame(body, sessionCookie);
+			expect(res.status).toBe(400);
+		}
+		const rows = await db()
+			.select()
+			.from(game)
+			.where(eq(game.title, 'Stray Via'));
+		expect(rows).toEqual([]);
+	});
+
 	it('a name-only add (no igdbId) lands unenriched with no external link (NFR-4)', async () => {
 		const res = await postGame({ title: 'Obscure Indie Gem' }, sessionCookie);
 		expect(res.status).toBe(201);
@@ -818,6 +871,24 @@ describe('add a game FROM THE CATALOG (Story 7.3, AD-20)', () => {
 		expect(res.status).toBe(400);
 		expect(
 			await gameRowsByNormalizedTitle('Never Owned By Browsing'),
+		).toHaveLength(0);
+	});
+
+	// TEST-THE-BYPASS: the new `via` field must not open a way around H1.
+	it('REFUSES owned:true + psnProductId even with via:membership (400)', async () => {
+		await seedProduct('EP-VIA-REFUSE-1', 'Never Claimed By Browsing');
+		const res = await postGame(
+			{
+				title: 'Never Claimed By Browsing',
+				psnProductId: 'EP-VIA-REFUSE-1',
+				owned: true,
+				via: 'membership',
+			},
+			sessionCookie,
+		);
+		expect(res.status).toBe(400);
+		expect(
+			await gameRowsByNormalizedTitle('Never Claimed By Browsing'),
 		).toHaveLength(0);
 	});
 

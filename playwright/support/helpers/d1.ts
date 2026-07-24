@@ -138,8 +138,8 @@ const seedSql = (game: SeedGame): string[] => {
 		 VALUES (${sq(game.id)}, ${sq(game.title)}, ${sq(key)}, ${sq(game.releaseDate)}, ${sq(game.coverUrl)}, ${sq(game.storeUrl)}, 0,
 		   ${sqNum(game.criticScore)}, ${sqNum(game.criticScoreCount)}, ${sqNum(game.userScore)}, ${sqNum(game.userScoreCount)},
 		   ${sqNum(game.ttbStorySeconds)}, ${sqNum(game.ttbCompleteSeconds)}, ${sqNum(game.ttbCount)});`,
-		`INSERT INTO game_tracking (user_id, game_id, owned, owned_via, play_status, completed_on, platinum_on, wishlisted_on)
-		 SELECT id, ${sq(game.id)}, ${t.owned ? 1 : 0}, ${sq(t.ownedVia)}, ${sq(t.playStatus)}, ${sq(t.completedOn)}, ${sq(t.platinumOn)}, ${sq(t.wishlistedOn)} FROM user LIMIT 1;`,
+		`INSERT INTO game_tracking (user_id, game_id, owned, owned_via, bought_on, play_status, completed_on, platinum_on, wishlisted_on)
+		 SELECT id, ${sq(game.id)}, ${t.owned ? 1 : 0}, ${sq(t.ownedVia)}, ${sq(t.boughtOn)}, ${sq(t.playStatus)}, ${sq(t.completedOn)}, ${sq(t.platinumOn)}, ${sq(t.wishlistedOn)} FROM user LIMIT 1;`,
 	];
 	// Story 8.3: membership/leaving are DERIVED from region-scoped data, so the
 	// factory contract (`psPlusExtra`/`psPlusLeavingOn` on SeedGame) is honored
@@ -189,6 +189,10 @@ export async function seedGames(games: SeedGame[]): Promise<void> {
 export interface SeedCatalogProduct {
 	productId: string;
 	name: string;
+	/** Store SKU id (`CUSA…`/`PPSA…`) — the browse collapse's evidence key. */
+	npTitleId?: string | null;
+	/** Store platform list; defaults to `['PS5']`. */
+	platforms?: string[];
 	coverUrl?: string | null;
 	storeUrl?: string | null;
 	/** PS-store facet KEYS (AD-26), e.g. `HORROR` — never IGDB genre names. */
@@ -209,8 +213,8 @@ export async function seedCatalog(
 			`INSERT OR REPLACE INTO ps_plus_catalog
 			   (region, tier, product_id, np_title_id, name, title_normalized, cover_url, platforms,
 			    store_classification, store_url, generation, first_seen_at, last_seen_at)
-			 VALUES (${sq(region)}, 'extra', ${sq(product.productId)}, NULL, ${sq(product.name)},
-			   ${sq(normalizeTitle(product.name))}, ${sq(product.coverUrl ?? null)}, '["PS5"]', NULL,
+			 VALUES (${sq(region)}, 'extra', ${sq(product.productId)}, ${sq(product.npTitleId ?? null)}, ${sq(product.name)},
+			   ${sq(normalizeTitle(product.name))}, ${sq(product.coverUrl ?? null)}, ${sq(JSON.stringify(product.platforms ?? ['PS5']))}, NULL,
 			   ${sq(product.storeUrl ?? `https://store.playstation.com/${region}/product/${product.productId}`)},
 			   'e2e', '2026-07-01', '2026-07-01');`,
 			...(product.genres ?? []).map(

@@ -408,6 +408,19 @@
 	cursor: pointer;
 }
 
+/* "Claimed with PS+" purchase→claim correction — electric tint, matching the
+   PS+ identity used by the owned-via label and the card tag. */
+.detail-panel__own-claimed {
+	padding: var(--space-1) var(--space-3);
+	border: 1px solid var(--color-accent-electric);
+	border-radius: var(--radius-pill);
+	background: none;
+	color: var(--color-accent-electric);
+	font-family: var(--font-ui);
+	font-size: 13px;
+	cursor: pointer;
+}
+
 /* Un-own — a quiet, reversible secondary command (UNDO toast). */
 .detail-panel__unown {
 	padding: var(--space-1) var(--space-3);
