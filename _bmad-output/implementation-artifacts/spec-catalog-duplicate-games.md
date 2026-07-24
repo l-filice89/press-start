@@ -56,7 +56,7 @@ context: []
 - [x] `src/services/psplus-browse.ts` -- rework `collapseEditions` predicate (shared `np_title_id` OR `CUSA`/`PPSA` cross-gen OR disjoint platforms; PS5-native wins) + rewrite the block comment to match reality (store platform lists are NOT reliable disjointness evidence — probed 2026-07-23) -- root-cause fix
 - [x] `test/integration/psplus-browse.test.ts` -- hazard tests from the I/O matrix: overlapping-platform pair → one card (PPSA wins); same-np_title_id pair → one card; both-PPSA distinct games → two cards; null-id overlap → two cards; facet count reflects collapsed cards -- HAZARD-TEST
 - [x] `playwright/e2e/epic7-catalog.spec.ts` -- e2e: seed a same-title CUSA/PPSA pair with overlapping platforms, grid shows ONE card; update `playwright/COVERAGE.md` -- E2E-COVERAGE
-- [ ] post-deploy ops (manual, no code) -- no manual trigger exists (Story 8.4/AD-31 removed button + route; refreshes are cron-only, `0 9,21 15-28 * *`): after deploy, wait for the next cron pass to rewrite `title_normalized`, then re-run the dup-pair probe query — expect suffix variants merged and grid deduped. Predicate-class pairs dedupe on deploy alone.
+- [x] post-deploy ops (manual, no code) -- no manual trigger exists (Story 8.4/AD-31 removed button + route; refreshes are cron-only, `0 9,21 15-28 * *`): after deploy, wait for the next cron pass to rewrite `title_normalized`, then re-run the dup-pair probe query — expect suffix variants merged and grid deduped. Predicate-class pairs dedupe on deploy alone.
 
 **Acceptance Criteria:**
 - Given the prod it-it/extra snapshot re-swept post-deploy, when the Catalog grid renders, then Crow Country and Deliver Us the Moon each show exactly one card.
