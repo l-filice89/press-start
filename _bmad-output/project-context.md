@@ -1,97 +1,92 @@
 ---
 project_name: 'ps-game-catalog'
 user_name: 'Luca'
-date: '2026-07-04'
+date: '2026-07-24'
 sections_completed:
-  [
-    'technology_stack',
-    'data_contracts',
-    'playstation_api',
-    'cover_art',
-    'legacy_python',
-    'development_workflow',
-    'critical_rules',
-  ]
-existing_patterns_found: 6
+  ['technology_stack', 'architecture_seams', 'data_contracts', 'providers', 'testing', 'workflow', 'critical_rules']
 status: 'complete'
-rule_count: 27
+rule_count: 26
 optimized_for_llm: true
 ---
 
 # Project Context for AI Agents
 
-_This file contains critical rules and patterns that AI agents must follow when implementing code in this project. Focus on unobvious details that agents might otherwise miss._
-
----
+_Critical rules and unobvious patterns for implementing code in this project. Binding
+architecture lives in `_bmad-output/planning-artifacts/architecture/architecture-ps-game-catalog-2026-07-05/ARCHITECTURE-SPINE.md`
+(AD-1…AD-33) — this file glosses only the load-bearing ones; read the spine for the rest.
+The two `.bmad-loop/runs/**` spine copies are stale worktree snapshots — ignore them._
 
 ## Technology Stack & Versions
 
-- **Target app (architecture decided 2026-07-05 — see `ARCHITECTURE-SPINE.md`):** **Cloudflare** single-vendor stack — one Worker (workerd/V8, TypeScript) serves a **React SPA** (Vite, Workers Static Assets) + a Hono JSON API; **Cloudflare D1** (SQLite) via binding; **Cron Triggers** for scheduled work. **Bun is demoted to a local dev toolchain only** (package manager, test runner, out-of-band scripts) — it is NOT the deployed runtime (AD-2). Runtime code must not use Bun-only APIs (`bun:sqlite`, Bun globals). SSR resolved: SPA, not SSR.
-- **Python 3.11 scripts are legacy/bootstrap-only** (`export_ps_catalog.py`, `update_ps_catalog.py`) — used to seed the database, then frozen. New functionality goes in Bun TS, never in Python.
-- **Test/lint/format decided (2026-07-05):** Vitest + `@cloudflare/vitest-pool-workers` for tests; **Biome** for lint+format. Other pinned tools: Drizzle ORM 0.45.x (D1), Hono, Zod, TanStack Query, better-auth (magic link), IGDB (games DB). See `ARCHITECTURE-SPINE.md` Stack table.
+| Layer | Tech (version) |
+|-------|----------------|
+| Runtime | Cloudflare Worker (workerd, `wrangler` 4.107.0 **exact-pinned** — loose installs skew workerd↔miniflare and crash `bun dev`) |
+| API | Hono 4.12.28, Zod 4.4.3, better-auth 1.6.23 (magic link + Google OAuth) |
+| DB | D1 + Drizzle 0.45.2 (`drizzle-kit` 0.31.10), migrations in `migrations/` |
+| SPA | React 19, Vite 8, react-router **v8** (import from `react-router` / `react-router/dom` — `react-router-dom` is gone), TanStack Query 5, PWA |
+| Toolchain | Bun 1.3.14 (dev/CI only — never the deployed runtime, AD-2; no `bun:sqlite`/Bun globals in `src/`/`worker/`) |
+| Test | Vitest 4.1.10 (3 projects: node unit / workers-pool integration / jsdom web) + Playwright ^1.61 |
+| Lint/format | Biome 2.5.2 — tabs, single quotes; TS ~6.0.2 strict (`verbatimModuleSyntax`, `erasableSyntaxOnly`) |
 
-## Critical Implementation Rules
+## Architecture Seams (enforced, not aspirational)
 
-### Data Contracts (most important)
+- `src/core/` = pure domain, **I/O-free** (AD-3). Three guard tests enforce the seams — if your change trips one, the change is wrong, not the test:
+  - `src/core/purity.test.ts` — bans `fetch`/D1/dynamic drizzle imports in core source; Biome `noRestrictedImports` bans the static imports.
+  - `src/orphan-tests.test.ts` — every `*.test.*` file must match a vitest include glob.
+  - `src/no-credential-code.test.ts` — no deleted PSN-credential identifier may reappear (npsso, fetchPurchasedGames, `ca.account.sony.com`, …).
+- Layer flow: `routes` (Hono+Zod) → `services` (orchestration; **only** layer touching providers) → `repositories` (all Drizzle/D1, AD-4) → `schema`. External I/O only via `src/providers/` (AD-5). Nothing external on a render path (AD-6) — reads are repository-only.
+- `worker/index.ts` is the composition root; cron routed by `controller.cron` (`0 3 * * *` = IGDB scores; the `15-28` twice-daily = PS+ rotation: one slot per fire — genre-sweep chunk, else leaving-sweep chunk, else membership pass, AD-31).
+- Every tracking query filters by `user_id` (AD-13 — most-cited AD in the codebase). `game` = shared catalog facts; `game_tracking` (PK `user_id, game_id`) = per-user state (AD-19).
 
-- **SQLite is the single source of truth.** The two CSVs exist **only to bootstrap** the database, then become read-only reference:
-  - `ps_catalog.csv` — 175 owned games from the PlayStation API. Columns: `name, platform, membership`. Encoding **utf-8-sig**.
-  - `Gaming list …_all.csv` — 169 tracked games from Notion. Columns: `Title, Category, Date finished, Date started, Owned, Rating, Release date, Status`.
-- **Notion CSV status enum** (exact values in the file): `Not started`, `Completed`, `Paused`, `Not released`, `Playing`, `Up next!`. **The app's state model is different** (PRD 2026-07-05): play status `Not started` / `Up next` / `Playing` / `Paused` / `Dropped` (nullable once a completion milestone exists) plus immutable `completed_on` / `platinum_on` milestone dates. The importer maps old values onto the new model.
-- **`Category` is multi-valued** — a quoted comma-separated list ("Action Adventure, Open world"). Model as many-to-many (game ↔ genre) in SQLite, never as a single string column.
-- **Genres come exclusively from the third-party games DB** (PRD 2026-07-05): the Notion `Category` column is ignored at import — every game is re-tagged via external lookup so the vocabulary stays consistent. The old typo-normalization mapping (`Turn-Basaed RPG`, `Rythm`) is obsolete.
-- **Game titles are the join key between the two datasets and don't match exactly** — PS names carry trademark glyphs (`HEAVY RAIN™`, `®`) and edition suffixes. Title matching must strip symbols and normalize case/whitespace; expect manual overrides for stragglers.
-- **PS4/PS5 duplicates collapse to one PS5 entry** — preserve the `dedupe_games` rule in the Bun sync function.
-- **Library sync is append-only by game**: syncing from the PS API adds new games, never modifies or deletes existing rows (user-entered status/dates must survive every sync; personal ratings dropped per PRD 2026-07-05 — the Notion `Rating` column is not imported).
-- **PS+ claims COUNT as owned (FR-9 amended 2026-07-11)**: a claimed game is playable, so sync and seed both mark it Owned — but `game_tracking.owned_via` records the source (`purchase` | `membership`). Claims never stamp `bought_on`; buying a claimed game upgrades `owned_via` and stamps it. A future subscription-cancel flow un-owns `membership` rows only — never touch that flag casually. Only WEBMAF web-app entitlements are excluded from sync/seed.
-- "Owned" ≠ "tracked": the PS export has games missing from the Notion data and vice versa (wishlist has `Owned: No`). The UI must handle games present in only one source.
+## Data Contracts
 
-### PlayStation API Rules
+- Identity is `external_link (source, external_id)` unique — namespaces `PSN` (np_title_id `CUSA…`/`PPSA…`), `PSN_PRODUCT` (store product id), `IGDB`. **Never mix the two PSN namespaces** — that mints duplicates. Many links per (game, source) allowed (AD-20).
+- `title_normalized` is the AD-9 join key: ONE normalizer (`src/core/title-normalizer.ts`), **non-unique** (AD-18). It strips ™®©, apostrophe/diacritic variants, edition suffixes, PS4/PS5 tags AND bare trailing "PS4 & PS5" runs, trailing Roman numerals II–IX, one leading article. Never join on raw titles; never fork a second normalizer.
+- Milestone dates (`completed_on`, `platinum_on`) are write-once via automatic flows (AD-11); `play_status` nullable once a milestone exists, but never both absent (AD-12 — API refuses).
+- `owned_via = purchase | membership` is the ownership *source*; `ownership_type = physical | digital` is the *format*. Claims never stamp `bought_on`.
+- `ps_plus_catalog` is a region-keyed store **snapshot** (AD-24), never a `game`; membership derives per-user at read time (AD-30); departures live in the `ps_plus_departure` ledger keyed (region, product_id) — survives prunes. The browse view collapses PS4/PS5 SKU pairs (`collapseEditions`); the snapshot keeps both rows.
+- Two genre vocabularies, never merged (AD-26): IGDB → `genre`/`game_genre`; PS store facet keys → `ps_plus_catalog_genre`.
 
-- Endpoint: `web.np.playstation.com/api/graphql/v1/op`, persisted GraphQL query `getPurchasedGameList` (sha256 hash pinned in `export_ps_catalog.py` — copy it verbatim). **Do not hand-write GraphQL queries** — only persisted-query calls work.
-- Required headers: mimic `library.playstation.com` origin/referer + `apollographql-client-name: my-playstation` (see `HEADERS` in the Python script).
-- Pagination: page size 100, loop until `pageInfo.isLast`.
-- **Auth = the NPSSO token (Story 9.1b, 2026-07-13 — the `pdccws_p` cookie path is deleted).** The token lives in the D1 `setting` table (`psn_npsso`), editable from the UI (the user copies it from `ca.account.sony.com/api/v1/ssocookie`); the provider reads it fresh per call and exchanges it — authorize → `?code=` → bearer — inside `src/providers/psn.ts` and nowhere else (AR-5). A Wrangler secret (`PSN_NPSSO`) may seed an initial value only. On a denial (401/403, or the HTTP-200 + "Access denied" GraphQL shape PSN really answers), surface the refresh instructions in the UI and don't retry; a Sony 5xx/429 is an outage, not an expired token. The legacy Python script still uses the cookie — it is frozen, not a pattern to copy.
+## Provider Rules
 
-### Cover Art Rules
+- **PSN is anonymous-only** (Epic 11): `src/providers/psn.ts` calls the public store (persisted GraphQL, pinned hashes, region via `x-psn-store-locale-override`). No credential of any kind — the auth path is deleted and the guard test bans its identifiers. Do not re-add one.
+- Degenerate responses fail closed: HTTP 200 + null grid/GraphQL errors throws `PsnStoreRejectionError`; empty catalog never prunes (AD-27); build hazard fixtures from CAPTURED payloads (`test/fixtures/psn/`), never hand-written.
+- IGDB (Twitch OAuth2): filter on `game_type`, **not** `category` (retired field — string tests pass, live calls silently return zero). Degrades to name-only adds when creds absent; tests force that mode.
+- Free-tier budgets are enumerated arithmetic (AD-32): 50 subrequests/invocation counts D1 binding calls too — batch writes, never per-row loops on data-scaled paths.
 
-- Source order: **PlayStation Store image URLs first** (captured during sync), **external games DB fallback** (IGDB/RAWG) for wishlist titles not in the PS library.
-- Persist resolved image URLs (or cached files) in SQLite — never re-hit external APIs on page render.
+## Testing Rules
 
-### Legacy Python Script Rules (bootstrap phase only)
+| Tier | Where | Runtime |
+|------|-------|---------|
+| Unit | co-located `src/**/*.test.ts`, `web/**/*.test.tsx` (jsdom + testing-library) | node / jsdom |
+| Integration | `test/integration/` | real workerd + D1 (workers pool; migrations applied in setup, never at Worker startup — AD-16) |
+| E2E | `playwright/e2e/` | isolated `env.e2e` D1; auth via magic link captured from server stdout; pre-authed storageState |
 
-- Stdlib only, full type hints, `SystemExit` with actionable messages for expected failures.
-- CSVs are always read/written with `utf-8-sig` + `newline=""` (Excel round-trip).
-- **Windows console is cp1252** — scripts print ASCII only, or set `PYTHONIOENCODING=utf-8`.
+- `playwright/COVERAGE.md` is a per-AC ledger: every epic AC has a pinning spec row or a `skipped` row with a real reason. Keep it current in the same change.
+- Hazard-named ACs need a test asserting exactly that hazard; guards need their **bypass** path tested, not just the refusal (standing rules — `_bmad/custom/standing-rules-core.md`).
 
-### Development Workflow Rules
+## Development Workflow
 
-- **Git repo is initialized but has zero commits and no remote yet.** Before the first commit: (1) scrub the hardcoded `SESSION_COOKIE` value from `export_ps_catalog.py`, (2) extend `.gitignore` with the SQLite DB file, `node_modules/`, and `.env`. Nothing has leaked yet — keep it that way.
-- The SQLite database file is **never committed** (contains the PSN credential + personal library data).
-- React/Cloudflare-Worker conventions (paradigm, boundaries, state model invariants, testing, SSR-or-not) are now **set by `ARCHITECTURE-SPINE.md`** (2026-07-05) — follow its ADs; do not invent conventions ad hoc.
+- `main` is protected, PR-only; single required check `CI OK` (lint → typecheck → vitest → build, e2e, burn-in). Conventional commits.
+- **Deploy = publish a GitHub Release** (checks out the tag): migrations apply → `wrangler deploy` → health smoke. Merging alone ships nothing.
+- No manual PS+ refresh exists (button + routes deleted, AD-31): snapshot writes come only from the cron rotation and the >35-day stale guard. Sweeps completing set `cycle_complete` — the region then skips until the next window (opens the 15th).
+- Never `rm -rf .wrangler/state` (that IS the local D1). Seed only with `bun dev` stopped (single-writer SQLite).
 
-### Critical Don't-Miss Rules
+## Critical Don't-Miss Rules
 
-- Never join the two datasets on raw title strings without normalization.
-- Never commit the PlayStation credential (the NPSSO token) or the SQLite DB.
-- Never let a PS-library sync overwrite user-entered tracking data (status, dates).
-- Don't add features to the Python scripts — all new code is Bun TypeScript.
+- Never join the two datasets on raw title strings — always `normalizeTitle`.
+- Never let any ingest overwrite user-entered tracking state (AD-10: append-only; sync may create games and flip `owned` false→true, nothing else).
+- Never store derived state (Released/Wishlisted/Playable-now — AD-8); compute in `core/`.
+- Never navigate outside react-router / use `window` CustomEvents for cross-tree state (AD-25).
+- Never commit the D1 file or secrets; secrets ride Wrangler/CI, `.dev.vars` locally.
+- Failures surface to the user (stragglers, banners) — no silent retries (AD-14).
 
 ---
 
 ## Usage Guidelines
 
-**For AI Agents:**
+**For AI Agents:** read before implementing; follow rules exactly; when in doubt, prefer the more restrictive option; the spine is authoritative where this file abbreviates.
 
-- Read this file before implementing any code
-- Follow ALL rules exactly as documented
-- When in doubt, prefer the more restrictive option
-- Update this file if new patterns emerge
+**For Humans:** keep lean; update when the stack or an AD changes; drop rules that become obvious.
 
-**For Humans:**
-
-- Keep this file lean and focused on agent needs
-- Update when technology stack changes (e.g. once architecture decides SSR/testing)
-- Remove rules that become obvious over time (e.g. legacy Python rules after bootstrap)
-
-Last Updated: 2026-07-04
+Last Updated: 2026-07-24
