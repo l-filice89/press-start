@@ -4,6 +4,29 @@ All notable changes to PRESS START are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/); this project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] — 2026-07-31
+
+### Added
+- **Release date on the shelf.** Each game's release date now shows on the
+  card and in the detail panel, and can be edited directly from the detail
+  panel.
+
+## [3.0.1] — 2026-07-24
+
+### Added
+- **Claimed-via-PS+ correction on manual ownership.** With sync gone, every
+  manual own of an un-owned game now opens a buy-vs-claim prompt; a
+  purchase→claim correction button was added to the detail panel's
+  Ownership section.
+- **Buy-vs-claim source on the add-game dialog.** Owned adds now carry an
+  inline Purchased/Claimed-with-PS+ choice instead of silently stamping a
+  made-up purchase date.
+
+### Fixed
+- **Cross-gen edition pairs collapse correctly in the PS+ catalog browse**,
+  keying on shared title ID / CUSA-PPSA generation prefix instead of the
+  platform-disjoint rule alone.
+
 ## [3.0.0] — 2026-07-22
 
 Multi-User Readiness: the app stops assuming one owner. Anyone with a
