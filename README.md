@@ -4,13 +4,13 @@ A multi-user installable PWA that replaces a Notion game-tracking database: a
 React SPA + a Hono JSON API, both served by **one Cloudflare Worker**, backed
 by **Cloudflare D1** (via Drizzle ORM).
 
-**v3.0.0** — the full library tracker, open to real users: registration via
-magic link or Google (verified email), the shelf with covers and
-status/ownership tracking, milestones, genres, lifecycle dates, add-by-name
-(IGDB), straggler resolution, CSV export, free-text search, per-user/per-region
-PlayStation Plus catalog awareness with decision signals (scores, time to
-beat, leaving-soon), and scheduled per-region refreshes. Shipped across
-Epics 1–12.
+**v3.1.0** — the full library tracker, open to real users: registration via
+magic link or Google (verified email), the shelf with covers, release dates,
+and status/ownership tracking, milestones, genres, lifecycle dates,
+add-by-name (IGDB), straggler resolution, CSV export, free-text search,
+per-user/per-region PlayStation Plus catalog awareness with decision signals
+(scores, time to beat, leaving-soon), and scheduled per-region refreshes.
+Shipped across Epics 1–12.
 
 ## Prerequisites
 
