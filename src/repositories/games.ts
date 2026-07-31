@@ -224,6 +224,18 @@ export async function updateGameIgdbFacts(
 }
 
 /**
+ * Overwrite ONE game's release date (manual detail-panel correction). A shared
+ * `game` fact — the service rotates every user's shelf ETag after this.
+ */
+export async function updateReleaseDate(
+	db: Db,
+	gameId: string,
+	releaseDate: string | null,
+) {
+	await db.update(game).set({ releaseDate }).where(eq(game.id, gameId));
+}
+
+/**
  * Enrich a name-only (`unenriched`) game once a manual IGDB match is confirmed
  * (Story 6.2, FR-28): fill the facts the add-by-name save lacked and clear the
  * flag. Straight `set` (not COALESCE) — resolution is the user deliberately

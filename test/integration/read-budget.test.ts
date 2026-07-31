@@ -19,6 +19,7 @@ import {
 	changeOwnership,
 	changePlayStatus,
 	editDates,
+	editReleaseDate,
 	getGameById,
 	loadLibrary,
 	logMilestone,
@@ -281,6 +282,16 @@ describe('8.6c — the version-bump bypass suite', () => {
 		theirs = await readLibraryVersion(db(), other);
 		const tagged = await addGenreToGame(db(), other, shared, 'Soulslike');
 		expect(tagged).toContain('Soulslike');
+		expect(await readLibraryVersion(db(), userId)).not.toBe(mine);
+		expect(await readLibraryVersion(db(), other)).not.toBe(theirs);
+
+		// release-date edit rewrites a shared `game` fact → bump-all (spec
+		// release-date-display-edit: every co-tracker's SOON/TBA pill and
+		// playableNow change with it).
+		mine = await readLibraryVersion(db(), userId);
+		theirs = await readLibraryVersion(db(), other);
+		const dated = await editReleaseDate(db(), other, shared, '2027-03-11');
+		expect(dated).toBe('updated');
 		expect(await readLibraryVersion(db(), userId)).not.toBe(mine);
 		expect(await readLibraryVersion(db(), other)).not.toBe(theirs);
 	});

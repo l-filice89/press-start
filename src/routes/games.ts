@@ -8,6 +8,7 @@ import {
 import { createDb } from '../repositories/db';
 import {
 	addGame,
+	editReleaseDate,
 	getGameById,
 	previewAddGame,
 	rematchGame,
@@ -79,6 +80,18 @@ const previewResponseSchema = z.object({
 		.nullable(),
 });
 
+// A real calendar date: the regex shape, then reject the impossible dates it
+// lets through (2020-13-45) by round-tripping through Date and requiring it
+// lands on the same day. Guard the Invalid-Date case first — .toISOString()
+// on it throws (would 500). Shared by add, rematch, and release-date edit.
+const isoCalendarDate = z
+	.string()
+	.regex(/^\d{4}-\d{2}-\d{2}$/)
+	.refine((s) => {
+		const ms = Date.parse(`${s}T00:00:00Z`);
+		return !Number.isNaN(ms) && new Date(ms).toISOString().slice(0, 10) === s;
+	});
+
 const addBodySchema = z
 	.object({
 		title: z.string().trim().min(1).max(200),
@@ -89,19 +102,7 @@ const addBodySchema = z
 			.max(500)
 			.regex(/^https:\/\//)
 			.nullish(),
-		releaseDate: z
-			.string()
-			.regex(/^\d{4}-\d{2}-\d{2}$/)
-			// Reject impossible calendar dates the regex lets through (2020-13-45):
-			// round-trip through Date and require it lands on the same day. Guard the
-			// Invalid-Date case first — .toISOString() on it throws (would 500).
-			.refine((s) => {
-				const ms = Date.parse(`${s}T00:00:00Z`);
-				return (
-					!Number.isNaN(ms) && new Date(ms).toISOString().slice(0, 10) === s
-				);
-			})
-			.nullish(),
+		releaseDate: isoCalendarDate.nullish(),
 		genres: z.array(z.string().max(64)).max(20).optional(),
 		...scoreBodyFields,
 		owned: z.boolean().optional(),
@@ -205,14 +206,7 @@ const rematchBodySchema = z.object({
 		.max(500)
 		.regex(/^https:\/\//)
 		.nullish(),
-	releaseDate: z
-		.string()
-		.regex(/^\d{4}-\d{2}-\d{2}$/)
-		.refine((s) => {
-			const ms = Date.parse(`${s}T00:00:00Z`);
-			return !Number.isNaN(ms) && new Date(ms).toISOString().slice(0, 10) === s;
-		})
-		.nullish(),
+	releaseDate: isoCalendarDate.nullish(),
 	genres: z.array(z.string().max(64)).max(20).optional(),
 	...scoreBodyFields,
 });
@@ -239,6 +233,35 @@ gamesRoute.post('/games/:id/rematch', requireAuth, async (c) => {
 		return c.json({ error: 'that match already belongs to another game' }, 409);
 	}
 	return c.json(addResponseSchema.parse({ gameId: outcome.gameId }), 200);
+});
+
+// Manual release-date correction (detail panel). ONE required key — `null`
+// clears, absence is unrepresentable (preserve-vs-clear ruling in the spec).
+// A shared `game` fact: the service rotates every user's shelf ETag.
+const releaseDateBodySchema = z.object({
+	releaseDate: isoCalendarDate.nullable(),
+});
+const releaseDateResponseSchema = z.object({ ok: z.literal(true) });
+
+gamesRoute.patch('/games/:id/release-date', requireAuth, async (c) => {
+	const body = releaseDateBodySchema.safeParse(
+		await c.req.json().catch(() => null),
+	);
+	if (!body.success) {
+		return c.json({ error: 'invalid release date' }, 400);
+	}
+
+	const db = createDb(c.env.DB);
+	const outcome = await editReleaseDate(
+		db,
+		c.get('userId'),
+		c.req.param('id'),
+		body.data.releaseDate,
+	);
+	if (outcome === 'not-found') {
+		return c.json({ error: 'game not found' }, 404);
+	}
+	return c.json(releaseDateResponseSchema.parse({ ok: true }), 200);
 });
 
 gamesRoute.post('/games', requireAuth, async (c) => {

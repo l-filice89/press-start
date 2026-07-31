@@ -1144,3 +1144,87 @@ describe('add a game FROM THE CATALOG (Story 7.3, AD-20)', () => {
 		expect(await again.json()).toEqual({ error: 'duplicate', gameId });
 	});
 });
+
+describe('edit a release date (spec release-date-display-edit, through the route)', () => {
+	const patchReleaseDate = (gameId: string, body: unknown, cookie?: string) =>
+		appFetch(`/api/games/${gameId}/release-date`, {
+			method: 'PATCH',
+			headers: {
+				'content-type': 'application/json',
+				...(cookie ? { cookie } : {}),
+			},
+			body: JSON.stringify(body),
+		});
+
+	const releaseDateOf = async (gameId: string) => {
+		const [row] = await db().select().from(game).where(eq(game.id, gameId));
+		return row.releaseDate;
+	};
+
+	let gameId: string;
+	beforeAll(async () => {
+		const created = await postGame(
+			{ title: 'Release Date Target', releaseDate: '2026-01-01' },
+			sessionCookie,
+		);
+		gameId = ((await created.json()) as { gameId: string }).gameId;
+	});
+
+	it('sets a new date, and explicit null CLEARS it (preserve-vs-clear ruling)', async () => {
+		const set = await patchReleaseDate(
+			gameId,
+			{ releaseDate: '2027-03-11' },
+			sessionCookie,
+		);
+		expect(set.status).toBe(200);
+		expect(await releaseDateOf(gameId)).toBe('2027-03-11');
+
+		const clear = await patchReleaseDate(
+			gameId,
+			{ releaseDate: null },
+			sessionCookie,
+		);
+		expect(clear.status).toBe(200);
+		expect(await releaseDateOf(gameId)).toBeNull();
+	});
+
+	it('refuses a malformed date, an impossible calendar date, and a missing key with 400 — nothing written', async () => {
+		await patchReleaseDate(
+			gameId,
+			{ releaseDate: '2027-06-15' },
+			sessionCookie,
+		);
+		for (const body of [
+			{ releaseDate: '11/03/2027' },
+			{ releaseDate: '2027-02-30' },
+			{},
+		]) {
+			const res = await patchReleaseDate(gameId, body, sessionCookie);
+			expect(res.status).toBe(400);
+		}
+		expect(await releaseDateOf(gameId)).toBe('2027-06-15');
+	});
+
+	it("404s an unknown id and another user's untracked game (AD-13)", async () => {
+		const unknown = await patchReleaseDate(
+			crypto.randomUUID(),
+			{ releaseDate: '2027-03-11' },
+			sessionCookie,
+		);
+		expect(unknown.status).toBe(404);
+
+		// A game NO tracking row ties to this user: insert directly, no tracking.
+		const untracked = await insertGame(db(), {
+			title: 'Nobody Tracks Me',
+			titleNormalized: normalizeTitle('Nobody Tracks Me'),
+			releaseDate: '2026-05-05',
+		});
+		const res = await patchReleaseDate(
+			untracked.id,
+			{ releaseDate: '2027-03-11' },
+			sessionCookie,
+		);
+		expect(res.status).toBe(404);
+		expect(await releaseDateOf(untracked.id)).toBe('2026-05-05');
+	});
+});

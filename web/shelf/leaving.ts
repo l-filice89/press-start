@@ -34,6 +34,23 @@ export function formatLeavingDate(iso: string): string {
 }
 
 /**
+ * "2027-03-11" → "11 MAR 2027" (or "5 NOV" when the release year is the
+ * current year — the year adds nothing). The shelf card's release pill: the
+ * actual date replaces the old "SOON" label, which read the same for next
+ * week and next year. Delegates to `formatLeavingDate` (one home for the pill
+ * date format, including its raw-ISO fallback); "current year" is the UTC
+ * year, same one-zone doctrine as `showLeaving` below.
+ */
+export function formatReleaseDate(iso: string): string {
+	const base = formatLeavingDate(iso);
+	if (base === iso) return iso;
+	const year = iso.slice(0, 4);
+	return year === new Date().toISOString().slice(0, 4)
+		? base
+		: `${base} ${year}`;
+}
+
+/**
  * Whether a leaving warning renders: a date exists, the game is un-owned
  * (FR-38 — ownership makes catalog membership irrelevant), and the date is
  * not past (a game departing inside the cron's blind window keeps its stale

@@ -254,6 +254,21 @@ export async function editDates(
 }
 
 /**
+ * Manually set or clear a game's release date (shared catalog fact). `null`
+ * clears — the game reads as TBA/unreleased until a date returns.
+ */
+export async function editReleaseDate(
+	gameId: string,
+	releaseDate: string | null,
+): Promise<void> {
+	await callApi(`/api/games/${encodeURIComponent(gameId)}/release-date`, {
+		method: 'PATCH',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ releaseDate }),
+	});
+}
+
+/**
  * Discard (soft-delete) a game or revive it (Story: discard-with-readd-revive).
  * A discarded game leaves every library surface but keeps its tracking row; the
  * UNDO toast calls this with `false`. Not a status change — resolves to void; a

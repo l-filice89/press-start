@@ -30,6 +30,7 @@ import {
 	removeExternalLinksBySource,
 	setDiscarded,
 	type TrackingPatch,
+	updateReleaseDate,
 	upsertGenre,
 } from '../repositories';
 import type { Db } from '../repositories/db';
@@ -542,4 +543,25 @@ export async function rematchGame(
 	// change, so every shelf ETag rotates (one UPDATE, Story 8.6).
 	await bumpAllLibraryVersions(db);
 	return { kind: 'rematched', gameId };
+}
+
+/**
+ * Manual release-date correction from the detail panel. Explicit `null` CLEARS
+ * the date (the game reads as TBA/unreleased); the route's single required key
+ * makes absence unrepresentable. A later rematch/ingest overwriting the manual
+ * value is accepted behavior — release date stays a shared `game` fact.
+ */
+export async function editReleaseDate(
+	db: Db,
+	userId: string,
+	gameId: string,
+	releaseDate: string | null,
+): Promise<'updated' | 'not-found'> {
+	// User-scope (AD-13): only a game this user tracks can be edited.
+	if (!(await getTracking(db, userId, gameId))) return 'not-found';
+	await updateReleaseDate(db, gameId, releaseDate);
+	// Shared `game` fact: every tracker's derived state (SOON/TBA pill,
+	// playableNow) changes — rotate EVERY user's shelf ETag (Story 8.6).
+	await bumpAllLibraryVersions(db);
+	return 'updated';
 }

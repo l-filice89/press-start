@@ -553,3 +553,11 @@ resolution: done 2026-07-16 (Story 10.2) — DECIDED: `first_seen_at` keeps its 
   summary: Historic `bought_on` seeding in e2e tests uses raw `d1Execute` UPDATEs; the knob belongs in the game factory.
   evidence: `playwright/e2e/epic6.spec.ts` downgrade-hazard test is the second test in the file to hand-write an UPDATE for a stamped date because the factory has no `bought_on` field — third caller pays for the factory knob.
   resolution: resolved 2026-07-23 by `spec-deferred-psplus-followups.md` — `boughtOn` knob added to the factory + seed INSERT; raw UPDATE deleted.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-release-date-display-edit.md`
+  summary: A discarded game's tracking row still authorizes shared-fact writes (release-date edit, rematch) — decide whether "tracks" includes tombstones.
+  evidence: `getTracking` returns the row regardless of the `discarded` flag, so `editReleaseDate` and the pre-existing `rematchGame` both accept API writes on a game the user removed from every surface; `getGameById` (8.6a) excludes discarded rows, so the two notions of "tracked" already disagree. Surfaced by adversarial review of the release-date spec.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-release-date-display-edit.md`
+  summary: After a rejected date PATCH, every DateRow keeps showing the unsaved draft as if stored (the useEffect only re-seeds when the server value changes).
+  evidence: `web/shelf/DetailPanel.tsx` DateRow + the dates/release-date mutations' onError paths toast but never reset the draft; pre-existing for the five lifecycle rows, now also true of the shared release-date row where the stale display misrepresents other users' reality too.
