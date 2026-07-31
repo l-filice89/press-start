@@ -634,6 +634,11 @@ describe('DetailPanel', () => {
 		expect(screen.getByLabelText('Platinum')).toHaveValue('');
 	});
 
+	it('renders the release date as an editable date input', async () => {
+		await openPanel(game({ releaseDate: '2015-03-24' }));
+		expect(screen.getByLabelText('Release date')).toHaveValue('2015-03-24');
+	});
+
 	it('links a wishlisted game to its persisted store URL', async () => {
 		await openPanel(
 			game({
@@ -934,6 +939,34 @@ describe('DetailPanel', () => {
 			});
 		});
 
+		it('saving the release date PATCHes its own route on blur — a shared game fact, not a lifecycle date', async () => {
+			await openPanel(game({ releaseDate: null }));
+
+			const input = screen.getByLabelText('Release date');
+			fireEvent.change(input, { target: { value: '2027-03-11' } });
+			expect(writes()).toHaveLength(0);
+
+			fireEvent.blur(input);
+
+			await waitFor(() => expect(writes()).toHaveLength(1));
+			const [url, init] = writes()[0];
+			expect(url).toBe('/api/games/g1/release-date');
+			expect(init).toMatchObject({ method: 'PATCH' });
+			expect(JSON.parse(init.body)).toEqual({ releaseDate: '2027-03-11' });
+		});
+
+		it('clearing the release date sends null (game reads as TBA)', async () => {
+			await openPanel(game({ releaseDate: '2027-03-11' }));
+
+			const input = screen.getByLabelText('Release date');
+			fireEvent.change(input, { target: { value: '' } });
+			fireEvent.blur(input);
+
+			await waitFor(() => expect(writes()).toHaveLength(1));
+			expect(writes()[0][0]).toBe('/api/games/g1/release-date');
+			expect(JSON.parse(writes()[0][1].body)).toEqual({ releaseDate: null });
+		});
+
 		it('explains a 409 completion-invariant refusal on a date edit', async () => {
 			fetchMock.mockResolvedValue({
 				ok: false,
@@ -965,8 +998,9 @@ describe('DetailPanel', () => {
 			const focusables = Array.from(
 				panel().querySelectorAll(FOCUSABLE_SELECTOR),
 			);
+			// Five lifecycle dates + the release date row.
 			const inputs = Array.from(panel().querySelectorAll('input[type="date"]'));
-			expect(inputs).toHaveLength(5);
+			expect(inputs).toHaveLength(6);
 			for (const input of inputs) {
 				expect(focusables).toContain(input);
 			}

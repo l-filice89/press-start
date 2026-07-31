@@ -5,7 +5,6 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useToast } from '../components/Toast';
 import { useModalTrap } from '../components/useModalTrap';
 import {
-	type DateEdits,
 	fetchGenreVocabulary,
 	OWNERSHIP_TYPES,
 	PLAY_STATUSES,
@@ -38,14 +37,12 @@ function storeHref(game: ShelfGame): string {
  */
 function DateRow({
 	label,
-	field,
 	date,
-	onSave,
+	onCommit,
 }: {
 	label: string;
-	field: keyof DateEdits;
 	date: string | null;
-	onSave: (edits: DateEdits) => void;
+	onCommit: (next: string | null) => void;
 }) {
 	const [draft, setDraft] = useState(date ?? '');
 	useEffect(() => setDraft(date ?? ''), [date]);
@@ -57,9 +54,17 @@ function DateRow({
 				className="detail-panel__date-input"
 				value={draft}
 				onChange={(e) => setDraft(e.target.value)}
-				onBlur={() => {
+				onBlur={(e) => {
+					// A half-typed date reads as value '' but validity.badInput — that
+					// is an abandoned edit, not an intentional clear. Committing it
+					// would silently null the stored date (worst on the shared
+					// release-date row). Snap back instead.
+					if (e.currentTarget.validity.badInput) {
+						setDraft(date ?? '');
+						return;
+					}
 					const next = draft === '' ? null : draft;
-					if (next !== date) onSave({ [field]: next });
+					if (next !== date) onCommit(next);
 				}}
 			/>
 		</label>
@@ -115,6 +120,7 @@ export function DetailPanel({
 		confirmSource,
 		cancelSource,
 		saveDates,
+		saveReleaseDate,
 		editGenre,
 		discard,
 		milestoneRows,
@@ -429,35 +435,38 @@ export function DetailPanel({
 					<section className="detail-panel__section">
 						<h3 className="detail-panel__heading">Dates</h3>
 						<div className="detail-panel__dates">
+							{/* Release date is a SHARED catalog fact (own endpoint), unlike
+							    the per-user lifecycle dates below. First row: it's the one
+							    date about the game itself. */}
+							<DateRow
+								label="Release date"
+								date={game.releaseDate}
+								onCommit={saveReleaseDate}
+							/>
 							<DateRow
 								label="Wishlisted"
-								field="wishlistedOn"
 								date={game.wishlistedOn}
-								onSave={saveDates}
+								onCommit={(next) => saveDates({ wishlistedOn: next })}
 							/>
 							<DateRow
 								label="Bought"
-								field="boughtOn"
 								date={game.boughtOn}
-								onSave={saveDates}
+								onCommit={(next) => saveDates({ boughtOn: next })}
 							/>
 							<DateRow
 								label="Started"
-								field="startedOn"
 								date={game.startedOn}
-								onSave={saveDates}
+								onCommit={(next) => saveDates({ startedOn: next })}
 							/>
 							<DateRow
 								label="Story completed"
-								field="completedOn"
 								date={game.completedOn}
-								onSave={saveDates}
+								onCommit={(next) => saveDates({ completedOn: next })}
 							/>
 							<DateRow
 								label="Platinum"
-								field="platinumOn"
 								date={game.platinumOn}
-								onSave={saveDates}
+								onCommit={(next) => saveDates({ platinumOn: next })}
 							/>
 						</div>
 					</section>

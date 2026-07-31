@@ -452,3 +452,16 @@ no cron. Bands are half-open; a null selected metric matches only Unknown
 | 12.1b the story/100% toggle re-evaluates every selected band against the chosen metric (default story); the toggle is filter state, not a global setting (VR-9) | `epic12-ttb.spec.ts` › the story/100% toggle re-evaluates the selected bands against the chosen metric; jsdom `FilterRow.test.tsx` › the metric toggle flips the metric in filter state, preserving bands; predicate half + metric-alone-never-activates in `filters.test.ts` |
 | 12.1c active Time selections narrate in the live summary with literal or/and words, and the mobile sheet carries the group with its count badge (FR-20, UX-DR23, UX-DR26) | `epic12-ttb.spec.ts` › …matches only Unknown (summary sentence + tinted connector words) + › phone: the sheet carries the Time group with its toggle, and bands count in the badge; jsdom sheet-group + trigger-badge pins in `FilterRow.test.tsx`; sentence tokens in `filters.test.ts` › narrates in the summary via literal or/and words |
 | 12.1d any Time-group state survives without color — words and pressed/checked state, never color alone (UX-DR23) | `epic12-ttb.spec.ts` asserts the metric toggle's machine-readable state (`aria-checked` on the desktop menu's `menuitemradio` rows, `aria-pressed` in the sheet) and literal connector WORDS in the summary; jsdom `FilterRow.test.tsx` pins `aria-checked` band rows + toggle state in both surfaces, and the menu's ONE roving focus list over radios + bands |
+
+### Release date on card + detail (spec-release-date-display-edit)
+
+Bugfix spec (2026-07-31): the shelf card shows the actual release date instead
+of "SOON" (TBA unchanged), and the detail panel gains an editable Release date
+row backed by `PATCH /api/games/:id/release-date` (shared `game` fact —
+bump-all ETag rotation).
+
+| AC | Coverage |
+|----|----------|
+| Unreleased card shows the formatted date pill, never SOON; TBA when dateless | `release-date.spec.ts` › unreleased card shows the formatted release date, editable from the detail panel; TBA/date/released branches + year formatting jsdom-pinned in `Card.test.tsx` › flags TBA when unreleased with no date… + › shows no release flag once released |
+| Detail panel shows/edits/clears the release date; value persists | `release-date.spec.ts` (edit → toast → pill re-bakes → survives reload); blur-commit + null-clear + own-route wiring jsdom-pinned in `DetailPanel.test.tsx` › saving the release date PATCHes its own route… + › clearing the release date sends null; route matrix (200/null-clear/400s/404s) in integration `games.test.ts` › edit a release date |
+| A shared-fact edit rotates EVERY user's shelf ETag (stale-read hazard) | integration `read-budget.test.ts` › the SHARED-fact writers rotate every tracker… (editReleaseDate driven through the real seam, both users' versions rotate); 304-refusal side pinned by › unchanged version ⇒ 304… |

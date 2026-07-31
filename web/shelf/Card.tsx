@@ -1,7 +1,7 @@
 import { type KeyboardEvent, useRef, useState } from 'react';
 import { PlatinumTrophy } from '../components/PlatinumTrophy';
 import type { ShelfGame } from './api';
-import { formatLeavingDate, showLeaving } from './leaving';
+import { formatLeavingDate, formatReleaseDate, showLeaving } from './leaving';
 import { OwnershipSourceDialog } from './OwnershipSourceDialog';
 import { StatusPopover } from './StatusPopover';
 import { scoreGrade } from './score-grade';
@@ -77,11 +77,16 @@ export function Card({
 		: game.hasCompleted
 			? { glyph: '✓', label: 'Story completed', platinum: false }
 			: null;
-	// Release-state flag: only shown until a game is released.
+	// Release-state flag: only shown until a game is released. A known date is
+	// shown as the date itself ("11 MAR 2027") — the old "SOON" label read the
+	// same for next week and next year.
 	const releaseFlag = game.released
 		? null
 		: game.releaseDate
-			? { label: 'SOON', description: 'Not yet released' }
+			? {
+					label: formatReleaseDate(game.releaseDate),
+					description: `Releases on ${game.releaseDate}`,
+				}
 			: { label: 'TBA', description: 'Release date to be announced' };
 
 	return (

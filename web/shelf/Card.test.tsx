@@ -253,19 +253,37 @@ describe('Card', () => {
 		expect(screen.getByText('✓')).toBeInTheDocument();
 	});
 
-	it('flags TBA when unreleased with no date, SOON with a future date', () => {
+	it('flags TBA when unreleased with no date, the formatted date otherwise — never SOON', () => {
 		const { rerender } = renderCard(
 			game({ released: false, releaseDate: null }),
 		);
 		expect(screen.getByText('TBA')).toBeInTheDocument();
+		// Another year: the year is part of the pill — "SOON" hid a year's gap.
 		rerender(
 			<Card
-				game={game({ released: false, releaseDate: '2999-01-01' })}
+				game={game({ released: false, releaseDate: '2999-01-05' })}
 				tabIndex={0}
 				{...noMenu}
 			/>,
 		);
-		expect(screen.getByText('SOON')).toBeInTheDocument();
+		expect(screen.getByText('5 JAN 2999')).toBeInTheDocument();
+		expect(screen.queryByText('SOON')).not.toBeInTheDocument();
+		// Current year: the year adds nothing and is dropped.
+		const thisYear = new Date().getFullYear();
+		rerender(
+			<Card
+				game={game({ released: false, releaseDate: `${thisYear}-12-31` })}
+				tabIndex={0}
+				{...noMenu}
+			/>,
+		);
+		expect(screen.getByText('31 DEC')).toBeInTheDocument();
+	});
+
+	it('shows no release flag once released (date in the past)', () => {
+		renderCard(game({ released: true, releaseDate: '2015-03-24' }));
+		expect(screen.queryByText('TBA')).not.toBeInTheDocument();
+		expect(screen.queryByText(/24 MAR/)).not.toBeInTheDocument();
 	});
 
 	it('makes the cover an open-details trigger outside the tab order (Story 2.3)', () => {

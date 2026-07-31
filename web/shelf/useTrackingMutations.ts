@@ -8,6 +8,7 @@ import {
 	type DateEdits,
 	type EffectiveState,
 	editDates,
+	editReleaseDate,
 	logMilestone,
 	type Milestone,
 	type OwnershipType,
@@ -418,6 +419,31 @@ export function useTrackingMutations(
 		[game.title, mutateDates, guardPending, beginWrite, toast],
 	);
 
+	// Release-date correction: a SHARED game fact (unlike the per-user lifecycle
+	// dates above), but the same seam — guard, toast, invalidate; the server
+	// re-derives released/playableNow and the refetch re-bakes the pill.
+	const releaseDateMutation = useMutation({
+		mutationFn: (releaseDate: string | null) =>
+			editReleaseDate(game.id, releaseDate),
+		onSettled: settleWrite,
+		onSuccess: () => invalidateShelfQueries(),
+		onError: () =>
+			toast({ message: `Couldn’t update ${game.title}. Try again.` }),
+	});
+	const { mutate: mutateReleaseDate } = releaseDateMutation;
+
+	const saveReleaseDate = useCallback(
+		(releaseDate: string | null) => {
+			// Same shared race guard as `selectStatus` (Story 3.4, AC5).
+			if (guardPending()) return;
+			beginWrite();
+			mutateReleaseDate(releaseDate, {
+				onSuccess: () => toast({ message: `${game.title} — date saved` }),
+			});
+		},
+		[game.title, mutateReleaseDate, guardPending, beginWrite, toast],
+	);
+
 	// Genre edits (Story 2.5): plain toasts — removing a genre is reversed by a
 	// trivial re-add, so no UNDO. Writes invalidate the shelf (chips + cards
 	// re-bake) and the vocabulary (an auto-created genre becomes a suggestion).
@@ -546,6 +572,7 @@ export function useTrackingMutations(
 		confirmSource,
 		cancelSource,
 		saveDates,
+		saveReleaseDate,
 		editGenre,
 		discard,
 		milestoneRows,
