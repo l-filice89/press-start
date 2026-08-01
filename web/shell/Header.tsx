@@ -5,14 +5,15 @@ import { useActiveDestination } from '../shelf/detail-navigation';
 import { Wordmark } from './Wordmark';
 import './header.css';
 
-/** The two destinations (EXPERIENCE.md IA). Everything else surfaces over them. */
+/** Primary destinations. Everything else surfaces over them. */
 const DESTINATIONS = [
 	{ path: '/', label: 'SHELF' },
 	{ path: '/catalog', label: 'CATALOG' },
+	{ path: '/stats', label: 'STATS' },
 ] as const;
 
 /**
- * `SHELF | CATALOG` — the one navigation control in the app (AD-25). Switching
+ * `SHELF | CATALOG | STATS` — the primary navigation control. Switching
  * navigates to the bare path, which is what CLEARS a live `?q=`: the search term
  * belongs to the destination you are looking at, and carrying it across would
  * rebuild "two live surfaces from one input" through the URL.
@@ -33,7 +34,11 @@ function DestinationToggle() {
 	// renders behind it).
 	const { pathname } = useActiveDestination();
 	const refs = useRef<(HTMLAnchorElement | null)[]>([]);
-	const activeIndex = pathname.startsWith('/catalog') ? 1 : 0;
+	const activeIndex = pathname.startsWith('/stats')
+		? 2
+		: pathname.startsWith('/catalog')
+			? 1
+			: 0;
 
 	return (
 		<nav className="destination-toggle" aria-label="Destination">
@@ -68,7 +73,7 @@ function DestinationToggle() {
 
 /**
  * The shell header (EXPERIENCE.md IA + Responsive deltas). Holds the wordmark,
- * a persistent search slot (header-left on desktop, bottom-pinned on phone),
+ * a destination-aware search slot (header-left on desktop, bottom-pinned on phone),
  * a library readout slot (full "PS+ CATALOG AS OF …" desktop / compact count
  * phone), and the sign-out control.
  *
@@ -76,8 +81,8 @@ function DestinationToggle() {
  * the last successful refresh, full on desktop / compact on phone (the
  * `header.css` `@media` swap), em-dash until the first refresh.
  * The search slot renders whatever `search` node the shell passes (Story 1.7's
- * live combobox); with no node it falls back to a disabled placeholder so the
- * slot's design/placement still holds. Sign-out is the FR-47 live control.
+ * live combobox); `null` removes it for Stats, while `undefined` retains the
+ * disabled placeholder. Sign-out is the FR-47 live control.
  */
 export function Header({
 	email,
@@ -92,7 +97,8 @@ export function Header({
 	onSignOut: () => void;
 	onOpenSettings?: () => void;
 	signOutFailed?: boolean;
-	search?: ReactNode;
+	/** `null` removes the slot for destinations without search. */
+	search?: ReactNode | null;
 	/** Date (YYYY-MM-DD) of the last successful PS+ Extra refresh, or null. */
 	psPlusRefreshedAt?: string | null;
 	/** A guard-triggered refresh is in flight (Story 8.4) — suffix the readout. */
@@ -111,17 +117,19 @@ export function Header({
 
 			<DestinationToggle />
 
-			<div className="app-header__search">
-				{search ?? (
-					<input
-						type="search"
-						className="app-header__search-input"
-						placeholder="Find or add a game"
-						aria-label="Search your library (available once your shelf is set up)"
-						disabled
-					/>
-				)}
-			</div>
+			{search !== null && (
+				<div className="app-header__search">
+					{search ?? (
+						<input
+							type="search"
+							className="app-header__search-input"
+							placeholder="Find or add a game"
+							aria-label="Search your library (available once your shelf is set up)"
+							disabled
+						/>
+					)}
+				</div>
+			)}
 
 			<div className="app-header__meta">
 				{/* Freshness readout (5.3) — em-dash until the first successful refresh. */}

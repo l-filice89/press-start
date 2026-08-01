@@ -4,6 +4,24 @@ All notable changes to PRESS START are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/); this project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] — 2026-08-01
+
+Reflect on your gaming history through a compact cabinet-style scoreboard.
+
+### Added
+- **Stats destination.** `SHELF | CATALOG | STATS` now opens a dedicated,
+  responsive dashboard with all-time tracked, owned, story-complete, and
+  Platinum totals.
+- **Gaming-year activity.** Select any year found in lifecycle dates to see
+  wishlisted, bought, started, completed, and Platinum totals, monthly activity,
+  and top genres among games completed that year.
+- **Honest dashboard states.** Loading, retryable failure, empty library,
+  no-dated-activity, and wishlist/purchase-only years have explicit states.
+
+### Changed
+- **Stats-specific shell.** Search/Add is removed while Stats is active, while
+  existing Shelf and Catalog behavior remains unchanged.
+
 ## [3.1.0] — 2026-07-31
 
 ### Added

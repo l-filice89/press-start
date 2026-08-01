@@ -12,6 +12,7 @@ import { GameDetailRoute } from '../shelf/GameRoute';
 import { SearchBox } from '../shelf/SearchBox';
 import { Shelf } from '../shelf/Shelf';
 import { StragglersDialog } from '../shelf/StragglersDialog';
+import { StatsPage } from '../stats/StatsPage';
 import { Background } from './Background';
 import { Fab } from './Fab';
 import { Header } from './Header';
@@ -60,6 +61,7 @@ export function AppShell({
 	// is that `<Routes location>` re-renders its subtree on every AppShell render,
 	// which is the deliberate price of the non-remount guarantee.
 	const destination = useActiveDestination();
+	const statsActive = destination.pathname.startsWith('/stats');
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [stragglersOpen, setStragglersOpen] = useState(false);
 	const { data: settings } = useQuery({
@@ -79,7 +81,7 @@ export function AppShell({
 					onSignOut={onSignOut}
 					onOpenSettings={() => setSettingsOpen(true)}
 					signOutFailed={signOutFailed}
-					search={<SearchBox />}
+					search={statsActive ? null : <SearchBox />}
 					psPlusRefreshedAt={settings?.psPlusRefreshedAt ?? null}
 					catalogRefreshing={settings?.catalogRefreshing ?? false}
 				/>
@@ -124,13 +126,18 @@ export function AppShell({
 				{/* `tabIndex={-1}`: the close-detail focus handoff falls back here when the
 				    background renders no grid (GameRoute.close) — a bare <main> is not
 				    focusable, so without this the fallback would still land on <body>. */}
-				<main className="app-shell__main" id="main-content" tabIndex={-1}>
+				<main
+					className={`app-shell__main${statsActive ? ' app-shell__main--no-pinned-search' : ''}`}
+					id="main-content"
+					tabIndex={-1}
+				>
 					<Routes location={destination}>
 						<Route
 							path="/catalog"
 							element={<Catalog onOpenSettings={() => setSettingsOpen(true)} />}
 						/>
 						<Route path="/" element={<Shelf />} />
+						<Route path="/stats" element={<StatsPage />} />
 						<Route path="/game/:id" element={<Shelf />} />
 						<Route path="*" element={<NotFound />} />
 					</Routes>

@@ -1,0 +1,61 @@
+version: 1
+created: 2026-08-01
+methodology: Whiteport Design Studio
+
+project:
+  name: press-start
+  type: brownfield
+  product_type: progressive_web_application
+  product_complexity: complex+mobile
+  root_folder: design-process
+
+workflow:
+  route: phase-8-product-evolution
+  brief_level: simplified
+  strategic_analysis: not_applicable
+  skip_design_system: false
+
+technology:
+  tech_stack: React 19 + TypeScript + Vite 8; Hono on Cloudflare Workers; Cloudflare D1 + Drizzle ORM
+  platform: installable PWA
+  routing: React Router
+  authentication: Better Auth
+  pwa: vite-plugin-pwa
+  testing: Vitest + Playwright
+  component_library: custom
+  styling: custom CSS and design tokens
+
+existing_materials:
+  has_materials: true
+  sources:
+    - _bmad-output/planning-artifacts/briefs
+    - _bmad-output/planning-artifacts/architecture
+    - _bmad-output/planning-artifacts/ux-designs
+    - _bmad-output/implementation-artifacts
+    - _bmad-output/roadmap.md
+    - _bmad-output/project-context.md
+    - README.md
+    - CHANGELOG.md
+    - docs
+    - design-artifacts
+    - source code and tests
+
+project_context:
+  stakes: personal_hobby
+  public_adoption_possible: true
+  documentation_posture: lean
+  quality_considerations:
+    - user experience
+    - privacy
+    - accessibility
+    - reliability
+
+working_relationship:
+  involvement: autonomous_execution
+  user_role: product_owner
+  recommendation_style: suggest_options
+  stakeholder_alignment_required: false
+
+status:
+  phase_0: complete
+  next_phase: phase_8

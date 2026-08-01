@@ -20,4 +20,7 @@
 		padding: var(--space-4) var(--space-3);
 		padding-bottom: calc(var(--space-6) + var(--hit-target));
 	}
+	.app-shell__main--no-pinned-search {
+		padding-bottom: var(--space-4);
+	}
 }

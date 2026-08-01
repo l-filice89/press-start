@@ -85,8 +85,10 @@ describe('Header destination toggle', () => {
 
 		const shelf = screen.getByRole('link', { name: 'SHELF' });
 		const catalog = screen.getByRole('link', { name: 'CATALOG' });
+		const stats = screen.getByRole('link', { name: 'STATS' });
 		expect(shelf).toHaveAttribute('aria-current', 'page');
 		expect(catalog).not.toHaveAttribute('aria-current');
+		expect(stats).toHaveAttribute('href', '/stats');
 		// A real href — ctrl-click / middle-click / "open in new tab" all live here.
 		expect(catalog).toHaveAttribute('href', '/catalog');
 
@@ -141,7 +143,7 @@ describe('Header destination toggle', () => {
 		).toHaveValue('');
 	});
 
-	it('traverses with arrow keys (one tab stop, not two)', async () => {
+	it('traverses all three destinations with arrow keys (one tab stop)', async () => {
 		const user = userEvent.setup();
 		renderHeader(<Header email="a@b.co" onSignOut={noop} />);
 
@@ -149,6 +151,21 @@ describe('Header destination toggle', () => {
 		await user.keyboard('{ArrowRight}');
 		expect(screen.getByRole('link', { name: 'CATALOG' })).toHaveFocus();
 		expect(url()).toBe('/catalog');
+		await user.keyboard('{ArrowRight}');
+		expect(screen.getByRole('link', { name: 'STATS' })).toHaveFocus();
+		expect(url()).toBe('/stats');
+	});
+
+	it('removes the search slot when explicitly passed null', () => {
+		renderHeader(
+			<Header email="a@b.co" onSignOut={noop} search={null} />,
+			'/stats',
+		);
+		expect(screen.getByRole('link', { name: 'STATS' })).toHaveAttribute(
+			'aria-current',
+			'page',
+		);
+		expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
 	});
 
 	it('keeps SHELF current on a routed detail (/game/:id is over the shelf)', () => {

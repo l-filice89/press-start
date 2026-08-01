@@ -10,6 +10,14 @@ describe('EmptyState', () => {
 		expect(screen.getByText('INSERT GAMES')).toBeInTheDocument();
 	});
 
+	it('uses stats-specific copy for an empty scoreboard', () => {
+		render(<EmptyState variant="stats-empty" />);
+		expect(screen.getByText('INSERT GAMES')).toBeInTheDocument();
+		expect(
+			screen.getByText(/light up the cabinet scoreboard/i),
+		).toBeInTheDocument();
+	});
+
 	it('renders the NO MATCH headline for the no-match variant', () => {
 		render(<EmptyState variant="no-match" />);
 		expect(screen.getByText('NO MATCH')).toBeInTheDocument();
