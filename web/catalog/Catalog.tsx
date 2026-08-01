@@ -3,11 +3,13 @@ import {
 	useInfiniteQuery,
 	useQuery,
 } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router';
 import { EmptyState } from '../components/EmptyState';
 import { useAnnounce } from '../components/LiveRegion';
 import { SkeletonGrid } from '../components/Skeleton';
+import { useModalTrap } from '../components/useModalTrap';
 import {
 	type CatalogGenre,
 	fetchCatalogGenres,
@@ -39,10 +41,14 @@ export function Catalog({ onOpenSettings }: { onOpenSettings?: () => void }) {
 	const search = searchParams.get('q') ?? '';
 	// The selected facet keys ride in the URL beside `?q=` — a filtered catalog
 	// is a place you can link to and come Back to.
-	const genreKeys = searchParams.getAll('genre');
+	const genreKeys = [...new Set(searchParams.getAll('genre'))];
 	const announce = useAnnounce();
 
-	const { data: genres = [], isError: genresFailed } = useQuery({
+	const {
+		data: genres = [],
+		isError: genresFailed,
+		isPending: genresPending,
+	} = useQuery({
 		queryKey: ['catalog-genres'],
 		queryFn: ({ signal }) => fetchCatalogGenres(signal),
 	});
@@ -191,13 +197,26 @@ export function Catalog({ onOpenSettings }: { onOpenSettings?: () => void }) {
 			<CatalogFilters
 				genres={genres}
 				genresFailed={genresFailed}
+				genresPending={genresPending}
 				selected={genreKeys}
 				onToggle={toggleGenre}
 				onClear={clearGenres}
+				total={first.total}
+				fetching={query.isFetching}
 			/>
-			<p className="catalog__count" data-testid="catalog-count">
-				{first.total} game{first.total === 1 ? '' : 's'}
-				{filtering ? ' matching' : ' in the PS+ Extra catalog'}
+			<p
+				className="catalog__count"
+				data-testid="catalog-count"
+				aria-busy={query.isFetching || undefined}
+			>
+				{query.isFetching ? (
+					'Updating catalog games…'
+				) : (
+					<>
+						{first.total} game{first.total === 1 ? '' : 's'}
+						{filtering ? ' matching' : ' in the PS+ Extra catalog'}
+					</>
+				)}
 			</p>
 
 			{games.length === 0 ? (
@@ -250,64 +269,423 @@ export function Catalog({ onOpenSettings }: { onOpenSettings?: () => void }) {
 function CatalogFilters({
 	genres,
 	genresFailed,
+	genresPending,
 	selected,
 	onToggle,
 	onClear,
+	total,
+	fetching,
 }: {
 	genres: CatalogGenre[];
 	genresFailed: boolean;
+	genresPending: boolean;
 	selected: string[];
 	onToggle: (key: string) => void;
 	onClear: () => void;
+	total: number;
+	fetching: boolean;
 }) {
-	if (genres.length === 0 && selected.length === 0 && !genresFailed)
-		return null;
+	const [sheetOpen, setSheetOpen] = useState(false);
+	const triggerRef = useRef<HTMLButtonElement>(null);
+	const desktopTriggerRef = useRef<HTMLButtonElement>(null);
+	const options = [
+		...selected
+			.filter((key) => !genres.some((genre) => genre.key === key))
+			.map((key) => ({ key, count: null })),
+		...genres,
+	];
+	const closeSheet = useCallback(() => {
+		setSheetOpen(false);
+		triggerRef.current?.focus();
+	}, []);
+	const closeSheetForDesktop = useCallback(() => {
+		setSheetOpen(false);
+		requestAnimationFrame(() => desktopTriggerRef.current?.focus());
+	}, []);
+	const mountDesktopTrigger = useCallback(
+		(element: HTMLButtonElement | null) => {
+			desktopTriggerRef.current = element;
+		},
+		[],
+	);
+
 	return (
-		<fieldset className="catalog__filters" data-testid="catalog-filters">
-			<legend className="sr-only">Filter by genre</legend>
-			{genresFailed && (
-				<p role="alert" className="catalog__genres-error">
-					The genre filters couldn’t load. Refresh to try again.
+		<div className="catalog__filters" data-testid="catalog-filters">
+			<button
+				ref={triggerRef}
+				type="button"
+				className="catalog__filter-sheet-trigger tap-target"
+				data-active={selected.length > 0 || undefined}
+				aria-label={
+					selected.length > 0
+						? `Filters — ${selected.length} active`
+						: 'Filters'
+				}
+				data-testid="catalog-filter-sheet-trigger"
+				onClick={() => setSheetOpen(true)}
+			>
+				Filters
+				{selected.length > 0 && (
+					<span className="catalog__filter-count" aria-hidden="true">
+						{selected.length}
+					</span>
+				)}
+			</button>
+			{sheetOpen && (
+				<CatalogFilterSheet
+					options={options}
+					genresFailed={genresFailed}
+					genresPending={genresPending}
+					selected={selected}
+					onToggle={onToggle}
+					onClear={onClear}
+					total={total}
+					fetching={fetching}
+					onClose={closeSheet}
+					onBreakpointClose={closeSheetForDesktop}
+				/>
+			)}
+			<div className="catalog__filter-desktop">
+				{genresFailed && (
+					<p role="alert" className="catalog__genres-error">
+						The genre filters couldn’t load. Refresh to try again.
+					</p>
+				)}
+				<CatalogGenreMenu
+					options={options}
+					genresFailed={genresFailed}
+					genresPending={genresPending}
+					selected={selected}
+					onToggle={onToggle}
+					onClear={onClear}
+					onTriggerMount={mountDesktopTrigger}
+				/>
+			</div>
+		</div>
+	);
+}
+
+type CatalogGenreOption = { key: string; count: number | null };
+
+function CatalogGenreMenu({
+	options,
+	genresFailed,
+	genresPending,
+	selected,
+	onToggle,
+	onClear,
+	onTriggerMount,
+}: {
+	options: CatalogGenreOption[];
+	genresFailed: boolean;
+	genresPending: boolean;
+	selected: string[];
+	onToggle: (key: string) => void;
+	onClear: () => void;
+	onTriggerMount: (element: HTMLButtonElement | null) => void;
+}) {
+	const [open, setOpen] = useState(false);
+	const triggerRef = useRef<HTMLButtonElement>(null);
+	const menuRef = useRef<HTMLDivElement>(null);
+	const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+	const menuId = useId();
+	const optionCount = options.length;
+	const navigableCount = options.length + (selected.length > 0 ? 1 : 0);
+	const close = useCallback((returnFocus = true) => {
+		setOpen(false);
+		if (returnFocus) triggerRef.current?.focus();
+	}, []);
+
+	useEffect(() => {
+		if (open && optionCount > 0)
+			itemRefs.current[0]?.focus({ preventScroll: true });
+	}, [open, optionCount]);
+
+	useEffect(() => {
+		if (!open) return;
+		const onPointerDown = (event: PointerEvent) => {
+			const target = event.target as Node;
+			if (
+				menuRef.current?.contains(target) ||
+				triggerRef.current?.contains(target)
+			)
+				return;
+			close(false);
+		};
+		const onScroll = (event: Event) => {
+			if (!menuRef.current?.contains(event.target as Node)) close();
+		};
+		const onResize = () => close();
+		document.addEventListener('pointerdown', onPointerDown);
+		window.addEventListener('scroll', onScroll, true);
+		window.addEventListener('resize', onResize);
+		return () => {
+			document.removeEventListener('pointerdown', onPointerDown);
+			window.removeEventListener('scroll', onScroll, true);
+			window.removeEventListener('resize', onResize);
+		};
+	}, [open, close]);
+
+	const moveFocus = (event: React.KeyboardEvent, index: number) => {
+		const last = navigableCount - 1;
+		let target: number | null = null;
+		switch (event.key) {
+			case 'ArrowDown':
+				target = index === last ? 0 : index + 1;
+				break;
+			case 'ArrowUp':
+				target = index === 0 ? last : index - 1;
+				break;
+			case 'Home':
+				target = 0;
+				break;
+			case 'End':
+				target = last;
+				break;
+			case 'Escape':
+				event.preventDefault();
+				close();
+				return;
+			case 'Tab':
+				close(false);
+				return;
+			default:
+				return;
+		}
+		event.preventDefault();
+		itemRefs.current[target]?.focus();
+	};
+
+	return (
+		<span className="catalog__genre-dropdown">
+			<button
+				ref={(element) => {
+					triggerRef.current = element;
+					onTriggerMount(element);
+				}}
+				type="button"
+				className="catalog__genre-trigger tap-target"
+				aria-haspopup="menu"
+				aria-expanded={open}
+				aria-controls={open ? menuId : undefined}
+				aria-label={
+					selected.length > 0
+						? `Genre — ${selected.length} selected`
+						: undefined
+				}
+				data-active={selected.length > 0 || undefined}
+				data-testid="catalog-filter-genre"
+				onClick={() => (open ? close() : setOpen(true))}
+				onKeyDown={(event) => {
+					if (event.key === 'ArrowDown') {
+						event.preventDefault();
+						setOpen(true);
+					} else if (event.key === 'Escape' && open) {
+						event.preventDefault();
+						close();
+					}
+				}}
+			>
+				Genre
+				{selected.length > 0 && (
+					<span className="catalog__filter-count" aria-hidden="true">
+						{selected.length}
+					</span>
+				)}
+			</button>
+			{open && (
+				<div
+					ref={menuRef}
+					id={menuId}
+					role="menu"
+					aria-label="Genre filters"
+					className="catalog__genre-menu"
+					data-testid="catalog-filter-genre-menu"
+				>
+					{options.length === 0 && (
+						<button
+							type="button"
+							role="menuitem"
+							aria-disabled="true"
+							tabIndex={-1}
+							className="catalog__genre-empty"
+						>
+							{genresFailed
+								? 'Genres couldn’t load'
+								: genresPending
+									? 'Loading genres…'
+									: 'No genres yet'}
+						</button>
+					)}
+					{options.map((option, index) => (
+						<button
+							key={option.key}
+							ref={(element) => {
+								itemRefs.current[index] = element;
+							}}
+							type="button"
+							role="menuitemcheckbox"
+							aria-checked={selected.includes(option.key)}
+							tabIndex={-1}
+							className="catalog__genre-item tap-target"
+							onClick={() => onToggle(option.key)}
+							onKeyDown={(event) => moveFocus(event, index)}
+						>
+							{genreLabel(option.key)}
+							{option.count !== null && (
+								<span className="catalog__genre-count">{option.count}</span>
+							)}
+						</button>
+					))}
+					{selected.length > 0 && (
+						<button
+							ref={(element) => {
+								itemRefs.current[options.length] = element;
+							}}
+							type="button"
+							role="menuitem"
+							tabIndex={-1}
+							className="catalog__clear tap-target"
+							onClick={() => {
+								onClear();
+								close();
+							}}
+							onKeyDown={(event) => moveFocus(event, options.length)}
+						>
+							Clear genres
+						</button>
+					)}
+				</div>
+			)}
+		</span>
+	);
+}
+
+function CatalogFilterSheet({
+	options,
+	genresFailed,
+	genresPending,
+	selected,
+	onToggle,
+	onClear,
+	total,
+	fetching,
+	onClose,
+	onBreakpointClose,
+}: {
+	options: CatalogGenreOption[];
+	genresFailed: boolean;
+	genresPending: boolean;
+	selected: string[];
+	onToggle: (key: string) => void;
+	onClear: () => void;
+	total: number;
+	fetching: boolean;
+	onClose: () => void;
+	onBreakpointClose: () => void;
+}) {
+	const sheetRef = useRef<HTMLDivElement>(null);
+	const showRef = useRef<HTMLButtonElement>(null);
+	const titleId = useId();
+	const onKeyDown = useModalTrap(sheetRef, onClose);
+
+	useEffect(() => {
+		const previous = document.body.style.overflow;
+		document.body.style.overflow = 'hidden';
+		return () => {
+			document.body.style.overflow = previous;
+		};
+	}, []);
+
+	const onBreakpointCloseRef = useRef(onBreakpointClose);
+	onBreakpointCloseRef.current = onBreakpointClose;
+	useEffect(() => {
+		const media = window.matchMedia?.('(min-width: 601px)');
+		if (!media) return;
+		const onChange = () => {
+			if (media.matches) onBreakpointCloseRef.current();
+		};
+		media.addEventListener('change', onChange);
+		return () => media.removeEventListener('change', onChange);
+	}, []);
+
+	return createPortal(
+		// biome-ignore lint/a11y/noStaticElementInteractions: backdrop is a pointer dismiss surface; dialog exposes Escape and a close button.
+		<div
+			className="catalog-filter-sheet__backdrop"
+			data-testid="catalog-filter-sheet-backdrop"
+			onMouseDown={(event) => {
+				if (event.target === event.currentTarget) onClose();
+			}}
+		>
+			<div
+				ref={sheetRef}
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby={titleId}
+				tabIndex={-1}
+				className="catalog-filter-sheet"
+				data-testid="catalog-filter-sheet"
+				onKeyDown={onKeyDown}
+			>
+				<p id={titleId} className="catalog-filter-sheet__title">
+					Filters
 				</p>
-			)}
-			{/* A selected key the vocabulary doesn't list still gets its own chip —
-			    the filter is live, so it must be visible and switchable off. Covers
-			    both a failed/empty vocabulary (M9) and a key whose count dropped to
-			    zero, which the facet response now omits (UX sweep 2026-07-16). */}
-			{selected
-				.filter((key) => !genres.some((genre) => genre.key === key))
-				.map((key) => (
+				<div className="catalog-filter-sheet__group">
+					<p className="catalog-filter-sheet__group-label">
+						Genre — any of (or)
+					</p>
+					{genresFailed && (
+						<p role="alert" className="catalog__genres-error">
+							The genre filters couldn’t load. Refresh to try again.
+						</p>
+					)}
+					{options.length === 0 && !genresFailed && (
+						<p className="catalog-filter-sheet__empty">
+							{genresPending ? 'Loading genres…' : 'No genres yet'}
+						</p>
+					)}
+					{options.map((option) => (
+						<button
+							key={option.key}
+							type="button"
+							className="catalog-filter-sheet__option tap-target"
+							aria-pressed={selected.includes(option.key)}
+							data-active={selected.includes(option.key) || undefined}
+							onClick={() => onToggle(option.key)}
+						>
+							{genreLabel(option.key)}
+							{option.count !== null && (
+								<span className="catalog__genre-count">{option.count}</span>
+							)}
+						</button>
+					))}
+				</div>
+				{selected.length > 0 && (
 					<button
-						key={key}
 						type="button"
-						className="catalog__genre tap-target"
-						aria-pressed={true}
-						onClick={() => onToggle(key)}
+						className="catalog__clear tap-target"
+						onClick={() => {
+							onClear();
+							requestAnimationFrame(() => showRef.current?.focus());
+						}}
 					>
-						{genreLabel(key)}
+						Clear genres
 					</button>
-				))}
-			{genres.map((genre) => (
+				)}
 				<button
-					key={genre.key}
+					ref={showRef}
 					type="button"
-					className="catalog__genre tap-target"
-					aria-pressed={selected.includes(genre.key)}
-					onClick={() => onToggle(genre.key)}
+					className="catalog-filter-sheet__show tap-target"
+					data-testid="catalog-filter-sheet-show"
+					onClick={onClose}
 				>
-					{genreLabel(genre.key)}
-					<span className="catalog__genre-count"> {genre.count}</span>
+					{fetching
+						? 'Close filters — updating games…'
+						: `Show ${total} game${total === 1 ? '' : 's'}`}
 				</button>
-			))}
-			{selected.length > 0 && (
-				<button
-					type="button"
-					className="catalog__clear tap-target"
-					onClick={onClear}
-				>
-					Clear genres
-				</button>
-			)}
-		</fieldset>
+			</div>
+		</div>,
+		document.body,
 	);
 }
