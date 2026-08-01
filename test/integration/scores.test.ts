@@ -10,10 +10,12 @@ import {
 	addExternalLink,
 	insertGame,
 	setSetting,
+	upsertTracking,
 } from '../../src/repositories';
 import { createDb } from '../../src/repositories/db';
 import { user } from '../../src/schema';
 import { game } from '../../src/schema/catalog';
+import { readLibraryVersion } from '../../src/services/library-version';
 import {
 	runScheduledScoreRefresh,
 	runScoreRefresh,
@@ -58,10 +60,15 @@ const fakeFetch = (
 	fetchTimeToBeatByIds: typeof ttb === 'function' ? ttb : async () => ttb ?? [],
 });
 
-async function seedLinkedGame(title: string, igdbId: string) {
+async function seedLinkedGame(
+	title: string,
+	igdbId: string,
+	releaseDate?: string | null,
+) {
 	const row = await insertGame(db(), {
 		title,
 		titleNormalized: title.toLowerCase(),
+		releaseDate,
 	});
 	await addExternalLink(db(), {
 		gameId: row.id,
@@ -69,6 +76,15 @@ async function seedLinkedGame(title: string, igdbId: string) {
 		externalId: igdbId,
 	});
 	return row.id;
+}
+
+async function releaseDateOf(gameId: string) {
+	const [row] = await db()
+		.select({ releaseDate: game.releaseDate })
+		.from(game)
+		.where(eq(game.id, gameId))
+		.limit(1);
+	return row.releaseDate;
 }
 
 async function scoresOf(gameId: string) {
@@ -116,7 +132,7 @@ describe('score refresh (Story 10.1)', () => {
 	});
 
 	it('HAZARD (degenerate response): a 200 [] for a non-empty id list writes NOTHING and existing scores survive', async () => {
-		const gameId = await seedLinkedGame('Celeste', '26226');
+		const gameId = await seedLinkedGame('Celeste', '26226', '2018-01-25');
 		await runScoreRefresh(
 			db(),
 			userId,
@@ -128,11 +144,12 @@ describe('score refresh (Story 10.1)', () => {
 		expect(outcome).toEqual({ ok: false, reason: 'provider' });
 		// The write-nothing guarantee: yesterday's scores STAND.
 		expect(await scoresOf(gameId)).toEqual(HADES_SCORES);
+		expect(await releaseDateOf(gameId)).toBe('2018-01-25');
 	});
 
 	it('HAZARD (partial response): a game absent from the reply keeps its stored scores', async () => {
-		const keptId = await seedLinkedGame('Kept Game', '900001');
-		const freshId = await seedLinkedGame('Fresh Game', '900002');
+		const keptId = await seedLinkedGame('Kept Game', '900001', '2027-01-01');
+		const freshId = await seedLinkedGame('Fresh Game', '900002', '2027-02-02');
 		await runScoreRefresh(
 			db(),
 			userId,
@@ -152,11 +169,159 @@ describe('score refresh (Story 10.1)', () => {
 		await runScoreRefresh(
 			db(),
 			userId,
-			fakeFetch([{ igdbId: '900002', ...fresh }]),
+			fakeFetch([{ igdbId: '900002', releaseDate: '2028-03-03', ...fresh }]),
 		);
 
 		expect(await scoresOf(keptId)).toEqual(HADES_SCORES); // untouched
 		expect(await scoresOf(freshId)).toEqual(fresh); // updated, nulls included
+		expect(await releaseDateOf(keptId)).toBe('2027-01-01');
+		expect(await releaseDateOf(freshId)).toBe('2028-03-03');
+	});
+
+	describe('release date rides the same /games pass', () => {
+		it('updates the shared date and rotates every tracking user library version', async () => {
+			const gameId = await seedLinkedGame(
+				'Rescheduled Game',
+				'920001',
+				'2027-04-01',
+			);
+			const now = new Date();
+			const [second] = await db()
+				.insert(user)
+				.values({
+					id: crypto.randomUUID(),
+					name: 'Release Date Observer',
+					email: 'release-date-observer@example.com',
+					createdAt: now,
+					updatedAt: now,
+				})
+				.returning({ id: user.id });
+			await upsertTracking(db(), userId, gameId);
+			await upsertTracking(db(), second.id, gameId);
+			const before = await Promise.all([
+				readLibraryVersion(db(), userId),
+				readLibraryVersion(db(), second.id),
+			]);
+
+			const outcome = await runScoreRefresh(
+				db(),
+				userId,
+				fakeFetch([
+					{
+						igdbId: '920001',
+						releaseDate: '2027-09-15',
+						...HADES_SCORES,
+					},
+				]),
+			);
+
+			expect(outcome).toEqual({ ok: true, updated: 1 });
+			expect(await releaseDateOf(gameId)).toBe('2027-09-15');
+			const after = await Promise.all([
+				readLibraryVersion(db(), userId),
+				readLibraryVersion(db(), second.id),
+			]);
+			expect(after[0]).not.toBe(before[0]);
+			expect(after[1]).not.toBe(before[1]);
+		});
+
+		it('clears a stored date when the returned row explicitly carries null', async () => {
+			const gameId = await seedLinkedGame(
+				'Withdrawn Date',
+				'920002',
+				'2027-05-01',
+			);
+
+			await runScoreRefresh(
+				db(),
+				userId,
+				fakeFetch([{ igdbId: '920002', releaseDate: null, ...HADES_SCORES }]),
+			);
+
+			expect(await releaseDateOf(gameId)).toBeNull();
+		});
+
+		it('preserves a stored date when the injected seam omits releaseDate', async () => {
+			const gameId = await seedLinkedGame(
+				'Omitted Date',
+				'920003',
+				'2027-06-01',
+			);
+
+			await runScoreRefresh(
+				db(),
+				userId,
+				fakeFetch([{ igdbId: '920003', ...HADES_SCORES }]),
+			);
+
+			expect(await releaseDateOf(gameId)).toBe('2027-06-01');
+		});
+
+		it('scheduled entry refreshes a stale release date through the daily trigger path', async () => {
+			const gameId = await seedLinkedGame(
+				'Scheduled Date',
+				'920004',
+				'2027-07-01',
+			);
+			await setSetting(
+				db(),
+				userId,
+				SCORES_REFRESHED_AT_SETTING_KEY,
+				'2020-01-01',
+			);
+
+			await runScheduledScoreRefresh(db(), {
+				fetchScoresByIds: async (ids) => {
+					expect(ids).toContain('920004');
+					return [
+						{
+							igdbId: '920004',
+							releaseDate: '2027-10-10',
+							...HADES_SCORES,
+						},
+					];
+				},
+				fetchTimeToBeatByIds: async () => [],
+			});
+
+			expect(await releaseDateOf(gameId)).toBe('2027-10-10');
+			expect(await getScoresRefreshedAt(db(), userId)).not.toBe('2020-01-01');
+		});
+
+		it('scheduled degenerate reply preserves the date, flags failure, and remains retryable', async () => {
+			const gameId = await seedLinkedGame(
+				'Scheduled Degenerate Date',
+				'920005',
+				'2027-08-01',
+			);
+			await setSetting(
+				db(),
+				userId,
+				SCORES_REFRESHED_AT_SETTING_KEY,
+				'2020-01-01',
+			);
+			await clearScoresRefreshFailed(db());
+
+			await runScheduledScoreRefresh(db(), fakeFetch([]));
+
+			expect(await releaseDateOf(gameId)).toBe('2027-08-01');
+			expect(await getScoresRefreshedAt(db(), userId)).toBe('2020-01-01');
+			expect(await isScoresRefreshFailed(db(), userId)).toBe(true);
+
+			await runScheduledScoreRefresh(
+				db(),
+				fakeFetch([
+					{
+						igdbId: '920005',
+						releaseDate: '2027-11-11',
+						...HADES_SCORES,
+					},
+				]),
+			);
+
+			expect(await releaseDateOf(gameId)).toBe('2027-11-11');
+			expect(await isScoresRefreshFailed(db(), userId)).toBe(false);
+		});
 	});
 
 	describe('time to beat rides the same pass (Story 10.3, VR-8)', () => {

@@ -42,6 +42,7 @@ export type GameScores = {
  * its stored hours (absence of fresh data never erases standing data).
  */
 export type GameIgdbFacts = Partial<GameScores> & {
+	releaseDate?: string | null;
 	ttbStorySeconds?: number | null;
 	ttbCompleteSeconds?: number | null;
 	ttbCount?: number | null;
@@ -196,14 +197,15 @@ export async function backfillGameFacts(
 }
 
 /**
- * Persist refreshed reception scores on a batch of games (Story 10.1). One
- * `db.batch` call — one D1 subrequest however many rows (the Epic 9
+ * Persist refreshed IGDB facts on a batch of games (Stories 10.1 + 10.3 and
+ * the scheduled release-date refresh). One `db.batch` call — one D1
+ * subrequest however many rows (the Epic 9
  * BUDGET-COUNTS-EVERY-SUBREQUEST lesson: a per-row loop of UPDATEs is N
  * subrequests the mock can't see). Values differ per row so this can't be the
- * `inArray` shape `setPsPlusExtraFlags` uses; each statement binds 5 params,
- * far under D1's 100-param cap. Caller passes ONLY rows present in the IGDB
- * response — a game absent from the reply keeps its stored scores (VR-5:
- * absence of fresh data never erases standing data).
+ * `inArray` shape `setPsPlusExtraFlags` uses; each statement remains far under
+ * D1's 100-param cap. Caller passes ONLY rows present in the IGDB response — a
+ * game absent from the reply keeps its stored facts (absence of fresh data
+ * never erases standing data).
  *
  * ponytail: one unchunked batch — fine at the ~65-row library; D1 also caps
  * statements-per-batch, so slice into multiple db.batch calls (each is one

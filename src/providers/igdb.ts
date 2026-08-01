@@ -29,9 +29,13 @@ export interface IgdbEnrichment {
 	userScoreCount: number | null;
 }
 
-/** The four score facts alone, keyed by IGDB id — the refresh job's row. */
+/** Shared game facts returned by the scheduled `/games` refresh, keyed by
+ * IGDB id. `releaseDate` is optional at the injected seam so an alternate
+ * provider/fake can omit it to mean preserve; the real adapter always emits
+ * the key, using null when IGDB has withdrawn the date (TBA). */
 export interface IgdbScores {
 	igdbId: string;
+	releaseDate?: string | null;
 	criticScore: number | null;
 	criticScoreCount: number | null;
 	userScore: number | null;
@@ -411,7 +415,11 @@ export function createIgdbProvider(
 				);
 				for (const game of games) {
 					if (game.id === undefined) continue;
-					rows.push({ igdbId: String(game.id), ...scores(game) });
+					rows.push({
+						igdbId: String(game.id),
+						releaseDate: releaseDate(game),
+						...scores(game),
+					});
 				}
 			}
 			return rows;
