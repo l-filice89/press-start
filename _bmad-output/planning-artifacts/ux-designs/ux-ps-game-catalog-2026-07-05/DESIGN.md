@@ -2,7 +2,7 @@
 name: PRESS START
 description: Arcade-neon personal game shelf. Dark-only, cover-forward, glance-and-go. Electric cyan does the work; hot magenta is reserved for what you're playing right now.
 status: final
-updated: 2026-07-14
+updated: 2026-08-01
 colors:
   bg-void: '#05090f'
   surface: '#0b1622'
@@ -50,7 +50,7 @@ components:
   card: 'Pure cover art + overlaid controls; info strip below.'
   status-pill: 'Effective-state chip; tap opens the status popover.'
   filter-pill: 'Solid = narrow (AND); dashed = reveal hidden state.'
-  fab: 'Bottom-corner chores launcher, position configurable.'
+  settings-backup: 'Peer Settings section with full-width outlined Export CSV action.'
   attention-banner: 'Under-header notice zone for needs-action items.'
   toast: 'Transient bottom confirmation, auto-dismiss.'
   summary-modal: 'Post-op readout (sync/import/PS+).'
@@ -58,7 +58,7 @@ components:
   popover: 'Inline status + milestone menu off the pill.'
   detail-panel: 'Flip-then-grow editable detail.'
   search-bar: 'Persistent find-or-add; scoped to the active destination.'
-  destination-toggle: 'Header segmented control — SHELF | CATALOG.'
+  destination-toggle: 'Header segmented control — SHELF | CATALOG | STATS.'
   catalog-card: 'Cover + title + PS+ flag; Add / Claim / In-library. No status pill, no owned toggle, no flip.'
 ---
 
@@ -87,7 +87,7 @@ Dark-only. One near-black void, layered surfaces, cool near-white text, and a di
 - **Void `#05090f`** — the app background. Behind the shelf it carries a faint Tron grid + a subtle blue→magenta radial wash (the signature texture).
 - **Surface `#0b1622`** (cards) and **Surface-raised `#0a1120`** (modals, sheets, popovers). Hierarchy by tone, edged with **hairline `#163043`** / **soft `#12283a`**.
 - **Text** — primary `#eafaff` (cool near-white), secondary `#8fb0c4`, muted `#6b8ba0` (the muted tone is floored at `#6b8ba0` — 5.06:1 on surface — so genres/dates/counts clear WCAG AA; do not use a dimmer grey for text).
-- **Brand blue `#0070cc`** is the PS-derived core, used for solid fills. **Electric `#12b3ff`** is the everyday interactive neon (selection, active pills, focus, links, the FAB). **Cyan glow `#35e0ff`** is the halo/highlight partner.
+- **Brand blue `#0070cc`** is the PS-derived core, used for solid fills. **Electric `#12b3ff`** is the everyday interactive neon (selection, active pills, focus, links, and outlined actions). **Cyan glow `#35e0ff`** is the halo/highlight partner.
 - **Heat magenta `#ff2e88`** (`#ff8bc2` as ink on dark) is the **reserved second neon** — rare by design, spent only on the **Playing** state (usually 1–3 games) so active games burn like embers in a cool library. Never used for common flags; flooding it would kill its meaning.
 - **Milestone silver `#d6e6f5`** — earned completion (Story completed / Platinum). A trophy gets its own metal.
 - **Semantic status:** Playing = magenta; Up next = cyan/electric; Paused = steel (`#8fb0c4`); Not started = dormant grey (`#3d5566`); Dropped = dim grey; Completed/Platinum = silver.
@@ -132,14 +132,15 @@ Covers follow their container corners. Two filter-pill *shapes* encode behavior:
 - **Card** — pure cover art. **Top-left flag cluster (display-only):** PS+ Extra badge (◈, when in the PS+ Extra catalog and not owned), a **release-state** flag (upcoming date / `TBA` while unreleased; nothing once released), and the **milestone badge** (silver ✓ Completed / 🏆 Platinum, persists regardless of play status). **Top-right:** owned toggle. Below the cover, an info strip — game name (Orbitron, ellipsis), then a **status pill**, then a genres line (desktop only; mobile hides genres and goes 2-up). The Playing card glows magenta. Satisfies FR-15. → `mockups/card-flip-prototype.html`
 - **Status pill** — shows *effective state* (FR-8). Tap → **popover** with the 5 play statuses (instant) + 2 milestone rows (confirm-gated). Milestone achievement also paints a permanent silver badge on the cover, independent of play status.
 - **Filter pills** — solid cyan (glow when active, FR-22) = narrow; dashed silver = reveal (Completed/Platinum/Dropped). → `mockups/filter-row-wireframe.html`
-- **FAB** — electric-blue rounded launcher, bottom-right by default (configurable to bottom-left). Opens an upward drawer of chores (icons+text on all sizes; revised 2026-07-14 — icons-only on mobile was too unclear). → `wireframes/ia-shell-wireframe.html`
+- **Settings backup** — a normal peer section after PlayStation Plus and before About & Help: `DATA BACKUP`, `Keep your own copy`, explanatory copy, and one full-width cyan-outlined `Export CSV` button. Pending label: `Exporting…`; failures use the standard toast. No FAB shell remains. → `_bmad-output/design-demos/export-settings/A-standard-section.html`
 - **Attention banner** — full-width notice under the header; amber (stragglers), magenta (expired cookie), steel (failed refresh).
 - **Toast** — `surface-raised`, cyan-edged, bottom, auto-dismiss; UNDO variant for reversible risky actions. → `mockups/state-feedback-board.html`
 - **Summary / confirm modals** — `surface-raised`, glow-ring; confirm modal uses silver for milestone gravity.
 - **Detail panel** — flip-then-grow; centered ~760px on desktop, full-screen on mobile.
 - **Search bar** — persistent, pill-shaped, cyan-edged with a focus glow; bottom-pinned on mobile, header-left on desktop. The hero find-or-add surface; results dropdown lists library matches + the `＋ Add` row.
 - **Popover** — `surface-raised` with glow-ring, anchored to the tapped status pill (flips above/below to stay on-screen); holds the status radio list + the two milestone rows.
-- **Destination toggle** — header segmented control, `SHELF | CATALOG` (Orbitron 600, uppercase, tracked). Active segment is a **solid electric fill with dark ink** and a cyan halo; inactive is muted text on `surface-raised`. Pill-shaped (`999px`), matching the filter/status pill family. Desktop: inline beside the wordmark. Phone: full-width on its own row under the wordmark. → `mockups/catalog-nav-options.html`
+- **Destination toggle** — header segmented control, `SHELF | CATALOG | STATS` (Orbitron 600, uppercase, tracked). Active segment is a **solid electric fill with dark ink** and a cyan halo; inactive is muted text on `surface-raised`. Pill-shaped (`999px`), matching the filter/status pill family. Desktop: inline beside the wordmark. Phone: full-width on its own row under the wordmark.
+- **Stats overview** — `CABINET SCORE` title, four all-time recap cards, and one native year select. Phone source/focus order is title → recap → `CURRENT ROUND`; desktop places the select beside the title and spans the recap below without duplicating controls.
 - **Catalog card** — the shelf card's chrome, minus everything that implies ownership. Cover art, `◈ PS+` flag top-left, title below (Orbitron, ellipsis). **No status pill, no owned toggle, no magenta bloom, no flip.** The bottom overlay carries one of three states:
   - **Not tracked** — **`＋ Add`** (solid electric fill, dark ink) beside **`Claim now`** (hairline outline, cyan ink).
   - **Tracked, not owned** (a wishlist entry that is also Playable-now) — an **`In library`** marker in `{colors.accent-electric}` (cyan = interactive family, "it's on your shelf") **with `Claim now` still live**, because a game added from the catalog isn't claimed to the PlayStation account yet.

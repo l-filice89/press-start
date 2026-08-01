@@ -90,11 +90,24 @@ export function StatsPage() {
 
 	return (
 		<section className="stats-page" aria-labelledby="stats-title">
-			<header className="stats-hero">
-				<div>
+			<div className="stats-overview">
+				<header className="stats-hero">
 					<p className="stats-eyebrow">PLAYER RECORD / ALL TIME</p>
 					<h1 id="stats-title">CABINET SCORE</h1>
-				</div>
+				</header>
+
+				<section className="stats-scoreboards" aria-label="All-time scores">
+					{SCORE_LABELS.map(([key, label]) => (
+						<article
+							className={`stats-scoreboard stats-scoreboard--${key}`}
+							key={key}
+						>
+							<p>{label}</p>
+							<strong>{summary.allTime[key].toLocaleString()}</strong>
+						</article>
+					))}
+				</section>
+
 				<label className="stats-year">
 					<span>CURRENT ROUND</span>
 					<select
@@ -108,19 +121,7 @@ export function StatsPage() {
 						))}
 					</select>
 				</label>
-			</header>
-
-			<section className="stats-scoreboards" aria-label="All-time scores">
-				{SCORE_LABELS.map(([key, label]) => (
-					<article
-						className={`stats-scoreboard stats-scoreboard--${key}`}
-						key={key}
-					>
-						<p>{label}</p>
-						<strong>{summary.allTime[key].toLocaleString()}</strong>
-					</article>
-				))}
-			</section>
+			</div>
 
 			<section className="stats-round" aria-labelledby="round-title">
 				<div className="stats-section-heading">

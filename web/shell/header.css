@@ -79,7 +79,7 @@
 	background: rgba(18, 179, 255, 0.12);
 }
 
-/* Interim Settings entry (Story 4.1; moves into the FAB drawer in Epic 6). */
+/* Permanent Settings entry (Story 4.1). */
 .app-header__settings {
 	padding: var(--space-2) var(--space-3);
 	font-size: 16px;

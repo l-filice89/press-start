@@ -1,25 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useToast } from '../components/Toast';
 import { useModalTrap } from '../components/useModalTrap';
-import {
-	cancelPsPlus,
-	fetchSettings,
-	saveFabHandedness,
-	savePsnRegion,
-} from './api';
+import { cancelPsPlus, fetchSettings, savePsnRegion } from './api';
 import './settings-panel.css';
 
 /**
  * The Settings surface (Story 4.1, stripped of the PSN credential surface by
- * Epic 11 story 11.2): a focus-trapped modal editing the PS+ region, FAB
- * placement and PS+ claim state.
+ * Epic 11 story 11.2): a focus-trapped modal editing the PS+ region and claim
+ * state, with a status-aware CSV backup action.
  */
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
 	const dialogRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLInputElement>(null);
+	const exportAbortRef = useRef<AbortController | null>(null);
 	const titleId = useId();
 	const queryClient = useQueryClient();
 	const { toast } = useToast();
@@ -46,14 +42,49 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 	// Mirrors the server guard — a disabled button beats a 400 round-trip.
 	const regionValid = /^[a-z]{2}(-[a-z]{2,4})?-[a-z]{2}$/.test(trimmedRegion);
 
-	const handedness = settings?.fabHandedness ?? 'right';
-	const setHandedness = useMutation({
-		mutationFn: saveFabHandedness,
-		onSuccess: () => queryClient.invalidateQueries({ queryKey: ['settings'] }),
-		// Not optimistic, so the toggle never lies about the stored side — but a
-		// failure was silent until now (NFR-4).
-		onError: () => toast({ message: 'Couldn’t save that setting. Try again.' }),
+	const exportCsv = useMutation({
+		mutationFn: async () => {
+			const controller = new AbortController();
+			exportAbortRef.current = controller;
+			try {
+				const response = await fetch('/api/export.csv', {
+					signal: controller.signal,
+				});
+				if (!response.ok) {
+					const error = new Error(`export failed (${response.status})`);
+					(error as Error & { status?: number }).status = response.status;
+					throw error;
+				}
+				if (!response.headers.get('content-type')?.includes('text/csv')) {
+					throw new Error('export returned a non-CSV response');
+				}
+				return response.blob();
+			} finally {
+				if (exportAbortRef.current === controller) {
+					exportAbortRef.current = null;
+				}
+			}
+		},
+		onSuccess: (blob) => {
+			const url = URL.createObjectURL(blob);
+			const anchor = document.createElement('a');
+			anchor.href = url;
+			anchor.download = 'press-start-library.csv';
+			anchor.click();
+			// Chromium can emit the download event before it has consumed the Blob.
+			// Keep the URL alive briefly, then release it once the read has started.
+			setTimeout(() => URL.revokeObjectURL(url), 1_000);
+		},
+		onError: (error) => {
+			if (error instanceof DOMException && error.name === 'AbortError') return;
+			toast({ message: 'Export failed — try again later.' });
+		},
 	});
+	const closePanel = () => {
+		exportAbortRef.current?.abort();
+		onClose();
+	};
+	useEffect(() => () => exportAbortRef.current?.abort(), []);
 
 	// "I cancelled PS+" (Story 6.4 AC4): count-confirmed bulk un-own of PS+
 	// claims. The button is inert with no claims; the confirm names the count.
@@ -74,7 +105,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 		},
 	});
 
-	const onKeyDown = useModalTrap(dialogRef, onClose, {
+	const onKeyDown = useModalTrap(dialogRef, closePanel, {
 		// The count-confirm stacks on top: hand Escape to it (Story 3.5 rule).
 		enabled: !confirmingCancel,
 		initialFocusRef: inputRef,
@@ -86,7 +117,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 			className="settings-panel__backdrop"
 			data-testid="settings-backdrop"
 			onMouseDown={(e) => {
-				if (e.target === e.currentTarget) onClose();
+				if (e.target === e.currentTarget) closePanel();
 			}}
 		>
 			<div
@@ -148,33 +179,6 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 				</section>
 
 				<section className="settings-panel__section">
-					<h3 className="settings-panel__heading">FAB placement</h3>
-					<p className="settings-panel__status">
-						Put the chores button on your dominant side.
-					</p>
-					{/* biome-ignore lint/a11y/useSemanticElements: this is a two-option toggle group, not a form radiogroup; aria-pressed buttons carry the state. */}
-					<div
-						className="settings-panel__handedness"
-						role="group"
-						aria-label="FAB placement"
-					>
-						{(['left', 'right'] as const).map((side) => (
-							<button
-								key={side}
-								type="button"
-								className="settings-panel__hand-option tap-target"
-								aria-pressed={handedness === side}
-								disabled={setHandedness.isPending}
-								data-testid={`handedness-${side}`}
-								onClick={() => setHandedness.mutate(side)}
-							>
-								{side === 'left' ? 'Bottom-left' : 'Bottom-right'}
-							</button>
-						))}
-					</div>
-				</section>
-
-				<section className="settings-panel__section">
 					<h3 className="settings-panel__heading">PlayStation Plus</h3>
 					<p className="settings-panel__status">
 						{claimCount === 0
@@ -192,6 +196,28 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 					</button>
 				</section>
 
+				<section className="settings-panel__section settings-panel__backup">
+					<p className="settings-panel__eyebrow">DATA BACKUP</p>
+					<h3 className="settings-panel__heading">Keep your own copy</h3>
+					<p className="settings-panel__status">
+						Download your complete library as CSV, including statuses, dates,
+						genres, and ownership.
+					</p>
+					<button
+						type="button"
+						className="settings-panel__export tap-target"
+						data-testid="settings-export"
+						disabled={exportCsv.isPending}
+						aria-busy={exportCsv.isPending}
+						onClick={() => exportCsv.mutate()}
+					>
+						{exportCsv.isPending ? 'Exporting…' : 'Export CSV'}
+					</button>
+					<span className="sr-only" aria-live="polite" aria-atomic="true">
+						{exportCsv.isPending ? 'Exporting your library.' : ''}
+					</span>
+				</section>
+
 				<section className="settings-panel__section">
 					<h3 className="settings-panel__heading">About &amp; Help</h3>
 					<p className="settings-panel__status">
@@ -206,7 +232,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 					<button
 						type="button"
 						className="settings-panel__close tap-target"
-						onClick={onClose}
+						onClick={closePanel}
 					>
 						Close
 					</button>

@@ -5,13 +5,11 @@ import { getSetting, setSetting } from '../repositories';
 import { createDb } from '../repositories/db';
 import { isRegionRefreshing } from '../services/psn-lock';
 import {
-	FAB_HANDEDNESS_SETTING_KEY,
 	getPsnRegion,
 	getPsPlusRefreshedAt,
 	isScoresRefreshFailed,
 	normalizePsnRegion,
 	PSN_REGION_SETTING_KEY,
-	readFabHandedness,
 	TIMEZONE_SETTING_KEY,
 } from '../services/settings';
 import { countStragglers } from '../services/stragglers';
@@ -43,7 +41,6 @@ settingsRoute.get('/settings', requireAuth, async (c) => {
 		timezone,
 		psPlusRefreshedAt,
 		stragglerCount,
-		fabHandedness,
 		psPlusClaimCount,
 		scoresRefreshFailed,
 		catalogRefreshing,
@@ -51,7 +48,6 @@ settingsRoute.get('/settings', requireAuth, async (c) => {
 		getSetting(db, userId, TIMEZONE_SETTING_KEY),
 		getPsPlusRefreshedAt(db, region ?? null),
 		countStragglers(db, userId),
-		readFabHandedness(db, userId),
 		countMembershipClaims(db, userId),
 		isScoresRefreshFailed(db, userId),
 		region ? isRegionRefreshing(db, region) : Promise.resolve(false),
@@ -68,8 +64,6 @@ settingsRoute.get('/settings', requireAuth, async (c) => {
 			scoresRefreshFailed,
 			// Drives the amber "needs a match" banner (Story 6.2, AR-22).
 			stragglerCount,
-			// FAB placement (Story 6.3, UX-DR10).
-			fabHandedness,
 			// Owned PS+ claims (Story 6.4): drives + names the cancel-PS+ confirm.
 			psPlusClaimCount,
 			// PSN store region the PS+ catalog is fetched for (anonymous call).
@@ -135,25 +129,4 @@ settingsRoute.put('/settings/psn-region', requireAuth, async (c) => {
 	// shelf GET's stale-snapshot guard refreshes a region that has none.
 	void previous;
 	return c.json({ region: body.data.region }, 200);
-});
-
-const handednessBodySchema = z.object({
-	handedness: z.enum(['left', 'right']),
-});
-
-settingsRoute.put('/settings/fab-handedness', requireAuth, async (c) => {
-	const body = handednessBodySchema.safeParse(
-		await c.req.json().catch(() => null),
-	);
-	if (!body.success) {
-		return c.json({ error: 'invalid handedness' }, 400);
-	}
-	const db = createDb(c.env.DB);
-	await setSetting(
-		db,
-		c.get('userId'),
-		FAB_HANDEDNESS_SETTING_KEY,
-		body.data.handedness,
-	);
-	return c.json({ fabHandedness: body.data.handedness }, 200);
 });

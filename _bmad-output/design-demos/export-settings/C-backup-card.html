@@ -1,0 +1,12 @@
+<!doctype html>
+<!-- Assumptions: strongest durability emphasis; one contained card makes backup discoverable without restoring floating chrome. Interactive state is illustrative only. -->
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Export Settings — C Backup Card</title><link rel="stylesheet" href="mock.css"></head>
+<body><main class="stage c"><p class="direction">C / BACKUP CARD · FORM FROM A USER-HELD SAFETY COPY</p><div class="phone">
+	<div class="app-behind"><div class="wordmark">PRESS START</div><div class="nav"><span>SHELF</span><span>CATALOG</span><span>STATS</span></div></div><div class="scrim"></div>
+	<section class="panel" role="dialog" aria-modal="true" aria-labelledby="title"><div class="panel__scroll"><h1 id="title">Settings</h1>
+		<section class="section"><h2>PlayStation region</h2><p>Your PS+ catalog region is it-it. Store locales are language-country.</p><div class="field">it-it</div></section>
+		<section class="section"><h2>PlayStation Plus</h2><p>You have no games claimed with PS+.</p><button class="quiet" disabled>No PS+ claims</button></section>
+		<section class="section"><div class="backup-card"><span class="eyebrow">YOUR DATA</span><h2>LIBRARY BACKUP</h2><p>Take a complete CSV copy of your catalog. Includes statuses, lifecycle dates, genres, and ownership.</p><div class="file-meta"><span>CSV</span><span>FULL LIBRARY</span><span>PRIVATE</span></div><button class="export" data-export>Export CSV</button><p class="status" aria-live="polite" data-status></p></div></section>
+		<section class="section"><h2>About &amp; Help</h2><p>Press Start is your personal game library. Search to add games and track what you own and play.</p></section>
+	</div><div class="panel__actions"><button class="quiet">Close</button></div></section>
+</div></main><script>document.querySelector('[data-export]').onclick=({currentTarget:b})=>{b.disabled=true;b.textContent='Exporting…';setTimeout(()=>{b.disabled=false;b.textContent='Export CSV';document.querySelector('[data-status]').textContent='CSV ready — mock only.'},900)}</script></body></html>

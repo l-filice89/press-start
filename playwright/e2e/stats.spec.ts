@@ -33,6 +33,24 @@ test('Stats navigation, year switching, direct load, and phone width', async ({
 		await expect(page.getByLabel('CURRENT ROUND')).toHaveValue(
 			String(currentYear),
 		);
+		const desktopTitleBox = await page
+			.getByRole('heading', { name: 'CABINET SCORE' })
+			.boundingBox();
+		const desktopSelectorBox = await page
+			.getByLabel('CURRENT ROUND')
+			.boundingBox();
+		const desktopRecapBox = await page
+			.getByRole('region', { name: 'All-time scores' })
+			.boundingBox();
+		expect(desktopTitleBox).not.toBeNull();
+		expect(desktopSelectorBox).not.toBeNull();
+		expect(desktopRecapBox).not.toBeNull();
+		expect(desktopSelectorBox?.x).toBeGreaterThan(
+			(desktopTitleBox?.x ?? 0) + (desktopTitleBox?.width ?? 0),
+		);
+		expect(desktopRecapBox?.y).toBeGreaterThan(
+			(desktopTitleBox?.y ?? 0) + (desktopTitleBox?.height ?? 0),
+		);
 
 		await page.getByLabel('CURRENT ROUND').selectOption('2024');
 		await expect(
@@ -44,6 +62,17 @@ test('Stats navigation, year switching, direct load, and phone width', async ({
 		).toBeVisible();
 		await page.setViewportSize({ width: 390, height: 844 });
 		await expect(page.getByRole('link', { name: 'STATS' })).toBeVisible();
+		const recapBox = await page
+			.getByRole('region', { name: 'All-time scores' })
+			.boundingBox();
+		const selectorBox = await page.getByLabel('CURRENT ROUND').boundingBox();
+		const roundBox = await page.locator('.stats-round').boundingBox();
+		expect(recapBox).not.toBeNull();
+		expect(selectorBox).not.toBeNull();
+		expect(roundBox).not.toBeNull();
+		expect(recapBox?.y).toBeLessThan(selectorBox?.y ?? 0);
+		expect(selectorBox?.y).toBeLessThan(roundBox?.y ?? 0);
+		await expect(page.getByRole('button', { name: 'Chores' })).toHaveCount(0);
 		expect(
 			await page.evaluate(
 				() => document.documentElement.scrollWidth <= window.innerWidth,

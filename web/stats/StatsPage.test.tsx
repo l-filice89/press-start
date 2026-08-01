@@ -120,6 +120,21 @@ describe('StatsPage', () => {
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
+	it('keeps recap before the year selector in DOM and focus order', async () => {
+		const currentYear = new Date().getFullYear();
+		renderStats([game({ id: 'ordered', owned: true })]);
+
+		const recap = await screen.findByRole('region', {
+			name: 'All-time scores',
+		});
+		const selector = screen.getByLabelText('CURRENT ROUND');
+		expect(
+			recap.compareDocumentPosition(selector) &
+				Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy();
+		expect(selector).toHaveValue(String(currentYear));
+	});
+
 	it('distinguishes a dated wishlist-only round from no dated activity', async () => {
 		const currentYear = new Date().getFullYear();
 		renderStats([game({ id: 'wish', wishlistedOn: `${currentYear}-02-01` })]);

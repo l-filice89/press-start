@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width,initial-scale=1">
+	<title>Press Start — Export Settings options</title>
+	<style>
+		* { box-sizing: border-box; }
+		body { margin: 0; padding: 28px; color: #eafaff; background: #05090f; font-family: system-ui, sans-serif; }
+		header { max-width: 1280px; margin: 0 auto 24px; }
+		h1 { margin: 0 0 8px; font-size: 24px; }
+		p { margin: 0; color: #8fb0c4; line-height: 1.5; }
+		.grid { display: grid; grid-template-columns: repeat(3, minmax(320px, 1fr)); gap: 22px; max-width: 1280px; margin: auto; overflow-x: auto; }
+		.option { overflow: hidden; border: 1px solid #163043; border-radius: 16px; background: #0a1120; }
+		.option__head { min-height: 104px; padding: 16px; border-bottom: 1px solid #163043; }
+		h2 { margin: 0 0 6px; font-size: 17px; }
+		.tag { color: #12b3ff; font: 700 11px ui-monospace, monospace; letter-spacing: .1em; }
+		iframe { display: block; width: 390px; max-width: 100%; height: 844px; margin: auto; border: 0; background: #05090f; }
+		@media (max-width: 720px) { body { padding: 16px; } .grid { grid-template-columns: 1fr; } }
+	</style>
+</head>
+<body>
+	<header><h1>Export in Settings</h1><p>Same Press Start system and copy. Only hierarchy changes. Buttons simulate pending/success locally.</p></header>
+	<main class="grid">
+		<section class="option"><div class="option__head"><span class="tag">RECOMMENDED</span><h2>A — Standard section</h2><p>Familiar, explicit, visually consistent.</p></div><iframe title="A — Standard section" src="A-standard-section.html"></iframe></section>
+		<section class="option"><div class="option__head"><span class="tag">COMPACT</span><h2>B — Action row</h2><p>Fast scan, least vertical weight.</p></div><iframe title="B — Compact action row" src="B-compact-action-row.html"></iframe></section>
+		<section class="option"><div class="option__head"><span class="tag">EMPHATIC</span><h2>C — Backup card</h2><p>Strongest durability and discoverability.</p></div><iframe title="C — Backup card" src="C-backup-card.html"></iframe></section>
+	</main>
+</body>
+</html>

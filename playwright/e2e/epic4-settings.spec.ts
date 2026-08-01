@@ -3,8 +3,8 @@ import { expect, test } from '../support/merged-fixtures';
 /**
  * The Settings surface after Epic 11 (stories 11.1/11.2): the credentialed
  * PSN flows are severed and the credential-token section is DELETED — this
- * file pins the surviving surface (region, FAB placement, PS+ claims,
- * About/Help), the absence of every credentialed entry point, and the
+ * file pins the surviving surface (region, PS+ claims, CSV backup,
+ * About/Help), the absence of every credentialed entry point and FAB, and the
  * region-save live-region announcement that used to ride the token section.
  */
 
@@ -25,8 +25,8 @@ test('Settings renders NO credential surface — the token section is gone (Epic
 	// new section cannot sneak a credential field in unnoticed.
 	await expect(panel.getByRole('heading', { level: 3 })).toHaveText([
 		'PlayStation region',
-		'FAB placement',
 		'PlayStation Plus',
+		'Keep your own copy',
 		'About & Help',
 	]);
 	await expect(panel.getByText(/token/i)).toHaveCount(0);
@@ -38,26 +38,23 @@ test('Settings renders NO credential surface — the token section is gone (Epic
 	);
 });
 
-test('the FAB drawer offers exactly Export CSV — no credentialed sync or manual check control exists (Epic 11 / Story 8.4)', async ({
+test('no destination renders a Chores FAB; Settings owns CSV export', async ({
 	page,
 }) => {
-	// The severed routes' UI entry points must be GONE, not disabled: a chores
-	// drawer with a dead item would still read as "this app can do that".
-	// Story 8.4 removed the manual PS+ check too — refreshes are automatic.
-	await page.goto('/');
+	for (const path of ['/', '/catalog', '/stats']) {
+		await page.goto(path);
+		await expect(page.getByRole('button', { name: 'Chores' })).toHaveCount(0);
+		await expect(page.getByTestId('fab')).toHaveCount(0);
+	}
 
-	const toggle = page.getByRole('button', { name: 'Chores' });
-	await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-	await toggle.click();
-
-	const drawer = page.getByTestId('fab-drawer');
-	await expect(drawer).toBeVisible();
-	await expect(page.getByTestId('fab-export')).toBeVisible();
-	// Exactly one item — nothing else can trigger anything.
-	await expect(drawer.getByRole('button')).toHaveCount(1);
-	await expect(page.getByTestId('fab-psplus-check')).toHaveCount(0);
-	await expect(page.getByTestId('fab-sync')).toHaveCount(0);
-	await expect(page.getByTestId('fab-trophy-sync')).toHaveCount(0);
+	await page.getByRole('button', { name: 'Settings' }).click();
+	const panel = page.getByTestId('settings-panel');
+	await expect(panel.getByText('DATA BACKUP')).toBeVisible();
+	await expect(
+		panel.getByRole('heading', { name: 'Keep your own copy' }),
+	).toBeVisible();
+	await expect(panel.getByTestId('settings-export')).toHaveText('Export CSV');
+	await expect(panel.getByText('FAB placement')).toHaveCount(0);
 });
 
 /*
