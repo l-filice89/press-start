@@ -1,6 +1,12 @@
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import {
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+	within,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -89,6 +95,11 @@ function renderCatalog(initialEntry = '/catalog') {
 
 afterEach(() => vi.unstubAllGlobals());
 
+async function openDesktopGenreMenu(user: ReturnType<typeof userEvent.setup>) {
+	await user.click(screen.getByRole('button', { name: /^Genre/ }));
+	return screen.getByRole('menu', { name: 'Genre filters' });
+}
+
 describe('Catalog empty states', () => {
 	it('NO REGION — the catalog is per-region, so it points into Settings', async () => {
 		mockCatalog(page({ region: null, generation: null }));
@@ -159,7 +170,10 @@ describe('Catalog filters', () => {
 		renderCatalog();
 		await screen.findByTestId('catalog-grid');
 
-		const chip = screen.getByRole('button', { name: /^Horror/ });
+		const menu = await openDesktopGenreMenu(user);
+		const chip = within(menu).getByRole('menuitemcheckbox', {
+			name: /^Horror/,
+		});
 		chip.focus();
 		await user.click(chip);
 
@@ -167,8 +181,10 @@ describe('Catalog filters', () => {
 		// and it still holds focus. (A skeleton here means the fix regressed.)
 		expect(screen.getByTestId('catalog-grid')).toBeInTheDocument();
 		expect(screen.queryByTestId('skeleton-grid')).not.toBeInTheDocument();
-		const pressed = screen.getByRole('button', { name: /^Horror/ });
-		expect(pressed).toHaveAttribute('aria-pressed', 'true');
+		const pressed = within(menu).getByRole('menuitemcheckbox', {
+			name: /^Horror/,
+		});
+		expect(pressed).toHaveAttribute('aria-checked', 'true');
 		expect(pressed).toHaveFocus();
 
 		resolveSecond?.();
@@ -201,20 +217,27 @@ describe('Catalog filters', () => {
 		);
 		renderCatalog('/catalog?genre=ARCADE');
 		const filters = await screen.findByTestId('catalog-filters');
+		const menu = await openDesktopGenreMenu(user);
 
-		// The orphaned selection renders pressed, beside the listed vocabulary…
+		// The orphaned selection renders checked, beside the listed vocabulary…
 		expect(
-			within(filters).getByRole('button', { name: genreLabel('ARCADE') }),
-		).toHaveAttribute('aria-pressed', 'true');
+			within(menu).getByRole('menuitemcheckbox', {
+				name: genreLabel('ARCADE'),
+			}),
+		).toHaveAttribute('aria-checked', 'true');
 		expect(
-			within(filters).getByRole('button', { name: /^Horror/ }),
-		).toHaveAttribute('aria-pressed', 'false');
+			within(menu).getByRole('menuitemcheckbox', { name: /^Horror/ }),
+		).toHaveAttribute('aria-checked', 'false');
 		// …and toggling it off releases the grid.
 		await user.click(
-			within(filters).getByRole('button', { name: genreLabel('ARCADE') }),
+			within(menu).getByRole('menuitemcheckbox', {
+				name: genreLabel('ARCADE'),
+			}),
 		);
 		expect(
-			within(filters).queryByRole('button', { name: genreLabel('ARCADE') }),
+			within(filters).queryByRole('menuitemcheckbox', {
+				name: genreLabel('ARCADE'),
+			}),
 		).not.toBeInTheDocument();
 	});
 
@@ -248,17 +271,29 @@ describe('Catalog filters', () => {
 		expect(within(filters).getByRole('alert')).toHaveTextContent(
 			'genre filters couldn’t load',
 		);
+		const menu = await openDesktopGenreMenu(user);
 		// The live filter has a chip…
 		expect(
-			within(filters).getByRole('button', { name: 'Horror' }),
+			within(menu).getByRole('menuitemcheckbox', { name: 'Horror' }),
+		).toHaveAttribute('aria-checked', 'true');
+		// The phone sheet carries the same failure and orphan-selection escape hatch.
+		await user.click(
+			screen.getByRole('button', { name: 'Filters — 1 active' }),
+		);
+		const sheet = screen.getByRole('dialog', { name: 'Filters' });
+		expect(within(sheet).getByRole('alert')).toHaveTextContent(
+			'genre filters couldn’t load',
+		);
+		expect(
+			within(sheet).getByRole('button', { name: 'Horror' }),
 		).toHaveAttribute('aria-pressed', 'true');
 		// …and the way out is right there.
 		await user.click(
-			within(filters).getByRole('button', { name: 'Clear genres' }),
+			within(sheet).getByRole('button', { name: 'Clear genres' }),
 		);
 		await waitFor(() =>
 			expect(
-				screen.queryByRole('button', { name: 'Clear genres' }),
+				within(sheet).queryByRole('button', { name: 'Clear genres' }),
 			).not.toBeInTheDocument(),
 		);
 	});
@@ -290,12 +325,236 @@ describe('Catalog filters', () => {
 		renderCatalog();
 		await screen.findByTestId('catalog-grid');
 
-		await user.click(screen.getByRole('button', { name: /^Horror/ }));
+		const menu = await openDesktopGenreMenu(user);
+		await user.click(
+			within(menu).getByRole('menuitemcheckbox', { name: /^Horror/ }),
+		);
 		await waitFor(() =>
 			expect(screen.getByTestId('live-region')).toHaveTextContent(
 				'1 catalog game match the current filters.',
 			),
 		);
+	});
+
+	it('the phone sheet applies live, never claims a stale count, and restores focus on close', async () => {
+		const user = userEvent.setup();
+		let resolveFiltered: (() => void) | undefined;
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (url: string) => {
+				if (url.includes('/genres')) {
+					return {
+						ok: true,
+						status: 200,
+						json: async () => ({ genres: [{ key: 'HORROR', count: 1 }] }),
+					};
+				}
+				const filtered = url.includes('genre=HORROR');
+				if (filtered) {
+					await new Promise<void>((resolve) => {
+						resolveFiltered = resolve;
+					});
+				}
+				return {
+					ok: true,
+					status: 200,
+					json: async () =>
+						filtered
+							? page({
+									total: 1,
+									snapshotTotal: 2,
+									games: [game('Crow Country')],
+								})
+							: page({
+									total: 2,
+									snapshotTotal: 2,
+									games: [game('Apex Arena'), game('Crow Country')],
+								}),
+				};
+			}),
+		);
+		renderCatalog();
+		await screen.findByTestId('catalog-grid');
+
+		const trigger = screen.getByRole('button', { name: 'Filters' });
+		await user.click(trigger);
+		const sheet = screen.getByRole('dialog', { name: 'Filters' });
+		expect(sheet).toHaveFocus();
+		expect(sheet).toHaveAttribute('aria-modal', 'true');
+		expect(document.body.style.overflow).toBe('hidden');
+
+		await user.click(within(sheet).getByRole('button', { name: /^Horror/ }));
+		expect(sheet).toBeInTheDocument();
+		expect(
+			within(sheet).getByRole('button', { name: /^Horror/ }),
+		).toHaveAttribute('aria-pressed', 'true');
+		const updating = within(sheet).getByRole('button', {
+			name: 'Close filters — updating games…',
+		});
+		expect(updating).toBeEnabled();
+		expect(within(sheet).queryByText('Show 2 games')).not.toBeInTheDocument();
+		expect(screen.getByTestId('catalog-count')).toHaveTextContent(
+			'Updating catalog games…',
+		);
+
+		resolveFiltered?.();
+		const show = await within(sheet).findByRole('button', {
+			name: 'Show 1 game',
+		});
+		await user.click(show);
+		expect(screen.queryByRole('dialog', { name: 'Filters' })).toBeNull();
+		expect(trigger).toHaveFocus();
+		expect(trigger).toHaveAccessibleName('Filters — 1 active');
+		expect(document.body.style.overflow).toBe('');
+	});
+
+	it('the phone sheet traps focus and Escape returns it to the trigger', async () => {
+		const user = userEvent.setup();
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (url: string) => ({
+				ok: true,
+				status: 200,
+				json: async () =>
+					url.includes('/genres')
+						? { genres: [{ key: 'HORROR', count: 1 }] }
+						: page({
+								total: 1,
+								snapshotTotal: 1,
+								games: [game('Crow Country')],
+							}),
+			})),
+		);
+		renderCatalog();
+		await screen.findByTestId('catalog-grid');
+		const trigger = screen.getByRole('button', { name: 'Filters' });
+		await user.click(trigger);
+		const sheet = screen.getByRole('dialog', { name: 'Filters' });
+
+		await user.tab({ shift: true });
+		expect(
+			within(sheet).getByRole('button', { name: 'Show 1 game' }),
+		).toHaveFocus();
+		await user.tab();
+		expect(
+			within(sheet).getByRole('button', { name: /^Horror/ }),
+		).toHaveFocus();
+		await user.keyboard('{Escape}');
+		expect(screen.queryByRole('dialog', { name: 'Filters' })).toBeNull();
+		expect(trigger).toHaveFocus();
+	});
+
+	it('backdrop and desktop breakpoint dismiss the phone sheet and restore scrolling', async () => {
+		const user = userEvent.setup();
+		let matches = false;
+		let mediaListener: (() => void) | undefined;
+		vi.stubGlobal(
+			'matchMedia',
+			vi.fn(() => ({
+				get matches() {
+					return matches;
+				},
+				media: '(min-width: 601px)',
+				onchange: null,
+				addEventListener: (_type: string, listener: () => void) => {
+					mediaListener = listener;
+				},
+				removeEventListener: vi.fn(),
+				addListener: vi.fn(),
+				removeListener: vi.fn(),
+				dispatchEvent: vi.fn(),
+			})),
+		);
+		mockCatalog(
+			page({ total: 1, snapshotTotal: 1, games: [game('Crow Country')] }),
+		);
+		renderCatalog();
+		await screen.findByTestId('catalog-grid');
+		const trigger = screen.getByRole('button', { name: 'Filters' });
+
+		await user.click(trigger);
+		fireEvent.mouseDown(screen.getByTestId('catalog-filter-sheet-backdrop'));
+		expect(screen.queryByRole('dialog', { name: 'Filters' })).toBeNull();
+		expect(document.body.style.overflow).toBe('');
+
+		await user.click(trigger);
+		matches = true;
+		mediaListener?.();
+		await waitFor(() =>
+			expect(screen.queryByRole('dialog', { name: 'Filters' })).toBeNull(),
+		);
+		await waitFor(() =>
+			expect(screen.getByRole('button', { name: 'Genre' })).toHaveFocus(),
+		);
+		expect(document.body.style.overflow).toBe('');
+	});
+
+	it('a desktop menu opened during genre loading focuses the first option when it arrives', async () => {
+		const user = userEvent.setup();
+		let resolveGenres: (() => void) | undefined;
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (url: string) => {
+				if (url.includes('/genres')) {
+					await new Promise<void>((resolve) => {
+						resolveGenres = resolve;
+					});
+					return {
+						ok: true,
+						status: 200,
+						json: async () => ({ genres: [{ key: 'HORROR', count: 1 }] }),
+					};
+				}
+				return {
+					ok: true,
+					status: 200,
+					json: async () =>
+						page({
+							total: 1,
+							snapshotTotal: 1,
+							games: [game('Crow Country')],
+						}),
+				};
+			}),
+		);
+		renderCatalog();
+		await screen.findByTestId('catalog-grid');
+		const menu = await openDesktopGenreMenu(user);
+		expect(within(menu).getByText('Loading genres…')).toBeInTheDocument();
+
+		resolveGenres?.();
+		const horror = await within(menu).findByRole('menuitemcheckbox', {
+			name: /^Horror/,
+		});
+		await waitFor(() => expect(horror).toHaveFocus());
+	});
+
+	it('duplicate URL values render as one effective filter and one active count', async () => {
+		const user = userEvent.setup();
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (url: string) => ({
+				ok: true,
+				status: 200,
+				json: async () =>
+					url.includes('/genres')
+						? { genres: [{ key: 'HORROR', count: 1 }] }
+						: page({
+								total: 1,
+								snapshotTotal: 1,
+								games: [game('Crow Country')],
+							}),
+			})),
+		);
+		renderCatalog('/catalog?genre=HORROR&genre=HORROR');
+		await screen.findByTestId('catalog-grid');
+		expect(
+			screen.getByRole('button', { name: 'Filters — 1 active' }),
+		).toBeInTheDocument();
+		const menu = await openDesktopGenreMenu(user);
+		expect(
+			within(menu).getAllByRole('menuitemcheckbox', { name: /^Horror/ }),
+		).toHaveLength(1);
 	});
 });
 

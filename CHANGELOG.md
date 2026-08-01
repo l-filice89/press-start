@@ -4,6 +4,22 @@ All notable changes to PRESS START are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/); this project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.1] — 2026-08-01
+
+Keep PS+ Catalog results visible sooner on narrow viewports.
+
+### Changed
+- **Responsive Catalog filters.** At 600px and below, one `Filters` button
+  opens a genre sheet whose selections and matching results update together;
+  wider layouts use one Genre dropdown instead of an inline genre wall.
+
+### Fixed
+- **Filter focus behavior.** Keyboard focus remains trapped while the sheet is
+  open, returns to its opener on close, and moves to the visible Genre control
+  when resizing to desktop; selected URL-backed genres remain active.
+- **Honest loading feedback.** Pending genre vocabulary and result totals show
+  updating text instead of presenting an empty or stale count as current.
+
 ## [3.3.0] — 2026-08-01
 
 Keep mobile Stats readable and move library backup into its permanent home.

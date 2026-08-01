@@ -177,12 +177,79 @@ test('the genre filter narrows the grid (PS-store facet keys, OR within the grou
 		await page.goto('/catalog');
 		await expect(catalogCards(page).filter({ hasText: id })).toHaveCount(3);
 
-		await page.getByRole('button', { name: /^Horror/ }).click();
+		// Desktop owns one keyboard-operable Genre menu; the old all-width wall of
+		// facet pills is gone.
+		const genreTrigger = page.getByRole('button', { name: 'Genre' });
+		await expect(genreTrigger).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Filters' })).toBeHidden();
+		await genreTrigger.focus();
+		await page.keyboard.press('ArrowDown');
+		const menu = page.getByRole('menu', { name: 'Genre filters' });
+		await expect(menu).toBeVisible();
+		await menu.getByRole('menuitemcheckbox', { name: /^Horror/ }).click();
 		const shown = catalogCards(page).filter({ hasText: id });
 		await expect(shown).toHaveCount(2);
 		await expect(shown.filter({ hasText: `Apex Arena ${id}` })).toHaveCount(0);
 		// The KEY travels in the URL, never the localized label (AD-26).
 		await expect(page).toHaveURL(/genre=HORROR/);
+	} finally {
+		await deleteCatalog(products.map((p) => p.productId));
+	}
+});
+
+test('phone catalog hides inline genres and filters live in a bottom sheet', async ({
+	page,
+}) => {
+	const id = run();
+	const products = catalogFixture(id);
+	try {
+		await page.setViewportSize({ width: 375, height: 667 });
+		await seedCatalog(products);
+		await page.goto('/catalog');
+		await expect(catalogCards(page).filter({ hasText: id })).toHaveCount(3);
+
+		// One compact entry point occupies the phone filter row. Desktop menu is
+		// still in the DOM for CSS responsiveness, but cannot be seen or operated.
+		const trigger = page.getByRole('button', { name: 'Filters' });
+		await expect(trigger).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Genre' })).toBeHidden();
+		await trigger.click();
+
+		const sheet = page.getByRole('dialog', { name: 'Filters' });
+		await expect(sheet).toBeVisible();
+		await expect(sheet).toHaveAttribute('aria-modal', 'true');
+		await sheet.getByRole('button', { name: /^Horror/ }).click();
+
+		// Selection applies without closing the sheet. The PS-store FACET KEY,
+		// never its localized label, remains URL-backed and narrows the live grid.
+		await expect(sheet).toBeVisible();
+		await expect(page).toHaveURL(/genre=HORROR/);
+		const shown = catalogCards(page).filter({ hasText: id });
+		await expect(shown).toHaveCount(2);
+		await expect(shown.filter({ hasText: `Apex Arena ${id}` })).toHaveCount(0);
+		await expect(
+			sheet.getByRole('button', { name: 'Show 2 games' }),
+		).toBeVisible();
+
+		await sheet.getByRole('button', { name: 'Show 2 games' }).click();
+		await expect(sheet).toHaveCount(0);
+		const activeTrigger = page.getByRole('button', {
+			name: 'Filters — 1 active',
+		});
+		await expect(activeTrigger).toBeVisible();
+		await expect(activeTrigger).toBeFocused();
+
+		// Crossing the shared 600px breakpoint dismisses stale phone chrome and
+		// hands focus to the desktop control that becomes authoritative.
+		await activeTrigger.click();
+		await expect(page.getByRole('dialog', { name: 'Filters' })).toBeVisible();
+		await page.setViewportSize({ width: 800, height: 667 });
+		await expect(page.getByRole('dialog', { name: 'Filters' })).toHaveCount(0);
+		const desktopGenre = page.getByRole('button', {
+			name: 'Genre — 1 selected',
+		});
+		await expect(desktopGenre).toBeVisible();
+		await expect(desktopGenre).toBeFocused();
 	} finally {
 		await deleteCatalog(products.map((p) => p.productId));
 	}
