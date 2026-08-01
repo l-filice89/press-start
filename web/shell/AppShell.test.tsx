@@ -149,6 +149,21 @@ describe('AppShell attention banners (Story 10.1, FR-40)', () => {
 });
 
 describe('AppShell destinations', () => {
+	it('renders Stats as a real destination without the search slot', async () => {
+		mockApi();
+		renderShell(['/stats']);
+
+		expect(
+			await screen.findByRole('heading', { name: 'CABINET SCORE' }),
+		).toBeInTheDocument();
+		expect(screen.getByText('NO DATED ACTIVITY')).toBeInTheDocument();
+		expect(screen.getByRole('link', { name: 'STATS' })).toHaveAttribute(
+			'aria-current',
+			'page',
+		);
+		expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
+	});
+
 	it('renders the CATALOG behind a detail opened from the catalog — never the shelf', async () => {
 		mockApi();
 		renderShell(['/catalog', detailOver('/catalog')]);

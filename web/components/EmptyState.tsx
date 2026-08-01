@@ -15,6 +15,7 @@ type EmptyVariant =
 	| 'no-match'
 	| 'no-region'
 	| 'empty-catalog'
+	| 'stats-empty'
 	| 'game-not-found'
 	| 'page-not-found';
 
@@ -42,6 +43,10 @@ const COPY: Record<EmptyVariant, { headline: string; subtext: string }> = {
 		// stale-snapshot guard fill this; there is no button to offer.
 		subtext:
 			'The catalog for your region updates automatically — check back soon.',
+	},
+	'stats-empty': {
+		headline: 'INSERT GAMES',
+		subtext: 'Track your first game to light up the cabinet scoreboard.',
 	},
 	// A resolved 404 on `/game/:id` (Story 7.2 review, H4). It is NOT `no-match`:
 	// no filter is involved, and "no games match the current filters" on a pasted
