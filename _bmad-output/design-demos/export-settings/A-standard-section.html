@@ -1,0 +1,13 @@
+<!doctype html>
+<!-- Assumptions: safest hierarchy; export is a peer Settings section after PS+ and before About. Interactive state is illustrative only. -->
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Export Settings — A Standard Section</title><link rel="stylesheet" href="mock.css"></head>
+<body><main class="stage a"><p class="direction">A / STANDARD SECTION · FORM FROM EXISTING SETTINGS RHYTHM</p><div class="phone">
+	<div class="app-behind"><div class="wordmark">PRESS START</div><div class="nav"><span>SHELF</span><span>CATALOG</span><span>STATS</span></div></div><div class="scrim"></div>
+	<section class="panel" role="dialog" aria-modal="true" aria-labelledby="title"><div class="panel__scroll"><h1 id="title">Settings</h1>
+		<section class="section"><h2>PlayStation region</h2><p>Your PS+ catalog region is it-it. Store locales are language-country.</p><div class="field">it-it</div></section>
+		<section class="section"><h2>PlayStation Plus</h2><p>You have no games claimed with PS+.</p><button class="quiet" disabled>No PS+ claims</button></section>
+		<section class="section export-section"><span class="eyebrow">DATA BACKUP</span><h2>Keep your own copy</h2><p>Download your complete library as CSV, including statuses, dates, genres, and ownership.</p><button class="export" data-export>Export CSV</button><p class="status" aria-live="polite" data-status></p></section>
+		<section class="section"><h2>About &amp; Help</h2><p>Press Start is your personal game library. Search to add games and track what you own and play.</p></section>
+	</div><div class="panel__actions"><button class="quiet">Close</button></div></section>
+</div></main><script>document.querySelector('[data-export]').onclick=({currentTarget:b})=>{b.disabled=true;b.textContent='Exporting…';setTimeout(()=>{b.disabled=false;b.textContent='Export CSV';document.querySelector('[data-status]').textContent='CSV ready — mock only.'},900)}</script></body></html>
+

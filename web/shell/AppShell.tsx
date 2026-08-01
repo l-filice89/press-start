@@ -14,7 +14,6 @@ import { Shelf } from '../shelf/Shelf';
 import { StragglersDialog } from '../shelf/StragglersDialog';
 import { StatsPage } from '../stats/StatsPage';
 import { Background } from './Background';
-import { Fab } from './Fab';
 import { Header } from './Header';
 import './app-shell.css';
 
@@ -101,8 +100,8 @@ export function AppShell({
 						}}
 					/>
 				)}
-				{/* Only <main> swaps between destinations (AD-25): the header, the
-				    banners, the toast host, the FAB, and every modal are SHARED chrome
+				{/* Only <main> swaps between destinations (AD-25): the header,
+				    banners, toast host, and every modal are SHARED chrome
 				    that surfaces OVER whichever destination is active.
 				    The routes render against the BACKGROUND location when a detail was
 				    opened from inside the app — react-router's background-location
@@ -144,7 +143,6 @@ export function AppShell({
 					<GameDetailRoute />
 				</main>
 			</div>
-			<Fab handedness={settings?.fabHandedness ?? 'right'} />
 			{settingsOpen && <SettingsPanel onClose={() => setSettingsOpen(false)} />}
 			{stragglersOpen && (
 				<StragglersDialog onClose={() => setStragglersOpen(false)} />

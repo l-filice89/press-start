@@ -561,3 +561,7 @@ resolution: done 2026-07-16 (Story 10.2) — DECIDED: `first_seen_at` keeps its 
 - source_spec: `_bmad-output/implementation-artifacts/spec-release-date-display-edit.md`
   summary: After a rejected date PATCH, every DateRow keeps showing the unsaved draft as if stored (the useEffect only re-seeds when the server value changes).
   evidence: `web/shelf/DetailPanel.tsx` DateRow + the dates/release-date mutations' onError paths toast but never reset the draft; pre-existing for the five lifecycle rows, now also true of the shared release-date row where the stale display misrepresents other users' reality too.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-mobile-stats-fab-export-cleanup.md`
+  summary: Pre-existing UX and coverage prose still describes a two-destination shell and a retired manual PS+ refresh button.
+  evidence: `DESIGN.md` still says the header switches two destinations despite Stats, while `playwright/COVERAGE.md` row 5.2b still claims button parity after manual PS+ refresh was removed before this story.

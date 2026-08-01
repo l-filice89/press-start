@@ -5,12 +5,17 @@
 	margin: 0 auto;
 }
 
-.stats-hero,
 .stats-section-heading--inline {
 	display: flex;
 	align-items: flex-end;
 	justify-content: space-between;
 	gap: var(--space-4);
+}
+
+.stats-overview {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: var(--space-5);
 }
 
 .stats-eyebrow,
@@ -57,6 +62,22 @@
 	display: grid;
 	grid-template-columns: repeat(4, minmax(0, 1fr));
 	gap: var(--space-3);
+}
+
+.stats-hero {
+	grid-column: 1;
+	grid-row: 1;
+}
+
+.stats-overview > .stats-scoreboards {
+	grid-column: 1 / -1;
+	grid-row: 2;
+}
+
+.stats-overview > .stats-year {
+	grid-column: 2;
+	grid-row: 1;
+	align-self: end;
 }
 
 .stats-scoreboard,
@@ -378,21 +399,27 @@
 	.stats-page {
 		gap: var(--space-4);
 	}
-	.stats-hero {
-		align-items: stretch;
-		flex-direction: column;
+	.stats-overview {
+		grid-template-columns: minmax(0, 1fr);
+		gap: var(--space-4);
+	}
+	.stats-hero,
+	.stats-overview > .stats-scoreboards,
+	.stats-overview > .stats-year {
+		grid-column: 1;
+		grid-row: auto;
 	}
 	.stats-hero h1 {
 		font-size: 26px;
 	}
-	.stats-year {
+	.stats-overview > .stats-year {
 		width: 100%;
 	}
 	.stats-year select {
 		width: 100%;
 		min-width: 112px;
 	}
-	.stats-scoreboards {
+	.stats-overview > .stats-scoreboards {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: var(--space-2);
 	}

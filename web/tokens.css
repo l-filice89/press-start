@@ -99,7 +99,6 @@
 	--z-content: 1;
 	--z-header: 10;
 	--z-banner: 20;
-	--z-fab: 30;
 	--z-overlay: 40; /* modals, popovers, sheets */
 	--z-toast: 50;
 }

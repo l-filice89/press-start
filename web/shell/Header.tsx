@@ -154,8 +154,7 @@ export function Header({
 					</span>
 				)}
 
-				{/* Settings entry point (Story 4.1) — Epic 6 relocates this into
-				    the FAB drawer's gear; the header button is the interim home. */}
+				{/* Permanent Settings entry point (Story 4.1). */}
 				{onOpenSettings && (
 					<button
 						type="button"

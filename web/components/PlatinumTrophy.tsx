@@ -5,7 +5,7 @@ import type { SVGProps } from 'react';
  * style (the emoji renders full-color gold and a grayscale filter reads flat
  * against the glow language). `currentColor` strokes so the caller's colour +
  * glow apply; the small diamond in the cup echoes the owned ◆. Renders the
- * card's platinum badge (its FAB trophy-sync sibling died with Epic 11).
+ * card's platinum badge.
  * Spread props onto the `<svg>` so a caller can add its own `data-testid`.
  */
 export function PlatinumTrophy(props: SVGProps<SVGSVGElement>) {

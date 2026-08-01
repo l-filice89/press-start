@@ -36,20 +36,6 @@ export async function getUserTimeZone(
 	return (await getSetting(db, userId, TIMEZONE_SETTING_KEY)) ?? null;
 }
 
-/** FAB placement (Story 6.3, UX-DR10): `'left'`|`'right'`, absent = `'right'`. */
-export const FAB_HANDEDNESS_SETTING_KEY = 'fab_handedness';
-export type FabHandedness = 'left' | 'right';
-
-/** This user's FAB handedness; defaults to right-handed when unset. */
-export async function readFabHandedness(
-	db: Db,
-	userId: string,
-): Promise<FabHandedness> {
-	return (await getSetting(db, userId, FAB_HANDEDNESS_SETTING_KEY)) === 'left'
-		? 'left'
-		: 'right';
-}
-
 /**
  * PSN store region (Story 5.1, AR-18/23): the locale the PS+ Extra catalog is
  * checked against. `SETTING` wins; the `PSN_REGION` Wrangler var only seeds —

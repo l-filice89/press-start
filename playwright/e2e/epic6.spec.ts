@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import { createGame, type SeedGame } from '../support/factories/game-factory';
 import {
@@ -530,20 +529,21 @@ test('stragglers: Ignore an import row is confirm-gated and hard-deletes the sta
 	}
 });
 
-test('Export CSV: the FAB item downloads the library as a CSV file (6.3)', async ({
+test('Export CSV: Settings downloads the library as a CSV file (6.3)', async ({
 	page,
 }) => {
 	await page.goto('/');
-	await page.getByRole('button', { name: 'Chores' }).click();
+	const response = await page.request.get('/api/export.csv');
+	expect(response.ok()).toBe(true);
+	expect(response.headers()['content-type']).toContain('text/csv');
+	expect(await response.text()).toContain('Title,State,');
+	await page.getByRole('button', { name: 'Settings' }).click();
 
 	const [download] = await Promise.all([
 		page.waitForEvent('download'),
-		page.getByTestId('fab-export').click(),
+		page.getByTestId('settings-export').click(),
 	]);
 	expect(download.suggestedFilename()).toBe('press-start-library.csv');
-	// The body is real CSV, not an error payload saved under a .csv name.
-	const content = await readFile((await download.path()) as string, 'utf-8');
-	expect(content.startsWith('Title,State,')).toBe(true);
 });
 
 test('Settings: About/Help is available; sign-out lives in the header (6.3)', async ({
@@ -917,24 +917,6 @@ test.describe('Story 6.4 ownership source', () => {
 			await deleteGames([claim.id, essential.id]);
 		}
 	});
-});
-
-test('Settings: FAB handedness moves the button and persists across a reload (6.3)', async ({
-	page,
-}) => {
-	await page.goto('/');
-	await page.getByRole('button', { name: 'Settings' }).click();
-	await page.getByTestId('handedness-left').click();
-	// The FAB moves to the left immediately.
-	await expect(page.getByTestId('fab')).toHaveClass(/fab--left/);
-
-	await page.reload();
-	await expect(page.getByTestId('fab')).toHaveClass(/fab--left/);
-
-	// Reset to the default so a shared-DB sibling test isn't left left-handed.
-	await page.getByRole('button', { name: 'Settings' }).click();
-	await page.getByTestId('handedness-right').click();
-	await expect(page.getByTestId('fab')).not.toHaveClass(/fab--left/);
 });
 
 /**

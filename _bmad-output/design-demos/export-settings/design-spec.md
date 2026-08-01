@@ -1,0 +1,14 @@
+# Export in Settings — direction brief
+
+This mock answers one placement decision inside the existing Press Start product: how CSV export should appear after the global floating action button is removed. It is not a redesign of Settings, navigation, branding, or CSV behavior. Primary audience is the product owner, reviewing a phone-first interface before approving implementation. Secondary audience is the implementation agent, which needs an unambiguous hierarchy, label, progress state, and failure posture.
+
+The context is unusually strong: production React/CSS, design tokens, typography, modal dimensions, screenshots, and the completed export story already exist. All directions therefore preserve the established near-black surface, cyan interactive accent, magenta lifecycle accent, hairline section dividers, Rajdhani-like condensed headings, Inter-like body copy, and monospace operational labels. No external imagery is useful; this is a utility surface where an image would add decoration rather than information.
+
+Shared content: Settings title; PlayStation region control; PlayStation Plus claim management; a new data-backup affordance; About & Help; Close. Export copy must state what the file contains without becoming a schema dump: complete library, statuses, dates, genres, and ownership. Control label is “Export CSV.” Pending label is “Exporting…” and disables repeat activation. Production failure will use existing toast copy, “Export failed — try again later,” and must never save a non-CSV error response.
+
+Output is a 390×844 phone viewport. Modal width and scrolling mirror the existing `28rem` cap and phone gutters. Each direction is a working HTML mock whose export button cycles through pending and success for inspection; it does not call a backend. Text stays at least 14px for body copy and 12px for labels. Controls meet a 44px target. Focus rings remain cyan and visible. No FAB appears behind or above the modal.
+
+Three hierarchy questions are explored. Direction A asks whether export should be a normal peer section: familiar, calm, and consistent with the rest of Settings. Direction B asks whether export works better as a compact utility row: less scrolling and a faster scan, but lower explanatory capacity. Direction C asks whether backup deserves a stronger “safety” card: clearest durability message and strongest call to action, but visually heavier than existing Settings sections.
+
+Form answers: narrative role is maintenance action; viewing distance is 10cm phone; temperature is calm and trustworthy; capacity is one short paragraph plus one action; motif is a user-held backup copy, expressed through hierarchy and filename—not decorative archive imagery. The final direction should feel native to Press Start, remain understandable without an icon, and avoid turning a routine export into an alarming destructive operation.
+

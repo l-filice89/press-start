@@ -12,6 +12,7 @@ import {
 	listLibraryForUser,
 	recordRegionOutcome,
 	releaseRegionLock,
+	setSetting,
 	upsertCatalogProducts,
 	upsertTracking,
 } from '../../src/repositories';
@@ -95,7 +96,6 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 			psPlusRefreshedAt: null,
 			scoresRefreshFailed: false,
 			stragglerCount: 0,
-			fabHandedness: 'right',
 			psPlusClaimCount: 0,
 			// The GET above already read the region through `getPsnRegion`, which
 			// seeds (and persists) the test env's `PSN_REGION` var.
@@ -259,30 +259,21 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 		expect(body.psPlusRefreshedAt).toBe('2026-07-10');
 	});
 
-	it('FAB handedness: defaults right, PUT persists, bad value 400 (Story 6.3)', async () => {
-		// Default when unset.
-		const other = 'handedness-fresh-user';
-		const { readFabHandedness } = await import('../../src/services/settings');
-		expect(await readFabHandedness(db(), other)).toBe('right');
+	it('ignores a legacy FAB setting and leaves its removed endpoint dead', async () => {
+		await setSetting(db(), userId, 'fab_handedness', 'left');
+		const body = (await (
+			await appFetch('/api/settings', { headers: { cookie } })
+		).json()) as Record<string, unknown>;
+		expect(body).not.toHaveProperty('fabHandedness');
+		expect(await getSetting(db(), userId, 'fab_handedness')).toBe('left');
 
-		// PUT persists and rides the GET payload.
 		const put = await appFetch('/api/settings/fab-handedness', {
 			method: 'PUT',
 			headers: { 'content-type': 'application/json', cookie },
 			body: JSON.stringify({ handedness: 'left' }),
 		});
-		expect(put.status).toBe(200);
-		expect(
-			await (await appFetch('/api/settings', { headers: { cookie } })).json(),
-		).toMatchObject({ fabHandedness: 'left' });
-
-		// Bad value rejected at the boundary.
-		const bad = await appFetch('/api/settings/fab-handedness', {
-			method: 'PUT',
-			headers: { 'content-type': 'application/json', cookie },
-			body: JSON.stringify({ handedness: 'sideways' }),
-		});
-		expect(bad.status).toBe(400);
+		expect(put.status).toBe(404);
+		expect(await getSetting(db(), userId, 'fab_handedness')).toBe('left');
 	});
 
 	it('cancel PS+ with no claims is an inert no-op (0-claim matrix row)', async () => {

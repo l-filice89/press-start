@@ -4,6 +4,19 @@ All notable changes to PRESS START are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/); this project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] — 2026-08-01
+
+Keep mobile Stats readable and move library backup into its permanent home.
+
+### Changed
+- **Mobile Stats reading order.** All-time recap cards now appear before the
+  year selector on phones, while desktop keeps the selector beside the title.
+- **CSV export moved to Settings.** `DATA BACKUP / Keep your own copy` now owns
+  the export action, with progress, failure feedback, response validation, and
+  cancellation when Settings closes.
+- **FAB retired.** The one-action Chores FAB and its handedness setting/API are
+  removed from Shelf, Catalog, and Stats; harmless legacy setting rows remain.
+
 ## [3.2.0] — 2026-08-01
 
 Reflect on your gaming history through a compact cabinet-style scoreboard.

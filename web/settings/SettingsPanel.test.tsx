@@ -3,12 +3,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ToastHost } from '../components/Toast';
 import { SettingsPanel } from './SettingsPanel';
 
 /**
  * Settings panel (Story 4.1, stripped of the PSN credential surface by Epic 11
- * story 11.2): region, FAB placement, PS+ claims, About/Help — and nothing
- * credentialed renders at all.
+ * story 11.2): region, PS+ claims, CSV backup, About/Help — and nothing
+ * credentialed or FAB-shaped renders at all.
  */
 
 function mockFetch(settings: { region?: string; psPlusClaimCount?: number }) {
@@ -29,13 +30,18 @@ function renderPanel(onClose = vi.fn()) {
 	});
 	render(
 		<QueryClientProvider client={client}>
-			<SettingsPanel onClose={onClose} />
+			<ToastHost>
+				<SettingsPanel onClose={onClose} />
+			</ToastHost>
 		</QueryClientProvider>,
 	);
 	return { onClose };
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+	vi.restoreAllMocks();
+	vi.unstubAllGlobals();
+});
 
 describe('SettingsPanel', () => {
 	it('renders NO credential surface — the PSN token section is gone (Epic 11, 11.2)', async () => {
@@ -48,8 +54,8 @@ describe('SettingsPanel', () => {
 			screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent),
 		).toEqual([
 			'PlayStation region',
-			'FAB placement',
 			'PlayStation Plus',
+			'Keep your own copy',
 			'About & Help',
 		]);
 		expect(screen.queryByText(/token/i)).toBeNull();
@@ -206,7 +212,9 @@ describe('SettingsPanel', () => {
 		// dialog's role="status" here when the token section died) — the a11y
 		// announcement path, not just visible text.
 		await waitFor(() =>
-			expect(screen.getByRole('status')).toHaveTextContent('Region saved.'),
+			expect(screen.getByTestId('psn-region-feedback')).toHaveTextContent(
+				'Region saved.',
+			),
 		);
 		const put = fetchMock.mock.calls.find(([url]) =>
 			String(url).includes('/api/settings/psn-region'),
@@ -223,23 +231,177 @@ describe('SettingsPanel', () => {
 		);
 	});
 
-	it('toggles FAB handedness, PUTting the chosen side (Story 6.3, UX-DR10)', async () => {
-		const fetchMock = mockFetch({});
+	it('exports a successful CSV with progress and the expected filename', async () => {
+		let finishExport: ((value: unknown) => void) | undefined;
+		const exportResponse = new Promise((resolve) => {
+			finishExport = resolve;
+		});
+		const blob = new Blob(['title,status\nGame,Playing']);
+		const fetchMock = vi.fn(async (url: string | URL | Request) => {
+			if (String(url).includes('/api/export.csv')) return exportResponse;
+			return {
+				ok: true,
+				status: 200,
+				json: async () => ({ timezone: null }),
+			};
+		});
+		vi.stubGlobal('fetch', fetchMock);
+		const createObjectURL = vi.fn(() => 'blob:library');
+		const revokeObjectURL = vi.fn();
+		vi.stubGlobal('URL', { createObjectURL, revokeObjectURL });
+		const click = vi
+			.spyOn(HTMLAnchorElement.prototype, 'click')
+			.mockImplementation(() => {});
 		renderPanel();
 
-		// Default right is pressed; picking left PUTs left.
-		await waitFor(() =>
-			expect(screen.getByTestId('handedness-right')).toHaveAttribute(
-				'aria-pressed',
-				'true',
-			),
+		const button = await screen.findByTestId('settings-export');
+		await userEvent.click(button);
+		expect(button).toBeDisabled();
+		expect(button).toHaveTextContent('Exporting…');
+		expect(screen.getByText('Exporting your library.')).toHaveAttribute(
+			'aria-live',
+			'polite',
 		);
-		await userEvent.click(screen.getByTestId('handedness-left'));
-		await waitFor(() =>
-			expect(fetchMock).toHaveBeenCalledWith(
-				'/api/settings/fab-handedness',
-				expect.objectContaining({ method: 'PUT' }),
-			),
+		finishExport?.({
+			ok: true,
+			status: 200,
+			headers: new Headers({ 'content-type': 'text/csv; charset=utf-8' }),
+			blob: async () => blob,
+		});
+
+		await waitFor(() => expect(button).toHaveTextContent('Export CSV'));
+		expect(createObjectURL).toHaveBeenCalledWith(blob);
+		expect(click).toHaveBeenCalledTimes(1);
+		await waitFor(
+			() => expect(revokeObjectURL).toHaveBeenCalledWith('blob:library'),
+			{ timeout: 2_000 },
 		);
+		expect(
+			fetchMock.mock.calls.some(([url]) =>
+				String(url).includes('/api/export.csv'),
+			),
+		).toBe(true);
+	});
+
+	it('shows a retryable toast and saves nothing when export fails', async () => {
+		const fetchMock = vi.fn(async (url: string | URL | Request) => {
+			if (String(url).includes('/api/export.csv')) {
+				return { ok: false, status: 503 };
+			}
+			return {
+				ok: true,
+				status: 200,
+				json: async () => ({ timezone: null }),
+			};
+		});
+		vi.stubGlobal('fetch', fetchMock);
+		const createObjectURL = vi.fn();
+		vi.stubGlobal('URL', { createObjectURL, revokeObjectURL: vi.fn() });
+		const click = vi
+			.spyOn(HTMLAnchorElement.prototype, 'click')
+			.mockImplementation(() => {});
+		renderPanel();
+
+		await userEvent.click(await screen.findByTestId('settings-export'));
+
+		expect(
+			await screen.findByText('Export failed — try again later.'),
+		).toBeInTheDocument();
+		expect(screen.getByTestId('settings-export')).toBeEnabled();
+		expect(createObjectURL).not.toHaveBeenCalled();
+		expect(click).not.toHaveBeenCalled();
+	});
+
+	it('rejects a successful response that is not CSV', async () => {
+		const fetchMock = vi.fn(async (url: string | URL | Request) => {
+			if (String(url).includes('/api/export.csv')) {
+				return {
+					ok: true,
+					status: 200,
+					headers: new Headers({ 'content-type': 'text/html' }),
+					blob: async () => new Blob(['<html>sign in</html>']),
+				};
+			}
+			return {
+				ok: true,
+				status: 200,
+				json: async () => ({ timezone: null }),
+			};
+		});
+		vi.stubGlobal('fetch', fetchMock);
+		const createObjectURL = vi.fn();
+		vi.stubGlobal('URL', { createObjectURL, revokeObjectURL: vi.fn() });
+		const click = vi
+			.spyOn(HTMLAnchorElement.prototype, 'click')
+			.mockImplementation(() => {});
+		renderPanel();
+
+		await userEvent.click(await screen.findByTestId('settings-export'));
+
+		expect(
+			await screen.findByText('Export failed — try again later.'),
+		).toBeInTheDocument();
+		expect(createObjectURL).not.toHaveBeenCalled();
+		expect(click).not.toHaveBeenCalled();
+	});
+
+	it('shows a retryable toast and saves nothing when the export request rejects', async () => {
+		const fetchMock = vi.fn(async (url: string | URL | Request) => {
+			if (String(url).includes('/api/export.csv')) {
+				throw new TypeError('network unavailable');
+			}
+			return {
+				ok: true,
+				status: 200,
+				json: async () => ({ timezone: null }),
+			};
+		});
+		vi.stubGlobal('fetch', fetchMock);
+		const createObjectURL = vi.fn();
+		vi.stubGlobal('URL', { createObjectURL, revokeObjectURL: vi.fn() });
+		const click = vi
+			.spyOn(HTMLAnchorElement.prototype, 'click')
+			.mockImplementation(() => {});
+		renderPanel();
+
+		await userEvent.click(await screen.findByTestId('settings-export'));
+
+		expect(
+			await screen.findByText('Export failed — try again later.'),
+		).toBeInTheDocument();
+		expect(screen.getByTestId('settings-export')).toBeEnabled();
+		expect(createObjectURL).not.toHaveBeenCalled();
+		expect(click).not.toHaveBeenCalled();
+	});
+
+	it('aborts an in-flight export when Settings closes', async () => {
+		const fetchMock = vi.fn(
+			async (url: string | URL | Request, init?: RequestInit) => {
+				if (String(url).includes('/api/export.csv')) {
+					return new Promise((_resolve, reject) => {
+						init?.signal?.addEventListener('abort', () =>
+							reject(new DOMException('aborted', 'AbortError')),
+						);
+					});
+				}
+				return {
+					ok: true,
+					status: 200,
+					json: async () => ({ timezone: null }),
+				};
+			},
+		);
+		vi.stubGlobal('fetch', fetchMock);
+		const { onClose } = renderPanel();
+
+		await userEvent.click(await screen.findByTestId('settings-export'));
+		await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+		expect(onClose).toHaveBeenCalledTimes(1);
+		const exportCall = fetchMock.mock.calls.find(([url]) =>
+			String(url).includes('/api/export.csv'),
+		);
+		expect(exportCall?.[1]?.signal?.aborted).toBe(true);
+		expect(screen.queryByText('Export failed — try again later.')).toBeNull();
 	});
 });
