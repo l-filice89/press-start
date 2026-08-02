@@ -2,7 +2,7 @@
 title: 'Story 13.2: Tune recommendations intentionally'
 type: 'feature'
 created: '2026-08-02'
-status: 'blocked'
+status: 'draft'
 review_loop_iteration: 0
 followup_review_recommended: false
 context:
@@ -93,7 +93,7 @@ Eligibility adds `wishlisted`: terminal/platinum/future rules stay absolute. Bas
 
 ARIA pattern: semantic `fieldset`/`legend`; deselectable exclusive buttons use `aria-pressed`; native checkbox for wishlist; disclosure button exposes `aria-expanded`/`aria-controls`. Applied summary remains separate from draft indicator. `Show me 3` stays focused and uses existing polite live-region provider.
 
-Placement mock: `_bmad-output/design-demos/epic-13-play-next/05-story-13-2-tune-modal.html`. Direction is an iteration of Luca-approved Option A; it does not reopen direction selection. Supersedes the rejected inline/below-controls structure in `04-story-13-2-tune-expanded.html`. Approval: **PENDING Story 13.2-specific sign-off.**
+Placement mock: `_bmad-output/design-demos/epic-13-play-next/05-story-13-2-tune-modal.html`. Direction is an iteration of Luca-approved Option A; it does not reopen direction selection. Supersedes the rejected inline/below-controls structure in `04-story-13-2-tune-expanded.html`. Approval received verbatim on 2026-08-02: `Use this as a mock: [05-story-13-2-tune-modal.html](_bmad-output/design-demos/epic-13-play-next/05-story-13-2-tune-modal.html)`. The app-aligned mock is binding for UI implementation.
 
 ## Verification
 
@@ -107,3 +107,6 @@ Placement mock: `_bmad-output/design-demos/epic-13-play-next/05-story-13-2-tune-
 
 Status: blocked
 Blocking condition: UI-MOCK-GATE approval missing for revised Story 13.2 Tune modal and Shelf/Catalog-aligned cards. Luca must explicitly approve `_bmad-output/design-demos/epic-13-play-next/05-story-13-2-tune-modal.html` before UI implementation.
+
+Resumed: 2026-08-02
+UI-MOCK-GATE: approved. Continue from readiness validation.

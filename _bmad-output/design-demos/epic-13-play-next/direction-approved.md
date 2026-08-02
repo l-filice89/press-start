@@ -66,3 +66,23 @@ Applied interpretation:
   placement, `◆/◇` ownership control, `▹` fallback, and compact fact strip.
 
 Status: pending Luca's explicit approval of revised Story 13.2 modal iteration.
+
+## Story 13.2 app-alignment pass — 2026-08-02
+
+`05-story-13-2-tune-modal.html` revised to copy shipped app values verbatim
+instead of approximating them: tokens from `web/tokens.css`, shell from
+`web/shell/header.css`, page header from Story 13.1 `web/play-next/play-next.css`,
+cover/flags/owned toggle from `web/shelf/card.css` (plain `PS+` flag text,
+borderless flags, dormant-tint `▹`, 22px chip in 44px hit area), and the Tune
+modal from `web/shelf/filter-row.css` (sheet-trigger grammar for the trigger,
+group label carries the logic in words, option pills + `SHOW ME 3` reuse the
+filter-sheet active treatment). Screenshots regenerated. Approval status
+unchanged: still pending.
+
+## Story 13.2 final mock approval — verbatim
+
+> Use this as a mock: [05-story-13-2-tune-modal.html](_bmad-output/design-demos/epic-13-play-next/05-story-13-2-tune-modal.html)
+
+Status: approved by Luca on 2026-08-02 for Story 13.2 UI implementation.
+The app-aligned `05-story-13-2-tune-modal.html` is binding implementation
+reference for Tune modal structure and suggestion-card cover composition.
