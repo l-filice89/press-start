@@ -2,8 +2,9 @@
 title: 'Story 13.2: Tune recommendations intentionally'
 type: 'feature'
 created: '2026-08-02'
-status: 'in-review'
+status: 'done'
 baseline_revision: 'f854622'
+final_revision: '56dd11d'
 review_loop_iteration: 0
 followup_review_recommended: true
 context:
@@ -129,7 +130,7 @@ Placement mock: `_bmad-output/design-demos/epic-13-play-next/05-story-13-2-tune-
 
 ## Auto Run Result
 
-Status: implementation verified; completion metadata pending commit revision
+Status: done
 
 Summary: shipped ephemeral Tune draft/applied state, conjunctive exact-first intent matching with closest fallback, wishlist discovery, explicit Finish behavior, approved Shelf/Catalog-style modal, and app-aligned suggestion covers with guarded ownership controls.
 
