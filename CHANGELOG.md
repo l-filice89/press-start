@@ -4,6 +4,20 @@ All notable changes to PRESS START are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/); this project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.2] — 2026-08-02
+
+Keep upcoming game release dates aligned with IGDB.
+
+### Changed
+- **Scheduled release-date refresh.** The existing weekly-effective IGDB score
+  pass now updates release dates too, using the same batched `/games` response
+  with no extra cron trigger or provider request.
+
+### Fixed
+- **Safe date convergence.** Rescheduled dates update automatically and dates
+  withdrawn by IGDB return to TBA; omitted games and failed or degenerate
+  replies preserve standing dates and retry through the existing failure path.
+
 ## [3.3.1] — 2026-08-01
 
 Keep PS+ Catalog results visible sooner on narrow viewports.
