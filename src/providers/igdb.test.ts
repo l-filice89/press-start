@@ -207,14 +207,15 @@ describe('createIgdbProvider.fetchScoresByIds (Story 10.1 refresh fetch)', () =>
 		});
 		const rows = await provider().fetchScoresByIds(['113112', '42']);
 		expect(rows).toEqual([
-			{ igdbId: '113112', ...HADES_SCORES },
-			{ igdbId: '42', ...NO_SCORES },
+			{ igdbId: '113112', releaseDate: '2020-09-17', ...HADES_SCORES },
+			{ igdbId: '42', releaseDate: null, ...NO_SCORES },
 		]);
 		const gamesCalls = m.mock.calls.filter((c) => !isTokenUrl(c[0]));
 		expect(gamesCalls).toHaveLength(1); // 2 ids, ONE subrequest
 		const body = String((gamesCalls[0]?.[1] as RequestInit).body);
 		expect(body).toContain('where id = (113112,42);');
 		expect(body).toContain('limit 500;');
+		expect(body).toContain('first_release_date');
 		// A refresh must not re-filter by game_type: an anchored id is trusted.
 		expect(body).not.toContain('game_type');
 	});

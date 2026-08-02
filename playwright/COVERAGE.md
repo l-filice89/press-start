@@ -465,3 +465,9 @@ bump-all ETag rotation).
 | Unreleased card shows the formatted date pill, never SOON; TBA when dateless | `release-date.spec.ts` › unreleased card shows the formatted release date, editable from the detail panel; TBA/date/released branches + year formatting jsdom-pinned in `Card.test.tsx` › flags TBA when unreleased with no date… + › shows no release flag once released |
 | Detail panel shows/edits/clears the release date; value persists | `release-date.spec.ts` (edit → toast → pill re-bakes → survives reload); blur-commit + null-clear + own-route wiring jsdom-pinned in `DetailPanel.test.tsx` › saving the release date PATCHes its own route… + › clearing the release date sends null; route matrix (200/null-clear/400s/404s) in integration `games.test.ts` › edit a release date |
 | A shared-fact edit rotates EVERY user's shelf ETag (stale-read hazard) | integration `read-budget.test.ts` › the SHARED-fact writers rotate every tracker… (editReleaseDate driven through the real seam, both users' versions rotate); 304-refusal side pinned by › unchanged version ⇒ 304… |
+
+### Scheduled release-date refresh (spec-cron-refresh-release-dates)
+
+| AC | Coverage |
+|----|----------|
+| IGDB release dates update or clear in the existing scheduled pass, while omitted/partial/degenerate replies preserve standing dates | no directly triggerable UI flow — provider wire mapping and same-request field are pinned in `src/providers/igdb.test.ts`; real-D1 update, explicit-null clear, omitted-property preserve, partial-row preserve, degenerate-response preserve/retry, scheduled stale-gate dispatch, and all-user version rotation are pinned in `test/integration/scores.test.ts` |

@@ -565,3 +565,15 @@ resolution: done 2026-07-16 (Story 10.2) — DECIDED: `first_seen_at` keeps its 
 - source_spec: `_bmad-output/implementation-artifacts/spec-mobile-stats-fab-export-cleanup.md`
   summary: Pre-existing UX and coverage prose still describes a two-destination shell and a retired manual PS+ refresh button.
   evidence: `DESIGN.md` still says the header switches two destinations despite Stats, while `playwright/COVERAGE.md` row 5.2b still claims button parity after manual PS+ refresh was removed before this story.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-cron-refresh-release-dates.md`
+  summary: Shared IGDB-fact writes and all-user library-version rotation are separate D1 operations, leaving a short stale-304 window if the fact batch succeeds and the version bump fails.
+  evidence: `runScoreRefresh` awaits `updateGameIgdbFacts` before a separate `bumpAllLibraryVersions`; this architecture predates the release-date rider and retries because the freshness stamp is written later, but affected clients can retain stale validators until retry.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-cron-refresh-release-dates.md`
+  summary: Batched IGDB `/games` refresh checks only aggregate emptiness, so an empty 500-ID chunk can hide behind successful sibling chunks once the linked library exceeds 500 IDs.
+  evidence: `fetchScoresByIds` concatenates chunk replies and `runScoreRefresh` treats only aggregate `rows.length === 0` as degenerate; current library is far below 500, making this a pre-existing scale boundary rather than current-story behavior.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-cron-refresh-release-dates.md`
+  summary: Multiple IGDB links on one game produce duplicate fact updates whose last release date wins without an explicit authoritative-link rule.
+  evidence: Schema permits multiple `(game, source)` links and `runScoreRefresh` intentionally maps each link to a write; scores already had this pathological ambiguity, while release dates now inherit it. Resolving which link wins needs a separate identity-cleanup decision.

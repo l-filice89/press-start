@@ -22,6 +22,7 @@
 import type { IgdbScoreFetch, IgdbScores, IgdbTimeToBeat } from '../providers';
 import {
 	findOldestUser,
+	type GameIgdbFacts,
 	type GameScores,
 	listExternalLinksBySource,
 	updateGameIgdbFacts,
@@ -46,13 +47,16 @@ export type ScoreRefreshOutcome =
 	| { ok: true; updated: number }
 	| { ok: false; reason: 'provider' };
 
-function toGameScores(row: IgdbScores): GameScores {
-	return {
+function toGameFacts(row: IgdbScores): GameIgdbFacts {
+	const facts: GameScores = {
 		criticScore: row.criticScore,
 		criticScoreCount: row.criticScoreCount,
 		userScore: row.userScore,
 		userScoreCount: row.userScoreCount,
 	};
+	return 'releaseDate' in row
+		? { ...facts, releaseDate: row.releaseDate }
+		: facts;
 }
 
 /**
@@ -134,7 +138,7 @@ export async function runScoreRefresh(
 			{
 				gameId: link.gameId,
 				facts: {
-					...(scoreRow ? toGameScores(scoreRow) : {}),
+					...(scoreRow ? toGameFacts(scoreRow) : {}),
 					...(ttbRow
 						? {
 								ttbStorySeconds: ttbRow.ttbStorySeconds,
