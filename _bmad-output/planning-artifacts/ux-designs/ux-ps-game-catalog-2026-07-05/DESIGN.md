@@ -58,8 +58,9 @@ components:
   popover: 'Inline status + milestone menu off the pill.'
   detail-panel: 'Flip-then-grow editable detail.'
   search-bar: 'Persistent find-or-add; scoped to the active destination.'
-  destination-toggle: 'Header segmented control — SHELF | CATALOG | STATS.'
+  destination-toggle: 'Header segmented control — SHELF | PLAY NEXT | CATALOG | STATS.'
   catalog-card: 'Cover + title + PS+ flag; Add / Claim / In-library. No status pill, no owned toggle, no flip.'
+  play-next-card: 'Cover + title + reason/access tags + known facts + explanation + Play this/Open details.'
 ---
 
 # PRESS START — Design Spine
@@ -96,6 +97,22 @@ Dark-only. One near-black void, layered surfaces, cool near-white text, and a di
 Avoid: a second saturated hue competing with magenta; magenta on anything but Playing; flat non-glowing fills for interactive neon.
 
 → Palette in situ ("Neon Grid"): `mockups/palette-neon-grid.html`
+
+## Play Next — Epic 13 addition
+
+`/play-next` uses existing dark arcade shell and adds no new brand color. Electric cyan remains interaction/focus treatment; heat magenta remains reserved for `Playing` only.
+
+- Page heading: `WHAT NEXT?`.
+- Desktop: controls above three equal cards; Shuffle below.
+- Phone: three compact vertical cards; controls inside collapsible `TUNE THE PICKS`; no carousel.
+- Each card shows cover, title, one primary reason tag, optional `Available now` or `Discover` access tag, known facts, one plain explanation, optional `Closest match`, `Play this`, and `Open details`.
+- Intent controls use fieldsets and `aria-pressed`; `Include wishlist` is a checkbox. Minimum target size is 44×44. State is never color-only.
+- Draft changes preserve current cards. `Show me 3` applies them and is disabled when draft equals active intent. `Surprise me` clears tuning and generates immediately. Shuffle uses active intent, including Surprise me.
+- Refresh keeps focus stable, announces new result count through a live region, and respects reduced motion.
+- `Open details` preserves slate and visit state. `Play this` uses existing mutation feedback; success returns to Shelf, failure stays and toasts.
+- Near exhaustion shows one or two cards plus: `You’ve seen every other match. Next Shuffle starts a fresh pool.`
+
+**UI-MOCK-GATE:** every Epic 13 story that changes UI requires an implementation-specific mock and Luca's recorded approval immediately before UI code. This section defines behavior and visual constraints, not final composition.
 
 ## Typography
 

@@ -36,7 +36,7 @@ Three destinations, switched by a **header toggle**; everything else hangs off w
 | **Settings** | Header gear | PlayStation region, PS+ claims, CSV backup, About/Help |
 | **Login** | Cold, unauthenticated | Magic-link sign-in (first run only) |
 
-- **Header toggle (`SHELF | CATALOG | STATS`).** A segmented control in the header, all labels always visible, one tap between destinations. Same control on phone and desktop.
+- **Header toggle (`SHELF | PLAY NEXT | CATALOG | STATS`).** A segmented control in the header, all labels always visible, one tap between destinations. Same control on phone and desktop. Play Next is a standalone `/play-next` destination; it does not add a Shelf panel or completion prompt.
 - **The search bar belongs to the active destination.** One box in the header, but it searches **what you're looking at**: the library on the Shelf, the catalog on the Catalog. The term **clears when you switch** — a shelf search never silently filters the catalog (AD-25). The `＋ Add "<name>"` row is **Shelf-only**: on the Catalog, a name that isn't in the catalog simply has no match, because you cannot conjure a game into Sony's catalog by typing it.
 - **No catalog detail surface.** Catalog cards carry their two actions inline (`＋ Add`, `Claim now`) and there is **no read-only catalog detail page**. The Add path already opens the **add preview** — IGDB-enriched, with the "Not the right game?" picker — which *is* the confirm-before-committing surface; a read-only detail in front of it would duplicate that decision and be the one screen in the app where tapping a cover doesn't flip it into something editable. After a successful add, the app lands on the game's **real, editable detail** (`/game/:id`) — the usual detail screen, at the moment it starts being true. *(Revisit only if browsing proves to need more than cover + title to decide.)*
 - **Search-as-add (the hero path).** The Shelf search bar (FR-19) is the *sole* Add entry point. Type a name → existing library games jump to their detail (FR-42, never duplicate); no match → the top row is `＋ Add "<name>"` → preview → save. Search matches the **entire** library, ignoring active filters and hidden states — "did I ever finish that?" always answers.
@@ -146,7 +146,8 @@ One responsive app; deltas by surface:
 | Stats overview | Title → recap → year select → selected-year content | Year select beside title; recap spans below |
 | Detail | True full-screen | Centered ~760px panel |
 | Header readout | Compact ("175 · 52 OWNED") | Full (`PS+ CATALOG AS OF …` timestamp) |
-| **Destination toggle** | Full-width three-segment control on its own row under the wordmark | Inline in the header, beside the wordmark |
+| **Destination toggle** | Full-width four-segment control on its own row under the wordmark | Inline in the header, beside the wordmark |
+| **Play Next** | Heading → three compact vertical cards → collapsible `TUNE THE PICKS`; full-width `Show me 3` appears when draft differs | Heading → tuning controls → three equal cards → Shuffle |
 | **Catalog grid** | 2-up, same lean card as the shelf | Auto-fill, same dense card as the shelf |
 | **Catalog filters** | The existing **Filters** bottom sheet — genre group only | Inline genre dropdown in the filter row |
 
@@ -186,6 +187,21 @@ Single protagonist: **Luca**, the owner. Success has one metric — *the Notion 
 2. Taps **Filters**; on desktop, the row is already there.
 3. Selects Owned + a genre; the **summary sentence** reads back exactly what he'll see.
 4. **Climax:** the shelf narrows to a handful of owned games in the mood he wants — the manual Notion backlog-filtering he used to do, beaten. He starts one and taps its status to **Playing** right from the shelf.
+
+### Flow 7 — Play Next (Luca wants the app to narrow the decision)
+1. Opens **PLAY NEXT**. Search is hidden and focus enters the `WHAT NEXT?` heading.
+2. Three varied **Surprise me** cards appear immediately; no question or setup blocks the first slate.
+3. Each card names one primary reason, access where useful, known supporting facts, and any `Closest match` relaxation.
+4. He may open details, choose **Play this**, or tune one choice per group and deliberately press **Show me 3**. Draft controls never replace visible cards before that press.
+5. **Shuffle** uses applied intent, does not repeat any game already shown this visit, and refreshes Surprise me too.
+6. If only one or two unseen matches remain, the smaller slate appears with `You’ve seen every other match. Next Shuffle starts a fresh pool.` The following Shuffle resets the pool but still excludes visible cards.
+7. **Climax:** Play this sets the game to `Playing` and returns to Shelf, removing the selection burden without hiding why the game was chosen.
+
+**Play Next intent groups:** Genre (`Familiar` / `Different`), Length (`Quick win`), Shelf age (`Fresh` / `Forgotten`), Confidence (`Safe bet` / `Wildcard`), Priority (`Follow my list` / `Last chance`), Progress (`Finish them`), plus `Include wishlist`. Choices are mutually exclusive within a group; applied groups form the desired AND match. Exact matches lead; automatic fallback is explicit.
+
+**Finish them:** Paused and story-completed-but-not-platinumed games participate in Surprise me, clearly tagged and capped at one card. Explicit Finish them intent lifts the cap. Playing, Platinum, and Dropped never appear.
+
+**Implementation gate:** every story changing UI presents an implementation-specific mock and records Luca's approval immediately before UI code begins. This behavioral spine is not final visual approval.
 
 ### Flow 4 — Did I ever finish that? (Luca, months later)
 1. Types a title into the search bar.

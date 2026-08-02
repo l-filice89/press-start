@@ -112,12 +112,27 @@ This document provides the complete epic and story breakdown for ps-game-catalog
 - **FR-48** — Single user in practice, but all user-entered tracking data is scoped to a user id from day one (no sharing/roles/tenancy built).
 - **FR-49** — CSV export in v1: the full library (games, statuses, milestones, lifecycle dates, genres, ownership) downloadable as CSV.
 
+**Play Next (§6, Epic 13)**
+
+- **FR-53** — Standalone Play Next destination immediately presents three suggestions; manual Shelf filtering stays unchanged.
+- **FR-54** — Eligible candidates have no known future release date; known released and unknown/TBA are included. `Playing`, `Platinum`, and `Dropped` are excluded. Owned and current PS+ games are included. Paused and story-completed-but-not-platinumed games form Finish them.
+- **FR-55** — Missing enrichment preserves eligibility; missing facts add no score or explanation claim.
+- **FR-56** — Ranking is additive and inspectable across intent, access, Up next, PS+ urgency, backlog age, genre, time-to-beat, confidence, and progress.
+- **FR-57** — At most one tag per intent group; active groups form desired conjunctive match.
+- **FR-58** — Draft intent applies only through `Show me 3`; exact combined matches lead, then automatic explicitly labeled closest matches.
+- **FR-59** — `Include wishlist` adds non-owned, non-PS+-playable wishlist games; current PS+ remains eligible regardless of checkbox.
+- **FR-60** — Every visit immediately creates a varied Surprise me slate. Finish them is capped at one default card; explicit Finish them lifts cap and prioritizes it.
+- **FR-61** — Every suggestion states a primary reason/category and only known supporting facts.
+- **FR-62** — Shuffle excludes all games already shown during the visit; exhausted pools show smaller slate, warning, then reset while excluding visible cards.
+- **FR-63** — Open details preserves visit state; Play this uses existing lifecycle behavior to set `Playing` and returns to Shelf.
+
 ### NonFunctional Requirements
 
 - **NFR-1** — Free-tier hosting is a hard constraint. The app is stateless; data lives in an externally managed database.
 - **NFR-2** — The PS+ Extra scheduled job must also fit the free tier.
 - **NFR-3** — Nothing external on render: covers and store links are served from persisted data; third-party APIs are hit only at import, sync, refresh, or add time.
 - **NFR-4** — Failures surface, never silently retry (expired cookie → refresh instructions; failed lookup → stragglers list).
+- **NFR-5** — Play Next is deterministic, local, and explainable: existing app data only; no LLM, machine learning, external recommendation service, or persisted recommendation preferences/history.
 
 ### Additional Requirements
 
@@ -268,10 +283,23 @@ Each FR is assigned a **primary** epic; FRs that genuinely span epics list each 
 - **FR-47** — E1: better-auth magic link.
 - **FR-48** — E1: every tracking row user-scoped.
 - **FR-49** — E6: full-library CSV export.
+- **FR-53** — E13: standalone Play Next destination and immediate slate.
+- **FR-54** — E13: release/access/lifecycle eligibility and Finish them candidates.
+- **FR-55** — E13: missing-data tolerance.
+- **FR-56** — E13: transparent additive ranking.
+- **FR-57** — E13: grouped combinable intent.
+- **FR-58** — E13: explicit generation and closest-match fallback.
+- **FR-59** — E13: optional wishlist shopping; PS+ always eligible.
+- **FR-60** — E13: varied Surprise me and Finish them cap.
+- **FR-61** — E13: recommendation reasons and facts.
+- **FR-62** — E13: visit-scoped non-repeating Shuffle and exhaustion behavior.
+- **FR-63** — E13: Open details and Play this actions.
 
-**NFR coverage:** NFR-1 → E1 (Cloudflare free-tier platform, whole app) · NFR-2 → E5 (Cron within free tier) · NFR-3 → E1 (nothing-external-on-render, structural across all read paths) · NFR-4 → E1 (feedback-channel shell) + E4/E5/E6 (surfaced per ingest op).
+**NFR coverage:** NFR-1 → E1 (Cloudflare free-tier platform, whole app) · NFR-2 → E5 (Cron within free tier) · NFR-3 → E1 (nothing-external-on-render, structural across all read paths) · NFR-4 → E1 (feedback-channel shell) + E4/E5/E6 (surfaced per ingest op) · NFR-5 → E13 (local, explainable recommendation derivation).
 
 **TR coverage (added 2026-07-09):** TR-1 → E2.5 (framework + console-link auth) · TR-2 → E2.5 (Epic 1+2 backfill) · TR-3 → E2.5 (standing rule in `_bmad/custom/bmad-dev-auto.toml`).
+
+**Epic 13 UI gate:** every UI-changing story presents an implementation-specific mock and records Luca's approval immediately before UI implementation. Behavioral UX approval does not satisfy this placement-level gate.
 
 ### Post-v1 Requirements (added 2026-07-13)
 
@@ -289,7 +317,7 @@ The v1.x tier of `roadmap.md`. The PRD lists these as unnumbered bullets in §6,
 
 **Multi-user blockers (B1a–B6):** owned by Epic 8; the table in `implementation-artifacts/publication-blockers.md` is the live source and is not duplicated here.
 
-**Post-v1 coverage map:** VR-1, VR-2, VR-3, VR-4 → E9 · VR-5, VR-6, VR-8 → E10 · VR-7 → E6 (Story 6.6) · VR-9 → E12 · FR-50, FR-51, FR-52 → E7 · B1a–B6 → E8
+**Post-v1 coverage map:** VR-1, VR-2, VR-3, VR-4 → E9 · VR-5, VR-6, VR-8 → E10 · VR-7 → E6 (Story 6.6) · VR-9 → E12 · FR-50, FR-51, FR-52 → E7 · FR-53–FR-63, NFR-5 → E13 · B1a–B6 → E8
 
 ## Epic List
 
@@ -345,6 +373,10 @@ Every call Press Start makes to PlayStation with Luca's own NPSSO token is attri
 ### Epic 12: Fit the Time I Have — the Time-to-beat Filter — _v1.x, after Epic 10_
 The shelf answers "what can I actually finish?" — a time-to-beat filter group narrows the backlog to games that fit the hours available, riding the TTB data Story 10.3 already persists. One story; a pure client-side filter-system revision.
 **VRs covered:** VR-9 · reuses FR-20/21 semantics (OR within, AND across), AD-7 (server computes, client filters), Story 10.3 fields
+
+### Epic 13: Choose What to Play Next — _post-v1, approved 2026-08-02_
+Play Next removes next-game choice fatigue with three varied, transparent suggestions immediately, then allows intentional tuning, non-repeating Shuffle, optional wishlist shopping, Finish them recovery, and direct action. Existing Shelf selection remains unchanged.
+**FRs covered:** FR-53–FR-63 · NFR-5 · AD-25, AD-34
 (Added 2026-07-16 via correct-course: `sprint-change-proposal-2026-07-16-ttb-filter.md`.)
 
 ---
@@ -2121,3 +2153,167 @@ So that I pick a game that fits the time I actually have — the 10.3 numbers be
 **Given** the standing rules
 **When** this story is specced
 **Then** it carries a placement-level UI mock signed off by Luca before implementation (UI-MOCK-GATE) and ships Playwright coverage for every UI AC (PLAYWRIGHT-COVERAGE); EXTERNAL-RISK-FLAG is N/A (no external call) — and `EXPERIENCE.md`'s filter-row line gains the group when the mock is signed off
+
+## Epic 13: Choose What to Play Next
+
+Play Next is a standalone, transparent recommendation flow over data already cached for Shelf. It adds a guided path without changing manual Shelf filters. No schema, migration, provider, cron, new API endpoint, LLM, machine learning, or persisted recommendation history.
+
+### Story 13.1: Get three transparent suggestions
+
+As Luca,
+I want three explained suggestions as soon as I open Play Next,
+So that choice fatigue shrinks before I configure anything.
+
+**Acceptance Criteria:**
+
+**Given** authenticated app navigation
+**When** Play Next ships
+**Then** `SHELF | PLAY NEXT | CATALOG | STATS` routes Play Next to `/play-next`; search is hidden there, and route focus enters `WHAT NEXT?` [FR-53, AD-25]
+
+**Given** a new Play Next visit
+**When** the destination opens
+**Then** it immediately derives a default Surprise me slate of three games when at least three candidates exist, without asking a question first [FR-53, FR-60]
+
+**Given** a tracked game
+**When** eligibility is evaluated
+**Then** known future release dates, `Playing`, `Platinum`, and `Dropped` are excluded; known released and unknown/TBA release dates remain eligible; owned and currently playable PS+ games remain eligible [FR-54]
+
+**Given** a `Paused` game or a game with `completed_on` but no platinum
+**When** Surprise me is derived
+**Then** it is a Finish them candidate and may appear clearly tagged, but at most one Finish them card occupies the default slate [FR-54, FR-60]
+
+**Given** missing genres, scores, time-to-beat, lifecycle dates, or other enrichment
+**When** the candidate is ranked and explained
+**Then** missing facts neither exclude it nor count as zero; they add no score and generate no unsupported claim [FR-55]
+
+**Given** eligible candidates
+**When** the slate is generated
+**Then** pure core rules apply inspectable additive factors, seeded tie-breaking, and cross-card variety so the default slate does not contain three near-identical games [FR-56, FR-60, NFR-5, AD-34]
+
+**Given** a suggestion card
+**When** it renders
+**Then** it shows cover, title, one primary reason/category, optional access tag, known facts, one plain explanation, and `Play this` / `Open details`; unknown facts are absent [FR-61]
+
+**Given** `Open details`
+**When** detail is opened and closed
+**Then** the same slate and visit state remain [FR-63, AD-25, AD-34]
+
+**Given** this story changes UI
+**When** implementation is about to begin
+**Then** an implementation-specific placement mock is presented and Luca's approval recorded before UI code; every visible AC receives Playwright coverage [UI-MOCK-GATE, PLAYWRIGHT-COVERAGE]
+
+### Story 13.2: Tune recommendations intentionally
+
+As Luca,
+I want to combine a few clear intents and deliberately generate a new slate,
+So that I keep control without rebuilding a complex filter query.
+
+**Acceptance Criteria:**
+
+**Given** tuning controls
+**When** they render
+**Then** groups are Genre (`Familiar`, `Different`), Length (`Quick win`), Shelf age (`Fresh`, `Forgotten`), Confidence (`Safe bet`, `Wildcard`), Priority (`Follow my list`, `Last chance`), and Progress (`Finish them`); selection is mutually exclusive within a group and combinable across groups [FR-57]
+
+**Given** choices across several groups
+**When** generation applies them
+**Then** exact conjunctive matches lead; ranking uses every selected intent rather than silently choosing one [FR-56, FR-57]
+
+**Given** a draft choice differs from applied intent
+**When** Luca edits controls
+**Then** visible cards remain unchanged and `Show me 3` becomes enabled; pressing it applies the complete draft and generates once [FR-58]
+
+**Given** fewer than three exact combined matches
+**When** `Show me 3` generates
+**Then** closest matches are added automatically and each relaxed result visibly says `Closest match`; no separate permission step appears [FR-58]
+
+**Given** `Include wishlist` is off
+**When** candidates are built
+**Then** non-owned, non-PS+-playable wishlist games are excluded, while current PS+ games remain eligible regardless of ownership [FR-59]
+
+**Given** `Include wishlist` is on
+**When** candidates are built
+**Then** those wishlist shopping candidates may appear with `Discover`; accessible owned/PS+ candidates may show `Available now` [FR-59, FR-61]
+
+**Given** Luca presses `Surprise me`
+**When** it applies
+**Then** tuning clears and a varied slate generates immediately [FR-60]
+
+**Given** Finish them is selected
+**When** the slate generates
+**Then** paused and story-completed-but-not-platinumed candidates are prioritized, the default one-card cap is lifted, and every such result is labeled `Finish them`; `Playing`, `Platinum`, and `Dropped` remain excluded [FR-54, FR-60]
+
+**Given** this story changes UI
+**When** implementation is about to begin
+**Then** an implementation-specific mock is presented and Luca's approval recorded before UI code; every visible AC receives Playwright coverage [UI-MOCK-GATE, PLAYWRIGHT-COVERAGE]
+
+### Story 13.3: Shuffle without repetition
+
+As Luca,
+I want Shuffle to keep exploring unseen matches during my visit,
+So that rejection does not immediately bring the same choices back.
+
+**Acceptance Criteria:**
+
+**Given** an applied intent, including default Surprise me
+**When** Shuffle runs
+**Then** it uses that applied intent, ignores any unapplied draft, and excludes every game shown earlier in the current visit [FR-62]
+
+**Given** current visible cards
+**When** any Shuffle or pool reset occurs
+**Then** none of those cards appears in the immediately resulting slate [FR-62]
+
+**Given** only one or two unseen matches remain
+**When** Shuffle runs
+**Then** it shows that smaller slate and states `You’ve seen every other match. Next Shuffle starts a fresh pool.` [FR-62]
+
+**Given** that warning is visible
+**When** Shuffle runs again
+**Then** it refreshes the exhausted pool but still excludes currently visible games [FR-62]
+
+**Given** Luca leaves Play Next
+**When** a later visit starts
+**Then** seen-game and exhaustion state are reset; no recommendation history persists [FR-62, NFR-5, AD-34]
+
+**Given** a refresh completes
+**When** results update
+**Then** focus stays on the initiating control, result count is announced through a live region, and reduced-motion preference is respected [UX, accessibility]
+
+**Given** this story changes UI
+**When** implementation is about to begin
+**Then** an implementation-specific mock is presented and Luca's approval recorded before UI code; every visible AC receives Playwright coverage [UI-MOCK-GATE, PLAYWRIGHT-COVERAGE]
+
+### Story 13.4: Act on a recommendation and harden the flow
+
+As Luca,
+I want to start a suggested game directly and trust the whole flow on phone or desktop,
+So that recommendation becomes action rather than another dead-end list.
+
+**Acceptance Criteria:**
+
+**Given** an eligible suggestion
+**When** Luca chooses `Play this`
+**Then** the existing status mutation sets `Playing`, preserving lifecycle reconciliation, query invalidation, toast feedback, and mutation race guards [FR-63, AD-34]
+
+**Given** that mutation succeeds
+**When** navigation completes
+**Then** Luca returns to Shelf and the game appears in the Playing tier [FR-63]
+
+**Given** that mutation fails
+**When** the error returns
+**Then** Luca remains on Play Next with the slate intact and receives existing error feedback [NFR-4]
+
+**Given** phone and desktop layouts
+**When** Play Next renders
+**Then** desktop uses three equal cards and visible controls; phone uses compact vertical cards and collapsible `TUNE THE PICKS`, with no carousel [UX]
+
+**Given** any Play Next control
+**When** used by pointer, keyboard, or assistive technology
+**Then** targets are at least 44×44, grouping and pressed/checked state are programmatic, state is not color-only, focus is visible, and route/detail transitions do not steal focus incorrectly [accessibility]
+
+**Given** existing manual Shelf filtering
+**When** Epic 13 regression runs
+**Then** Flow 3 and its current filter/search/status behaviors remain unchanged [FR-53]
+
+**Given** this story changes UI
+**When** implementation is about to begin
+**Then** an implementation-specific mock is presented and Luca's approval recorded before UI code; unit, web, integration-where-needed, and Playwright coverage are entered in `playwright/COVERAGE.md` [UI-MOCK-GATE, PLAYWRIGHT-COVERAGE]

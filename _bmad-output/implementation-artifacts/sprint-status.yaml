@@ -164,6 +164,14 @@ development_status:
   12-1-filter-the-shelf-by-time-to-beat-bands: done # 2026-07-16 (dev-auto): Time filter group — 5 half-open bands + Unknown, story/100% toggle, single-predicate clause, summary+sheet, hazard tests + epic12-ttb e2e; 5 review patches; followup_review_recommended:true (shared dropdown focus rework)
   epic-12-retrospective: done # 2026-07-17 — epic-12-retro-2026-07-17.md; WCAG nudge + summary-metric copy shipped at the retro; merge + v2.2.0 = critical path
 
+  # Epic 13: Choose What to Play Next — approved 2026-08-02 via Correct Course
+  epic-13: backlog
+  13-1-get-three-transparent-suggestions: backlog
+  13-2-tune-recommendations-intentionally: backlog
+  13-3-shuffle-without-repetition: backlog
+  13-4-act-on-a-recommendation-and-harden-flow: backlog
+  epic-13-retrospective: optional
+
 action_items:
   - epic: 1
     action: "Wire a hazard-named-AC-gets-a-hazard-named-test rule into the bmad-loop dev/review gate"
@@ -396,12 +404,16 @@ action_items:
   - epic: 8
     action: "Critical path: merge dance — push + PR epic/8-multi-user-readiness -> main via CI gate"
     owner: "Luca"
-    status: open
+    status: done # 2026-08-02 documentation correction: PR #35 merged at 4d1522f; verified through release/deploy evidence
   - epic: 8
     action: "Deploy gate: migration 0016 (destructive, drops 4 game columns) — human-approve, then verify both crons live (PS+ rotation + scores 0 3 * * *)"
     owner: "Luca"
-    status: open
+    status: done # 2026-08-02 documentation correction: v3.0.0 deployed in run 29940002606; migrations 0016-0018 landed; production lineage later reached v3.3.2
   - epic: 8
     action: "Post-deploy minor bug fixes (Luca's queued list once the epic is live)"
+    owner: "Luca + Amelia"
+    status: done # 2026-08-02 documentation correction: release is live and subsequent production versions reached v3.3.2; no remaining Epic 8 gate
+  - epic: 13
+    action: "Create Story 13.1 from approved Play Next artifacts; present implementation-specific mock before any UI code"
     owner: "Luca + Amelia"
     status: open

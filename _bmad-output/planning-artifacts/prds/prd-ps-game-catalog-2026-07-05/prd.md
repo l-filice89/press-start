@@ -2,7 +2,7 @@
 title: PS Game Catalog PRD
 status: final
 created: 2026-07-05
-updated: 2026-07-05
+updated: 2026-08-02
 ---
 
 # PS Game Catalog — Product Requirements Document
@@ -23,6 +23,7 @@ It is a single-user tool, reachable from the phone at the moment of discovery �
 2. Logging a status change takes seconds, not a Notion-editing session.
 3. The wishlist gets consulted before purchases — including the "already in PS+ Extra" check.
 4. Filtering the backlog beats what Notion's views offered.
+5. Choosing the next game takes one short, transparent Play Next visit; manual Shelf filtering remains available when Luca wants direct control.
 
 **Counter-metric — how we'd know it's failing:** the app stops being consulted when deciding what to play next, or wishlist additions regress to occasional batches instead of happening at the moment of discovery. A tracker that's only mostly right slowly stops being consulted at all; trust is the real deliverable.
 
@@ -166,6 +167,7 @@ Three doors into the library. All of them record lifecycle dates silently (§4.5
 
 - **NFR-3** — **Nothing external on render:** covers and store links are served from persisted data; third-party APIs are hit only at import, sync, refresh, or add time.
 - **NFR-4** — **Failures surface, never silently retry:** an expired PlayStation session cookie shows the refresh instructions (FR-36); a failed external lookup lands the game in the stragglers list.
+- **NFR-5** — **Play Next is local and explainable:** recommendation derivation uses existing application data and deterministic client-side rules. No LLM, machine learning, external recommendation service, or persistent recommendation-preference/history data.
 - **FR-49** — **CSV export in v1:** the full library — games, statuses, milestones, lifecycle dates, genres, ownership — downloadable as CSV. Cheap insurance for data that can't be reconstructed; the DB provider's backups are not the only copy.
 
 ## 6. Later & Out of Scope
@@ -188,10 +190,25 @@ Not in the v1 milestone. Epic 5 flags catalog membership on games *already track
 - **FR-51** — A **catalog destination** renders the stored catalog in a shelf-style, paged grid with a **genre filter and name search**, marking games already in the library (FR-42 dedup parity). Covers/genres come from the PS-store payload (NFR-3: stored, not fetched on render).
 - **FR-52** — Adding a catalog game promotes it into the library via the §4.4 add preview (IGDB enrichment on demand, saves as wishlisted — FR-41/43); catalog membership immediately lights its PS+ flag. A **"Claim now"** deep-link opens the PS Store product page for the region so the user adds it to their PlayStation account themselves — **no direct in-app claim** (an undocumented authenticated write against the user's real account; out of scope).
 
+### Post-v1 — Choose what to play next (Epic 13)
+
+Play Next is a standalone, transparent alternative to Flow 3's manual Shelf filtering. It uses only facts already present in the Shelf payload and never changes the manual flow.
+
+- **FR-53** — A standalone **Play Next** destination immediately presents three suggestions on every visit, with no required input. Current manual Shelf filtering remains unchanged.
+- **FR-54** — A candidate must have no known future release date and must not be `Playing`, `Platinum`, or `Dropped`. Known released and unknown/TBA release dates are eligible. Owned and currently playable PS+ games are eligible. `Paused` and story-completed-but-not-platinumed games are eligible as **Finish them** candidates.
+- **FR-55** — Missing enrichment never makes an otherwise eligible game ineligible. Missing facts contribute no score and produce no unsupported explanation.
+- **FR-56** — Ranking is additive and inspectable: intent match, ownership/playability, `Up next` priority, PS+ departure urgency, backlog age, genre familiarity/variety, time-to-beat fit, confidence, and Finish them progress.
+- **FR-57** — User may select at most one tag per intent group. Active groups form desired conjunctive match. Groups cover Genre, Length, Shelf age, Confidence, Priority, and Progress.
+- **FR-58** — Editing intent does not replace current cards. **Show me 3** applies draft intent. Exact combined matches are preferred; when fewer than three exist, Play Next automatically returns closest matches and explicitly labels each relaxed result **Closest match**.
+- **FR-59** — **Include wishlist** adds non-owned, non-PS+-playable wishlist games. Currently playable PS+ games remain eligible regardless of ownership and checkbox state.
+- **FR-60** — Default **Surprise me** creates a varied slate. Finish them candidates participate but occupy at most one default card. Selecting Finish them removes that cap and prioritizes those candidates.
+- **FR-61** — Every suggestion explains itself with a primary reason/category and known supporting facts. Supported labels include `Familiar`, `Different`, `Quick win`, `Fresh`, `Forgotten`, `Safe bet`, `Wildcard`, `Follow my list`, `Last chance`, `Finish them`, `Available now`, and `Discover`.
+- **FR-62** — **Shuffle** uses applied intent and excludes every game already shown during the visit. If only one or two unseen matches remain, it shows the smaller slate and warns that the next Shuffle refreshes the pool. Pool reset still excludes currently visible games. Visit state is not persisted after leaving Play Next.
+- **FR-63** — User can **Open details** without losing Play Next visit state or choose **Play this**, which uses existing lifecycle behavior to set `Playing` and returns to Shelf.
+
 ### Future — earns its way in later
 
 - **PS+ subscription settings:** the user declares whether they have PS+ and the tier — *Essential* (no catalog: invite to sync / highlight when the three monthly games change), *Extra* (the default behavior v1 implements), *Premium* (Extra plus the premium-bracket catalog). Feeds the tier-aware catalog (FR-50).
-- Tunable play-next suggestions ("same genre" / "vary genre").
 - Stats and dashboards over the lifecycle-date history.
 - Sale detection + notifications for wishlisted games (mechanism sketch in the addendum).
 - Possibly **personal** playtime tracking (hours *Luca* put in — distinct from the v1.x time-to-beat estimate above) and other platforms.
