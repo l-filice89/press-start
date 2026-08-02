@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+	EMPTY_PLAY_NEXT_INTENT,
 	getPlayNextSuggestions,
 	isFinishThem,
 	isPlayNextEligible,
@@ -32,6 +33,7 @@ function game(
 		ttbStorySeconds: null,
 		boughtOn: null,
 		wishlistedOn: null,
+		wishlisted: false,
 		...overrides,
 	};
 }
@@ -387,5 +389,180 @@ describe('Play Next scoring and selection', () => {
 			{ referenceIso: TODAY, visitSeed: 'visit' },
 		);
 		expect(result.map((item) => item.game.id)).toContain('action');
+	});
+
+	it('combines active intent groups with AND and appends factors in fixed order', () => {
+		const result = getPlayNextSuggestions(
+			[
+				game('anchor', { playStatus: 'Playing', genres: ['RPG'] }),
+				game('exact', {
+					genres: ['RPG'],
+					ttbStorySeconds: 20 * 3600,
+					boughtOn: '2025-01-01',
+					criticScore: 80,
+					criticScoreCount: 10,
+					playStatus: 'Up next',
+				}),
+				game('partial', {
+					genres: ['RPG'],
+					ttbStorySeconds: 21 * 3600,
+					boughtOn: '2025-01-01',
+					criticScore: 80,
+					criticScoreCount: 10,
+					playStatus: 'Up next',
+				}),
+			],
+			{
+				referenceIso: TODAY,
+				visitSeed: 'intent',
+				intent: {
+					genre: 'Familiar',
+					time: 'Quick win',
+					backlogAge: 'Forgotten',
+					confidence: 'Safe bet',
+					priority: 'Follow my list',
+					progress: null,
+					includeWishlist: false,
+				},
+			},
+		);
+		expect(result[0].game.id).toBe('exact');
+		expect(result[0].intentDistance).toBe(0);
+		expect(result[0].closestMatch).toBe(false);
+		expect(
+			result[0].factors
+				.filter((factor) => factor.code.startsWith('intent-'))
+				.map((factor) => factor.code),
+		).toEqual([
+			'intent-genre',
+			'intent-time',
+			'intent-backlog-age',
+			'intent-confidence',
+			'intent-priority',
+		]);
+		expect(result.find((item) => item.game.id === 'partial')).toMatchObject({
+			intentDistance: 1,
+			closestMatch: true,
+		});
+	});
+
+	it('sorts intent distance before additive score and diversity adjustments', () => {
+		const result = getPlayNextSuggestions(
+			[
+				game('exact', { ttbStorySeconds: 20 * 3600 }),
+				game('partial-high', {
+					playStatus: 'Paused',
+					psPlusExtra: true,
+					psPlusLeavingOn: '2026-08-03',
+					boughtOn: '2020-01-01',
+					criticScore: 99,
+					criticScoreCount: 99,
+				}),
+			],
+			{
+				referenceIso: TODAY,
+				visitSeed: 'lexicographic-hazard',
+				intent: { ...EMPTY_PLAY_NEXT_INTENT, time: 'Quick win' },
+			},
+		);
+		expect(result.map((item) => item.game.id)).toEqual([
+			'exact',
+			'partial-high',
+		]);
+	});
+
+	it('treats missing or malformed facts as matching neither side', () => {
+		const bare = game('bare');
+		const malformed = game('malformed', {
+			criticScore: 101,
+			criticScoreCount: 0,
+			userScore: -1,
+			userScoreCount: 20,
+		});
+		for (const intent of [
+			{ ...EMPTY_PLAY_NEXT_INTENT, genre: 'Different' as const },
+			{ ...EMPTY_PLAY_NEXT_INTENT, backlogAge: 'Fresh' as const },
+			{ ...EMPTY_PLAY_NEXT_INTENT, backlogAge: 'Forgotten' as const },
+			{ ...EMPTY_PLAY_NEXT_INTENT, confidence: 'Wildcard' as const },
+		]) {
+			const suggestion = getPlayNextSuggestions([bare], {
+				referenceIso: TODAY,
+				visitSeed: 'missing',
+				intent,
+			})[0];
+			expect(suggestion.intentDistance).toBe(1);
+			expect(
+				suggestion.factors.some((factor) => factor.code.startsWith('intent-')),
+			).toBe(false);
+		}
+		const malformedSuggestion = getPlayNextSuggestions([malformed], {
+			referenceIso: TODAY,
+			visitSeed: 'malformed',
+			intent: { ...EMPTY_PLAY_NEXT_INTENT, confidence: 'Wildcard' },
+		})[0];
+		expect(malformedSuggestion.intentDistance).toBe(1);
+		expect(malformedSuggestion.primaryReason).not.toBe('SAFE BET');
+		expect(malformedSuggestion.factors).not.toContainEqual(
+			expect.objectContaining({ code: 'critic-confidence' }),
+		);
+		for (const malformedDate of ['2026-02-31', '2026-02-01junk']) {
+			const dated = game(`date-${malformedDate}`, {
+				boughtOn: malformedDate,
+				psPlusExtra: true,
+				psPlusLeavingOn: malformedDate,
+			});
+			for (const intent of [
+				{ ...EMPTY_PLAY_NEXT_INTENT, backlogAge: 'Fresh' as const },
+				{ ...EMPTY_PLAY_NEXT_INTENT, backlogAge: 'Forgotten' as const },
+				{ ...EMPTY_PLAY_NEXT_INTENT, priority: 'Last chance' as const },
+			]) {
+				const result = getPlayNextSuggestions([dated], {
+					referenceIso: TODAY,
+					visitSeed: malformedDate,
+					intent,
+				})[0];
+				expect(result.intentDistance).toBe(1);
+				expect(
+					result.factors.some((factor) => factor.code.startsWith('intent-')),
+				).toBe(false);
+			}
+		}
+	});
+
+	it('admits only actual inaccessible wishlist games when requested', () => {
+		const games = [
+			game('wishlist', { owned: false, wishlisted: true }),
+			game('not-wishlist', { owned: false }),
+			game('plus', { owned: false, psPlusExtra: true }),
+			game('owned'),
+		];
+		expect(
+			getPlayNextSuggestions(games, {
+				referenceIso: TODAY,
+				visitSeed: 'off',
+			}).map((item) => item.game.id),
+		).toEqual(expect.arrayContaining(['plus', 'owned']));
+		const enabled = getPlayNextSuggestions(games, {
+			referenceIso: TODAY,
+			visitSeed: 'on',
+			intent: { ...EMPTY_PLAY_NEXT_INTENT, includeWishlist: true },
+		});
+		expect(enabled.find((item) => item.game.id === 'wishlist')?.accessTag).toBe(
+			'DISCOVER',
+		);
+		expect(enabled.map((item) => item.game.id)).not.toContain('not-wishlist');
+	});
+
+	it('removes the Finish them cap only for explicit Finish them', () => {
+		const result = getPlayNextSuggestions(
+			['a', 'b', 'c'].map((id) => game(id, { playStatus: 'Paused' })),
+			{
+				referenceIso: TODAY,
+				visitSeed: 'finish',
+				intent: { ...EMPTY_PLAY_NEXT_INTENT, progress: 'Finish them' },
+			},
+		);
+		expect(result).toHaveLength(3);
+		expect(result.every((item) => !item.closestMatch)).toBe(true);
 	});
 });

@@ -487,4 +487,19 @@ Shelf payload; visit state remains mounted behind routed detail overlays.
 | 13.1f additive factors, seeded ties, and diversity prevent a three-card near duplicate | browser score-factor list + three distinct known genres in `epic13-play-next.spec.ts`; exact factor order, same/different seed, input immutability, Finish cap, and third-card alternative in `src/core/play-next.test.ts` |
 | 13.1g each card shows cover/title/reason/access/known facts/explanation and two live actions | browser spec pins visible genre, TTB, PS+ tag, factors, and both actions; `Play this` success is pinned in its own browser test |
 | 13.1h detail close preserves exact slate/visit and returns focus to originating suggestion | `epic13-play-next.spec.ts` captures visit id plus ordered game ids before/after overlay and asserts card focus |
-| 13.1i approved implementation-specific mock recorded and phone targets remain usable | `_bmad-output/design-demos/epic-13-play-next/direction-approved.md`; browser phone test pins vertical stack and ≥44px actions |
+| 13.1i approved implementation-specific mock recorded and phone targets remain usable | `_bmad-output/design-demos/epic-13-play-next/direction-approved.md`; browser phone test pins approved compact two-up covers and ≥44px actions |
+
+Story 13.2 (Tune recommendations intentionally). Approved modal iteration:
+`_bmad-output/design-demos/epic-13-play-next/05-story-13-2-tune-modal.html`.
+
+| AC | Coverage |
+|----|----------|
+| 13.2a Tune edits draft only; `Show me 3` applies once and announces honest count | `epic13-play-next.spec.ts` › Tune keeps draft separate…; jsdom `PlayNextPage.test.tsx` › keeps draft edits separate… |
+| 13.2b groups are labeled, one-or-none, and wishlist is a checkbox | browser Tune flow plus jsdom exclusive/deselectable assertions; semantic `fieldset`/`legend` and native checkbox rendered by `TunePanel.tsx` |
+| 13.2c active groups combine with AND; exact precedes smallest-distance `Closest match` | browser exact/closest card order; direct conjunction, distance-before-score/diversity hazard, and factor-order tests in `src/core/play-next.test.ts` |
+| 13.2d missing facts prove neither side and create no claim | boundary matrix in `src/core/play-next.test.ts` › treats missing or malformed facts as matching neither side; jsdom unknown-fact omission |
+| 13.2e Include wishlist admits only inaccessible wishlist rows as `DISCOVER` | browser Tune flow seeds same Shelf with wishlist off/on; jsdom and core eligibility/access tests |
+| 13.2f explicit Finish them removes default one-card cap | direct default-cap and explicit-uncapped tests in `src/core/play-next.test.ts` |
+| 13.2g detail round-trip preserves draft, applied intent, slate, seed, and focus; a new destination visit resets them | browser Tune flow compares visit id, ordered card ids, applied readback, draft, focus, then leaves/re-enters Play Next and verifies reset |
+| 13.2h centered desktop modal / phone bottom sheet traps and restores focus, locks backdrop, dismisses, and keeps 44px targets | browser desktop geometry/focus-cycle assertions and phone disposition/target test; jsdom forward/reverse focus cycle, Escape, backdrop, scroll-lock, and restoration test |
+| 13.2i cards reuse 3:4 cover trigger/fallback, PS+/leaving flags, ownership diamond/source dialog, facts, and closest/access labels | browser card/Tune flow plus dedicated guarded ownership-source browser test and jsdom `PlayNextPage.test.tsx` › uses cover detail trigger… |

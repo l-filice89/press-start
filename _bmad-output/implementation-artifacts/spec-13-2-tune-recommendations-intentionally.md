@@ -2,9 +2,10 @@
 title: 'Story 13.2: Tune recommendations intentionally'
 type: 'feature'
 created: '2026-08-02'
-status: 'draft'
+status: 'in-review'
+baseline_revision: 'f854622'
 review_loop_iteration: 0
-followup_review_recommended: false
+followup_review_recommended: true
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-13-context.md'
 warnings: [oversized]
@@ -47,7 +48,7 @@ warnings: [oversized]
 - `src/core/play-next.test.ts` -- conjunctive, missing-data, wishlist, Finish, exact/closest, factor, and determinism hazards.
 - `web/play-next/PlayNextPage.tsx` -- own visit Shelf snapshot, draft/applied intent, explicit generation, active summary, and live announcement.
 - `web/play-next/TunePanel.tsx` -- Shelf/Catalog-style focus-trapped modal, grouped deselectable pressed buttons, wishlist checkbox, draft indicator, and apply control.
-- `web/play-next/SuggestionCard.tsx` -- reuse Shelf/Catalog 3:4 cover composition, cover trigger, flags, ownership diamond/fallback glyph, facts, and card-level `Closest match`/`DISCOVER` presentation wherever compatible.
+- `web/play-next/SuggestionCard.tsx` -- reuse Shelf/Catalog 3:4 cover composition, cover trigger, cover-error fallback, access/leaving flags, live ownership diamond/source dialog, facts, and card-level `Closest match`/`DISCOVER` presentation.
 - `web/play-next/play-next.css` -- compact Tune trigger, centered desktop modal, phone bottom sheet, and Shelf/Catalog-aligned game-card layout.
 - `web/play-next/PlayNextPage.test.tsx` -- draft/apply/reset, detail continuity, announcement, closest, and access behavior.
 - `playwright/e2e/epic13-play-next.spec.ts`, `playwright/COVERAGE.md` -- real-D1 Story 13.2 visible flows and AC ledger.
@@ -55,11 +56,11 @@ warnings: [oversized]
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `src/core/play-next.ts`, `src/core/play-next.test.ts` -- implement and pin intent matching before UI.
-- [ ] `web/play-next/TunePanel.tsx`, `web/play-next/PlayNextPage.tsx` -- after approval, implement draft/applied state and one-shot application.
-- [ ] `web/play-next/SuggestionCard.tsx`, `web/play-next/play-next.css` -- add approved closest/access treatment and responsive placement.
-- [ ] `web/play-next/PlayNextPage.test.tsx` -- pin all state transitions, missing facts, detail persistence, and announcements.
-- [ ] `playwright/e2e/epic13-play-next.spec.ts`, `playwright/COVERAGE.md` -- prove every visible Story 13.2 criterion.
+- [x] `src/core/play-next.ts`, `src/core/play-next.test.ts` -- implement and pin intent matching before UI.
+- [x] `web/play-next/TunePanel.tsx`, `web/play-next/PlayNextPage.tsx` -- after approval, implement draft/applied state and one-shot application.
+- [x] `web/play-next/SuggestionCard.tsx`, `web/play-next/play-next.css` -- add approved closest/access treatment and responsive placement.
+- [x] `web/play-next/PlayNextPage.test.tsx` -- pin all state transitions, missing facts, detail persistence, and announcements.
+- [x] `playwright/e2e/epic13-play-next.spec.ts`, `playwright/COVERAGE.md` -- prove every visible Story 13.2 criterion.
 
 **Acceptance Criteria:**
 - Given the default slate, when Tune opens and draft choices change, then current cards and applied `SURPRISE ME` remain unchanged until `Show me 3`.
@@ -72,6 +73,7 @@ warnings: [oversized]
 - Given a routed detail round-trip or a new destination visit, when navigation completes, then the first preserves draft/applied/slate state and the second resets it.
 - Given desktop and 320px phone, when Tune opens, then a modal backdrop isolates it, desktop uses a centered dialog, phone uses the existing filter-sheet disposition, focus is trapped/restored, Escape/backdrop dismiss, and every target is at least 44px.
 - Given a suggestion card, when its cover renders, then it reuses Shelf/Catalog 3:4 proportions, cover detail trigger, known access/leaving flag placement, `◆/◇` ownership icon, and `▹` fallback wherever the candidate data supports them.
+- Given a suggestion ownership diamond, when ownership changes, then it uses the existing guarded ownership mutation and source dialog rather than a duplicate or decorative control.
 
 ## Spec Change Log
 
@@ -81,17 +83,39 @@ warnings: [oversized]
 
 ## Review Triage Log
 
+### 2026-08-02 — Review pass
+- intent_gap: 0
+- bad_spec: 0
+- patch: 11: (high 0, medium 10, low 1)
+- defer: 0
+- reject: 0
+- addressed_findings:
+  - `[medium]` `[patch]` kept visit recommendation facts, reasons, factors, and ordering frozen across Shelf refetches while reconciling only ownership/access fields consistently.
+  - `[medium]` `[patch]` disabled Tune until its visit snapshot exists and added intent-specific empty-state copy.
+  - `[medium]` `[patch]` made UTC date predicates reject malformed and impossible calendar dates.
+  - `[medium]` `[patch]` pinned unchanged-draft single generation, complete modal focus wrapping, ownership mutation confirmation, visit detail continuity/reset, and centered desktop geometry.
+  - `[medium]` `[patch]` expanded real-D1 browser evidence for source-guarded ownership changes and phone control targets.
+  - `[low]` `[patch]` scoped cover failures to the failed URL so a changed cover can retry.
+
 ## Design Notes
 
 Intent groups are exact: Genre = `Familiar | Different`; Time = `Quick win`; Backlog age = `Fresh | Forgotten`; Confidence = `Safe bet | Wildcard`; Priority = `Follow my list | Last chance`; Progress = `Finish them`. Each is nullable. `Include wishlist` is a pool control, not a match group.
+
+Public core shape is exact: `PlayNextIntent` has nullable `genre`, `time`, `backlogAge`, `confidence`, `priority`, and `progress` fields plus boolean `includeWishlist`; export `EMPTY_PLAY_NEXT_INTENT`. `getPlayNextSuggestions` accepts optional `intent` inside its existing options. `PlayNextSuggestion` adds integer `intentDistance` and boolean `closestMatch`; access tags expand to `OWNED | PS+ EXTRA | DISCOVER`. Default empty intent must preserve Story 13.1 outputs byte-for-byte except for the new metadata fields.
 
 Predicate reuse: Familiar overlaps normalized active Shelf anchors; Different requires a known genre with zero overlap. Quick win requires valid TTB ≤20h. Forgotten requires known backlog age ≥180 UTC days; Fresh requires known age <180. Safe bet reuses qualified critic ≥80/10 or user ≥80/20. Wildcard requires at least one known score/count pair and no Safe bet qualification; unknown confidence matches neither. Follow my list is raw `Up next`; Last chance is current PS+ leaving in 0–30 days; Finish them reuses `isFinishThem`.
 
 Every matched active group adds named `intent-*` factor +24 for explanation inspection, but selection sorts intent distance before additive total, so points cannot move partial above exact. Distance is active-group count minus matched-group count. Fill in ascending distance; `closestMatch` is true only when distance >0. Within one distance tier, reuse Story 13.1 score/diversity/seed/id order. Explicit Finish removes the cap; otherwise default cap remains one.
 
+Base factors remain in their Story 13.1 order; matching intent factors append in fixed group order: genre, time, backlog age, confidence, priority, progress. Every greedy selection step first restricts candidates to the smallest remaining `intentDistance`; diversity and the third-card anti-duplicate alternative operate only inside that tier. This lexicographic boundary is a named hazard and requires a direct test.
+
 Eligibility adds `wishlisted`: terminal/platinum/future rules stay absolute. Base access is owned/current PS+; `includeWishlist` additionally admits actual wishlisted games with neither, tagged `DISCOVER`. Missing facts never match Different, Fresh, Forgotten, Wildcard, or any other predicate.
 
-ARIA pattern: semantic `fieldset`/`legend`; deselectable exclusive buttons use `aria-pressed`; native checkbox for wishlist; disclosure button exposes `aria-expanded`/`aria-controls`. Applied summary remains separate from draft indicator. `Show me 3` stays focused and uses existing polite live-region provider.
+A known confidence pair requires a finite score from 0 through 100 and a positive finite count. Malformed, negative, out-of-range, zero-count, or missing pairs match neither Safe bet nor Wildcard. `DISCOVER` cards retain live `Play this`; they already represent tracked wishlisted Shelf rows, and the existing guarded status write may move them to Playing.
+
+ARIA pattern: semantic `fieldset`/`legend`; deselectable exclusive buttons use `aria-pressed`; native checkbox for wishlist; disclosure button exposes `aria-haspopup="dialog"`, `aria-expanded`, and `aria-controls`. The portal dialog reuses `useModalTrap`, locks/restores body scroll, closes on Escape/backdrop/close/apply, and restores focus to the Tune trigger. Dismissal preserves the draft. `Show me 3` derives exactly once even when unchanged, snapshots draft to active, closes, restores trigger focus, and announces the honest count through the existing polite live region.
+
+Applied readback is exact: empty active intent renders `SURPRISE ME`; otherwise render active choice labels in group order, followed by `INCLUDE WISHLIST` when enabled. Trigger badge count equals active group choices plus the wishlist pool control. Draft edits never change either readback or badge. New destination mount resets draft, active intent, visit Shelf snapshot, seed, and slate; routed detail preserves all of them.
 
 Placement mock: `_bmad-output/design-demos/epic-13-play-next/05-story-13-2-tune-modal.html`. Direction is an iteration of Luca-approved Option A; it does not reopen direction selection. Supersedes the rejected inline/below-controls structure in `04-story-13-2-tune-expanded.html`. Approval received verbatim on 2026-08-02: `Use this as a mock: [05-story-13-2-tune-modal.html](_bmad-output/design-demos/epic-13-play-next/05-story-13-2-tune-modal.html)`. The app-aligned mock is binding for UI implementation.
 
@@ -105,8 +129,10 @@ Placement mock: `_bmad-output/design-demos/epic-13-play-next/05-story-13-2-tune-
 
 ## Auto Run Result
 
-Status: blocked
-Blocking condition: UI-MOCK-GATE approval missing for revised Story 13.2 Tune modal and Shelf/Catalog-aligned cards. Luca must explicitly approve `_bmad-output/design-demos/epic-13-play-next/05-story-13-2-tune-modal.html` before UI implementation.
+Status: implementation verified; completion metadata pending commit revision
 
-Resumed: 2026-08-02
-UI-MOCK-GATE: approved. Continue from readiness validation.
+Summary: shipped ephemeral Tune draft/applied state, conjunctive exact-first intent matching with closest fallback, wishlist discovery, explicit Finish behavior, approved Shelf/Catalog-style modal, and app-aligned suggestion covers with guarded ownership controls.
+
+Review findings: 11 patches applied (high 0, medium 10, low 1); 0 deferred; 0 rejected. Significant cross-layer review changes require independent follow-up (`followup_review_recommended: true`).
+
+Verification: core 19/19; targeted web 15/15; Epic 13 Playwright 6/6 across full run plus corrected final-case retry; full Vitest 2159/2159 with `--maxWorkers=2`; lint, typecheck, build, and `git diff --check` pass. Initial unrestricted full-suite run suffered unrelated local resource-starvation timeouts; clean bounded-worker retry passed.

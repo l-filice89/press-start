@@ -18,7 +18,28 @@ export interface PlayNextCandidate {
 	ttbStorySeconds: number | null;
 	boughtOn: string | null;
 	wishlistedOn: string | null;
+	wishlisted: boolean;
 }
+
+export interface PlayNextIntent {
+	genre: 'Familiar' | 'Different' | null;
+	time: 'Quick win' | null;
+	backlogAge: 'Fresh' | 'Forgotten' | null;
+	confidence: 'Safe bet' | 'Wildcard' | null;
+	priority: 'Follow my list' | 'Last chance' | null;
+	progress: 'Finish them' | null;
+	includeWishlist: boolean;
+}
+
+export const EMPTY_PLAY_NEXT_INTENT: PlayNextIntent = {
+	genre: null,
+	time: null,
+	backlogAge: null,
+	confidence: null,
+	priority: null,
+	progress: null,
+	includeWishlist: false,
+};
 
 export type PlayNextReason =
 	| 'FINISH THEM'
@@ -42,8 +63,10 @@ export interface PlayNextSuggestion {
 	factors: readonly PlayNextFactor[];
 	primaryReason: PlayNextReason;
 	explanation: string;
-	accessTag: 'OWNED' | 'PS+ EXTRA';
+	accessTag: 'OWNED' | 'PS+ EXTRA' | 'DISCOVER';
 	finishThem: boolean;
+	intentDistance: number;
+	closestMatch: boolean;
 }
 
 const DAY_MS = 86_400_000;
@@ -59,8 +82,20 @@ function compareIds(left: string, right: string): number {
 }
 
 function utcDay(iso: string): number | null {
-	const value = Date.parse(`${iso.slice(0, 10)}T00:00:00Z`);
-	return Number.isFinite(value) ? Math.floor(value / DAY_MS) : null;
+	const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+	if (!match) return null;
+	const year = Number(match[1]);
+	const month = Number(match[2]);
+	const day = Number(match[3]);
+	const value = Date.UTC(year, month - 1, day);
+	const parsed = new Date(value);
+	if (
+		parsed.getUTCFullYear() !== year ||
+		parsed.getUTCMonth() !== month - 1 ||
+		parsed.getUTCDate() !== day
+	)
+		return null;
+	return Math.floor(value / DAY_MS);
 }
 
 function calendarDays(fromIso: string, toIso: string): number | null {
@@ -81,8 +116,14 @@ function fnv1a(value: string): number {
 export function isPlayNextEligible(
 	candidate: PlayNextCandidate,
 	referenceIso: string,
+	includeWishlist = false,
 ): boolean {
-	if (!candidate.owned && !candidate.psPlusExtra) return false;
+	if (
+		!candidate.owned &&
+		!candidate.psPlusExtra &&
+		!(includeWishlist && candidate.wishlisted)
+	)
+		return false;
 	if (candidate.hasPlatinum || candidate.platinumOn !== null) return false;
 	if (candidate.playStatus === 'Playing' || candidate.playStatus === 'Dropped')
 		return false;
@@ -119,6 +160,10 @@ function explain(
 					score: candidate.criticScore,
 					count: candidate.criticScoreCount,
 					qualified:
+						validConfidencePair(
+							candidate.criticScore,
+							candidate.criticScoreCount,
+						) &&
 						(candidate.criticScore ?? 0) >= 80 &&
 						(candidate.criticScoreCount ?? 0) >= 10,
 					order: 0,
@@ -128,6 +173,10 @@ function explain(
 					score: candidate.userScore,
 					count: candidate.userScoreCount,
 					qualified:
+						validConfidencePair(
+							candidate.userScore,
+							candidate.userScoreCount,
+						) &&
 						(candidate.userScore ?? 0) >= 80 &&
 						(candidate.userScoreCount ?? 0) >= 20,
 					order: 1,
@@ -157,6 +206,7 @@ function scoreCandidate(
 	candidate: PlayNextCandidate,
 	referenceIso: string,
 	preferenceGenres: ReadonlySet<string>,
+	intent: PlayNextIntent,
 ): PlayNextSuggestion {
 	const factors: PlayNextFactor[] = [];
 	const add = (code: string, points: number) => factors.push({ code, points });
@@ -193,11 +243,16 @@ function scoreCandidate(
 		else if (storyHours <= 20) add('quick-win-20', 6);
 	}
 	if (
+		validConfidencePair(candidate.criticScore, candidate.criticScoreCount) &&
 		(candidate.criticScore ?? 0) >= 80 &&
 		(candidate.criticScoreCount ?? 0) >= 10
 	)
 		add('critic-confidence', 8);
-	if ((candidate.userScore ?? 0) >= 80 && (candidate.userScoreCount ?? 0) >= 20)
+	if (
+		validConfidencePair(candidate.userScore, candidate.userScoreCount) &&
+		(candidate.userScore ?? 0) >= 80 &&
+		(candidate.userScoreCount ?? 0) >= 20
+	)
 		add('user-confidence', 8);
 	const sharedGenre = candidate.genres.find((genre) =>
 		preferenceGenres.has(genre.trim().toLowerCase()),
@@ -205,6 +260,19 @@ function scoreCandidate(
 	if (sharedGenre) add('familiar-genre', 4);
 	if (candidate.psPlusExtra) add('ps-plus-access', 6);
 	if (candidate.owned) add('owned-access', 4);
+
+	const intentMatches = matchesIntent(
+		candidate,
+		referenceIso,
+		preferenceGenres,
+		intent,
+	);
+	for (const match of intentMatches) {
+		if (match.matches) add(`intent-${match.group}`, 24);
+	}
+	const intentDistance = intentMatches.filter(
+		(match) => match.active && !match.matches,
+	).length;
 
 	const codes = new Set(factors.map((factor) => factor.code));
 	const primaryReason: PlayNextReason = codes.has('finish-them')
@@ -230,15 +298,148 @@ function scoreCandidate(
 		factors,
 		primaryReason,
 		explanation: explain(primaryReason, candidate, sharedGenre),
-		accessTag: candidate.owned ? 'OWNED' : 'PS+ EXTRA',
+		accessTag: candidate.owned
+			? 'OWNED'
+			: candidate.psPlusExtra
+				? 'PS+ EXTRA'
+				: 'DISCOVER',
 		finishThem,
+		intentDistance,
+		closestMatch: intentDistance > 0,
 	};
+}
+
+type IntentMatch = {
+	group:
+		| 'genre'
+		| 'time'
+		| 'backlog-age'
+		| 'confidence'
+		| 'priority'
+		| 'progress';
+	active: boolean;
+	matches: boolean;
+};
+
+function validConfidencePair(score: number | null, count: number | null) {
+	return (
+		score !== null &&
+		count !== null &&
+		Number.isFinite(score) &&
+		Number.isFinite(count) &&
+		score >= 0 &&
+		score <= 100 &&
+		count > 0
+	);
+}
+
+function matchesIntent(
+	candidate: PlayNextCandidate,
+	referenceIso: string,
+	preferenceGenres: ReadonlySet<string>,
+	intent: PlayNextIntent,
+): IntentMatch[] {
+	const genres = normalizedGenres(candidate);
+	const hasKnownGenre = genres.length > 0;
+	const overlapsAnchor = genres.some((genre) => preferenceGenres.has(genre));
+	const storyHours =
+		candidate.ttbStorySeconds !== null &&
+		Number.isFinite(candidate.ttbStorySeconds) &&
+		candidate.ttbStorySeconds >= 0
+			? candidate.ttbStorySeconds / 3600
+			: null;
+	const backlogDate = candidate.boughtOn ?? candidate.wishlistedOn;
+	const backlogDays = backlogDate
+		? calendarDays(backlogDate, referenceIso)
+		: null;
+	const criticKnown = validConfidencePair(
+		candidate.criticScore,
+		candidate.criticScoreCount,
+	);
+	const userKnown = validConfidencePair(
+		candidate.userScore,
+		candidate.userScoreCount,
+	);
+	const safeBet =
+		(criticKnown &&
+			(candidate.criticScore ?? 0) >= 80 &&
+			(candidate.criticScoreCount ?? 0) >= 10) ||
+		(userKnown &&
+			(candidate.userScore ?? 0) >= 80 &&
+			(candidate.userScoreCount ?? 0) >= 20);
+	const leavingDays = candidate.psPlusLeavingOn
+		? calendarDays(referenceIso, candidate.psPlusLeavingOn)
+		: null;
+	return [
+		{
+			group: 'genre',
+			active: intent.genre !== null,
+			matches:
+				intent.genre === 'Familiar'
+					? hasKnownGenre && overlapsAnchor
+					: intent.genre === 'Different'
+						? hasKnownGenre && !overlapsAnchor
+						: false,
+		},
+		{
+			group: 'time',
+			active: intent.time !== null,
+			matches:
+				intent.time === 'Quick win' && storyHours !== null && storyHours <= 20,
+		},
+		{
+			group: 'backlog-age',
+			active: intent.backlogAge !== null,
+			matches:
+				backlogDays !== null &&
+				backlogDays >= 0 &&
+				(intent.backlogAge === 'Fresh'
+					? backlogDays < 180
+					: intent.backlogAge === 'Forgotten'
+						? backlogDays >= 180
+						: false),
+		},
+		{
+			group: 'confidence',
+			active: intent.confidence !== null,
+			matches:
+				intent.confidence === 'Safe bet'
+					? safeBet
+					: intent.confidence === 'Wildcard'
+						? (criticKnown || userKnown) && !safeBet
+						: false,
+		},
+		{
+			group: 'priority',
+			active: intent.priority !== null,
+			matches:
+				intent.priority === 'Follow my list'
+					? candidate.playStatus === 'Up next'
+					: intent.priority === 'Last chance'
+						? candidate.psPlusExtra &&
+							leavingDays !== null &&
+							leavingDays >= 0 &&
+							leavingDays <= 30
+						: false,
+		},
+		{
+			group: 'progress',
+			active: intent.progress !== null,
+			matches: intent.progress === 'Finish them' && isFinishThem(candidate),
+		},
+	];
 }
 
 export function getPlayNextSuggestions(
 	games: readonly PlayNextCandidate[],
-	options: { referenceIso: string; visitSeed: string; limit?: number },
+	options: {
+		referenceIso: string;
+		visitSeed: string;
+		limit?: number;
+		intent?: PlayNextIntent;
+	},
 ): PlayNextSuggestion[] {
+	const intent = options.intent ?? EMPTY_PLAY_NEXT_INTENT;
 	const uniqueGames = games.filter(
 		(game, index) =>
 			games.findIndex((candidate) => candidate.id === game.id) === index,
@@ -251,10 +452,13 @@ export function getPlayNextSuggestions(
 			.flatMap(normalizedGenres),
 	);
 	const ranked = uniqueGames
-		.filter((game) => isPlayNextEligible(game, options.referenceIso))
-		.map((game) => scoreCandidate(game, options.referenceIso, anchors))
+		.filter((game) =>
+			isPlayNextEligible(game, options.referenceIso, intent.includeWishlist),
+		)
+		.map((game) => scoreCandidate(game, options.referenceIso, anchors, intent))
 		.sort(
 			(a, b) =>
+				a.intentDistance - b.intentDistance ||
 				b.total - a.total ||
 				fnv1a(`${options.visitSeed}:${a.game.id}`) -
 					fnv1a(`${options.visitSeed}:${b.game.id}`) ||
@@ -267,9 +471,18 @@ export function getPlayNextSuggestions(
 		? Math.max(0, Math.floor(requestedLimit))
 		: 3;
 	while (selected.length < limit && remaining.length > 0) {
-		const candidates = remaining.filter(
+		const uncapped = intent.progress === 'Finish them';
+		const available = remaining.filter(
 			(item) =>
-				!item.finishThem || !selected.some((chosen) => chosen.finishThem),
+				uncapped ||
+				!item.finishThem ||
+				!selected.some((chosen) => chosen.finishThem),
+		);
+		const nextDistance = Math.min(
+			...available.map((item) => item.intentDistance),
+		);
+		const candidates = available.filter(
+			(item) => item.intentDistance === nextDistance,
 		);
 		if (candidates.length === 0) break;
 		const scored = candidates.map((item) => {

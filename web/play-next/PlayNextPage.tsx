@@ -1,12 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import type { PlayNextSuggestion } from '../../src/core';
-import { getPlayNextSuggestions } from '../../src/core';
+import type { PlayNextIntent, PlayNextSuggestion } from '../../src/core';
+import { EMPTY_PLAY_NEXT_INTENT, getPlayNextSuggestions } from '../../src/core';
+import { useAnnounce } from '../components/LiveRegion';
 import { SkeletonGrid } from '../components/Skeleton';
-import { fetchShelf } from '../shelf/api';
+import { fetchShelf, type ShelfGame } from '../shelf/api';
 import { toDetail } from '../shelf/detail-navigation';
 import { SuggestionCard } from './SuggestionCard';
+import { TunePanel } from './TunePanel';
 import './play-next.css';
 
 export function PlayNextPage() {
@@ -19,7 +21,17 @@ export function PlayNextPage() {
 	const [suggestions, setSuggestions] = useState<
 		readonly PlayNextSuggestion[] | null
 	>(null);
+	const [visitGames, setVisitGames] = useState<typeof data>(undefined);
+	const [draftIntent, setDraftIntent] = useState<PlayNextIntent>(() => ({
+		...EMPTY_PLAY_NEXT_INTENT,
+	}));
+	const [activeIntent, setActiveIntent] = useState<PlayNextIntent>(() => ({
+		...EMPTY_PLAY_NEXT_INTENT,
+	}));
+	const [tuneOpen, setTuneOpen] = useState(false);
+	const generationRef = useRef(0);
 	const headingRef = useRef<HTMLHeadingElement>(null);
+	const announce = useAnnounce();
 	const navigate = useNavigate();
 	const location = useLocation();
 	useEffect(() => {
@@ -27,6 +39,7 @@ export function PlayNextPage() {
 	}, []);
 	useEffect(() => {
 		if (data && suggestions === null) {
+			setVisitGames(data);
 			setSuggestions(
 				getPlayNextSuggestions(data, {
 					referenceIso,
@@ -35,6 +48,28 @@ export function PlayNextPage() {
 			);
 		}
 	}, [data, referenceIso, suggestions, visitSeed]);
+	const activeLabels = useMemo(
+		() => intentLabels(activeIntent),
+		[activeIntent],
+	);
+	const activeCount = activeLabels.length;
+	const draftDirty =
+		JSON.stringify(draftIntent) !== JSON.stringify(activeIntent);
+	const applyDraft = () => {
+		if (!visitGames) return;
+		generationRef.current += 1;
+		const next = getPlayNextSuggestions(visitGames, {
+			referenceIso,
+			visitSeed: `${visitSeed}:tune:${generationRef.current}`,
+			intent: draftIntent,
+		});
+		setActiveIntent({ ...draftIntent });
+		setSuggestions(next);
+		setTuneOpen(false);
+		announce(
+			`${next.length} ${next.length === 1 ? 'suggestion' : 'suggestions'} ready.`,
+		);
+	};
 	const slate = suggestions ?? [];
 	const suggestionsLoading = isPending || (!isError && suggestions === null);
 
@@ -49,10 +84,46 @@ export function PlayNextPage() {
 					<h1 id="play-next-heading" ref={headingRef} tabIndex={-1}>
 						WHAT NEXT?
 					</h1>
-					<span className="play-next__mode">SURPRISE ME</span>
+					<span className="play-next__applied">APPLIED INTENT</span>
+					<span className="play-next__mode">
+						{activeLabels.length > 0 ? activeLabels.join(' · ') : 'SURPRISE ME'}
+					</span>
 				</div>
-				<p>Three picks from your Shelf</p>
+				<div className="play-next__controls">
+					<button
+						type="button"
+						className="tune-trigger"
+						data-active={activeCount > 0 || undefined}
+						aria-haspopup="dialog"
+						aria-expanded={tuneOpen}
+						aria-controls="play-next-tune-dialog"
+						aria-label={
+							activeCount > 0
+								? `Tune the picks — ${activeCount} active`
+								: 'Tune the picks'
+						}
+						disabled={!visitGames}
+						onClick={() => setTuneOpen(true)}
+					>
+						TUNE THE PICKS
+						{activeCount > 0 && (
+							<span className="tune-trigger__count" aria-hidden="true">
+								{activeCount}
+							</span>
+						)}
+					</button>
+					<p>Three picks from your Shelf</p>
+				</div>
 			</header>
+			{tuneOpen && (
+				<TunePanel
+					draft={draftIntent}
+					dirty={draftDirty}
+					onChange={setDraftIntent}
+					onApply={applyDraft}
+					onClose={() => setTuneOpen(false)}
+				/>
+			)}
 			{suggestionsLoading ? (
 				<SkeletonGrid label="Loading Play Next suggestions" />
 			) : isError ? (
@@ -62,7 +133,11 @@ export function PlayNextPage() {
 			) : slate.length === 0 ? (
 				<div className="play-next__empty">
 					<h2>NO PICKS YET</h2>
-					<p>Add an owned or currently available PS+ game to your Shelf.</p>
+					<p>
+						{activeCount > 0
+							? 'No eligible Shelf games match the applied intent.'
+							: 'Add an owned or currently available PS+ game to your Shelf.'}
+					</p>
 				</div>
 			) : (
 				<>
@@ -75,7 +150,10 @@ export function PlayNextPage() {
 						{slate.map((suggestion) => (
 							<SuggestionCard
 								key={suggestion.game.id}
-								suggestion={suggestion}
+								suggestion={reconcileOwnership(
+									suggestion,
+									data?.find((game) => game.id === suggestion.game.id),
+								)}
 								referenceIso={referenceIso}
 								onPlayed={() => void navigate('/')}
 								onOpenDetails={() =>
@@ -88,4 +166,48 @@ export function PlayNextPage() {
 			)}
 		</section>
 	);
+}
+
+/** Keep recommendation facts/reasons frozen to the visit snapshot. Only the
+ * ownership control's own mutable state may reconcile after its guarded write. */
+function reconcileOwnership(
+	suggestion: PlayNextSuggestion,
+	liveGame: ShelfGame | undefined,
+): PlayNextSuggestion {
+	if (!liveGame || liveGame.owned === suggestion.game.owned) return suggestion;
+	const accessTag = liveGame.owned
+		? 'OWNED'
+		: liveGame.psPlusExtra
+			? 'PS+ EXTRA'
+			: liveGame.wishlisted
+				? 'DISCOVER'
+				: null;
+	// An un-own that removes all access makes this visit snapshot stale. Preserve
+	// its internally consistent card until the next generation instead of
+	// inventing a NO ACCESS recommendation or changing the slate under focus.
+	if (!accessTag) return suggestion;
+	return {
+		...suggestion,
+		accessTag,
+		game: {
+			...suggestion.game,
+			owned: liveGame.owned,
+			ownedVia: liveGame.ownedVia,
+			ownershipType: liveGame.ownershipType,
+		} as ShelfGame,
+	};
+}
+
+function intentLabels(intent: PlayNextIntent): string[] {
+	return [
+		intent.genre,
+		intent.time,
+		intent.backlogAge,
+		intent.confidence,
+		intent.priority,
+		intent.progress,
+		intent.includeWishlist ? 'INCLUDE WISHLIST' : null,
+	]
+		.filter((label): label is string => label !== null)
+		.map((label) => label.toUpperCase());
 }
