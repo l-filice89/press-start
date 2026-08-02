@@ -89,7 +89,12 @@ export function useTrackingMutations(
 	{
 		onConfirmClose,
 		onHidden,
-	}: { onConfirmClose?: () => void; onHidden?: () => void } = {},
+		onStatusSuccess,
+	}: {
+		onConfirmClose?: () => void;
+		onHidden?: () => void;
+		onStatusSuccess?: () => void;
+	} = {},
 ) {
 	// Which milestone the confirm dialog is gating; null = no dialog.
 	const [confirming, setConfirming] = useState<Milestone | null>(null);
@@ -228,6 +233,7 @@ export function useTrackingMutations(
 							: `${game.title} — status cleared`,
 						undo,
 					});
+					onStatusSuccess?.();
 				},
 			});
 		},
@@ -240,6 +246,7 @@ export function useTrackingMutations(
 			guardPending,
 			guardStaleUndo,
 			beginWrite,
+			onStatusSuccess,
 		],
 	);
 
@@ -567,6 +574,7 @@ export function useTrackingMutations(
 
 	return {
 		selectStatus,
+		statusPending: mutation.isPending,
 		setOwnership,
 		sourcePrompt,
 		confirmSource,

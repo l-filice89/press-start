@@ -471,3 +471,20 @@ bump-all ETag rotation).
 | AC | Coverage |
 |----|----------|
 | IGDB release dates update or clear in the existing scheduled pass, while omitted/partial/degenerate replies preserve standing dates | no directly triggerable UI flow — provider wire mapping and same-request field are pinned in `src/providers/igdb.test.ts`; real-D1 update, explicit-null clear, omitted-property preserve, partial-row preserve, degenerate-response preserve/retry, scheduled stale-gate dispatch, and all-user version rotation are pinned in `test/integration/scores.test.ts` |
+
+## Epic 13
+
+Story 13.1 (Get three transparent suggestions). Pure derivation over the cached
+Shelf payload; visit state remains mounted behind routed detail overlays.
+
+| AC | Coverage |
+|----|----------|
+| 13.1a navigation is `SHELF | PLAY NEXT | CATALOG | STATS`, `/play-next` hides search, and focus enters `WHAT NEXT?` | `epic13-play-next.spec.ts` › Play Next shows three transparent, varied picks…; jsdom `Header.test.tsx` four-link roving order + `AppShell.test.tsx` route/search pin |
+| 13.1b a new visit immediately shows three default Surprise me suggestions | `epic13-play-next.spec.ts` › …three transparent, varied picks…; jsdom `PlayNextPage.test.tsx` immediate three-card render |
+| 13.1c future, Playing, Dropped, and platinum are excluded; released/TBA owned/current-PS+ remain | browser spec seeds and proves absence of high-scoring Playing, future, Dropped, and platinum hazards; exact boundary matrix in `src/core/play-next.test.ts` |
+| 13.1d Paused/completed-without-platinum may be Finish them, capped at one | browser spec renders one seeded Paused candidate; classification and hard cap in `src/core/play-next.test.ts` |
+| 13.1e missing facts neither exclude nor score and create no unsupported claim | jsdom `PlayNextPage.test.tsx` › omits unknown facts…; factor/explanation neutrality in `src/core/play-next.test.ts` |
+| 13.1f additive factors, seeded ties, and diversity prevent a three-card near duplicate | browser score-factor list + three distinct known genres in `epic13-play-next.spec.ts`; exact factor order, same/different seed, input immutability, Finish cap, and third-card alternative in `src/core/play-next.test.ts` |
+| 13.1g each card shows cover/title/reason/access/known facts/explanation and two live actions | browser spec pins visible genre, TTB, PS+ tag, factors, and both actions; `Play this` success is pinned in its own browser test |
+| 13.1h detail close preserves exact slate/visit and returns focus to originating suggestion | `epic13-play-next.spec.ts` captures visit id plus ordered game ids before/after overlay and asserts card focus |
+| 13.1i approved implementation-specific mock recorded and phone targets remain usable | `_bmad-output/design-demos/epic-13-play-next/direction-approved.md`; browser phone test pins vertical stack and ≥44px actions |

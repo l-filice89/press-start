@@ -5,6 +5,7 @@ import { Catalog } from '../catalog/Catalog';
 import { AttentionBanner } from '../components/AttentionBanner';
 import { EmptyState } from '../components/EmptyState';
 import { ToastHost } from '../components/Toast';
+import { PlayNextPage } from '../play-next/PlayNextPage';
 import { fetchSettings } from '../settings/api';
 import { SettingsPanel } from '../settings/SettingsPanel';
 import { useActiveDestination } from '../shelf/detail-navigation';
@@ -61,6 +62,8 @@ export function AppShell({
 	// which is the deliberate price of the non-remount guarantee.
 	const destination = useActiveDestination();
 	const statsActive = destination.pathname.startsWith('/stats');
+	const playNextActive = destination.pathname === '/play-next';
+	const searchHidden = statsActive || playNextActive;
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [stragglersOpen, setStragglersOpen] = useState(false);
 	const { data: settings } = useQuery({
@@ -80,7 +83,7 @@ export function AppShell({
 					onSignOut={onSignOut}
 					onOpenSettings={() => setSettingsOpen(true)}
 					signOutFailed={signOutFailed}
-					search={statsActive ? null : <SearchBox />}
+					search={searchHidden ? null : <SearchBox />}
 					psPlusRefreshedAt={settings?.psPlusRefreshedAt ?? null}
 					catalogRefreshing={settings?.catalogRefreshing ?? false}
 				/>
@@ -126,7 +129,7 @@ export function AppShell({
 				    background renders no grid (GameRoute.close) — a bare <main> is not
 				    focusable, so without this the fallback would still land on <body>. */}
 				<main
-					className={`app-shell__main${statsActive ? ' app-shell__main--no-pinned-search' : ''}`}
+					className={`app-shell__main${searchHidden ? ' app-shell__main--no-pinned-search' : ''}`}
 					id="main-content"
 					tabIndex={-1}
 				>
@@ -136,6 +139,7 @@ export function AppShell({
 							element={<Catalog onOpenSettings={() => setSettingsOpen(true)} />}
 						/>
 						<Route path="/" element={<Shelf />} />
+						<Route path="/play-next" element={<PlayNextPage />} />
 						<Route path="/stats" element={<StatsPage />} />
 						<Route path="/game/:id" element={<Shelf />} />
 						<Route path="*" element={<NotFound />} />

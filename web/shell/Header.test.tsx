@@ -84,10 +84,12 @@ describe('Header destination toggle', () => {
 		renderHeader(<Header email="a@b.co" onSignOut={noop} />);
 
 		const shelf = screen.getByRole('link', { name: 'SHELF' });
+		const playNext = screen.getByRole('link', { name: 'PLAY NEXT' });
 		const catalog = screen.getByRole('link', { name: 'CATALOG' });
 		const stats = screen.getByRole('link', { name: 'STATS' });
 		expect(shelf).toHaveAttribute('aria-current', 'page');
 		expect(catalog).not.toHaveAttribute('aria-current');
+		expect(playNext).toHaveAttribute('href', '/play-next');
 		expect(stats).toHaveAttribute('href', '/stats');
 		// A real href — ctrl-click / middle-click / "open in new tab" all live here.
 		expect(catalog).toHaveAttribute('href', '/catalog');
@@ -143,11 +145,14 @@ describe('Header destination toggle', () => {
 		).toHaveValue('');
 	});
 
-	it('traverses all three destinations with arrow keys (one tab stop)', async () => {
+	it('traverses all four destinations with arrow keys (one tab stop)', async () => {
 		const user = userEvent.setup();
 		renderHeader(<Header email="a@b.co" onSignOut={noop} />);
 
 		screen.getByRole('link', { name: 'SHELF' }).focus();
+		await user.keyboard('{ArrowRight}');
+		expect(screen.getByRole('link', { name: 'PLAY NEXT' })).toHaveFocus();
+		expect(url()).toBe('/play-next');
 		await user.keyboard('{ArrowRight}');
 		expect(screen.getByRole('link', { name: 'CATALOG' })).toHaveFocus();
 		expect(url()).toBe('/catalog');

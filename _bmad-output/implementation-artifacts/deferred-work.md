@@ -577,3 +577,7 @@ resolution: done 2026-07-16 (Story 10.2) — DECIDED: `first_seen_at` keeps its 
 - source_spec: `_bmad-output/implementation-artifacts/spec-cron-refresh-release-dates.md`
   summary: Multiple IGDB links on one game produce duplicate fact updates whose last release date wins without an explicit authoritative-link rule.
   evidence: Schema permits multiple `(game, source)` links and `runScoreRefresh` intentionally maps each link to a write; scores already had this pathological ambiguity, while release dates now inherit it. Resolving which link wins needs a separate identity-cleanup decision.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-13-1-get-three-transparent-suggestions.md`
+  summary: Fully parallel Playwright files share one user and whole-Shelf recommendation pool, so unrelated concurrent fixtures can influence ranking assertions.
+  evidence: `playwright.config.ts` enables `fullyParallel` against one local D1 and one authenticated user; Story 13.1 uses dominant run-unique fixtures and passes its serial burn-in shape, but true cross-file isolation requires a harness-level per-worker user/database design.
