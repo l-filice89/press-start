@@ -2,8 +2,9 @@
 title: 'Story 13.1: Get three transparent suggestions'
 type: 'feature'
 created: '2026-08-02'
-status: 'in-review'
+status: 'done'
 baseline_revision: 'd51a979'
+final_revision: 'b05ced8'
 review_loop_iteration: 0
 followup_review_recommended: true
 context:
@@ -189,7 +190,7 @@ Approval: **APPROVED by Luca on 2026-08-02 — "Approve revised option A placeme
 
 ## Auto Run Result
 
-Status: in-review; implementation and review fixes verified.
+Status: done
 
 Summary: shipped pure deterministic Play Next eligibility/scoring/diversity, approved `/play-next` Option A destination, transparent three-card slate, live `Play this`, routed detail preservation/focus, responsive layout, and real-D1 browser evidence.
 
