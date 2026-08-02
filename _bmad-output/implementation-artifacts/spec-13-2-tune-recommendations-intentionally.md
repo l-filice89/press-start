@@ -16,13 +16,13 @@ warnings: [oversized]
 
 **Problem:** Surprise me cannot express deliberate play intent, so a user cannot narrow recommendations without leaving Play Next or mentally filtering the slate.
 
-**Approach:** Add ephemeral draft/applied tuning state, pure conjunctive intent matching with automatic closest-match fallback, and an approved Option A Tune panel that applies only on `Show me 3`.
+**Approach:** Add ephemeral draft/applied tuning state, pure conjunctive intent matching with automatic closest-match fallback, and an Option A Tune modal that applies only on `Show me 3`.
 
 ## Boundaries & Constraints
 
 **Always:** Keep intent predicates, distance, wishlist eligibility, exact/closest ordering, Finish them behavior, and match metadata pure in `src/core/`. Keep draft and applied intent separate in `PlayNextPage`; edits never regenerate. Active groups combine with AND and permit at most one choice each. Exact matches lead; relaxed cards say `Closest match`. Missing data proves neither side of an intent. Current PS+ remains eligible regardless of `Include wishlist`. Preserve visit state through detail.
 
-**Block If:** Luca has not explicitly approved `_bmad-output/design-demos/epic-13-play-next/04-story-13-2-tune-expanded.html` immediately before UI implementation; a requested visible claim requires a Shelf fact that does not exist.
+**Block If:** Luca has not explicitly approved `_bmad-output/design-demos/epic-13-play-next/05-story-13-2-tune-modal.html` immediately before UI implementation; a requested visible claim requires a Shelf fact that does not exist.
 
 **Never:** Add backend/schema/provider/persistence, mutate manual Shelf filters, implement Shuffle/seen/exhaustion, regenerate while draft controls change, treat missing data as a negative match, or let additive score place a partial match before an exact match.
 
@@ -46,9 +46,9 @@ warnings: [oversized]
 - `src/core/play-next.ts` -- extend candidate with `wishlisted`, add intent types/predicates/distance/match factors, closest metadata, Discover access, and explicit-Finish cap rule.
 - `src/core/play-next.test.ts` -- conjunctive, missing-data, wishlist, Finish, exact/closest, factor, and determinism hazards.
 - `web/play-next/PlayNextPage.tsx` -- own visit Shelf snapshot, draft/applied intent, explicit generation, active summary, and live announcement.
-- `web/play-next/TunePanel.tsx` -- grouped deselectable pressed buttons, wishlist checkbox, draft indicator, apply control, desktop/mobile placement.
-- `web/play-next/SuggestionCard.tsx` -- card-level `Closest match` and `DISCOVER` presentation.
-- `web/play-next/play-next.css` -- approved inline desktop panel and phone cards-before-collapsible-controls order.
+- `web/play-next/TunePanel.tsx` -- Shelf/Catalog-style focus-trapped modal, grouped deselectable pressed buttons, wishlist checkbox, draft indicator, and apply control.
+- `web/play-next/SuggestionCard.tsx` -- reuse Shelf/Catalog 3:4 cover composition, cover trigger, flags, ownership diamond/fallback glyph, facts, and card-level `Closest match`/`DISCOVER` presentation wherever compatible.
+- `web/play-next/play-next.css` -- compact Tune trigger, centered desktop modal, phone bottom sheet, and Shelf/Catalog-aligned game-card layout.
 - `web/play-next/PlayNextPage.test.tsx` -- draft/apply/reset, detail continuity, announcement, closest, and access behavior.
 - `playwright/e2e/epic13-play-next.spec.ts`, `playwright/COVERAGE.md` -- real-D1 Story 13.2 visible flows and AC ledger.
 
@@ -70,9 +70,14 @@ warnings: [oversized]
 - Given explicit Finish them, when applied, then Finish candidates lead without the default one-card cap and any relaxed filler is visibly labeled.
 - Given `Show me 3`, when applied, then exactly one generation occurs, focus stays stable, and a polite live region announces the honest result count.
 - Given a routed detail round-trip or a new destination visit, when navigation completes, then the first preserves draft/applied/slate state and the second resets it.
-- Given desktop and 320px phone, when Tune is rendered, then desktop controls sit above cards, phone cards precede collapsible controls, and every target is at least 44px.
+- Given desktop and 320px phone, when Tune opens, then a modal backdrop isolates it, desktop uses a centered dialog, phone uses the existing filter-sheet disposition, focus is trapped/restored, Escape/backdrop dismiss, and every target is at least 44px.
+- Given a suggestion card, when its cover renders, then it reuses Shelf/Catalog 3:4 proportions, cover detail trigger, known access/leaving flag placement, `◆/◇` ownership icon, and `▹` fallback wherever the candidate data supports them.
 
 ## Spec Change Log
+
+- 2026-08-02: Replaced inline/below Tune panel with Shelf/Catalog-style modal;
+  aligned suggestion covers with existing Shelf/Catalog composition and icons
+  following Luca's design correction.
 
 ## Review Triage Log
 
@@ -88,7 +93,7 @@ Eligibility adds `wishlisted`: terminal/platinum/future rules stay absolute. Bas
 
 ARIA pattern: semantic `fieldset`/`legend`; deselectable exclusive buttons use `aria-pressed`; native checkbox for wishlist; disclosure button exposes `aria-expanded`/`aria-controls`. Applied summary remains separate from draft indicator. `Show me 3` stays focused and uses existing polite live-region provider.
 
-Placement mock: `_bmad-output/design-demos/epic-13-play-next/04-story-13-2-tune-expanded.html`. Direction is an iteration of Luca-approved Option A; it does not reopen direction selection. Approval: **PENDING Story 13.2-specific sign-off.**
+Placement mock: `_bmad-output/design-demos/epic-13-play-next/05-story-13-2-tune-modal.html`. Direction is an iteration of Luca-approved Option A; it does not reopen direction selection. Supersedes the rejected inline/below-controls structure in `04-story-13-2-tune-expanded.html`. Approval: **PENDING Story 13.2-specific sign-off.**
 
 ## Verification
 
@@ -101,4 +106,4 @@ Placement mock: `_bmad-output/design-demos/epic-13-play-next/04-story-13-2-tune-
 ## Auto Run Result
 
 Status: blocked
-Blocking condition: UI-MOCK-GATE approval missing for Story 13.2 Tune structure. Luca must explicitly approve `_bmad-output/design-demos/epic-13-play-next/04-story-13-2-tune-expanded.html` before UI implementation.
+Blocking condition: UI-MOCK-GATE approval missing for revised Story 13.2 Tune modal and Shelf/Catalog-aligned cards. Luca must explicitly approve `_bmad-output/design-demos/epic-13-play-next/05-story-13-2-tune-modal.html` before UI implementation.
