@@ -170,7 +170,7 @@ export function PlayNextPage() {
 							disabled={!visitGames || pendingGameIds.size > 0}
 							onClick={() => setTuneOpen(true)}
 						>
-							TUNE THE PICKS
+							<span className="tune-trigger__label">TUNE THE PICKS</span>
 							{activeCount > 0 && (
 								<span className="tune-trigger__count" aria-hidden="true">
 									{activeCount}

@@ -539,3 +539,4 @@ Play Next card-size parity correction (`spec-play-next-card-size-parity.md`):
 | 320px remains two-up with 12px canonical gap, no overflow, and ≥44px actions | `epic13-play-next.spec.ts` › phone uses compact two-up covers and keeps every action at least 44px high |
 | Tune exposes no Confidence, Safe bet, or Wildcard control on desktop or phone | desktop Tune flow + phone Tune sheet browser tests; jsdom `PlayNextPage.test.tsx` › keeps draft edits separate… |
 | Default score-confidence factors and `SAFE BET` reason remain unchanged | `src/core/play-next.test.ts` › pins every date, duration, and confidence scoring boundary; › uses fixed primary-reason precedence… |
+| Active Tune count keeps the trigger label centered at 320px | `epic13-play-next.spec.ts` › Tune uses the phone filter sheet disposition… compares inactive/active centers and trigger geometry, then pins visible/spoken count, non-overlap, and no overflow |

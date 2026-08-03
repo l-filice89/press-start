@@ -850,6 +850,20 @@ test('Tune uses the phone filter sheet disposition with trapped 44px controls', 
 		await page.setViewportSize({ width: 320, height: 667 });
 		await page.goto('/play-next');
 		const trigger = page.locator('.tune-trigger');
+		const [inactiveTriggerBox, inactiveLabelBox] = await Promise.all([
+			trigger.boundingBox(),
+			trigger.locator('.tune-trigger__label').boundingBox(),
+		]);
+		if (!inactiveTriggerBox || !inactiveLabelBox) {
+			throw new Error('inactive Tune trigger geometry unavailable');
+		}
+		expect(
+			Math.abs(
+				inactiveTriggerBox.x +
+					inactiveTriggerBox.width / 2 -
+					(inactiveLabelBox.x + inactiveLabelBox.width / 2),
+			),
+		).toBeLessThan(1);
 		await trigger.click();
 		const dialog = page.getByRole('dialog', { name: 'Tune the picks' });
 		await expect(dialog.getByText(/Confidence/)).toHaveCount(0);
@@ -877,6 +891,41 @@ test('Tune uses the phone filter sheet disposition with trapped 44px controls', 
 		await page.keyboard.press('Escape');
 		await expect(dialog).toHaveCount(0);
 		await expect(trigger).toBeFocused();
+		await trigger.click();
+		await page.getByRole('button', { name: 'Familiar' }).click();
+		await page.getByRole('button', { name: 'SHOW ME 3' }).click();
+		const badge = trigger.locator('.tune-trigger__count');
+		await expect(trigger).toHaveAccessibleName('Tune the picks — 1 active');
+		await expect(badge).toBeVisible();
+		const [triggerBox, labelBox, badgeBox, shuffleBox] = await Promise.all([
+			trigger.boundingBox(),
+			trigger.locator('.tune-trigger__label').boundingBox(),
+			badge.boundingBox(),
+			page.getByRole('button', { name: 'SHUFFLE', exact: true }).boundingBox(),
+		]);
+		if (!triggerBox || !labelBox || !badgeBox || !shuffleBox) {
+			throw new Error('active Tune command geometry unavailable');
+		}
+		expect(
+			Math.abs(
+				triggerBox.x + triggerBox.width / 2 - (labelBox.x + labelBox.width / 2),
+			),
+		).toBeLessThan(1);
+		expect(triggerBox.x).toBe(inactiveTriggerBox.x);
+		expect(triggerBox.width).toBe(inactiveTriggerBox.width);
+		expect(badgeBox.width).toBeGreaterThan(0);
+		expect(badgeBox.height).toBeGreaterThan(0);
+		expect(badgeBox.x).toBeGreaterThanOrEqual(shuffleBox.x + shuffleBox.width);
+		expect(badgeBox.x + badgeBox.width).toBeLessThanOrEqual(320);
+		expect(badgeBox.x).toBeGreaterThanOrEqual(labelBox.x + labelBox.width);
+		expect(
+			await page.evaluate(
+				() =>
+					document.documentElement.scrollWidth <=
+					document.documentElement.clientWidth,
+			),
+		).toBe(true);
+		await expect(badge).toHaveText('1');
 	} finally {
 		await deleteGames(games.map((game) => game.id));
 	}
