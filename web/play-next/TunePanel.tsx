@@ -22,11 +22,6 @@ const GROUPS: readonly {
 		choices: ['Fresh', 'Forgotten'],
 	},
 	{
-		key: 'confidence',
-		label: 'Confidence — one or none',
-		choices: ['Safe bet', 'Wildcard'],
-	},
-	{
 		key: 'priority',
 		label: 'Priority — one or none',
 		choices: ['Follow my list', 'Last chance'],

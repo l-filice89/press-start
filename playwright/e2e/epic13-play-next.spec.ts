@@ -488,6 +488,76 @@ test('Shuffle uses applied Tune intent and ignores a dismissed draft', async ({
 	}
 });
 
+test('desktop recommendation cards match the Shelf grid track width and spacing', async ({
+	page,
+}) => {
+	const games = candidates(randomUUID().slice(0, 8));
+	try {
+		await seedGames(games);
+		await page.goto('/play-next');
+		const playNextCards = page.locator('[data-play-next-game-id]');
+		await expect(playNextCards).toHaveCount(3);
+		const playNextBoxes = await playNextCards.evaluateAll((nodes) =>
+			nodes.map((node) => {
+				const rect = node.getBoundingClientRect();
+				return { left: rect.left, right: rect.right, width: rect.width };
+			}),
+		);
+		const playNextGridBox = await page
+			.locator('.play-next__grid')
+			.boundingBox();
+		const playNextGap = await page
+			.locator('.play-next__grid')
+			.evaluate((grid) => getComputedStyle(grid).columnGap);
+		const playNextGapPx = Number.parseFloat(playNextGap);
+		expect(
+			Math.max(...playNextBoxes.map(({ width }) => width)) -
+				Math.min(...playNextBoxes.map(({ width }) => width)),
+		).toBeLessThan(1);
+		expect(
+			(playNextGridBox?.x ?? 0) +
+				(playNextGridBox?.width ?? 0) -
+				playNextBoxes[2].right,
+		).toBeGreaterThanOrEqual(playNextBoxes[0].width + playNextGapPx - 1);
+		expect(
+			await page.evaluate(
+				() =>
+					document.documentElement.scrollWidth <=
+					document.documentElement.clientWidth,
+			),
+		).toBe(true);
+
+		await page.getByRole('link', { name: 'SHELF' }).click();
+		const shelfCard = page.locator('.shelf__grid .card').first();
+		await expect(shelfCard).toBeVisible();
+		const shelfCardWidth = (await shelfCard.boundingBox())?.width;
+		const shelfGap = await page
+			.locator('.shelf__grid')
+			.evaluate((grid) => getComputedStyle(grid).columnGap);
+
+		expect(shelfCardWidth).toBeDefined();
+		expect(
+			Math.abs(playNextBoxes[0].width - (shelfCardWidth ?? 1)),
+		).toBeLessThan(1);
+		expect(playNextGap).toBe(shelfGap);
+
+		await page.getByRole('link', { name: 'CATALOG' }).click();
+		const catalogCard = page.locator('.catalog__grid .catalog-card').first();
+		await expect(catalogCard).toBeVisible();
+		const catalogCardWidth = (await catalogCard.boundingBox())?.width;
+		const catalogGap = await page
+			.locator('.catalog__grid')
+			.evaluate((grid) => getComputedStyle(grid).columnGap);
+		expect(catalogCardWidth).toBeDefined();
+		expect(
+			Math.abs(playNextBoxes[0].width - (catalogCardWidth ?? 1)),
+		).toBeLessThan(1);
+		expect(playNextGap).toBe(catalogGap);
+	} finally {
+		await deleteGames(games.map((game) => game.id));
+	}
+});
+
 test('phone uses compact two-up covers and keeps every action at least 44px high', async ({
 	page,
 }) => {
@@ -521,12 +591,15 @@ test('phone uses compact two-up covers and keeps every action at least 44px high
 		const boxes = await cards.evaluateAll((nodes) =>
 			nodes.map((node) => {
 				const rect = node.getBoundingClientRect();
-				return { top: rect.top, left: rect.left };
+				return { top: rect.top, left: rect.left, width: rect.width };
 			}),
 		);
 		expect(Math.abs(boxes[1].top - boxes[0].top)).toBeLessThan(2);
-		expect(boxes[1].left).toBeGreaterThan(boxes[0].left);
+		expect(boxes[1].left - (boxes[0].left + boxes[0].width)).toBe(12);
+		expect(boxes[1].width).toBe(boxes[0].width);
 		expect(boxes[2].top).toBeGreaterThan(boxes[0].top);
+		expect(boxes[2].left).toBe(boxes[0].left);
+		expect(boxes[2].width).toBe(boxes[0].width);
 		for (const button of await cards.getByRole('button').all()) {
 			expect((await button.boundingBox())?.height).toBeGreaterThanOrEqual(44);
 		}
@@ -552,6 +625,16 @@ test('phone uses compact two-up covers and keeps every action at least 44px high
 				.locator('.play-next__grid')
 				.evaluate((grid) => getComputedStyle(grid).display),
 		).toBe('grid');
+		const playNextGap = await page
+			.locator('.play-next__grid')
+			.evaluate((grid) => getComputedStyle(grid).columnGap);
+		await page.getByRole('link', { name: 'SHELF' }).click();
+		await expect(page.locator('.shelf__grid .card').first()).toBeVisible();
+		expect(
+			await page
+				.locator('.shelf__grid')
+				.evaluate((grid) => getComputedStyle(grid).columnGap),
+		).toBe(playNextGap);
 	} finally {
 		await deleteGames(games.map((game) => game.id));
 	}
@@ -607,6 +690,13 @@ test('Tune keeps draft separate, applies exact then closest picks, and preserves
 		await trigger.click();
 		const dialog = page.getByRole('dialog', { name: 'Tune the picks' });
 		await expect(dialog).toBeFocused();
+		await expect(dialog.getByText(/Confidence/)).toHaveCount(0);
+		await expect(dialog.getByRole('button', { name: 'Safe bet' })).toHaveCount(
+			0,
+		);
+		await expect(dialog.getByRole('button', { name: 'Wildcard' })).toHaveCount(
+			0,
+		);
 		const desktopBox = await dialog.boundingBox();
 		const viewport = page.viewportSize();
 		expect(desktopBox?.width ?? viewport?.width ?? 0).toBeLessThan(
@@ -762,6 +852,13 @@ test('Tune uses the phone filter sheet disposition with trapped 44px controls', 
 		const trigger = page.locator('.tune-trigger');
 		await trigger.click();
 		const dialog = page.getByRole('dialog', { name: 'Tune the picks' });
+		await expect(dialog.getByText(/Confidence/)).toHaveCount(0);
+		await expect(dialog.getByRole('button', { name: 'Safe bet' })).toHaveCount(
+			0,
+		);
+		await expect(dialog.getByRole('button', { name: 'Wildcard' })).toHaveCount(
+			0,
+		);
 		const dialogBox = await dialog.boundingBox();
 		expect(dialogBox?.x).toBe(0);
 		expect(dialogBox?.width).toBe(320);

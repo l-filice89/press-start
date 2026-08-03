@@ -425,6 +425,13 @@ describe('PlayNextPage', () => {
 		const trigger = screen.getByRole('button', { name: 'Tune the picks' });
 		await user.click(trigger);
 		const dialog = screen.getByRole('dialog', { name: 'Tune the picks' });
+		expect(within(dialog).queryByText(/Confidence/)).not.toBeInTheDocument();
+		expect(
+			within(dialog).queryByRole('button', { name: 'Safe bet' }),
+		).not.toBeInTheDocument();
+		expect(
+			within(dialog).queryByRole('button', { name: 'Wildcard' }),
+		).not.toBeInTheDocument();
 		const familiar = within(dialog).getByRole('button', { name: 'Familiar' });
 		const different = within(dialog).getByRole('button', { name: 'Different' });
 		await user.click(familiar);

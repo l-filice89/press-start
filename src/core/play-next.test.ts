@@ -419,7 +419,6 @@ describe('Play Next scoring and selection', () => {
 					genre: 'Familiar',
 					time: 'Quick win',
 					backlogAge: 'Forgotten',
-					confidence: 'Safe bet',
 					priority: 'Follow my list',
 					progress: null,
 					includeWishlist: false,
@@ -437,7 +436,6 @@ describe('Play Next scoring and selection', () => {
 			'intent-genre',
 			'intent-time',
 			'intent-backlog-age',
-			'intent-confidence',
 			'intent-priority',
 		]);
 		expect(result.find((item) => item.game.id === 'partial')).toMatchObject({
@@ -471,7 +469,7 @@ describe('Play Next scoring and selection', () => {
 		]);
 	});
 
-	it('treats missing or malformed facts as matching neither side', () => {
+	it('treats missing facts as matching neither remaining intent side and never trusts malformed confidence', () => {
 		const bare = game('bare');
 		const malformed = game('malformed', {
 			criticScore: 101,
@@ -483,7 +481,6 @@ describe('Play Next scoring and selection', () => {
 			{ ...EMPTY_PLAY_NEXT_INTENT, genre: 'Different' as const },
 			{ ...EMPTY_PLAY_NEXT_INTENT, backlogAge: 'Fresh' as const },
 			{ ...EMPTY_PLAY_NEXT_INTENT, backlogAge: 'Forgotten' as const },
-			{ ...EMPTY_PLAY_NEXT_INTENT, confidence: 'Wildcard' as const },
 		]) {
 			const suggestion = getPlayNextSuggestions([bare], {
 				referenceIso: TODAY,
@@ -498,9 +495,7 @@ describe('Play Next scoring and selection', () => {
 		const malformedSuggestion = getPlayNextSuggestions([malformed], {
 			referenceIso: TODAY,
 			visitSeed: 'malformed',
-			intent: { ...EMPTY_PLAY_NEXT_INTENT, confidence: 'Wildcard' },
 		})[0];
-		expect(malformedSuggestion.intentDistance).toBe(1);
 		expect(malformedSuggestion.primaryReason).not.toBe('SAFE BET');
 		expect(malformedSuggestion.factors).not.toContainEqual(
 			expect.objectContaining({ code: 'critic-confidence' }),

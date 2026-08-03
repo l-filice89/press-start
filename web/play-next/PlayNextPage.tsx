@@ -288,7 +288,6 @@ function intentLabels(intent: PlayNextIntent): string[] {
 		intent.genre,
 		intent.time,
 		intent.backlogAge,
-		intent.confidence,
 		intent.priority,
 		intent.progress,
 		intent.includeWishlist ? 'INCLUDE WISHLIST' : null,

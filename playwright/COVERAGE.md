@@ -530,3 +530,12 @@ Story 13.4 (Act on a recommendation and harden the flow). Approved action-state 
 | 13.4e routed detail closes to originating recommendation without visit changes | `epic13-play-next.spec.ts` › Play Next shows three… and Shuffle exhausts unseen picks… assert exact slate/visit preservation and originating-card focus |
 | 13.4f existing Shelf lifecycle, filter, search, ordering, and focus remain unchanged | unchanged `epic2-tracking.spec.ts` and `epic3-filter.spec.ts` regression flows; focused Shelf web suites cover grid ordering/focus |
 | 13.4g implementation-specific mock approved before production UI and every visible AC has Playwright evidence | Story spec records Luca’s 2026-08-03 approval after final shipped-app alignment edits; approved mock path above; this ledger maps every visible AC |
+
+Play Next card-size parity correction (`spec-play-next-card-size-parity.md`):
+
+| AC | Coverage |
+|----|----------|
+| Desktop cards use Shelf/Catalog auto-fill track sizing and spacing, leaving unused tracks empty | `epic13-play-next.spec.ts` › desktop recommendation cards match the Shelf grid track width and spacing |
+| 320px remains two-up with 12px canonical gap, no overflow, and ≥44px actions | `epic13-play-next.spec.ts` › phone uses compact two-up covers and keeps every action at least 44px high |
+| Tune exposes no Confidence, Safe bet, or Wildcard control on desktop or phone | desktop Tune flow + phone Tune sheet browser tests; jsdom `PlayNextPage.test.tsx` › keeps draft edits separate… |
+| Default score-confidence factors and `SAFE BET` reason remain unchanged | `src/core/play-next.test.ts` › pins every date, duration, and confidence scoring boundary; › uses fixed primary-reason precedence… |

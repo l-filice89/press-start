@@ -25,7 +25,6 @@ export interface PlayNextIntent {
 	genre: 'Familiar' | 'Different' | null;
 	time: 'Quick win' | null;
 	backlogAge: 'Fresh' | 'Forgotten' | null;
-	confidence: 'Safe bet' | 'Wildcard' | null;
 	priority: 'Follow my list' | 'Last chance' | null;
 	progress: 'Finish them' | null;
 	includeWishlist: boolean;
@@ -35,7 +34,6 @@ export const EMPTY_PLAY_NEXT_INTENT: PlayNextIntent = {
 	genre: null,
 	time: null,
 	backlogAge: null,
-	confidence: null,
 	priority: null,
 	progress: null,
 	includeWishlist: false,
@@ -310,13 +308,7 @@ function scoreCandidate(
 }
 
 type IntentMatch = {
-	group:
-		| 'genre'
-		| 'time'
-		| 'backlog-age'
-		| 'confidence'
-		| 'priority'
-		| 'progress';
+	group: 'genre' | 'time' | 'backlog-age' | 'priority' | 'progress';
 	active: boolean;
 	matches: boolean;
 };
@@ -352,21 +344,6 @@ function matchesIntent(
 	const backlogDays = backlogDate
 		? calendarDays(backlogDate, referenceIso)
 		: null;
-	const criticKnown = validConfidencePair(
-		candidate.criticScore,
-		candidate.criticScoreCount,
-	);
-	const userKnown = validConfidencePair(
-		candidate.userScore,
-		candidate.userScoreCount,
-	);
-	const safeBet =
-		(criticKnown &&
-			(candidate.criticScore ?? 0) >= 80 &&
-			(candidate.criticScoreCount ?? 0) >= 10) ||
-		(userKnown &&
-			(candidate.userScore ?? 0) >= 80 &&
-			(candidate.userScoreCount ?? 0) >= 20);
 	const leavingDays = candidate.psPlusLeavingOn
 		? calendarDays(referenceIso, candidate.psPlusLeavingOn)
 		: null;
@@ -398,16 +375,6 @@ function matchesIntent(
 					: intent.backlogAge === 'Forgotten'
 						? backlogDays >= 180
 						: false),
-		},
-		{
-			group: 'confidence',
-			active: intent.confidence !== null,
-			matches:
-				intent.confidence === 'Safe bet'
-					? safeBet
-					: intent.confidence === 'Wildcard'
-						? (criticKnown || userKnown) && !safeBet
-						: false,
 		},
 		{
 			group: 'priority',
