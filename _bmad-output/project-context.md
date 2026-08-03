@@ -65,11 +65,12 @@ The two `.bmad-loop/runs/**` spine copies are stale worktree snapshots — ignor
 
 - `playwright/COVERAGE.md` is a per-AC ledger: every epic AC has a pinning spec row or a `skipped` row with a real reason. Keep it current in the same change.
 - Hazard-named ACs need a test asserting exactly that hazard; guards need their **bypass** path tested, not just the refusal (standing rules — `_bmad/custom/standing-rules-core.md`).
-- **UI-MOCK-GATE:** every UI-changing story presents an implementation-specific placement mock and records Luca's approval immediately before UI implementation. Planning UX approval does not replace this gate.
+- **UI-MOCK-GATE:** every rendered-surface change presents an implementation-specific placement mock plus a behavior/state matrix enumerating affected supported screen classes, then records Luca's approval immediately before UI implementation. Unaffected classes get explicit regression statements; changing the approved responsive contract requires reapproval. Any introduced or changed breakpoint names its boundary at planning and needs passing browser evidence at the exact boundary plus nearest valid adjacent widths before story `done`. Planning UX approval does not replace this gate. Non-UI work is exempt.
 
 ## Development Workflow
 
 - `main` is protected, PR-only; single required check `CI OK` (lint → typecheck → vitest → build, e2e, burn-in). Conventional commits.
+- UI epics require integrated whole-feature responsive review across spec-enumerated screen classes and predeclared critical states after the final rendered-surface change, with evidence and Luca's acceptance recorded before merge. Findings reopen/create reviewable work and force the closeout to rerun; any later rendered change invalidates acceptance. Non-UI epics are exempt.
 - **Deploy = publish a GitHub Release** (checks out the tag): migrations apply → `wrangler deploy` → health smoke. Merging alone ships nothing.
 - No manual PS+ refresh exists (button + routes deleted, AD-31): snapshot writes come only from the cron rotation and the >35-day stale guard. Sweeps completing set `cycle_complete` — the region then skips until the next window (opens the 15th).
 - Never `rm -rf .wrangler/state` (that IS the local D1). Seed only with `bun dev` stopped (single-writer SQLite).

@@ -1,5 +1,5 @@
 # generated: 2026-07-06
-# last_updated: 2026-07-13
+# last_updated: 2026-08-03
 # project: ps-game-catalog
 # project_key: NOKEY
 # tracking_system: file-system
@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-06
-last_updated: 2026-07-22 # epic-8 retro: retrospective done, action items appended (1-2 shipped in-session)
+last_updated: 2026-08-03 # epic-13 retro: retrospective done, responsive-process actions appended, v3.4.0 prepared
 project: ps-game-catalog
 project_key: NOKEY
 tracking_system: file-system
@@ -170,7 +170,7 @@ development_status:
   13-2-tune-recommendations-intentionally: done
   13-3-shuffle-without-repetition: done
   13-4-act-on-a-recommendation-and-harden-flow: done
-  epic-13-retrospective: optional
+  epic-13-retrospective: done # 2026-08-03 — epic-13-retro-2026-08-03.md; UI accepted, v3.4.0 prepared, merge/deploy remains critical path
 
 action_items:
   - epic: 1
@@ -416,4 +416,20 @@ action_items:
   - epic: 13
     action: "Create Story 13.1 from approved Play Next artifacts; present implementation-specific mock before any UI code"
     owner: "Luca + Amelia"
+    status: done # 2026-08-03: all four Epic 13 stories completed; implementation-specific mocks approved before UI work
+  - epic: 13
+    action: "Extend the UI gate to cover phone, tablet, and desktop behavior, not placement alone"
+    owner: "Sally + Murat"
+    status: done # 2026-08-03: behavior/state matrix and unaffected-class regression statement implemented in standing-rules-core.md; concise contract synchronized in project-context.md
+  - epic: 13
+    action: "Test both sides of every introduced layout breakpoint before a UI story reaches done"
+    owner: "Murat + Amelia"
+    status: done # 2026-08-03: exact-boundary + nearest-adjacent evidence made a story-done requirement; Epic 13 already pins 694/695 and 1023/1024 in epic13-play-next.spec.ts
+  - epic: 13
+    action: "Run an integrated whole-feature responsive review before a UI epic is completed"
+    owner: "Sally + Luka8"
+    status: done # 2026-08-03: final responsive review + Luka8 acceptance recorded in epic-13-retro-2026-08-03.md; future closeout gate implemented in standing-rules-epic-process.md
+  - epic: 13
+    action: "Push, open PR, merge through CI, publish v3.4.0, and verify Play Next in production"
+    owner: "Luka8"
     status: open

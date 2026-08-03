@@ -4,6 +4,35 @@ All notable changes to PRESS START are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/); this project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.0] — 2026-08-03
+
+Turn Shelf data into an immediate, transparent answer to “what should I play
+next?”
+
+### Added
+- **Play Next destination.** Every visit opens with up to three deterministic,
+  varied suggestions derived locally from cached Shelf data, with inspectable
+  reasons and known supporting facts.
+- **Intentional tuning.** Combine genre, length, shelf-age, confidence,
+  priority, and progress intent; exact matches lead and relaxed results are
+  labeled `Closest match`. Wishlist discovery remains explicit.
+- **Non-repeating Shuffle.** Visit-scoped history avoids previously shown games,
+  reports honest pool exhaustion, and resets without immediately repeating the
+  visible slate.
+- **Recommendation actions.** Open details without losing visit state, or use
+  the existing guarded lifecycle mutation to start a game and return to Shelf.
+
+### Changed
+- **Responsive recommendation briefing.** Compact ranked command rows serve
+  tablet widths; full command rows serve desktop; narrow screens retain the
+  approved card layout. Exact breakpoint behavior has browser coverage.
+
+### Fixed
+- **Interaction hardening.** Pending writes lock slate-changing escape paths,
+  failures preserve the complete visit and restore focus, successful writes
+  focus the settled Playing card once, and concurrent card writes cannot unlock
+  controls early.
+
 ## [3.3.2] — 2026-08-02
 
 Keep upcoming game release dates aligned with IGDB.
