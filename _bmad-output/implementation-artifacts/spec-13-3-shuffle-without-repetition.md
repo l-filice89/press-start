@@ -77,6 +77,8 @@ warnings: [oversized]
 
 `seenGameIds` contains every game actually displayed during the mounted destination visit, including initial, Tune-applied, shuffled, and fresh-pool slates. The exhausted/reset flag is armed after a one- or two-card replacement, or after a zero-unseen attempt that deliberately preserves the current slate. Fresh-pool selection uses an empty historical exclusion plus current visible IDs; afterward, seen state starts from only the newly displayed slate.
 
+Near-exhausted and reset-ready are one state, not two steps. Once the smaller slate and warning appear, the very next single Shuffle click immediately generates the fresh-pool slate while excluding the cards currently visible.
+
 Exclusions are an optional core selection input and affect eligibility only after full-snapshot context such as Familiar genre anchors is derived. Seed suffixes use one monotonic visit generation counter across Tune and Shuffle so every explicit generation is deterministic and distinct.
 
 Shuffle is a native button below the suggestion grid, matching the approved Story 13.2 card/tuning structure. Warning is programmatic status text adjacent to the control. Motion changes use existing CSS transitions only and are disabled under `prefers-reduced-motion: reduce`.
@@ -95,4 +97,4 @@ Status: blocked
 
 Blocking condition: UI-MOCK-GATE — awaiting Luca's explicit approval of `_bmad-output/design-demos/epic-13-play-next/06-story-13-3-shuffle-states.html` before production UI or core implementation.
 
-Prepared: ready-for-development Story 13.3 spec plus app-aligned interactive mock covering normal, near-exhausted, and reset-ready states at desktop and 320px phone. Six screenshots verified; production code remains untouched.
+Prepared: ready-for-development Story 13.3 spec plus app-aligned interactive mock covering normal, near-exhausted/reset-armed, and fresh-pool-after-one-click states at desktop and 320px phone. Production code remains untouched.

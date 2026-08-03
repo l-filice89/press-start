@@ -9,8 +9,8 @@ ASSUMPTIONS / ITERATION SOURCE
 - Continuation of Luca-approved Direction A and binding 05 Story 13.2 modal/card mock.
 - Production UI adds only Shuffle below cards and adjacent exhaustion status.
 - State switcher is mock-only review chrome, never production UI.
-- Near-exhausted and reset-ready intentionally share production treatment: exact warning copy
-  communicates that the same Shuffle control performs the fresh-pool transition next.
+- Near-exhausted IS reset-ready. One next Shuffle immediately produces a fresh slate
+  while excluding the two cards currently visible. There is no intermediate click.
 -->
 <style>
 @font-face{font-family:Orbitron;src:url('../../../node_modules/@fontsource-variable/orbitron/files/orbitron-latin-wght-normal.woff2')}
@@ -107,8 +107,8 @@ main{max-width:1120px;margin:auto;padding:var(--space-5) var(--space-4) 56px}
 		<p class="mock-bar__label">STORY 13.3 REVIEW STATES · MOCK-ONLY CONTROL</p>
 		<div class="mock-bar__states">
 			<button class="mock-state" type="button" data-next-state="normal" aria-pressed="true">NORMAL</button>
-			<button class="mock-state" type="button" data-next-state="exhausted" aria-pressed="false">NEAR EXHAUSTED</button>
-			<button class="mock-state" type="button" data-next-state="reset" aria-pressed="false">RESET READY</button>
+			<button class="mock-state" type="button" data-next-state="exhausted" aria-pressed="false">NEAR EXHAUSTED / RESET ARMED</button>
+			<button class="mock-state" type="button" data-next-state="fresh" aria-pressed="false">FRESH POOL · AFTER ONE CLICK</button>
 		</div>
 	</div>
 	<section aria-labelledby="play-next-heading">
@@ -134,22 +134,25 @@ const warning=document.querySelector('.shuffle-warning');
 const third=document.querySelector('[data-card="3"]');
 const caption=document.querySelector('.state-caption');
 const stateButtons=[...document.querySelectorAll('[data-next-state]')];
+const titles=[...document.querySelectorAll('.card__title-row h2')];
 function setState(state){
 	document.body.dataset.state=state;
 	stateButtons.forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.nextState===state)));
-	const depleted=state!=='normal';
+	const depleted=state==='exhausted';
 	warning.hidden=!depleted;
 	third.hidden=depleted;
-	caption.textContent=state==='normal'?'NORMAL · THREE UNSEEN MATCHES AVAILABLE':state==='exhausted'?'NEAR EXHAUSTED · HONEST TWO-CARD SLATE':'RESET READY · NEXT SHUFFLE STARTS FRESH, CURRENT CARDS STAY EXCLUDED';
+	const fresh=state==='fresh';
+	titles.forEach((title,index)=>{title.textContent=`[GAME TITLE ${String(index+(fresh?4:1)).padStart(2,'0')}]`});
+	caption.textContent=state==='normal'?'NORMAL · THREE UNSEEN MATCHES AVAILABLE':state==='exhausted'?'NEAR EXHAUSTED + RESET ARMED · NEXT CLICK STARTS FRESH':'FRESH POOL · ONE CLICK LATER · PREVIOUS CARDS EXCLUDED';
 	location.hash=state;
 }
 stateButtons.forEach(button=>button.addEventListener('click',()=>setState(button.dataset.nextState)));
-document.querySelector('.shuffle-button').addEventListener('click',()=>setState(document.body.dataset.state==='normal'?'exhausted':document.body.dataset.state==='exhausted'?'reset':'normal'));
+document.querySelector('.shuffle-button').addEventListener('click',()=>setState(document.body.dataset.state==='exhausted'?'fresh':'exhausted'));
 const backdrop=document.querySelector('[data-backdrop]');const modal=backdrop.querySelector('.tune');const trigger=document.querySelector('.tune-trigger');
 function openTune(){backdrop.hidden=false;trigger.setAttribute('aria-expanded','true');document.body.style.overflow='hidden';modal.focus()}
 function closeTune(){backdrop.hidden=true;trigger.setAttribute('aria-expanded','false');document.body.style.overflow='';trigger.focus()}
 trigger.addEventListener('click',openTune);backdrop.querySelector('.tune__close').addEventListener('click',closeTune);backdrop.addEventListener('mousedown',event=>{if(event.target===backdrop)closeTune()});document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!backdrop.hidden)closeTune()});
-setState(location.hash.slice(1)==='exhausted'?'exhausted':location.hash.slice(1)==='reset'?'reset':'normal');
+setState(location.hash.slice(1)==='exhausted'?'exhausted':location.hash.slice(1)==='fresh'?'fresh':'normal');
 </script>
 </body>
 </html>

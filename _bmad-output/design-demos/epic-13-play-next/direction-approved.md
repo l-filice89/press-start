@@ -86,3 +86,29 @@ unchanged: still pending.
 Status: approved by Luca on 2026-08-02 for Story 13.2 UI implementation.
 The app-aligned `05-story-13-2-tune-modal.html` is binding implementation
 reference for Tune modal structure and suggestion-card cover composition.
+
+## Story 13.3 Shuffle iteration
+
+Iteration source: approved Story 13.2 app-aligned mock above. Story 13.3 adds
+only Shuffle placement and exhaustion feedback; it does not reopen direction
+selection.
+
+- HTML: `_bmad-output/design-demos/epic-13-play-next/06-story-13-3-shuffle-states.html`
+- Normal desktop/mobile screenshots: `screenshots/06-story-13-3-shuffle-normal-*`
+- Near-exhausted desktop/mobile screenshots: `screenshots/06-story-13-3-shuffle-exhausted-*`
+- Fresh-pool desktop/mobile screenshots: `screenshots/06-story-13-3-shuffle-fresh-pool-*`
+
+## Story 13.3 interaction correction — verbatim
+
+> Why in near exhausted I have to play shuffle twice to actually shuffle? I don't like that
+
+Applied interpretation:
+
+- Mock state machine was wrong; production behavior was never intended to need
+  two clicks.
+- `NEAR EXHAUSTED` and `RESET ARMED` are one state.
+- The next single Shuffle immediately generates a fresh-pool slate while
+  excluding currently visible cards.
+- Removed the misleading intermediate reset-ready state and its screenshots.
+
+Status: pending Luca's explicit approval of revised Story 13.3 mock before UI implementation.
