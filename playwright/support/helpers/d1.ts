@@ -165,6 +165,15 @@ const seedSql = (game: SeedGame): string[] => {
 			 VALUES (${sq(E2E_REGION)}, 'extra', ${sq(`e2e-${game.id}`)}, NULL, ${sq(key)}, NULL, ${sq(game.psPlusLeavingOn)}, NULL);`,
 		);
 	}
+	for (const [index, genre] of game.genres.entries()) {
+		const genreId = `e2e-genre-${game.id}-${index}`;
+		statements.push(
+			`INSERT OR IGNORE INTO genre (id, name) VALUES (${sq(genreId)}, ${sq(genre)});`,
+			`INSERT INTO game_genre (game_id, genre_id)
+			 SELECT ${sq(game.id)}, id FROM genre
+			 WHERE lower(name) = lower(${sq(genre)}) ORDER BY id LIMIT 1;`,
+		);
+	}
 	return statements;
 };
 
@@ -244,6 +253,9 @@ export async function deleteGames(gameIds: string[]): Promise<void> {
 	const productIds = gameIds.map((id) => sq(`e2e-${id}`)).join(', ');
 	await d1Execute(
 		`DELETE FROM game WHERE id IN (${ids});`,
+		`DELETE FROM genre
+		 WHERE substr(id, 1, 10) = 'e2e-genre-'
+		   AND NOT EXISTS (SELECT 1 FROM game_genre WHERE genre_id = genre.id);`,
 		`DELETE FROM ps_plus_catalog WHERE product_id IN (${productIds});`,
 		`DELETE FROM ps_plus_departure WHERE product_id IN (${productIds});`,
 	);

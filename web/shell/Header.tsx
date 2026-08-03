@@ -8,6 +8,7 @@ import './header.css';
 /** Primary destinations. Everything else surfaces over them. */
 const DESTINATIONS = [
 	{ path: '/', label: 'SHELF' },
+	{ path: '/play-next', label: 'PLAY NEXT' },
 	{ path: '/catalog', label: 'CATALOG' },
 	{ path: '/stats', label: 'STATS' },
 ] as const;
@@ -35,10 +36,12 @@ function DestinationToggle() {
 	const { pathname } = useActiveDestination();
 	const refs = useRef<(HTMLAnchorElement | null)[]>([]);
 	const activeIndex = pathname.startsWith('/stats')
-		? 2
+		? 3
 		: pathname.startsWith('/catalog')
-			? 1
-			: 0;
+			? 2
+			: pathname === '/play-next'
+				? 1
+				: 0;
 
 	return (
 		<nav className="destination-toggle" aria-label="Destination">

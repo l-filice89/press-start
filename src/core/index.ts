@@ -7,6 +7,7 @@ export * from './igdb-match';
 export * from './milestone';
 export * from './notion-status';
 export * from './ownership';
+export * from './play-next';
 export * from './seed-reconcile';
 export * from './shelf';
 export * from './status-transition';

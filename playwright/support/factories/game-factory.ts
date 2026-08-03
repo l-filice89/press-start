@@ -24,6 +24,8 @@ export interface SeedGame {
 	ttbStorySeconds: number | null;
 	ttbCompleteSeconds: number | null;
 	ttbCount: number | null;
+	/** IGDB genres attached through game_genre; empty by default. */
+	genres: string[];
 	tracking: {
 		owned: boolean;
 		/** FR-9 amended: `membership` = PS+ claim (card shows the PS+ tag). */
@@ -64,6 +66,7 @@ export function createGame(
 		ttbStorySeconds: null,
 		ttbCompleteSeconds: null,
 		ttbCount: null,
+		genres: [],
 		...overrides,
 		tracking: {
 			owned: true,

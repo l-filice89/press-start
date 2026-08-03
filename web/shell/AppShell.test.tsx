@@ -149,6 +149,20 @@ describe('AppShell attention banners (Story 10.1, FR-40)', () => {
 });
 
 describe('AppShell destinations', () => {
+	it('renders Play Next as a real destination without the search slot', async () => {
+		mockApi();
+		renderShell(['/play-next']);
+
+		expect(
+			await screen.findByRole('heading', { name: 'WHAT NEXT?' }),
+		).toBeInTheDocument();
+		expect(screen.getByRole('link', { name: 'PLAY NEXT' })).toHaveAttribute(
+			'aria-current',
+			'page',
+		);
+		expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
+	});
+
 	it('renders Stats as a real destination without the search slot', async () => {
 		mockApi();
 		renderShell(['/stats']);
@@ -240,5 +254,15 @@ describe('AppShell destinations', () => {
 		renderShell(['/catlog']);
 		expect(await screen.findByText('PAGE NOT FOUND')).toBeInTheDocument();
 		expect(screen.queryByTestId('shelf-grid')).not.toBeInTheDocument();
+	});
+
+	it('a Play Next-looking unknown URL remains Not Found with search visible', async () => {
+		mockApi();
+		renderShell(['/play-nextoops']);
+		expect(await screen.findByText('PAGE NOT FOUND')).toBeInTheDocument();
+		expect(screen.getByRole('searchbox')).toBeInTheDocument();
+		expect(screen.getByRole('link', { name: 'PLAY NEXT' })).not.toHaveAttribute(
+			'aria-current',
+		);
 	});
 });

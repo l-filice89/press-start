@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Play Next desktop A — Command rows</title>
+<!--
+DIRECTION A · COMMAND ROWS (dossier)
+Logic 3 · best-designer: console-dashboard thinking (PS5 game hub / mission briefing).
+The three picks become full-width ranked landscape rows: cover left, evidence middle,
+factors + actions right. Whole slate + header lands in one 1440×900 viewport, titles
+never truncate, the empty right two-thirds of today's page becomes the reading surface.
+Form from content: Play Next IS a ranked briefing — rank, verdict, evidence, one action.
+Tokens/values from web/tokens.css + play-next.css; real slate data from live app 2026-08-03.
+Desktop-only mock (≥1024px); phone keeps the shipped card grid, out of scope here.
+-->
+<style>
+:root{
+	--color-void:#05090f;--color-surface:#0b1622;--color-surface-raised:#0a1120;
+	--color-border-hairline:#163043;--color-border-soft:#12283a;
+	--color-text-primary:#eafaff;--color-text-secondary:#8fb0c4;--color-text-muted:#6b8ba0;
+	--color-accent-electric:#12b3ff;--color-accent-glow:#35e0ff;
+	--color-state-dormant:#3d5566;--color-warn-amber:#ffb254;
+	--space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:24px;
+	--radius-sm:8px;--radius-md:12px;--radius-lg:18px;--radius-pill:999px;
+	--font-display:"Orbitron",system-ui,sans-serif;--font-ui:"Rajdhani",system-ui,sans-serif;
+	--font-body:"Inter",system-ui,sans-serif;--font-mono:"JetBrains Mono",ui-monospace,monospace;
+	--glow-ring:0 0 28px rgba(53,224,255,.18);--hit-target:44px;
+}
+:focus-visible{outline:2px solid var(--color-accent-electric);outline-offset:2px}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:var(--color-void);color:var(--color-text-primary);font:400 13px/1.5 var(--font-body);background-image:linear-gradient(rgba(18,179,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(18,179,255,.025) 1px,transparent 1px);background-size:32px 32px}
+h1,h2{margin:0;font-family:var(--font-display);font-weight:700;line-height:1.15}
+button{font-family:var(--font-ui);color:inherit;cursor:pointer}
+.app-header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:var(--space-4);padding:var(--space-3) var(--space-4);background:rgba(5,9,15,.82);backdrop-filter:blur(8px);border-bottom:1px solid var(--color-border-hairline)}
+.wordmark{font:900 18px var(--font-display);letter-spacing:.08em}.wordmark b{color:var(--color-accent-electric)}
+.destination-toggle{display:flex;gap:2px;padding:2px;background:var(--color-surface-raised);border:1px solid var(--color-border-hairline);border-radius:var(--radius-pill)}
+.destination-toggle a{display:inline-flex;padding:var(--space-2) var(--space-4);border-radius:var(--radius-pill);color:var(--color-text-secondary);font:600 12px var(--font-ui);letter-spacing:.1em;text-decoration:none}
+.destination-toggle a[aria-current="page"]{color:var(--color-void);background:var(--color-accent-electric)}
+.app-header__readout{margin-left:auto;color:var(--color-text-muted);font:11px var(--font-mono);letter-spacing:.06em}
+main{max-width:1400px;margin:auto;padding:var(--space-5) var(--space-4)}
+.play-next__header{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-4);margin-bottom:var(--space-5)}
+.play-next__header h1{font-size:clamp(1.6rem,4vw,2.4rem);letter-spacing:.08em}
+.play-next__applied{display:block;color:var(--color-text-muted);font:.65rem var(--font-mono);letter-spacing:.12em}
+.play-next__mode{display:inline-flex;margin-top:var(--space-2);color:var(--color-accent-electric);font-family:var(--font-ui);font-weight:700;letter-spacing:.1em}
+.controls{display:flex;flex-direction:column;align-items:flex-end;gap:var(--space-2)}
+.controls p{margin:0;color:var(--color-text-secondary)}
+.command-row-buttons{display:flex;gap:var(--space-2)}
+.shuffle{display:inline-flex;align-items:center;min-height:var(--hit-target);padding:var(--space-2) var(--space-3);border:1px solid var(--color-accent-electric);border-radius:var(--radius-lg);background:transparent;color:var(--color-accent-electric);font:700 .9rem var(--font-ui);letter-spacing:.08em}
+.tune{display:inline-flex;align-items:center;min-height:var(--hit-target);padding:var(--space-2) var(--space-3);border:1px solid var(--color-border-hairline);border-radius:var(--radius-lg);background:var(--color-surface-raised);font:600 .9rem var(--font-ui)}
+.slate{display:flex;flex-direction:column;gap:var(--space-3)}
+.row{display:grid;grid-template-columns:44px 120px minmax(0,1.5fr) minmax(0,1fr) 180px;gap:var(--space-4);align-items:stretch;background:var(--color-surface);border:1px solid var(--color-border-soft);border-radius:var(--radius-md);overflow:hidden;transition:border-color 120ms cubic-bezier(.2,0,.2,1)}
+.row:hover{border-color:var(--color-border-hairline)}
+.row__rank{display:grid;place-items:center;background:var(--color-surface-raised);border-right:1px solid var(--color-border-soft);color:var(--color-state-dormant);font:700 1.1rem var(--font-display)}
+.row__cover{position:relative;aspect-ratio:3/4;align-self:center}
+.row__cover img{display:block;width:100%;height:100%;object-fit:cover;border-radius:var(--radius-sm)}
+.row__cover-badge{position:absolute;top:var(--space-1);left:var(--space-1);display:inline-flex;padding:2px var(--space-2);border-radius:var(--radius-pill);background:rgba(5,9,15,.72);color:var(--color-accent-glow);font:600 .625rem/1.4 var(--font-mono);backdrop-filter:blur(2px)}
+.row__main{display:flex;flex-direction:column;gap:var(--space-2);padding:var(--space-3) 0;min-width:0}
+.row__title-line{display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap}
+.row__title-line h2{font-size:1.05rem;font-weight:600}
+.access{padding:var(--space-1) var(--space-2);border:1px solid var(--color-border-hairline);border-radius:var(--radius-pill);color:var(--color-text-secondary);font:700 .7rem var(--font-ui);letter-spacing:.1em}
+.reason{display:inline-flex;margin:0;color:var(--color-accent-electric);font-family:var(--font-ui);font-weight:700;letter-spacing:.1em}
+.leaving{display:inline-flex;align-items:center;padding:2px var(--space-2);border:1px solid rgba(255,178,84,.4);border-radius:var(--radius-pill);color:var(--color-warn-amber);font:600 .625rem/1.4 var(--font-mono)}
+.facts{display:flex;flex-wrap:wrap;gap:var(--space-2);margin:0;padding:0;list-style:none}
+.facts li{padding:var(--space-1) var(--space-2);border-radius:var(--radius-pill);background:var(--color-surface-raised);color:var(--color-text-secondary);font:.68rem var(--font-mono)}
+.expl{margin:0;max-width:52ch;color:var(--color-text-secondary)}
+.row__factors{display:flex;flex-direction:column;justify-content:center;gap:var(--space-1);padding:var(--space-3) 0;border-left:1px solid var(--color-border-soft);padding-left:var(--space-4)}
+.row__factors-label{color:var(--color-text-muted);font:.65rem var(--font-mono);letter-spacing:.12em}
+.factors{display:flex;flex-wrap:wrap;gap:var(--space-1) var(--space-2);margin:0;padding:0;list-style:none}
+.factors li{color:var(--color-text-muted);font:.68rem var(--font-mono)}
+.row__actions{display:flex;flex-direction:column;justify-content:center;gap:var(--space-2);padding:var(--space-4);padding-left:0}
+.row__actions button{min-height:var(--hit-target);padding:var(--space-2) var(--space-3);border:1px solid var(--color-accent-electric);border-radius:var(--radius-sm);background:transparent;color:var(--color-accent-electric);font-weight:700}
+.row__actions button:first-child{background:var(--color-accent-electric);color:var(--color-void)}
+.mock-note{margin-top:var(--space-5);color:var(--color-text-muted);font:10px var(--font-mono);letter-spacing:.08em}
+</style>
+</head>
+<body>
+<header class="app-header">
+	<div class="wordmark">PRESS <b>START</b></div>
+	<nav class="destination-toggle" aria-label="Destination"><a href="#">SHELF</a><a href="#" aria-current="page">PLAY NEXT</a><a href="#">CATALOG</a><a href="#">STATS</a></nav>
+	<span class="app-header__readout">PS+ CATALOG AS OF Jul 16, 2026</span>
+</header>
+<main>
+	<header class="play-next__header">
+		<div><h1>WHAT NEXT?</h1><span class="play-next__applied">APPLIED INTENT</span><span class="play-next__mode">SURPRISE ME</span></div>
+		<div class="controls">
+			<div class="command-row-buttons"><button class="shuffle" type="button">SHUFFLE</button><button class="tune" type="button">TUNE THE PICKS</button></div>
+			<p>Three picks from your Shelf</p>
+		</div>
+	</header>
+	<div class="slate" aria-label="Current suggestions">
+		<article class="row">
+			<span class="row__rank" aria-hidden="true">01</span>
+			<div class="row__cover"><img src="https://images.igdb.com/igdb/image/upload/t_cover_big/cob9k6.jpg" alt=""></div>
+			<div class="row__main">
+				<div class="row__title-line"><h2>Final Fantasy VII Rebirth</h2><span class="access">OWNED</span></div>
+				<p class="reason">FINISH THEM</p>
+				<ul class="facts"><li>Adventure</li><li>Critic 89</li><li>User 90</li></ul>
+				<p class="expl">You already made progress here. Returning now could turn it into a finish.</p>
+			</div>
+			<div class="row__factors"><span class="row__factors-label">SCORE FACTORS</span><ul class="factors"><li>finish-them +40</li><li>critic-confidence +8</li><li>user-confidence +8</li><li>familiar-genre +4</li><li>owned-access +4</li></ul></div>
+			<div class="row__actions"><button type="button">Play this</button><button type="button">Open details</button></div>
+		</article>
+		<article class="row">
+			<span class="row__rank" aria-hidden="true">02</span>
+			<div class="row__cover"><img src="https://images.igdb.com/igdb/image/upload/t_cover_big/co4qfn.jpg" alt=""><span class="row__cover-badge">◈ PS+</span></div>
+			<div class="row__main">
+				<div class="row__title-line"><h2>Assassin's Creed IV Black Flag</h2><span class="access">PS+ EXTRA</span></div>
+				<p class="reason">UP NEXT</p>
+				<ul class="facts"><li>Adventure</li><li>36h story</li><li>Critic 85</li><li>User 83</li></ul>
+				<p class="expl">You marked this Up next, so it is ready to move from intention to play.</p>
+			</div>
+			<div class="row__factors"><span class="row__factors-label">SCORE FACTORS</span><ul class="factors"><li>up-next +32</li><li>critic-confidence +8</li><li>user-confidence +8</li><li>familiar-genre +4</li><li>ps-plus-access +6</li></ul></div>
+			<div class="row__actions"><button type="button">Play this</button><button type="button">Open details</button></div>
+		</article>
+		<article class="row">
+			<span class="row__rank" aria-hidden="true">03</span>
+			<div class="row__cover"><img src="https://images.igdb.com/igdb/image/upload/t_cover_big/co2ed3.jpg" alt=""><span class="row__cover-badge">◈ PS+</span></div>
+			<div class="row__main">
+				<div class="row__title-line"><h2>Assassin's Creed Valhalla</h2><span class="access">PS+ EXTRA</span><span class="leaving">LEAVING 19 AUG</span></div>
+				<p class="reason">LAST CHANCE</p>
+				<ul class="facts"><li>Adventure</li><li>110h story</li><li>Critic 85</li><li>User 74</li><li>Leaves 2026-08-19</li></ul>
+				<p class="expl">It leaves PS+ on 2026-08-19, so waiting could remove your current access.</p>
+			</div>
+			<div class="row__factors"><span class="row__factors-label">SCORE FACTORS</span><ul class="factors"><li>last-chance-30 +18</li><li>critic-confidence +8</li><li>familiar-genre +4</li><li>ps-plus-access +6</li></ul></div>
+			<div class="row__actions"><button type="button">Play this</button><button type="button">Open details</button></div>
+		</article>
+	</div>
+	<p class="mock-note">DIRECTION A · COMMAND ROWS · DESKTOP ≥1024 ONLY · PHONE KEEPS SHIPPED GRID</p>
+</main>
+</body>
+</html>

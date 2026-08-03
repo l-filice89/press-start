@@ -577,3 +577,8 @@ resolution: done 2026-07-16 (Story 10.2) — DECIDED: `first_seen_at` keeps its 
 - source_spec: `_bmad-output/implementation-artifacts/spec-cron-refresh-release-dates.md`
   summary: Multiple IGDB links on one game produce duplicate fact updates whose last release date wins without an explicit authoritative-link rule.
   evidence: Schema permits multiple `(game, source)` links and `runScoreRefresh` intentionally maps each link to a write; scores already had this pathological ambiguity, while release dates now inherit it. Resolving which link wins needs a separate identity-cleanup decision.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-13-1-get-three-transparent-suggestions.md`
+  summary: Fully parallel Playwright files share one user and whole-Shelf recommendation pool, so unrelated concurrent fixtures can influence ranking assertions.
+  evidence: `playwright.config.ts` enables `fullyParallel` against one local D1 and one authenticated user; Story 13.1 uses dominant run-unique fixtures and passes its serial burn-in shape, but true cross-file isolation requires a harness-level per-worker user/database design.
+  resolution: discarded (accepted) 2026-08-03 Epic 13 operator sweep — no observed product defect; Epic 13 uses run-unique dominant fixtures and its final real-D1 contract plus unchanged Shelf lifecycle/filter regressions pass 22/22 serially. Per-worker user/database isolation is a repository-wide harness redesign with no current failure trigger, so Epic 13 does not carry it forward.

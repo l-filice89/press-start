@@ -1,11 +1,11 @@
 ---
 project_name: 'ps-game-catalog'
 user_name: 'Luca'
-date: '2026-07-24'
+date: '2026-08-02'
 sections_completed:
   ['technology_stack', 'architecture_seams', 'data_contracts', 'providers', 'testing', 'workflow', 'critical_rules']
 status: 'complete'
-rule_count: 26
+rule_count: 28
 optimized_for_llm: true
 ---
 
@@ -13,7 +13,7 @@ optimized_for_llm: true
 
 _Critical rules and unobvious patterns for implementing code in this project. Binding
 architecture lives in `_bmad-output/planning-artifacts/architecture/architecture-ps-game-catalog-2026-07-05/ARCHITECTURE-SPINE.md`
-(AD-1…AD-33) — this file glosses only the load-bearing ones; read the spine for the rest.
+(AD-1…AD-34) — this file glosses only the load-bearing ones; read the spine for the rest.
 The two `.bmad-loop/runs/**` spine copies are stale worktree snapshots — ignore them._
 
 ## Technology Stack & Versions
@@ -37,6 +37,7 @@ The two `.bmad-loop/runs/**` spine copies are stale worktree snapshots — ignor
 - Layer flow: `routes` (Hono+Zod) → `services` (orchestration; **only** layer touching providers) → `repositories` (all Drizzle/D1, AD-4) → `schema`. External I/O only via `src/providers/` (AD-5). Nothing external on a render path (AD-6) — reads are repository-only.
 - `worker/index.ts` is the composition root; cron routed by `controller.cron` (`0 3 * * *` = IGDB scores; the `15-28` twice-daily = PS+ rotation: one slot per fire — genre-sweep chunk, else leaving-sweep chunk, else membership pass, AD-31).
 - Every tracking query filters by `user_id` (AD-13 — most-cited AD in the codebase). `game` = shared catalog facts; `game_tracking` (PK `user_id, game_id`) = per-user state (AD-19).
+- Play Next is a pure derivation over cached `['shelf']` data (AD-34): `core/` owns eligibility, scoring, reasons, closest-match relaxation, diversity, Finish them, and seeded tie-breaking; `web/play-next/` owns visit-only draft/applied intent, slate, seen set, and exhaustion. No new API/schema/provider/persistence.
 
 ## Data Contracts
 
@@ -64,10 +65,12 @@ The two `.bmad-loop/runs/**` spine copies are stale worktree snapshots — ignor
 
 - `playwright/COVERAGE.md` is a per-AC ledger: every epic AC has a pinning spec row or a `skipped` row with a real reason. Keep it current in the same change.
 - Hazard-named ACs need a test asserting exactly that hazard; guards need their **bypass** path tested, not just the refusal (standing rules — `_bmad/custom/standing-rules-core.md`).
+- **UI-MOCK-GATE:** every rendered-surface change presents an implementation-specific placement mock plus a behavior/state matrix enumerating affected supported screen classes, then records Luca's approval immediately before UI implementation. Unaffected classes get explicit regression statements; changing the approved responsive contract requires reapproval. Any introduced or changed breakpoint names its boundary at planning and needs passing browser evidence at the exact boundary plus nearest valid adjacent widths before story `done`. Planning UX approval does not replace this gate. Non-UI work is exempt.
 
 ## Development Workflow
 
 - `main` is protected, PR-only; single required check `CI OK` (lint → typecheck → vitest → build, e2e, burn-in). Conventional commits.
+- UI epics require integrated whole-feature responsive review across spec-enumerated screen classes and predeclared critical states after the final rendered-surface change, with evidence and Luca's acceptance recorded before merge. Findings reopen/create reviewable work and force the closeout to rerun; any later rendered change invalidates acceptance. Non-UI epics are exempt.
 - **Deploy = publish a GitHub Release** (checks out the tag): migrations apply → `wrangler deploy` → health smoke. Merging alone ships nothing.
 - No manual PS+ refresh exists (button + routes deleted, AD-31): snapshot writes come only from the cron rotation and the >35-day stale guard. Sweeps completing set `cycle_complete` — the region then skips until the next window (opens the 15th).
 - Never `rm -rf .wrangler/state` (that IS the local D1). Seed only with `bun dev` stopped (single-writer SQLite).
@@ -78,6 +81,7 @@ The two `.bmad-loop/runs/**` spine copies are stale worktree snapshots — ignor
 - Never let any ingest overwrite user-entered tracking state (AD-10: append-only; sync may create games and flip `owned` false→true, nothing else).
 - Never store derived state (Released/Wishlisted/Playable-now — AD-8); compute in `core/`.
 - Never navigate outside react-router / use `window` CustomEvents for cross-tree state (AD-25).
+- Never make Play Next eligibility or scoring inside React components, persist its visit state, or fetch a second recommendation dataset (AD-34).
 - Never commit the D1 file or secrets; secrets ride Wrangler/CI, `.dev.vars` locally.
 - Failures surface to the user (stragglers, banners) — no silent retries (AD-14).
 
@@ -89,4 +93,4 @@ The two `.bmad-loop/runs/**` spine copies are stale worktree snapshots — ignor
 
 **For Humans:** keep lean; update when the stack or an AD changes; drop rules that become obvious.
 
-Last Updated: 2026-07-24
+Last Updated: 2026-08-02

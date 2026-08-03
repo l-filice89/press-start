@@ -109,6 +109,9 @@ export function GameDetail({ id }: { id: string }) {
 		const cell = document.querySelector<HTMLElement>(
 			`[role="gridcell"][data-game-id="${CSS.escape(id)}"]`,
 		);
+		const playNextCard = document.querySelector<HTMLElement>(
+			`[data-play-next-game-id="${CSS.escape(id)}"]`,
+		);
 		// …and `#main-content` as the LAST resort: both grids are conditionally
 		// mounted (a shelf skeleton/empty/error, a no-region/empty catalog render no
 		// grid at all), so a close over a gridless background would otherwise no-op
@@ -116,6 +119,7 @@ export function GameDetail({ id }: { id: string }) {
 		// prevent. `<main id="main-content">` is always mounted and focusable.
 		(
 			cell ??
+			playNextCard ??
 			document.querySelector<HTMLElement>(
 				'[data-testid="shelf-grid"], [data-testid="catalog-grid"]',
 			) ??

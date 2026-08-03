@@ -1,5 +1,5 @@
 # generated: 2026-07-06
-# last_updated: 2026-07-13
+# last_updated: 2026-08-03
 # project: ps-game-catalog
 # project_key: NOKEY
 # tracking_system: file-system
@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-06
-last_updated: 2026-07-22 # epic-8 retro: retrospective done, action items appended (1-2 shipped in-session)
+last_updated: 2026-08-03 # epic-13 retro: retrospective done, responsive-process actions appended, v3.4.0 prepared
 project: ps-game-catalog
 project_key: NOKEY
 tracking_system: file-system
@@ -163,6 +163,14 @@ development_status:
   epic-12: done # 2026-07-17 — 1/1 stories; follow-up review clean; merged to main (PR #31), v2.2.0 released
   12-1-filter-the-shelf-by-time-to-beat-bands: done # 2026-07-16 (dev-auto): Time filter group — 5 half-open bands + Unknown, story/100% toggle, single-predicate clause, summary+sheet, hazard tests + epic12-ttb e2e; 5 review patches; followup_review_recommended:true (shared dropdown focus rework)
   epic-12-retrospective: done # 2026-07-17 — epic-12-retro-2026-07-17.md; WCAG nudge + summary-metric copy shipped at the retro; merge + v2.2.0 = critical path
+
+  # Epic 13: Choose What to Play Next — approved 2026-08-02 via Correct Course
+  epic-13: done # 2026-08-03 — 4/4 stories; approved UI; adversarial + independent follow-ups complete; final browser gate 22/22
+  13-1-get-three-transparent-suggestions: done
+  13-2-tune-recommendations-intentionally: done
+  13-3-shuffle-without-repetition: done
+  13-4-act-on-a-recommendation-and-harden-flow: done
+  epic-13-retrospective: done # 2026-08-03 — epic-13-retro-2026-08-03.md; UI accepted, v3.4.0 prepared, merge/deploy remains critical path
 
 action_items:
   - epic: 1
@@ -396,12 +404,32 @@ action_items:
   - epic: 8
     action: "Critical path: merge dance — push + PR epic/8-multi-user-readiness -> main via CI gate"
     owner: "Luca"
-    status: open
+    status: done # 2026-08-02 documentation correction: PR #35 merged at 4d1522f; verified through release/deploy evidence
   - epic: 8
     action: "Deploy gate: migration 0016 (destructive, drops 4 game columns) — human-approve, then verify both crons live (PS+ rotation + scores 0 3 * * *)"
     owner: "Luca"
-    status: open
+    status: done # 2026-08-02 documentation correction: v3.0.0 deployed in run 29940002606; migrations 0016-0018 landed; production lineage later reached v3.3.2
   - epic: 8
     action: "Post-deploy minor bug fixes (Luca's queued list once the epic is live)"
     owner: "Luca + Amelia"
+    status: done # 2026-08-02 documentation correction: release is live and subsequent production versions reached v3.3.2; no remaining Epic 8 gate
+  - epic: 13
+    action: "Create Story 13.1 from approved Play Next artifacts; present implementation-specific mock before any UI code"
+    owner: "Luca + Amelia"
+    status: done # 2026-08-03: all four Epic 13 stories completed; implementation-specific mocks approved before UI work
+  - epic: 13
+    action: "Extend the UI gate to cover phone, tablet, and desktop behavior, not placement alone"
+    owner: "Sally + Murat"
+    status: done # 2026-08-03: behavior/state matrix and unaffected-class regression statement implemented in standing-rules-core.md; concise contract synchronized in project-context.md
+  - epic: 13
+    action: "Test both sides of every introduced layout breakpoint before a UI story reaches done"
+    owner: "Murat + Amelia"
+    status: done # 2026-08-03: exact-boundary + nearest-adjacent evidence made a story-done requirement; Epic 13 already pins 694/695 and 1023/1024 in epic13-play-next.spec.ts
+  - epic: 13
+    action: "Run an integrated whole-feature responsive review before a UI epic is completed"
+    owner: "Sally + Luka8"
+    status: done # 2026-08-03: final responsive review + Luka8 acceptance recorded in epic-13-retro-2026-08-03.md; future closeout gate implemented in standing-rules-epic-process.md
+  - epic: 13
+    action: "Push, open PR, merge through CI, publish v3.4.0, and verify Play Next in production"
+    owner: "Luka8"
     status: open

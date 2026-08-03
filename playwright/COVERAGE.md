@@ -471,3 +471,90 @@ bump-all ETag rotation).
 | AC | Coverage |
 |----|----------|
 | IGDB release dates update or clear in the existing scheduled pass, while omitted/partial/degenerate replies preserve standing dates | no directly triggerable UI flow — provider wire mapping and same-request field are pinned in `src/providers/igdb.test.ts`; real-D1 update, explicit-null clear, omitted-property preserve, partial-row preserve, degenerate-response preserve/retry, scheduled stale-gate dispatch, and all-user version rotation are pinned in `test/integration/scores.test.ts` |
+
+## Epic 13
+
+Story 13.1 (Get three transparent suggestions). Pure derivation over the cached
+Shelf payload; visit state remains mounted behind routed detail overlays.
+
+| AC | Coverage |
+|----|----------|
+| 13.1a navigation is `SHELF | PLAY NEXT | CATALOG | STATS`, `/play-next` hides search, and focus enters `WHAT NEXT?` | `epic13-play-next.spec.ts` › Play Next shows three transparent, varied picks…; jsdom `Header.test.tsx` four-link roving order + `AppShell.test.tsx` route/search pin |
+| 13.1b a new visit immediately shows three default Surprise me suggestions | `epic13-play-next.spec.ts` › …three transparent, varied picks…; jsdom `PlayNextPage.test.tsx` immediate three-card render |
+| 13.1c future, Playing, Dropped, and platinum are excluded; released/TBA owned/current-PS+ remain | browser spec seeds and proves absence of high-scoring Playing, future, Dropped, and platinum hazards; exact boundary matrix in `src/core/play-next.test.ts` |
+| 13.1d Paused/completed-without-platinum may be Finish them, capped at one | browser spec renders one seeded Paused candidate; classification and hard cap in `src/core/play-next.test.ts` |
+| 13.1e missing facts neither exclude nor score and create no unsupported claim | jsdom `PlayNextPage.test.tsx` › omits unknown facts…; factor/explanation neutrality in `src/core/play-next.test.ts` |
+| 13.1f additive factors, seeded ties, and diversity prevent a three-card near duplicate | browser score-factor list + three distinct known genres in `epic13-play-next.spec.ts`; exact factor order, same/different seed, input immutability, Finish cap, and third-card alternative in `src/core/play-next.test.ts` |
+| 13.1g each card shows cover/title/reason/access/known facts/explanation and two live actions | browser spec pins visible genre, TTB, PS+ tag, factors, and both actions; `Play this` success is pinned in its own browser test |
+| 13.1h detail close preserves exact slate/visit and returns focus to originating suggestion | `epic13-play-next.spec.ts` captures visit id plus ordered game ids before/after overlay and asserts card focus |
+| 13.1i approved implementation-specific mock recorded and phone targets remain usable | `_bmad-output/design-demos/epic-13-play-next/direction-approved.md`; browser phone test pins approved compact two-up covers and ≥44px actions |
+
+Story 13.2 (Tune recommendations intentionally). Approved modal iteration:
+`_bmad-output/design-demos/epic-13-play-next/05-story-13-2-tune-modal.html`.
+
+| AC | Coverage |
+|----|----------|
+| 13.2a Tune edits draft only; `Show me 3` applies once and announces honest count | `epic13-play-next.spec.ts` › Tune keeps draft separate…; jsdom `PlayNextPage.test.tsx` › keeps draft edits separate… |
+| 13.2b groups are labeled, one-or-none, and wishlist is a checkbox | browser Tune flow plus jsdom exclusive/deselectable assertions; semantic `fieldset`/`legend` and native checkbox rendered by `TunePanel.tsx` |
+| 13.2c active groups combine with AND; exact precedes smallest-distance `Closest match` | browser exact/closest card order; direct conjunction, distance-before-score/diversity hazard, and factor-order tests in `src/core/play-next.test.ts` |
+| 13.2d missing facts prove neither side and create no claim | boundary matrix in `src/core/play-next.test.ts` › treats missing or malformed facts as matching neither side; jsdom unknown-fact omission |
+| 13.2e Include wishlist admits only inaccessible wishlist rows as `DISCOVER` | browser Tune flow seeds same Shelf with wishlist off/on; jsdom and core eligibility/access tests |
+| 13.2f explicit Finish them removes default one-card cap | direct default-cap and explicit-uncapped tests in `src/core/play-next.test.ts` |
+| 13.2g detail round-trip preserves draft, applied intent, slate, seed, and focus; a new destination visit resets them | browser Tune flow compares visit id, ordered card ids, applied readback, draft, focus, then leaves/re-enters Play Next and verifies reset |
+| 13.2h centered desktop modal / phone bottom sheet traps and restores focus, locks backdrop, dismisses, and keeps 44px targets | browser desktop geometry/focus-cycle assertions and phone disposition/target test; jsdom forward/reverse focus cycle, Escape, backdrop, scroll-lock, and restoration test |
+| 13.2i cards reuse 3:4 cover trigger/fallback, PS+/leaving flags, ownership diamond/source dialog, facts, and closest/access labels | browser card/Tune flow plus dedicated guarded ownership-source browser test and jsdom `PlayNextPage.test.tsx` › uses cover detail trigger… |
+
+Story 13.3 (Shuffle without repetition). Approved state mock:
+`_bmad-output/design-demos/epic-13-play-next/06-story-13-3-shuffle-states.html`.
+
+| AC | Coverage |
+|----|----------|
+| 13.3a Shuffle uses applied intent, ignores dismissed draft, and excludes every displayed visit ID | `epic13-play-next.spec.ts` › Shuffle uses applied Tune intent… compares Shuffle against both initial and Tune-applied IDs; jsdom applied/draft core-call assertion and core exclusion tests |
+| 13.3b normal Shuffle and fresh-pool reset never immediately repeat a current card | `epic13-play-next.spec.ts` › Shuffle exhausts unseen picks… compares ordered IDs across both transitions; core deterministic exclusion tests |
+| 13.3c one or two unseen matches render an honest smaller slate and exact warning | `epic13-play-next.spec.ts` › Shuffle exhausts unseen picks… asserts two cards, exact warning, and honest live count |
+| 13.3d zero unseen matches retain current cards, show the warning, and arm reset | `epic13-play-next.spec.ts` › zero unseen picks keep the slate…; jsdom `PlayNextPage.test.tsx` › keeps zero-result slate… |
+| 13.3e warning’s next single Shuffle resets old history while excluding current cards | `epic13-play-next.spec.ts` › Shuffle exhausts unseen picks… asserts one-click three-card reset disjoint from current exhausted slate |
+| 13.3f routed detail preserves slate/exhaustion/generation and destination remount resets visit state | `epic13-play-next.spec.ts` › Shuffle exhausts unseen picks… preserves two-card warning through detail, then verifies new visit and cleared warning after Shelf round-trip |
+| 13.3g every refresh announces honest count, focus returns to Shuffle, targets are ≥44px, and reduced motion is respected | browser exhaustion flow asserts counts/focus; phone layout test asserts same-row ≥44px commands and reduced transition; jsdom consecutive-identical-count mutation test pins re-announcement |
+| 13.3h implementation-specific state mock approved before production UI and every visible AC has Playwright evidence | Story spec records Luca’s 2026-08-03 approval; approved mock path above; this ledger maps every visible AC |
+
+Story 13.4 (Act on a recommendation and harden the flow). Approved action-state mock:
+`_bmad-output/design-demos/epic-13-play-next/07-story-13-4-action-hardening.html`.
+
+| AC | Coverage |
+|----|----------|
+| 13.4a rapid Play this activation makes exactly one shared lifecycle write, exposes `STARTING…`/`aria-busy`, and disables paired text actions | `epic13-play-next.spec.ts` › Play this marks… holds real PATCH pending, retries DOM activation, counts one request, and asserts semantic/disabled state; deferred jsdom test pins same seam |
+| 13.4b successful Playing write returns to Shelf, keeps existing toast, settles in Playing order, and focuses selected card once | `epic13-play-next.spec.ts` › Play this marks… asserts toast, selected Playing accessible name, first-tier position, and route-arrival focus; `Shelf.test.tsx` pins one-shot route-state consumption and ordinary-visit non-focus |
+| 13.4c failed write preserves tuned/exhausted visit, restores actions/focus, and leaves next deterministic transition intact | `epic13-play-next.spec.ts` › failed Play this preserves… intercepts PATCH 500 and compares URL, slate, warning, applied/draft intent, visit ID, focus, toast, and reset transition; jsdom mirrors deferred failure |
+| 13.4d desktop/320px retain approved controls, ≥44px targets, modal/bottom sheet, non-color state, grid/no overflow | Epic 13 phone grid test asserts two-up grid, same-row commands, every action ≥44px, reduced motion, and document width; Tune desktop/phone tests assert modal/sheet disposition and focus trap; pending browser flow asserts literal state text plus semantics |
+| 13.4e routed detail closes to originating recommendation without visit changes | `epic13-play-next.spec.ts` › Play Next shows three… and Shuffle exhausts unseen picks… assert exact slate/visit preservation and originating-card focus |
+| 13.4f existing Shelf lifecycle, filter, search, ordering, and focus remain unchanged | unchanged `epic2-tracking.spec.ts` and `epic3-filter.spec.ts` regression flows; focused Shelf web suites cover grid ordering/focus |
+| 13.4g implementation-specific mock approved before production UI and every visible AC has Playwright evidence | Story spec records Luca’s 2026-08-03 approval after final shipped-app alignment edits; approved mock path above; this ledger maps every visible AC |
+
+Play Next card-size parity correction (`spec-play-next-card-size-parity.md`):
+
+| AC | Coverage |
+|----|----------|
+| Desktop cards use Shelf/Catalog auto-fill track sizing and spacing, leaving unused tracks empty | superseded by Luca's later approved desktop command-row direction; current desktop geometry is pinned below |
+| 320px remains two-up with 12px canonical gap, no overflow, and ≥44px actions | `epic13-play-next.spec.ts` › phone uses compact two-up covers and keeps every action at least 44px high |
+| Tune exposes no Confidence, Safe bet, or Wildcard control on desktop or phone | desktop Tune flow + phone Tune sheet browser tests; jsdom `PlayNextPage.test.tsx` › keeps draft edits separate… |
+| Default score-confidence factors and `SAFE BET` reason remain unchanged | `src/core/play-next.test.ts` › pins every date, duration, and confidence scoring boundary; › uses fixed primary-reason precedence… |
+| Active Tune count keeps the trigger label centered at 320px | `epic13-play-next.spec.ts` › Tune uses the phone filter sheet disposition… compares inactive/active centers and trigger geometry, then pins visible/spoken count, non-overlap, and no overflow |
+
+Play Next desktop command rows (`spec-play-next-desktop-command-rows.md`):
+
+| AC | Coverage |
+|----|----------|
+| 1440×900 shows three full-width ranked rows with fixed cover, evidence, factors, and action regions; titles remain untruncated and page does not overflow | `epic13-play-next.spec.ts` › desktop renders the approved ranked command-row briefing without truncation |
+| Full command rows activate at 1024px with the approved 44px rank, 120px cover, dedicated factors rail, and 180px actions | `epic13-play-next.spec.ts` › compact command rows span 695 through 1023 before full desktop rows; › desktop renders the approved ranked command-row briefing without truncation |
+| 320px retains shipped two-up order, spacing, 3:4 covers, ≥44px targets, and no overflow; desktop rank/factor headings remain hidden | `epic13-play-next.spec.ts` › phone uses compact two-up covers and keeps every action at least 44px high |
+| Tune and Shuffle recompute decorative `01`–`03` ranks from current rendered order | `PlayNextPage.test.tsx` › shuffles to unseen games… pins new IDs plus current-order ranks; browser Shuffle/Tune flows drive slate replacement |
+| Details, ownership, PS+/leaving/closest-match, pending Playing success/failure, focus, and visit preservation remain unchanged; mutation flows run at compact width | existing `epic13-play-next.spec.ts` detail, ownership, Tune, Play this success, and failed Play this flows; `PlayNextPage.test.tsx` pins shared semantic/action tree after grouping |
+
+Play Next compact command rows (`spec-play-next-compact-command-rows.md`):
+
+| AC | Coverage |
+|----|----------|
+| 694px retains portrait cards; 695px through 1023px uses 36px rank, 88px cover, combined evidence/factors, and 150px actions; 1024px restores full 08a rails | `epic13-play-next.spec.ts` › compact command rows span 695 through 1023 before full desktop rows |
+| Compact rows contain long titles, keep every row clear of its action rail, separate in-cover PS+/ownership controls, expose Leaving, preserve ≥44px targets, and avoid page overflow | `epic13-play-next.spec.ts` › compact command rows span 695 through 1023 before full desktop rows |
+| Details, Tune closest-match, ownership, and Playing success/failure retain behavior and focus/visit semantics at compact width | compact-width `epic13-play-next.spec.ts` detail, Tune, ownership, Play this success, and failed Play this flows |

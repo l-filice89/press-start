@@ -199,3 +199,10 @@
 		display: inline;
 	}
 }
+
+@media (max-width: 360px) {
+	.destination-toggle__tab {
+		padding-inline: var(--space-1);
+		letter-spacing: 0;
+	}
+}

@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Story 13.2 — Option A Tune modal</title>
+<!--
+Iteration source: Luca-selected Option A / Command Deck.
+Alignment pass 2026-08-02: every value below is copied from the shipped app —
+web/tokens.css (tokens verbatim), web/shell/header.css (shell + destination
+toggle), web/shelf/card.css (3:4 cover, flags, owned toggle, fallback mark),
+web/play-next/play-next.css (Story 13.1 page header + card content), and
+web/shelf/filter-row.css (sheet-trigger, modal/sheet, option pills, show CTA).
+Tune reuses the Shelf/Catalog filter-sheet grammar: centered dialog ≥601px,
+bottom sheet ≤600px, group label carries the logic in words, active option =
+glow border + 18% glow tint (state also machine-readable via aria-pressed).
+Placeholders: no game facts or artwork are fabricated.
+-->
+<style>
+@font-face{font-family:Orbitron;src:url('../../../node_modules/@fontsource/orbitron/files/orbitron-latin-700-normal.woff2')}
+@font-face{font-family:Rajdhani;src:url('../../../node_modules/@fontsource/rajdhani/files/rajdhani-latin-600-normal.woff2')}
+@font-face{font-family:Inter;src:url('../../../node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2')}
+@font-face{font-family:JetBrains;src:url('../../../node_modules/@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2')}
+
+/* Tokens — verbatim from web/tokens.css. */
+:root{
+	--color-void:#05090f;--color-surface:#0b1622;--color-surface-raised:#0a1120;
+	--color-border-hairline:#163043;--color-border-soft:#12283a;
+	--color-text-primary:#eafaff;--color-text-secondary:#8fb0c4;--color-text-muted:#6b8ba0;
+	--color-accent-electric:#12b3ff;--color-accent-glow:#35e0ff;
+	--color-state-dormant:#3d5566;--color-warn-amber:#ffb254;
+	--space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:24px;
+	--radius-sm:8px;--radius-md:12px;--radius-lg:18px;--radius-pill:999px;
+	--font-display:"Orbitron",system-ui,sans-serif;
+	--font-ui:"Rajdhani",system-ui,sans-serif;
+	--font-body:"Inter",system-ui,sans-serif;
+	--font-mono:"JetBrains",ui-monospace,monospace;
+	--glow-ring:0 0 28px rgba(53,224,255,.18);
+	--hit-target:44px;
+	--z-header:10;--z-overlay:40;
+}
+*{box-sizing:border-box}
+button{cursor:pointer}
+body{
+	margin:0;min-height:100vh;background:var(--color-void);color:var(--color-text-primary);
+	font:15px/1.5 var(--font-body);
+	background-image:linear-gradient(rgba(18,179,255,.025) 1px,transparent 1px),
+		linear-gradient(90deg,rgba(18,179,255,.025) 1px,transparent 1px);
+	background-size:32px 32px;
+}
+
+/* ---- App shell — web/shell/header.css ---- */
+.app-header{
+	position:sticky;top:0;z-index:var(--z-header);display:flex;flex-wrap:wrap;align-items:center;
+	gap:var(--space-4);padding:var(--space-3) var(--space-4);
+	background:rgba(5,9,15,.82);backdrop-filter:blur(8px);
+	border-bottom:1px solid var(--color-border-hairline);
+}
+.wordmark{font:900 18px var(--font-display);letter-spacing:.08em}
+.wordmark b{color:var(--color-accent-electric)}
+.destination-toggle{
+	display:flex;flex:0 0 auto;gap:2px;padding:2px;background:var(--color-surface-raised);
+	border:1px solid var(--color-border-hairline);border-radius:var(--radius-pill);
+}
+.destination-toggle__tab{
+	display:inline-flex;align-items:center;justify-content:center;text-decoration:none;
+	padding:var(--space-2) var(--space-4);border:none;border-radius:var(--radius-pill);
+	background:transparent;color:var(--color-text-secondary);
+	font:600 12px var(--font-ui);letter-spacing:.1em;
+}
+.destination-toggle__tab[aria-current="page"]{color:var(--color-void);background:var(--color-accent-electric)}
+.app-header__readout{margin-left:auto;font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;color:var(--color-text-muted)}
+
+main{max-width:1120px;margin:auto;padding:var(--space-5) var(--space-4) 56px}
+.mock-note{margin:0 0 var(--space-4);font-family:var(--font-mono);font-size:11px;letter-spacing:.16em;color:var(--color-accent-electric)}
+
+/* ---- Play Next header — web/play-next/play-next.css (Story 13.1), plus the
+   Tune trigger reusing the shelf Filters sheet-trigger grammar. ---- */
+.play-next__header{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-4);margin-bottom:var(--space-5)}
+.play-next__header h1{margin:0;font-family:var(--font-display);font-size:clamp(1.6rem,4vw,2.4rem);letter-spacing:.08em}
+.play-next__header>p{margin:0;color:var(--color-text-secondary)}
+.play-next__mode{display:inline-flex;margin-top:var(--space-2);font-family:var(--font-ui);font-weight:700;letter-spacing:.1em;color:var(--color-accent-electric)}
+.play-next__applied{display:block;font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;color:var(--color-text-muted)}
+.play-next__controls{display:flex;flex-direction:column;align-items:flex-end;gap:var(--space-2)}
+.tune-trigger{
+	display:inline-flex;align-items:center;gap:var(--space-2);min-height:var(--hit-target);
+	padding:var(--space-2) var(--space-3);border:1px solid var(--color-border-hairline);
+	border-radius:var(--radius-lg);background:var(--color-surface-raised);
+	color:var(--color-text-primary);font-family:var(--font-ui);font-size:.9rem;font-weight:600;
+}
+.tune-trigger[data-active]{border-color:var(--color-accent-glow);background:rgba(53,224,255,.18)}
+.tune-trigger__count{
+	display:inline-flex;align-items:center;justify-content:center;min-width:1.4em;height:1.4em;
+	border-radius:var(--radius-pill);background:var(--color-accent-glow);color:var(--color-void);
+	font-size:.8em;font-weight:700;
+}
+
+/* ---- Suggestion cards: shelf cover composition (web/shelf/card.css) over
+   Story 13.1 card content (web/play-next/play-next.css). ---- */
+.play-next__grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-4)}
+.card{
+	display:flex;flex-direction:column;min-width:0;background:var(--color-surface);
+	border:1px solid var(--color-border-soft);border-radius:var(--radius-md);
+}
+.card__cover{
+	position:relative;aspect-ratio:3/4;background:var(--color-surface-raised);
+	border-radius:calc(var(--radius-md) - 1px) calc(var(--radius-md) - 1px) 0 0;overflow:hidden;
+}
+.card__cover-button{display:block;width:100%;height:100%;padding:0;border:none;background:none}
+.card__cover-fallback{
+	display:grid;place-items:center;width:100%;height:100%;
+	color:var(--color-state-dormant);font-family:var(--font-display);font-size:2rem;
+}
+.card__owned-toggle{
+	position:absolute;top:calc((var(--hit-target) - 22px)/2);right:calc((var(--hit-target) - 22px)/2);
+	z-index:1;display:grid;place-items:center;width:22px;height:22px;padding:0;line-height:1;
+	border:1px solid var(--color-border-hairline);border-radius:var(--radius-pill);
+	background:rgba(5,9,15,.72);color:var(--color-text-muted);font-size:11px;backdrop-filter:blur(2px);
+}
+.card__owned-toggle[aria-pressed="true"]{color:var(--color-accent-glow);border-color:var(--color-accent-glow)}
+.card__flags{
+	position:absolute;top:var(--space-2);left:var(--space-2);
+	right:calc((var(--hit-target) - 22px)/2 + 22px + var(--space-1));
+	display:flex;flex-wrap:wrap;gap:var(--space-1);pointer-events:none;
+}
+.card__flag{
+	display:inline-flex;align-items:center;padding:2px var(--space-2);border-radius:var(--radius-pill);
+	font-family:var(--font-mono);font-size:10px;line-height:1.4;
+	background:rgba(5,9,15,.72);color:var(--color-text-primary);backdrop-filter:blur(2px);
+}
+.card__flag--ps-extra{color:var(--color-accent-glow);font-weight:600;letter-spacing:.04em}
+.card__flag--leaving{
+	flex-basis:100%;max-width:fit-content;color:var(--color-warn-amber);font-weight:600;letter-spacing:.04em;
+	border:1px solid rgba(255,178,84,.4);
+}
+.card__content{display:flex;flex:1;flex-direction:column;gap:var(--space-3);padding:var(--space-4)}
+.card__title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-3)}
+.card__title-row h2{
+	min-width:0;margin:0;font-family:var(--font-display);font-weight:600;font-size:1rem;
+	white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.card__access{
+	flex:none;padding:var(--space-1) var(--space-2);border:1px solid var(--color-border-hairline);
+	border-radius:var(--radius-pill);color:var(--color-text-secondary);
+	font-family:var(--font-ui);font-weight:700;font-size:.7rem;letter-spacing:.1em;
+}
+.card__reason{margin:0;font-family:var(--font-ui);font-weight:700;letter-spacing:.1em;color:var(--color-accent-electric)}
+.card__closest{
+	align-self:flex-start;margin:0;padding:var(--space-1) var(--space-2);
+	border:1px dashed rgba(255,178,84,.6);border-radius:var(--radius-pill);
+	color:var(--color-warn-amber);font-family:var(--font-ui);font-weight:700;font-size:.7rem;letter-spacing:.1em;
+}
+.card__facts{display:flex;flex-wrap:wrap;gap:var(--space-2);margin:0;padding:0;list-style:none}
+.card__facts li{
+	padding:var(--space-1) var(--space-2);border-radius:var(--radius-pill);
+	background:var(--color-surface-raised);color:var(--color-text-secondary);
+	font-family:var(--font-mono);font-size:.68rem;
+}
+.card__explanation{margin:0;color:var(--color-text-secondary)}
+.card__actions{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-2);margin-top:auto}
+.card__actions button{
+	min-height:var(--hit-target);padding:var(--space-2);border:1px solid var(--color-accent-electric);
+	border-radius:var(--radius-sm);background:transparent;color:var(--color-accent-electric);font-weight:700;
+}
+.card__actions button:first-child{background:var(--color-accent-electric);color:var(--color-void)}
+
+/* ---- Tune modal: shelf/catalog filter-sheet grammar (web/shelf/filter-row.css).
+   Desktop = centered dialog; phone = the existing bottom sheet, unchanged. ---- */
+.tune__backdrop{
+	position:fixed;inset:0;z-index:var(--z-overlay);display:flex;align-items:center;justify-content:center;
+	padding:var(--space-5);background:rgba(5,9,15,.7);
+}
+.tune__backdrop[hidden]{display:none}
+.tune{
+	width:min(680px,100%);max-height:80vh;overflow-y:auto;padding:var(--space-4);
+	border:1px solid var(--color-border-hairline);border-radius:var(--radius-lg);
+	background:var(--color-surface-raised);box-shadow:var(--glow-ring);
+}
+.tune__head{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--space-4)}
+.tune__title{
+	margin:0 0 var(--space-3);color:var(--color-text-primary);font-family:var(--font-display);
+	text-transform:uppercase;font-size:.9rem;letter-spacing:.08em;
+}
+.tune__close{
+	display:grid;place-items:center;width:var(--hit-target);height:var(--hit-target);padding:0;
+	border:1px solid var(--color-border-hairline);border-radius:var(--radius-pill);
+	background:transparent;color:var(--color-text-primary);font:20px/1 var(--font-ui);
+}
+.tune__draft{
+	margin:0 0 var(--space-4);padding:var(--space-2) var(--space-3);
+	border-left:2px solid var(--color-warn-amber);background:rgba(255,178,84,.06);
+	color:var(--color-text-secondary);font-size:13px;
+}
+.tune__draft strong{color:var(--color-warn-amber)}
+.tune__groups{display:grid;grid-template-columns:1fr 1fr;gap:0 var(--space-4)}
+.tune__group{display:flex;flex-wrap:wrap;gap:var(--space-2);margin:0 0 var(--space-4);padding:0;border:0;min-inline-size:0}
+.tune__group legend{
+	padding:0;margin-bottom:var(--space-1);color:var(--color-text-secondary);
+	font-family:var(--font-ui);font-size:.8rem;
+}
+.tune__option{
+	min-height:var(--hit-target);padding:var(--space-2) var(--space-3);
+	border:1px solid var(--color-border-hairline);border-radius:var(--radius-pill);
+	background:none;color:var(--color-text-primary);font-family:var(--font-ui);font-size:.9rem;
+}
+.tune__option[aria-pressed="true"]{border-color:var(--color-accent-glow);background:rgba(53,224,255,.18)}
+.tune__wishlist{display:flex;align-items:center;gap:var(--space-2);min-height:var(--hit-target);margin-bottom:var(--space-3);font-family:var(--font-ui);font-size:.9rem}
+.tune__wishlist input{width:20px;height:20px;accent-color:var(--color-accent-electric)}
+.tune__wishlist small{color:var(--color-text-secondary)}
+.tune__show{
+	width:100%;min-height:var(--hit-target);padding:var(--space-3);
+	border:1px solid var(--color-accent-glow);border-radius:var(--radius-lg);
+	background:rgba(53,224,255,.18);color:var(--color-text-primary);
+	font-family:var(--font-ui);font-size:1rem;
+}
+
+/* ---- Phone deltas (≤600px, app breakpoint) ---- */
+@media (max-width:600px){
+	.app-header{gap:var(--space-2);padding:var(--space-3);backdrop-filter:none;background:var(--color-void)}
+	.destination-toggle{order:3;flex:1 0 100%}
+	.destination-toggle__tab{flex:1 1 0;padding-inline:var(--space-1)}
+	.app-header__readout{font-size:10px}
+	main{padding:var(--space-4) var(--space-3) 48px}
+	.play-next__header{flex-direction:column}
+	.play-next__controls{align-items:flex-start}
+	/* Shelf-style compact grid: 2-up 3:4 covers, genres-tier facts trimmed. */
+	.play-next__grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-2)}
+	.card__content{padding:var(--space-2) var(--space-3) var(--space-3)}
+	.card__title-row h2{font-size:12.5px}
+	.card__actions{grid-template-columns:1fr}
+	/* The existing filter bottom sheet, verbatim disposition. */
+	.tune__backdrop{align-items:flex-end;padding:0}
+	.tune{width:100%;max-height:80vh;border:0;border-top:1px solid var(--color-border-hairline);
+		border-radius:var(--radius-lg) var(--radius-lg) 0 0;box-shadow:none;
+		padding-bottom:calc(var(--space-4) + env(safe-area-inset-bottom,0px))}
+	.tune__groups{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<header class="app-header">
+	<div class="wordmark">PRESS <b>START</b></div>
+	<nav class="destination-toggle" aria-label="Destination">
+		<a class="destination-toggle__tab" href="#">SHELF</a>
+		<a class="destination-toggle__tab" href="#" aria-current="page">PLAY NEXT</a>
+		<a class="destination-toggle__tab" href="#">CATALOG</a>
+		<a class="destination-toggle__tab" href="#">STATS</a>
+	</nav>
+	<span class="app-header__readout">PS+ CATALOG AS OF —</span>
+</header>
+<main>
+<p class="mock-note">STORY 13.2 / OPTION A MODAL ITERATION — APP-ALIGNED</p>
+<section aria-labelledby="play-next-heading">
+	<header class="play-next__header">
+		<div>
+			<h1 id="play-next-heading">WHAT NEXT?</h1>
+			<span class="play-next__applied">APPLIED INTENT</span>
+			<span class="play-next__mode">SURPRISE ME</span>
+		</div>
+		<div class="play-next__controls">
+			<button class="tune-trigger" type="button" aria-haspopup="dialog" aria-expanded="false">
+				TUNE THE PICKS
+			</button>
+			<p class="play-next__header-copy" style="margin:0;color:var(--color-text-secondary)">Three picks from your Shelf</p>
+		</div>
+	</header>
+	<div class="play-next__grid" aria-label="Current suggestions">
+		<article class="card">
+			<div class="card__cover">
+				<button class="card__cover-button" type="button" aria-label="Open details — Game title 01">
+					<span class="card__cover-fallback" aria-hidden="true">▹</span>
+				</button>
+				<button class="card__owned-toggle" type="button" aria-pressed="true" aria-label="Owned — Game title 01"><span aria-hidden="true">◆</span></button>
+				<div class="card__flags"></div>
+			</div>
+			<div class="card__content">
+				<div class="card__title-row"><h2>[GAME TITLE 01]</h2><span class="card__access">OWNED</span></div>
+				<p class="card__reason">QUICK WIN</p>
+				<ul class="card__facts" aria-label="Known facts"><li>[GENRE]</li><li>[XX]h story</li><li>Critic [XX]</li></ul>
+				<p class="card__explanation">Exact match for every applied choice, from known Shelf facts.</p>
+				<div class="card__actions"><button type="button">Play this</button><button type="button">Open details</button></div>
+			</div>
+		</article>
+		<article class="card">
+			<div class="card__cover">
+				<button class="card__cover-button" type="button" aria-label="Open details — Game title 02">
+					<span class="card__cover-fallback" aria-hidden="true">▹</span>
+				</button>
+				<button class="card__owned-toggle" type="button" aria-pressed="false" aria-label="Owned — Game title 02"><span aria-hidden="true">◇</span></button>
+				<div class="card__flags">
+					<span class="card__flag card__flag--ps-extra">PS+</span>
+					<span class="card__flag card__flag--leaving">LEAVING [DATE]</span>
+				</div>
+			</div>
+			<div class="card__content">
+				<div class="card__title-row"><h2>[GAME TITLE 02]</h2><span class="card__access">PS+</span></div>
+				<p class="card__reason">LAST CHANCE</p>
+				<ul class="card__facts" aria-label="Known facts"><li>[GENRE]</li><li>User [XX]</li><li>Leaves [DATE]</li></ul>
+				<p class="card__explanation">Departure fact stays visible on the cover, exactly as on Shelf.</p>
+				<div class="card__actions"><button type="button">Play this</button><button type="button">Open details</button></div>
+			</div>
+		</article>
+		<article class="card">
+			<div class="card__cover">
+				<button class="card__cover-button" type="button" aria-label="Open details — Game title 03">
+					<span class="card__cover-fallback" aria-hidden="true">▹</span>
+				</button>
+				<button class="card__owned-toggle" type="button" aria-pressed="false" aria-label="Owned — Game title 03"><span aria-hidden="true">◇</span></button>
+				<div class="card__flags"></div>
+			</div>
+			<div class="card__content">
+				<div class="card__title-row"><h2>[GAME TITLE 03]</h2><span class="card__access">DISCOVER</span></div>
+				<p class="card__reason">WILDCARD</p>
+				<p class="card__closest">CLOSEST MATCH</p>
+				<ul class="card__facts" aria-label="Known facts"><li>[KNOWN FACT]</li></ul>
+				<p class="card__explanation">Relaxed fill is labeled on the card itself, never only in global copy.</p>
+				<div class="card__actions"><button type="button">Play this</button><button type="button">Open details</button></div>
+			</div>
+		</article>
+	</div>
+</section>
+</main>
+
+<div class="tune__backdrop" data-backdrop hidden>
+	<section class="tune" role="dialog" aria-modal="true" aria-labelledby="tune-title" tabindex="-1">
+		<div class="tune__head">
+			<p class="tune__title" id="tune-title">Tune the picks</p>
+			<button class="tune__close" type="button" aria-label="Close Tune the picks">×</button>
+		</div>
+		<p class="tune__draft">Draft only — current picks stay put until <strong>SHOW ME 3</strong>.</p>
+		<div class="tune__groups">
+			<fieldset class="tune__group"><legend>Genre — one or none</legend>
+				<button class="tune__option" type="button" aria-pressed="true">Familiar</button>
+				<button class="tune__option" type="button" aria-pressed="false">Different</button>
+			</fieldset>
+			<fieldset class="tune__group"><legend>Time — one or none</legend>
+				<button class="tune__option" type="button" aria-pressed="true">Quick win</button>
+			</fieldset>
+			<fieldset class="tune__group"><legend>Backlog age — one or none</legend>
+				<button class="tune__option" type="button" aria-pressed="false">Fresh</button>
+				<button class="tune__option" type="button" aria-pressed="false">Forgotten</button>
+			</fieldset>
+			<fieldset class="tune__group"><legend>Confidence — one or none</legend>
+				<button class="tune__option" type="button" aria-pressed="false">Safe bet</button>
+				<button class="tune__option" type="button" aria-pressed="false">Wildcard</button>
+			</fieldset>
+			<fieldset class="tune__group"><legend>Priority — one or none</legend>
+				<button class="tune__option" type="button" aria-pressed="false">Follow my list</button>
+				<button class="tune__option" type="button" aria-pressed="false">Last chance</button>
+			</fieldset>
+			<fieldset class="tune__group"><legend>Progress — one or none</legend>
+				<button class="tune__option" type="button" aria-pressed="false">Finish them</button>
+			</fieldset>
+		</div>
+		<label class="tune__wishlist"><input type="checkbox" checked> Include wishlist <small>DISCOVER access</small></label>
+		<button class="tune__show" type="button">SHOW ME 3</button>
+	</section>
+</div>
+
+<script>
+const backdrop=document.querySelector('[data-backdrop]');
+const modal=backdrop.querySelector('.tune');
+const trigger=document.querySelector('.tune-trigger');
+const open=()=>{backdrop.hidden=false;trigger.setAttribute('aria-expanded','true');document.body.style.overflow='hidden';modal.focus()};
+const close=()=>{backdrop.hidden=true;trigger.setAttribute('aria-expanded','false');document.body.style.overflow='';trigger.focus()};
+trigger.addEventListener('click',open);
+backdrop.querySelector('.tune__close').addEventListener('click',close);
+backdrop.addEventListener('mousedown',e=>{if(e.target===backdrop)close()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!backdrop.hidden)close()});
+// One-or-none per group: pressing an option clears its siblings; pressing the
+// active option deselects it. Mirrors the intended TunePanel state machine.
+document.querySelectorAll('.tune__group').forEach(group=>{
+	group.querySelectorAll('.tune__option').forEach(button=>button.addEventListener('click',()=>{
+		const next=button.getAttribute('aria-pressed')!=='true';
+		group.querySelectorAll('.tune__option').forEach(o=>o.setAttribute('aria-pressed','false'));
+		button.setAttribute('aria-pressed',String(next));
+	}));
+});
+// Trigger badge mirrors the shelf Filters trigger: applied-intent count.
+// Static in the mock (applied = SURPRISE ME, zero choices) — no badge shown.
+</script>
+</body></html>
