@@ -488,37 +488,81 @@ test('Shuffle uses applied Tune intent and ignores a dismissed draft', async ({
 	}
 });
 
-test('desktop recommendation cards match the Shelf grid track width and spacing', async ({
+test('desktop renders the approved ranked command-row briefing without truncation', async ({
 	page,
 }) => {
 	const games = candidates(randomUUID().slice(0, 8));
+	games[0].title = `A deliberately long recommendation title that must remain fully readable ${randomUUID().slice(0, 8)}`;
 	try {
 		await seedGames(games);
+		await page.setViewportSize({ width: 1440, height: 900 });
 		await page.goto('/play-next');
-		const playNextCards = page.locator('[data-play-next-game-id]');
-		await expect(playNextCards).toHaveCount(3);
-		const playNextBoxes = await playNextCards.evaluateAll((nodes) =>
+		const rows = page.locator('[data-play-next-game-id]');
+		await expect(rows).toHaveCount(3);
+		const gridBox = await page.locator('.play-next__grid').boundingBox();
+		await expect(page.locator('.play-next-card__rank')).toHaveText([
+			'01',
+			'02',
+			'03',
+		]);
+		await expect(page.locator('.play-next-card__factors-label')).toHaveText([
+			'SCORE FACTORS',
+			'SCORE FACTORS',
+			'SCORE FACTORS',
+		]);
+		const boxes = await rows.evaluateAll((nodes) =>
 			nodes.map((node) => {
 				const rect = node.getBoundingClientRect();
-				return { left: rect.left, right: rect.right, width: rect.width };
+				return {
+					top: rect.top,
+					bottom: rect.bottom,
+					left: rect.left,
+					right: rect.right,
+					width: rect.width,
+				};
 			}),
 		);
-		const playNextGridBox = await page
-			.locator('.play-next__grid')
-			.boundingBox();
-		const playNextGap = await page
-			.locator('.play-next__grid')
-			.evaluate((grid) => getComputedStyle(grid).columnGap);
-		const playNextGapPx = Number.parseFloat(playNextGap);
+		expect(boxes[0].top).toBeLessThan(boxes[1].top);
+		expect(boxes[1].top).toBeLessThan(boxes[2].top);
+		expect(boxes[2].bottom).toBeLessThanOrEqual(900);
+		for (const box of boxes) {
+			expect(Math.abs(box.left - (gridBox?.x ?? 0))).toBeLessThan(1);
+			expect(
+				Math.abs(box.right - ((gridBox?.x ?? 0) + (gridBox?.width ?? 0))),
+			).toBeLessThan(1);
+			expect(Math.abs(box.left - boxes[0].left)).toBeLessThan(1);
+			expect(Math.abs(box.right - boxes[0].right)).toBeLessThan(1);
+			expect(Math.abs(box.width - boxes[0].width)).toBeLessThan(1);
+		}
+		const first = rows.first();
+		const [rankBox, coverBox, mainBox, factorsBox, actionsBox] =
+			await Promise.all([
+				first.locator('.play-next-card__rank').boundingBox(),
+				first.locator('.play-next-card__cover').boundingBox(),
+				first.locator('.play-next-card__main').boundingBox(),
+				first.locator('.play-next-card__factors-block').boundingBox(),
+				first.locator('.play-next-card__actions').boundingBox(),
+			]);
+		expect(rankBox?.width).toBe(44);
+		expect(coverBox?.width).toBe(120);
 		expect(
-			Math.max(...playNextBoxes.map(({ width }) => width)) -
-				Math.min(...playNextBoxes.map(({ width }) => width)),
-		).toBeLessThan(1);
+			Math.abs((coverBox?.height ?? 0) / (coverBox?.width ?? 1) - 4 / 3),
+		).toBeLessThan(0.02);
+		expect((mainBox?.x ?? 0) + (mainBox?.width ?? 0)).toBeLessThanOrEqual(
+			factorsBox?.x ?? 0,
+		);
+		expect((factorsBox?.x ?? 0) + (factorsBox?.width ?? 0)).toBeLessThanOrEqual(
+			actionsBox?.x ?? 0,
+		);
+		expect(actionsBox?.width).toBe(180);
+		const longTitle = page.getByRole('heading', { name: games[0].title });
+		await expect(longTitle).toBeVisible();
 		expect(
-			(playNextGridBox?.x ?? 0) +
-				(playNextGridBox?.width ?? 0) -
-				playNextBoxes[2].right,
-		).toBeGreaterThanOrEqual(playNextBoxes[0].width + playNextGapPx - 1);
+			await longTitle.evaluate((title) => ({
+				whiteSpace: getComputedStyle(title).whiteSpace,
+				fullyVisible: title.scrollWidth <= title.clientWidth,
+			})),
+		).toEqual({ whiteSpace: 'normal', fullyVisible: true });
 		expect(
 			await page.evaluate(
 				() =>
@@ -526,33 +570,53 @@ test('desktop recommendation cards match the Shelf grid track width and spacing'
 					document.documentElement.clientWidth,
 			),
 		).toBe(true);
+	} finally {
+		await deleteGames(games.map((game) => game.id));
+	}
+});
 
-		await page.getByRole('link', { name: 'SHELF' }).click();
-		const shelfCard = page.locator('.shelf__grid .card').first();
-		await expect(shelfCard).toBeVisible();
-		const shelfCardWidth = (await shelfCard.boundingBox())?.width;
-		const shelfGap = await page
-			.locator('.shelf__grid')
-			.evaluate((grid) => getComputedStyle(grid).columnGap);
+test('command rows activate at 1024px and not at 1023px', async ({ page }) => {
+	const games = candidates(randomUUID().slice(0, 8));
+	games[0].title = `Unbroken-${'X'.repeat(180)}`;
+	try {
+		await seedGames(games);
+		await page.setViewportSize({ width: 1023, height: 900 });
+		await page.goto('/play-next');
+		const grid = page.locator('.play-next__grid');
+		const first = page.locator('[data-play-next-game-id]').first();
+		await expect(first).toBeVisible();
+		expect(await grid.evaluate((node) => getComputedStyle(node).display)).toBe(
+			'grid',
+		);
+		expect(await first.evaluate((node) => getComputedStyle(node).display)).toBe(
+			'flex',
+		);
+		await expect(first.locator('.play-next-card__rank')).not.toBeVisible();
+		await expect(
+			first.locator('.play-next-card__factors-label'),
+		).not.toBeVisible();
 
-		expect(shelfCardWidth).toBeDefined();
+		await page.setViewportSize({ width: 1024, height: 900 });
+		expect(await grid.evaluate((node) => getComputedStyle(node).display)).toBe(
+			'flex',
+		);
+		expect(await first.evaluate((node) => getComputedStyle(node).display)).toBe(
+			'grid',
+		);
+		await expect(first.locator('.play-next-card__rank')).toBeVisible();
+		await expect(first.locator('.play-next-card__factors-label')).toBeVisible();
 		expect(
-			Math.abs(playNextBoxes[0].width - (shelfCardWidth ?? 1)),
-		).toBeLessThan(1);
-		expect(playNextGap).toBe(shelfGap);
-
-		await page.getByRole('link', { name: 'CATALOG' }).click();
-		const catalogCard = page.locator('.catalog__grid .catalog-card').first();
-		await expect(catalogCard).toBeVisible();
-		const catalogCardWidth = (await catalogCard.boundingBox())?.width;
-		const catalogGap = await page
-			.locator('.catalog__grid')
-			.evaluate((grid) => getComputedStyle(grid).columnGap);
-		expect(catalogCardWidth).toBeDefined();
-		expect(
-			Math.abs(playNextBoxes[0].width - (catalogCardWidth ?? 1)),
-		).toBeLessThan(1);
-		expect(playNextGap).toBe(catalogGap);
+			await page.evaluate(
+				() =>
+					document.documentElement.scrollWidth <=
+					document.documentElement.clientWidth,
+			),
+		).toBe(true);
+		for (const button of await first.getByRole('button').all()) {
+			const box = await button.boundingBox();
+			expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+			expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+		}
 	} finally {
 		await deleteGames(games.map((game) => game.id));
 	}
@@ -588,6 +652,10 @@ test('phone uses compact two-up covers and keeps every action at least 44px high
 		expect(transitionMs).toBeLessThanOrEqual(0.001);
 		const cards = page.locator('[data-play-next-game-id]');
 		await expect(cards).toHaveCount(3);
+		await expect(page.locator('.play-next-card__rank:visible')).toHaveCount(0);
+		await expect(
+			page.locator('.play-next-card__factors-label:visible'),
+		).toHaveCount(0);
 		const boxes = await cards.evaluateAll((nodes) =>
 			nodes.map((node) => {
 				const rect = node.getBoundingClientRect();
@@ -731,6 +799,11 @@ test('Tune keeps draft separate, applies exact then closest picks, and preserves
 		await expect(dialog).toHaveCount(0);
 		await expect(trigger).toBeFocused();
 		await expect(trigger).toHaveAccessibleName('Tune the picks — 2 active');
+		await expect(page.locator('.play-next-card__rank')).toHaveText([
+			'01',
+			'02',
+			'03',
+		]);
 		await expect(page.locator('.play-next__mode')).toHaveText(
 			'QUICK WIN · INCLUDE WISHLIST',
 		);

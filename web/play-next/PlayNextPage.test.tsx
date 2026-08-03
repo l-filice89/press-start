@@ -98,6 +98,15 @@ function visibleGameIds(): string[] {
 		.map((card) => card.getAttribute('data-play-next-game-id') ?? '');
 }
 
+function visibleRanks(): string[] {
+	return screen
+		.getAllByRole('article')
+		.map(
+			(card) =>
+				card.querySelector('.play-next-card__rank')?.textContent?.trim() ?? '',
+		);
+}
+
 afterEach(() => {
 	vi.restoreAllMocks();
 	vi.unstubAllGlobals();
@@ -116,6 +125,11 @@ describe('PlayNextPage', () => {
 		await waitFor(() => expect(heading).toHaveFocus());
 		expect(screen.getByText('SURPRISE ME')).toBeInTheDocument();
 		expect(screen.getAllByRole('article')).toHaveLength(3);
+		expect(visibleRanks()).toEqual(['01', '02', '03']);
+		for (const rank of document.querySelectorAll('.play-next-card__rank')) {
+			expect(rank).toHaveAttribute('aria-hidden', 'true');
+		}
+		expect(screen.getAllByText('SCORE FACTORS')).toHaveLength(3);
 		expect(screen.getAllByRole('button', { name: 'Play this' })).toHaveLength(
 			3,
 		);
@@ -493,6 +507,7 @@ describe('PlayNextPage', () => {
 		expect(after).toHaveLength(3);
 		expect(after).not.toEqual(before);
 		expect(after.every((id) => !before.includes(id))).toBe(true);
+		expect(visibleRanks()).toEqual(['01', '02', '03']);
 		expect(shuffle).toHaveFocus();
 		await waitFor(() =>
 			expect(screen.getByTestId('live-region')).toHaveTextContent(
@@ -760,7 +775,17 @@ describe('PlayNextPage', () => {
 		fireEvent.error(cover.querySelector('img') as HTMLImageElement);
 		expect(cover).toHaveTextContent('▹');
 		expect(screen.getByText('◈ PS+')).toBeInTheDocument();
-		expect(screen.getByText(/LEAVING/)).toBeInTheDocument();
+		expect(screen.getAllByText(/LEAVING/)).toHaveLength(2);
+		expect(
+			screen.getByText(
+				'Leaving the PlayStation Plus Extra catalog on 2999-08-10',
+			),
+		).toHaveClass('sr-only');
+		for (const flag of document.querySelectorAll(
+			'.play-next-card__flag--leaving',
+		)) {
+			expect(flag).toHaveAttribute('aria-hidden', 'true');
+		}
 		const owned = screen.getByRole('button', { name: 'Owned — Game plus' });
 		expect(owned).toHaveAttribute('aria-pressed', 'false');
 		await user.click(owned);

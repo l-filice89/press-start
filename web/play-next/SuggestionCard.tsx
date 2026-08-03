@@ -11,12 +11,14 @@ function hours(seconds: number): string {
 
 export function SuggestionCard({
 	suggestion,
+	rank,
 	referenceIso,
 	onOpenDetails,
 	onPlayed,
 	onPendingChange,
 }: {
 	suggestion: PlayNextSuggestion;
+	rank: number;
 	referenceIso: string;
 	onOpenDetails: () => void;
 	onPlayed: () => void;
@@ -45,6 +47,7 @@ export function SuggestionCard({
 		return () => onPendingChange(game.id, false);
 	}, [game.id, onPendingChange, statusPending]);
 	const showCover = !!game.coverUrl && failedCoverUrl !== game.coverUrl;
+	const leavingVisible = showLeaving(game.psPlusLeavingOn, game.owned);
 	const facts = [
 		game.genres[0] ? { key: 'genre', value: game.genres[0] } : null,
 		game.ttbStorySeconds !== null &&
@@ -71,6 +74,9 @@ export function SuggestionCard({
 				aria-busy={statusPending}
 				tabIndex={-1}
 			>
+				<span className="play-next-card__rank" aria-hidden="true">
+					{String(rank).padStart(2, '0')}
+				</span>
 				<div className="play-next-card__cover">
 					<button
 						type="button"
@@ -116,45 +122,61 @@ export function SuggestionCard({
 								</span>
 							</span>
 						)}
-						{showLeaving(game.psPlusLeavingOn, game.owned) && (
-							<span className="play-next-card__flag play-next-card__flag--leaving">
-								<span aria-hidden="true">
-									LEAVING {formatLeavingDate(game.psPlusLeavingOn)}
-								</span>
-								<span className="sr-only">
-									Leaving the PlayStation Plus Extra catalog on{' '}
-									{game.psPlusLeavingOn}
-								</span>
+						{leavingVisible && game.psPlusLeavingOn && (
+							<span
+								className="play-next-card__flag play-next-card__flag--leaving play-next-card__leaving--narrow"
+								aria-hidden="true"
+							>
+								LEAVING {formatLeavingDate(game.psPlusLeavingOn)}
 							</span>
 						)}
 					</div>
 				</div>
 				<div className="play-next-card__content">
-					<div className="play-next-card__title-row">
-						<h2 title={game.title}>{game.title}</h2>
-						<span className="play-next-card__access">
-							{suggestion.accessTag}
-						</span>
+					<div className="play-next-card__main">
+						<div className="play-next-card__title-row">
+							<h2 title={game.title}>{game.title}</h2>
+							<span className="play-next-card__access">
+								{suggestion.accessTag}
+							</span>
+							{leavingVisible && game.psPlusLeavingOn && (
+								<span
+									className="play-next-card__flag play-next-card__flag--leaving play-next-card__leaving--desktop"
+									aria-hidden="true"
+								>
+									LEAVING {formatLeavingDate(game.psPlusLeavingOn)}
+								</span>
+							)}
+						</div>
+						{leavingVisible && game.psPlusLeavingOn && (
+							<span className="sr-only">
+								Leaving the PlayStation Plus Extra catalog on{' '}
+								{game.psPlusLeavingOn}
+							</span>
+						)}
+						<p className="play-next-card__reason">{suggestion.primaryReason}</p>
+						{suggestion.closestMatch && (
+							<p className="play-next-card__closest">CLOSEST MATCH</p>
+						)}
+						{facts.length > 0 && (
+							<ul className="play-next-card__facts" aria-label="Known facts">
+								{facts.map((fact) => (
+									<li key={fact.key}>{fact.value}</li>
+								))}
+							</ul>
+						)}
+						<p className="play-next-card__explanation">
+							{suggestion.explanation}
+						</p>
 					</div>
-					<p className="play-next-card__reason">{suggestion.primaryReason}</p>
-					{suggestion.closestMatch && (
-						<p className="play-next-card__closest">CLOSEST MATCH</p>
-					)}
-					{facts.length > 0 && (
-						<ul className="play-next-card__facts" aria-label="Known facts">
-							{facts.map((fact) => (
-								<li key={fact.key}>{fact.value}</li>
+					<div className="play-next-card__factors-block">
+						<span className="play-next-card__factors-label">SCORE FACTORS</span>
+						<ul className="play-next-card__factors" aria-label="Score factors">
+							{suggestion.factors.map((factor) => (
+								<li key={factor.code}>{`${factor.code} +${factor.points}`}</li>
 							))}
 						</ul>
-					)}
-					<p className="play-next-card__explanation">
-						{suggestion.explanation}
-					</p>
-					<ul className="play-next-card__factors" aria-label="Score factors">
-						{suggestion.factors.map((factor) => (
-							<li key={factor.code}>{`${factor.code} +${factor.points}`}</li>
-						))}
-					</ul>
+					</div>
 					<div className="play-next-card__actions">
 						<button
 							ref={playActionRef}

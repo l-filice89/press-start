@@ -218,9 +218,10 @@ export function PlayNextPage() {
 						</p>
 					)}
 					<div className="play-next__grid">
-						{slate.map((suggestion) => (
+						{slate.map((suggestion, index) => (
 							<SuggestionCard
 								key={suggestion.game.id}
+								rank={index + 1}
 								suggestion={reconcileOwnership(
 									suggestion,
 									data?.find((game) => game.id === suggestion.game.id),
