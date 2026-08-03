@@ -7,7 +7,8 @@
 <!--
 ASSUMPTIONS / ITERATION SOURCE
 - Continuation of Luca-approved Direction A and binding 05 Story 13.2 modal/card mock.
-- Production UI adds only Shuffle below cards and adjacent exhaustion status.
+- Production UI adds Shuffle immediately left of Tune in the top command row.
+- Exhaustion status sits under that command row, before the cards.
 - State switcher is mock-only review chrome, never production UI.
 - Near-exhausted IS reset-ready. One next Shuffle immediately produces a fresh slate
   while excluding the two cards currently visible. There is no intermediate click.
@@ -48,8 +49,9 @@ main{max-width:1120px;margin:auto;padding:var(--space-5) var(--space-4) 56px}
 .play-next__header h1{margin:0;font-family:var(--font-display);font-size:clamp(1.6rem,4vw,2.4rem);letter-spacing:.08em}
 .play-next__applied{display:block;color:var(--color-text-muted);font:10px var(--font-mono);letter-spacing:.12em}
 .play-next__mode{display:inline-flex;margin-top:var(--space-2);color:var(--color-accent-electric);font:700 15px var(--font-ui);letter-spacing:.1em}
-.play-next__controls{display:flex;flex-direction:column;align-items:flex-end;gap:var(--space-2)}
+.play-next__controls{display:flex;max-width:520px;flex-direction:column;align-items:flex-end;gap:var(--space-2)}
 .play-next__controls p{margin:0;color:var(--color-text-secondary)}
+.command-row{display:flex;justify-content:flex-end;gap:var(--space-2)}
 .tune-trigger{display:inline-flex;align-items:center;gap:var(--space-2);min-height:var(--hit-target);padding:var(--space-2) var(--space-3);border:1px solid var(--color-border-hairline);border-radius:var(--radius-lg);background:var(--color-surface-raised);color:var(--color-text-primary);font:600 .9rem var(--font-ui)}
 .play-next__grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-4)}
 .card{display:flex;flex-direction:column;min-width:0;overflow:hidden;background:var(--color-surface);border:1px solid var(--color-border-soft);border-radius:var(--radius-md)}
@@ -70,12 +72,11 @@ main{max-width:1120px;margin:auto;padding:var(--space-5) var(--space-4) 56px}
 .card__facts{display:flex;flex-wrap:wrap;gap:var(--space-2);margin:0;padding:0;list-style:none}.card__facts li{padding:var(--space-1) var(--space-2);border-radius:var(--radius-pill);background:var(--color-surface-raised);color:var(--color-text-secondary);font:.68rem var(--font-mono)}
 .card__explanation{margin:0;color:var(--color-text-secondary)}
 .card__actions{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-2);margin-top:auto}.card__actions button{min-height:var(--hit-target);padding:var(--space-2);border:1px solid var(--color-accent-electric);border-radius:var(--radius-sm);background:transparent;color:var(--color-accent-electric);font-weight:700}.card__actions button:first-child{background:var(--color-accent-electric);color:var(--color-void)}
-.shuffle-zone{display:grid;justify-items:center;gap:var(--space-3);margin-top:var(--space-5)}
-.shuffle-warning{max-width:660px;margin:0;padding:var(--space-3) var(--space-4);border:1px solid rgba(255,178,84,.4);border-radius:var(--radius-md);background:rgba(255,178,84,.06);color:var(--color-warn-amber);font:600 14px var(--font-ui);text-align:center}
+.shuffle-warning{max-width:520px;margin:0;padding:var(--space-2) var(--space-3);border:1px solid rgba(255,178,84,.4);border-radius:var(--radius-md);background:rgba(255,178,84,.06);color:var(--color-warn-amber);font:600 14px var(--font-ui);text-align:right}
 .shuffle-warning[hidden]{display:none}
-.shuffle-button{display:inline-flex;align-items:center;justify-content:center;min-width:180px;min-height:var(--hit-target);padding:var(--space-2) var(--space-5);border:1px solid var(--color-accent-electric);border-radius:var(--radius-lg);background:transparent;color:var(--color-accent-electric);font:700 15px var(--font-ui);letter-spacing:.1em}
+.shuffle-button{display:inline-flex;align-items:center;justify-content:center;min-height:var(--hit-target);padding:var(--space-2) var(--space-3);border:1px solid var(--color-accent-electric);border-radius:var(--radius-lg);background:transparent;color:var(--color-accent-electric);font:700 .9rem var(--font-ui);letter-spacing:.08em}
 .shuffle-button:hover,.shuffle-button:focus-visible{background:rgba(18,179,255,.12)}
-.state-caption{margin:0;color:var(--color-text-muted);font:10px var(--font-mono);letter-spacing:.08em;text-align:center}
+.state-caption{margin:0;color:var(--color-text-muted);font:10px var(--font-mono);letter-spacing:.08em;text-align:right}
 .tune__backdrop{position:fixed;inset:0;z-index:var(--z-overlay);display:flex;align-items:center;justify-content:center;padding:var(--space-5);background:rgba(5,9,15,.7)}.tune__backdrop[hidden]{display:none}
 .tune{width:min(680px,100%);max-height:80vh;overflow:auto;padding:var(--space-4);border:1px solid var(--color-border-hairline);border-radius:var(--radius-lg);background:var(--color-surface-raised);box-shadow:0 0 28px rgba(53,224,255,.18)}
 .tune__head{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-4)}.tune__title{margin:0 0 var(--space-3);font:600 .9rem var(--font-display);letter-spacing:.08em;text-transform:uppercase}.tune__close{display:grid;place-items:center;width:var(--hit-target);height:var(--hit-target);padding:0;border:1px solid var(--color-border-hairline);border-radius:var(--radius-pill);background:transparent;color:var(--color-text-primary);font-size:20px}
@@ -87,8 +88,8 @@ main{max-width:1120px;margin:auto;padding:var(--space-5) var(--space-4) 56px}
 @media(max-width:600px){
 	.app-header{gap:var(--space-2);padding:var(--space-3);background:var(--color-void);backdrop-filter:none}.destination-toggle{order:3;flex:1 0 100%}.destination-toggle__tab{flex:1;padding-inline:var(--space-1)}.app-header__readout{font-size:10px}
 	main{padding:var(--space-4) var(--space-3) 48px}.mock-bar{align-items:flex-start;flex-direction:column}.mock-bar__label{margin-top:var(--space-2)}.mock-bar__states{width:100%}.mock-state{flex:1;padding-inline:var(--space-2);font-size:10px}
-	.play-next__header{flex-direction:column}.play-next__controls{align-items:flex-start}.play-next__grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-2)}
-	.card__content{padding:var(--space-2) var(--space-3) var(--space-3)}.card__title-row{flex-direction:column;gap:var(--space-1)}.card__title-row h2{font-size:12.5px}.card__actions{grid-template-columns:1fr}.shuffle-zone{margin-top:var(--space-4)}.shuffle-warning{text-align:left}.shuffle-button{width:100%}
+	.play-next__header{flex-direction:column}.play-next__controls{width:100%;max-width:none;align-items:flex-start}.command-row{width:100%}.command-row button{flex:1}.shuffle-warning{width:100%;max-width:none;text-align:left}.state-caption{text-align:left}.play-next__grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-2)}
+	.card__content{padding:var(--space-2) var(--space-3) var(--space-3)}.card__title-row{flex-direction:column;gap:var(--space-1)}.card__title-row h2{font-size:12.5px}.card__actions{grid-template-columns:1fr}
 	.tune__backdrop{align-items:flex-end;padding:0}.tune{width:100%;max-height:80vh;padding-bottom:calc(var(--space-4) + env(safe-area-inset-bottom,0px));border:0;border-top:1px solid var(--color-border-hairline);border-radius:var(--radius-lg) var(--radius-lg) 0 0;box-shadow:none}.tune__groups{grid-template-columns:1fr}
 }
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition-duration:.001ms!important}}
@@ -114,17 +115,17 @@ main{max-width:1120px;margin:auto;padding:var(--space-5) var(--space-4) 56px}
 	<section aria-labelledby="play-next-heading">
 		<header class="play-next__header">
 			<div><h1 id="play-next-heading">WHAT NEXT?</h1><span class="play-next__applied">APPLIED INTENT</span><span class="play-next__mode">SURPRISE ME</span></div>
-			<div class="play-next__controls"><button class="tune-trigger" type="button" aria-haspopup="dialog" aria-expanded="false">TUNE THE PICKS</button><p>Three picks from your Shelf</p></div>
+			<div class="play-next__controls">
+				<div class="command-row"><button class="shuffle-button" type="button">SHUFFLE</button><button class="tune-trigger" type="button" aria-haspopup="dialog" aria-expanded="false">TUNE THE PICKS</button></div>
+				<p class="shuffle-warning" role="status" hidden>You’ve seen every other match. Next Shuffle starts a fresh pool.</p>
+				<p class="state-caption">NORMAL · THREE UNSEEN MATCHES AVAILABLE</p>
+				<p>Three picks from your Shelf</p>
+			</div>
 		</header>
 		<div class="play-next__grid" aria-label="Current suggestions">
 			<article class="card" data-card="1"><div class="card__cover"><button class="card__cover-button" type="button" aria-label="Open details — Game title 01"><span class="card__cover-fallback" aria-hidden="true">▹</span></button><button class="card__owned-toggle" type="button" aria-pressed="true" aria-label="Owned — Game title 01"><span aria-hidden="true">◆</span></button><div class="card__flags"></div></div><div class="card__content"><div class="card__title-row"><h2>[GAME TITLE 01]</h2><span class="card__access">OWNED</span></div><p class="card__reason">QUICK WIN</p><ul class="card__facts"><li>[GENRE]</li><li>[XX]h story</li></ul><p class="card__explanation">A known Shelf match that has not appeared earlier in this visit.</p><div class="card__actions"><button type="button">Play this</button><button type="button">Open details</button></div></div></article>
 			<article class="card" data-card="2"><div class="card__cover"><button class="card__cover-button" type="button" aria-label="Open details — Game title 02"><span class="card__cover-fallback" aria-hidden="true">▹</span></button><button class="card__owned-toggle" type="button" aria-pressed="false" aria-label="Owned — Game title 02"><span aria-hidden="true">◇</span></button><div class="card__flags"><span class="card__flag card__flag--ps-extra">◈ PS+</span><span class="card__flag card__flag--leaving">LEAVING [DATE]</span></div></div><div class="card__content"><div class="card__title-row"><h2>[GAME TITLE 02]</h2><span class="card__access">PS+ EXTRA</span></div><p class="card__reason">LAST CHANCE</p><ul class="card__facts"><li>[GENRE]</li><li>Leaves [DATE]</li></ul><p class="card__explanation">Current PS+ access and its known departure remain visible.</p><div class="card__actions"><button type="button">Play this</button><button type="button">Open details</button></div></div></article>
 			<article class="card" data-card="3"><div class="card__cover"><button class="card__cover-button" type="button" aria-label="Open details — Game title 03"><span class="card__cover-fallback" aria-hidden="true">▹</span></button><button class="card__owned-toggle" type="button" aria-pressed="true" aria-label="Owned — Game title 03"><span aria-hidden="true">◆</span></button><div class="card__flags"></div></div><div class="card__content"><div class="card__title-row"><h2>[GAME TITLE 03]</h2><span class="card__access">OWNED</span></div><p class="card__reason">WILDCARD</p><ul class="card__facts"><li>[KNOWN FACT]</li></ul><p class="card__explanation">A third unseen pick completes the normal three-card slate.</p><div class="card__actions"><button type="button">Play this</button><button type="button">Open details</button></div></div></article>
-		</div>
-		<div class="shuffle-zone">
-			<p class="shuffle-warning" role="status" hidden>You’ve seen every other match. Next Shuffle starts a fresh pool.</p>
-			<button class="shuffle-button" type="button">SHUFFLE</button>
-			<p class="state-caption">NORMAL · THREE UNSEEN MATCHES AVAILABLE</p>
 		</div>
 	</section>
 </main>

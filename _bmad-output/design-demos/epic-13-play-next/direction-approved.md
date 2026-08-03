@@ -112,3 +112,17 @@ Applied interpretation:
 - Removed the misleading intermediate reset-ready state and its screenshots.
 
 Status: pending Luca's explicit approval of revised Story 13.3 mock before UI implementation.
+
+## Story 13.3 placement correction — verbatim
+
+> I'd move the shuffle to the left of tune picks. So that all commands are up top
+
+Applied interpretation:
+
+- Shuffle moves from below the suggestion grid to immediately left of
+  `TUNE THE PICKS` in the page-header command row.
+- Exhaustion warning moves with it, directly below the command row and before
+  the cards.
+- Phone keeps both commands together in one full-width, two-button row.
+
+Status: pending Luca's explicit approval of revised Story 13.3 placement.

@@ -81,7 +81,7 @@ Near-exhausted and reset-ready are one state, not two steps. Once the smaller sl
 
 Exclusions are an optional core selection input and affect eligibility only after full-snapshot context such as Familiar genre anchors is derived. Seed suffixes use one monotonic visit generation counter across Tune and Shuffle so every explicit generation is deterministic and distinct.
 
-Shuffle is a native button below the suggestion grid, matching the approved Story 13.2 card/tuning structure. Warning is programmatic status text adjacent to the control. Motion changes use existing CSS transitions only and are disabled under `prefers-reduced-motion: reduce`.
+Shuffle is a native button immediately left of `TUNE THE PICKS` in the top command row. Exhaustion warning is programmatic status text directly beneath that row and before the suggestion grid. On phone both commands share the full-width row with 44px targets. Motion changes use existing CSS transitions only and are disabled under `prefers-reduced-motion: reduce`.
 
 ## Verification
 
