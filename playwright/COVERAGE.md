@@ -546,7 +546,15 @@ Play Next desktop command rows (`spec-play-next-desktop-command-rows.md`):
 | AC | Coverage |
 |----|----------|
 | 1440×900 shows three full-width ranked rows with fixed cover, evidence, factors, and action regions; titles remain untruncated and page does not overflow | `epic13-play-next.spec.ts` › desktop renders the approved ranked command-row briefing without truncation |
-| Command rows activate at exactly 1024px, never 1023px | `epic13-play-next.spec.ts` › command rows activate at 1024px and not at 1023px |
+| Full command rows activate at 1024px with the approved 44px rank, 120px cover, dedicated factors rail, and 180px actions | `epic13-play-next.spec.ts` › compact command rows span 695 through 1023 before full desktop rows; › desktop renders the approved ranked command-row briefing without truncation |
 | 320px retains shipped two-up order, spacing, 3:4 covers, ≥44px targets, and no overflow; desktop rank/factor headings remain hidden | `epic13-play-next.spec.ts` › phone uses compact two-up covers and keeps every action at least 44px high |
 | Tune and Shuffle recompute decorative `01`–`03` ranks from current rendered order | `PlayNextPage.test.tsx` › shuffles to unseen games… pins new IDs plus current-order ranks; browser Shuffle/Tune flows drive slate replacement |
-| Details, ownership, PS+/leaving/closest-match, pending Playing success/failure, focus, and visit preservation remain unchanged | existing `epic13-play-next.spec.ts` detail, ownership, Tune, Play this success, and failed Play this flows; `PlayNextPage.test.tsx` pins shared semantic/action tree after grouping |
+| Details, ownership, PS+/leaving/closest-match, pending Playing success/failure, focus, and visit preservation remain unchanged; mutation flows run at compact width | existing `epic13-play-next.spec.ts` detail, ownership, Tune, Play this success, and failed Play this flows; `PlayNextPage.test.tsx` pins shared semantic/action tree after grouping |
+
+Play Next compact command rows (`spec-play-next-compact-command-rows.md`):
+
+| AC | Coverage |
+|----|----------|
+| 694px retains portrait cards; 695px through 1023px uses 36px rank, 88px cover, combined evidence/factors, and 150px actions; 1024px restores full 08a rails | `epic13-play-next.spec.ts` › compact command rows span 695 through 1023 before full desktop rows |
+| Compact rows contain long titles, keep every row clear of its action rail, separate in-cover PS+/ownership controls, expose Leaving, preserve ≥44px targets, and avoid page overflow | `epic13-play-next.spec.ts` › compact command rows span 695 through 1023 before full desktop rows |
+| Details, Tune closest-match, ownership, and Playing success/failure retain behavior and focus/visit semantics at compact width | compact-width `epic13-play-next.spec.ts` detail, Tune, ownership, Play this success, and failed Play this flows |

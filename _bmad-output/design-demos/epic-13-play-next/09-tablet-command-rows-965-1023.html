@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Play Next — compact command rows at 695–1023px</title>
+<!--
+TABLET / NARROW-DESKTOP MOCK · 695–1023px · shown at 965px
+Horizontal command rows remain, but Score Factors fold into the evidence column.
+At ≥1024px, approved 08a restores its dedicated factors rail and 120px covers.
+-->
+<style>
+:root{
+	--void:#05090f;--surface:#0b1622;--raised:#0a1120;--line:#163043;--soft:#12283a;
+	--text:#eafaff;--secondary:#8fb0c4;--muted:#6b8ba0;--blue:#12b3ff;--glow:#35e0ff;
+	--dormant:#3d5566;--amber:#ffb254;--display:"Orbitron",system-ui,sans-serif;
+	--ui:"Rajdhani",system-ui,sans-serif;--body:"Inter",system-ui,sans-serif;
+	--mono:"JetBrains Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background-color:var(--void);background-image:linear-gradient(rgba(18,179,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(18,179,255,.025) 1px,transparent 1px);background-size:32px 32px;color:var(--text);font:400 13px/1.45 var(--body)}
+button{color:inherit;font-family:var(--ui);cursor:pointer}
+.viewport{width:min(100%,1023px);min-height:100vh;margin:auto;border-inline:1px solid var(--soft)}
+.app-header{display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(5,9,15,.9);border-bottom:1px solid var(--line)}
+.wordmark{font:900 16px var(--display);letter-spacing:.08em;white-space:nowrap}.wordmark b{color:var(--blue)}
+.nav{display:flex;gap:2px;padding:2px;background:var(--raised);border:1px solid var(--line);border-radius:999px}
+.nav a{padding:7px 12px;border-radius:999px;color:var(--secondary);font:600 11px var(--ui);letter-spacing:.08em;text-decoration:none}
+.nav a[aria-current="page"]{background:var(--blue);color:var(--void)}
+.readout{margin-left:auto;color:var(--muted);font:10px var(--mono);white-space:nowrap}
+main{padding:20px 16px}
+.briefing-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}
+h1,h2{margin:0;font-family:var(--display);line-height:1.15}
+h1{font-size:1.8rem;letter-spacing:.07em}
+.eyebrow{display:block;margin-top:2px;color:var(--muted);font:10px var(--mono);letter-spacing:.12em}
+.mode{display:inline-block;margin-top:7px;color:var(--blue);font:700 12px var(--ui);letter-spacing:.1em}
+.controls{text-align:right}.commands{display:flex;gap:8px}
+.commands button{min-height:44px;padding:8px 13px;border-radius:18px;background:transparent;font-size:13px;font-weight:700;letter-spacing:.05em}
+.shuffle{border:1px solid var(--blue);color:var(--blue)}.tune{border:1px solid var(--line);background:var(--raised)!important}
+.controls p{margin:7px 0 0;color:var(--secondary);font-size:12px}
+.slate{display:flex;flex-direction:column;gap:10px}
+.row{display:grid;grid-template-columns:36px 88px minmax(0,1fr) 150px;gap:12px;min-width:0;background:var(--surface);border:1px solid var(--soft);border-radius:12px;overflow:hidden}
+.rank{display:grid;place-items:center;background:var(--raised);border-right:1px solid var(--soft);color:var(--dormant);font:700 .9rem var(--display)}
+.cover{position:relative;align-self:center;aspect-ratio:3/4;overflow:hidden;border-radius:7px}
+.cover img{display:block;width:100%;height:100%;object-fit:cover}
+.cover-badge{position:absolute;bottom:4px;left:4px;padding:2px 6px;border-radius:999px;background:rgba(5,9,15,.78);color:var(--glow);font:600 9px var(--mono)}
+.owned{position:absolute;top:4px;right:4px;display:grid;place-items:center;width:44px;height:44px;padding:0;border:1px solid var(--line);border-radius:999px;background:rgba(5,9,15,.78);color:var(--muted);font-size:18px}
+.owned.active{border-color:var(--glow);color:var(--glow)}
+.main{display:flex;flex-direction:column;justify-content:center;gap:5px;min-width:0;padding:11px 0;overflow-wrap:anywhere}
+.title-line{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.title-line h2{font-size:.9rem;font-weight:600}
+.access,.leaving{padding:2px 7px;border-radius:999px;font:700 9px var(--ui);letter-spacing:.08em}
+.access{border:1px solid var(--line);color:var(--secondary)}.leaving{border:1px solid rgba(255,178,84,.4);color:var(--amber);font-family:var(--mono)}
+.reason{margin:0;color:var(--blue);font:700 11px var(--ui);letter-spacing:.1em}
+.facts,.factors{display:flex;flex-wrap:wrap;gap:4px 7px;margin:0;padding:0;list-style:none}
+.facts li{padding:2px 6px;border-radius:999px;background:var(--raised);color:var(--secondary);font:9px var(--mono)}
+.explanation{margin:0;color:var(--secondary);font-size:11px}
+.factor-line{display:flex;align-items:baseline;gap:7px;margin-top:2px;padding-top:5px;border-top:1px solid var(--soft)}
+.factor-label{flex:0 0 auto;color:var(--muted);font:8px var(--mono);letter-spacing:.1em}
+.factors li{color:var(--muted);font:8px var(--mono)}
+.actions{display:flex;flex-direction:column;justify-content:center;gap:7px;padding:12px 12px 12px 0}
+.actions button{min-height:44px;padding:7px 10px;border:1px solid var(--blue);border-radius:8px;background:transparent;color:var(--blue);font-weight:700}
+.actions button:first-child{background:var(--blue);color:var(--void)}
+.note{margin:14px 0 0;color:var(--muted);font:9px var(--mono);letter-spacing:.07em}
+@media(max-width:880px){.readout{display:none}.nav a{padding-inline:10px}}
+</style>
+</head>
+<body>
+<div class="viewport">
+	<header class="app-header">
+		<div class="wordmark">PRESS <b>START</b></div>
+		<nav class="nav" aria-label="Destination"><a href="#">SHELF</a><a href="#" aria-current="page">PLAY NEXT</a><a href="#">CATALOG</a><a href="#">STATS</a></nav>
+		<span class="readout">PS+ CATALOG AS OF 16 JUL 2026</span>
+	</header>
+	<main>
+		<header class="briefing-header">
+			<div><h1>WHAT NEXT?</h1><span class="eyebrow">APPLIED INTENT</span><span class="mode">SURPRISE ME</span></div>
+			<div class="controls"><div class="commands"><button class="shuffle">SHUFFLE</button><button class="tune">TUNE THE PICKS</button></div><p>Three picks from your Shelf</p></div>
+		</header>
+		<div class="slate" aria-label="Current suggestions">
+			<article class="row">
+				<span class="rank" aria-hidden="true">01</span>
+				<div class="cover"><img src="https://images.igdb.com/igdb/image/upload/t_cover_big/cob9k6.jpg" alt=""><button class="owned active" aria-label="Owned — Final Fantasy VII Rebirth">◆</button></div>
+				<div class="main"><div class="title-line"><h2>Final Fantasy VII Rebirth</h2><span class="access">OWNED</span></div><p class="reason">FINISH THEM</p><ul class="facts"><li>Adventure</li><li>Critic 89</li><li>User 90</li></ul><p class="explanation">You already made progress here. Returning now could turn it into a finish.</p><div class="factor-line"><span class="factor-label">SCORE FACTORS</span><ul class="factors"><li>finish-them +40</li><li>critic-confidence +8</li><li>owned-access +4</li></ul></div></div>
+				<div class="actions"><button>Play this</button><button>Open details</button></div>
+			</article>
+			<article class="row">
+				<span class="rank" aria-hidden="true">02</span>
+				<div class="cover"><img src="https://images.igdb.com/igdb/image/upload/t_cover_big/co4qfn.jpg" alt=""><button class="owned" aria-label="Owned — Assassin's Creed IV Black Flag">◇</button><span class="cover-badge">◈ PS+</span></div>
+				<div class="main"><div class="title-line"><h2>Assassin's Creed IV Black Flag</h2><span class="access">PS+ EXTRA</span></div><p class="reason">UP NEXT</p><ul class="facts"><li>Adventure</li><li>36h story</li><li>Critic 85</li><li>User 83</li></ul><p class="explanation">You marked this Up next, so it is ready to move from intention to play.</p><div class="factor-line"><span class="factor-label">SCORE FACTORS</span><ul class="factors"><li>up-next +32</li><li>critic-confidence +8</li><li>ps-plus-access +6</li></ul></div></div>
+				<div class="actions"><button>Play this</button><button>Open details</button></div>
+			</article>
+			<article class="row">
+				<span class="rank" aria-hidden="true">03</span>
+				<div class="cover"><img src="https://images.igdb.com/igdb/image/upload/t_cover_big/co2ed3.jpg" alt=""><button class="owned" aria-label="Owned — Assassin's Creed Valhalla">◇</button><span class="cover-badge">◈ PS+</span></div>
+				<div class="main"><div class="title-line"><h2>Assassin's Creed Valhalla</h2><span class="access">PS+ EXTRA</span><span class="leaving">LEAVING 19 AUG</span></div><p class="reason">LAST CHANCE</p><ul class="facts"><li>Adventure</li><li>110h story</li><li>Critic 85</li><li>User 74</li></ul><p class="explanation">It leaves PS+ soon, so waiting could remove your current access.</p><div class="factor-line"><span class="factor-label">SCORE FACTORS</span><ul class="factors"><li>last-chance-30 +18</li><li>critic-confidence +8</li><li>ps-plus-access +6</li></ul></div></div>
+				<div class="actions"><button>Play this</button><button>Open details</button></div>
+			</article>
+		</div>
+		<p class="note">COMPACT COMMAND ROWS · 695–1023PX · SHOWN AT 965PX · FACTORS FOLD INTO EVIDENCE · FULL 08A SPLIT AT ≥1024PX</p>
+	</main>
+</div>
+</body>
+</html>

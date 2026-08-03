@@ -157,6 +157,7 @@ test('Play this marks the suggestion Playing and returns to Shelf', async ({
 	let writeCount = 0;
 	try {
 		await seedGames(games);
+		await page.setViewportSize({ width: 965, height: 900 });
 		await page.route('**/api/games/*/play-status', async (route) => {
 			writeCount += 1;
 			await writeGate;
@@ -225,6 +226,7 @@ test('failed Play this preserves tuned exhausted visit and its next transition',
 	);
 	try {
 		await seedGames(games);
+		await page.setViewportSize({ width: 965, height: 900 });
 		await page.goto('/play-next');
 		const cards = page.locator('[data-play-next-game-id]');
 		const ids = () =>
@@ -575,15 +577,18 @@ test('desktop renders the approved ranked command-row briefing without truncatio
 	}
 });
 
-test('command rows activate at 1024px and not at 1023px', async ({ page }) => {
+test('compact command rows span 695 through 1023 before full desktop rows', async ({
+	page,
+}) => {
 	const games = candidates(randomUUID().slice(0, 8));
 	games[0].title = `Unbroken-${'X'.repeat(180)}`;
 	try {
 		await seedGames(games);
-		await page.setViewportSize({ width: 1023, height: 900 });
+		await page.setViewportSize({ width: 694, height: 900 });
 		await page.goto('/play-next');
 		const grid = page.locator('.play-next__grid');
-		const first = page.locator('[data-play-next-game-id]').first();
+		const rows = page.locator('[data-play-next-game-id]');
+		const first = rows.first();
 		await expect(first).toBeVisible();
 		expect(await grid.evaluate((node) => getComputedStyle(node).display)).toBe(
 			'grid',
@@ -596,15 +601,164 @@ test('command rows activate at 1024px and not at 1023px', async ({ page }) => {
 			first.locator('.play-next-card__factors-label'),
 		).not.toBeVisible();
 
+		for (const width of [695, 965, 1023]) {
+			await page.setViewportSize({ width, height: 900 });
+			expect(
+				await grid.evaluate((node) => getComputedStyle(node).display),
+			).toBe('flex');
+			expect(
+				await first.evaluate((node) => getComputedStyle(node).display),
+			).toBe('grid');
+			await expect(first.locator('.play-next-card__rank')).toBeVisible();
+			await expect(
+				first.locator('.play-next-card__factors-label'),
+			).toBeVisible();
+
+			const gridBox = await grid.boundingBox();
+			const rowBoxes = await rows.evaluateAll((nodes) =>
+				nodes.map((node) => {
+					const rect = node.getBoundingClientRect();
+					const main = node
+						.querySelector('.play-next-card__main')
+						?.getBoundingClientRect();
+					const factors = node
+						.querySelector('.play-next-card__factors-block')
+						?.getBoundingClientRect();
+					const actions = node
+						.querySelector('.play-next-card__actions')
+						?.getBoundingClientRect();
+					return {
+						top: rect.top,
+						left: rect.left,
+						right: rect.right,
+						mainRight: main?.right ?? Number.POSITIVE_INFINITY,
+						factorsRight: factors?.right ?? Number.POSITIVE_INFINITY,
+						actionsLeft: actions?.left ?? Number.NEGATIVE_INFINITY,
+					};
+				}),
+			);
+			expect(rowBoxes[0].top).toBeLessThan(rowBoxes[1].top);
+			expect(rowBoxes[1].top).toBeLessThan(rowBoxes[2].top);
+			for (const box of rowBoxes) {
+				expect(Math.abs(box.left - (gridBox?.x ?? 0))).toBeLessThan(1);
+				expect(
+					Math.abs(box.right - ((gridBox?.x ?? 0) + (gridBox?.width ?? 0))),
+				).toBeLessThan(1);
+				expect(box.mainRight).toBeLessThanOrEqual(box.actionsLeft);
+				expect(box.factorsRight).toBeLessThanOrEqual(box.actionsLeft);
+			}
+
+			const [rankBox, coverBox, mainBox, factorsBox, actionsBox] =
+				await Promise.all([
+					first.locator('.play-next-card__rank').boundingBox(),
+					first.locator('.play-next-card__cover').boundingBox(),
+					first.locator('.play-next-card__main').boundingBox(),
+					first.locator('.play-next-card__factors-block').boundingBox(),
+					first.locator('.play-next-card__actions').boundingBox(),
+				]);
+			expect(rankBox?.width).toBe(36);
+			expect(coverBox?.width).toBe(88);
+			expect(
+				Math.abs((coverBox?.height ?? 0) / (coverBox?.width ?? 1) - 4 / 3),
+			).toBeLessThan(0.02);
+			expect(mainBox?.x).toBe(factorsBox?.x);
+			expect(mainBox?.width).toBe(factorsBox?.width);
+			expect(mainBox?.y ?? 0).toBeLessThan(factorsBox?.y ?? 0);
+			expect(actionsBox?.width).toBe(150);
+
+			const title = page
+				.locator('.play-next-card__title-row h2')
+				.filter({ hasText: 'Unbroken-' });
+			expect(
+				await title.evaluate((node) => ({
+					whiteSpace: getComputedStyle(node).whiteSpace,
+					fullyVisible: node.scrollWidth <= node.clientWidth,
+				})),
+			).toEqual({ whiteSpace: 'normal', fullyVisible: true });
+			expect(
+				await page.evaluate(
+					() =>
+						document.documentElement.scrollWidth <=
+						document.documentElement.clientWidth,
+				),
+			).toBe(true);
+			for (const button of await first.getByRole('button').all()) {
+				const box = await button.boundingBox();
+				expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+				expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+			}
+
+			const last = page.locator(`[data-play-next-game-id="${games[2].id}"]`);
+			const [lastCoverBox, ownedBox, psPlusBox] = await Promise.all([
+				last.locator('.play-next-card__cover').boundingBox(),
+				last.locator('.play-next-card__owned-toggle').boundingBox(),
+				last.locator('.play-next-card__flag--ps-extra').boundingBox(),
+			]);
+			expect(lastCoverBox).not.toBeNull();
+			expect(ownedBox).not.toBeNull();
+			expect(psPlusBox).not.toBeNull();
+			if (!(lastCoverBox && ownedBox && psPlusBox)) {
+				throw new Error('compact cover overlay geometry unavailable');
+			}
+			expect(ownedBox.width).toBeGreaterThanOrEqual(44);
+			expect(ownedBox.height).toBeGreaterThanOrEqual(44);
+			expect(ownedBox.x).toBeGreaterThanOrEqual(lastCoverBox.x);
+			expect(ownedBox.x + ownedBox.width).toBeLessThanOrEqual(
+				lastCoverBox.x + lastCoverBox.width,
+			);
+			expect(psPlusBox.x).toBeGreaterThanOrEqual(lastCoverBox.x);
+			expect(psPlusBox.x + psPlusBox.width).toBeLessThanOrEqual(
+				lastCoverBox.x + lastCoverBox.width,
+			);
+			expect(ownedBox.y + ownedBox.height).toBeLessThanOrEqual(psPlusBox.y);
+			await expect(
+				last.locator('.play-next-card__leaving--desktop'),
+			).toBeVisible();
+			await expect(
+				last.locator('.play-next-card__leaving--narrow'),
+			).not.toBeVisible();
+
+			if (width === 965) {
+				await first
+					.getByRole('button', { name: 'Open details', exact: true })
+					.click();
+				const dialog = page.getByRole('dialog');
+				await expect(dialog).toBeVisible();
+				await dialog.getByRole('button', { name: 'Close details' }).click();
+				await expect(first).toBeFocused();
+			}
+		}
+
 		await page.setViewportSize({ width: 1024, height: 900 });
-		expect(await grid.evaluate((node) => getComputedStyle(node).display)).toBe(
-			'flex',
-		);
-		expect(await first.evaluate((node) => getComputedStyle(node).display)).toBe(
-			'grid',
-		);
+		const [rankBox, coverBox, mainBox, factorsBox, actionsBox] =
+			await Promise.all([
+				first.locator('.play-next-card__rank').boundingBox(),
+				first.locator('.play-next-card__cover').boundingBox(),
+				first.locator('.play-next-card__main').boundingBox(),
+				first.locator('.play-next-card__factors-block').boundingBox(),
+				first.locator('.play-next-card__actions').boundingBox(),
+			]);
+		expect(rankBox).not.toBeNull();
+		expect(coverBox).not.toBeNull();
+		expect(mainBox).not.toBeNull();
+		expect(factorsBox).not.toBeNull();
+		expect(actionsBox).not.toBeNull();
+		if (!(rankBox && coverBox && mainBox && factorsBox && actionsBox)) {
+			throw new Error('desktop command-row geometry unavailable');
+		}
+		expect(rankBox.width).toBe(44);
+		expect(coverBox.width).toBe(120);
+		expect(actionsBox.width).toBe(180);
+		expect(mainBox.x + mainBox.width).toBeLessThanOrEqual(factorsBox.x);
 		await expect(first.locator('.play-next-card__rank')).toBeVisible();
 		await expect(first.locator('.play-next-card__factors-label')).toBeVisible();
+		for (const button of await first.getByRole('button').all()) {
+			const box = await button.boundingBox();
+			expect(box).not.toBeNull();
+			if (!box) throw new Error('desktop action geometry unavailable');
+			expect(box.width).toBeGreaterThanOrEqual(44);
+			expect(box.height).toBeGreaterThanOrEqual(44);
+		}
 		expect(
 			await page.evaluate(
 				() =>
@@ -612,11 +766,6 @@ test('command rows activate at 1024px and not at 1023px', async ({ page }) => {
 					document.documentElement.clientWidth,
 			),
 		).toBe(true);
-		for (const button of await first.getByRole('button').all()) {
-			const box = await button.boundingBox();
-			expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
-			expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
-		}
 	} finally {
 		await deleteGames(games.map((game) => game.id));
 	}
@@ -747,6 +896,7 @@ test('Tune keeps draft separate, applies exact then closest picks, and preserves
 	];
 	try {
 		await seedGames(games);
+		await page.setViewportSize({ width: 965, height: 900 });
 		await page.goto('/play-next');
 		const cards = page.locator('[data-play-next-game-id]');
 		await expect(cards).toHaveCount(3);
@@ -894,6 +1044,7 @@ test('suggestion ownership diamond reuses the guarded ownership source flow', as
 	});
 	try {
 		await seedGames([target]);
+		await page.setViewportSize({ width: 965, height: 900 });
 		await page.goto('/play-next');
 		const card = page.locator(`[data-play-next-game-id="${target.id}"]`);
 		await expect(card).toBeVisible();
