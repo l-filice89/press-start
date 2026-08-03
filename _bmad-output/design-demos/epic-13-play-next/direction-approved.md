@@ -149,3 +149,18 @@ desktop three-card Play Next layout and 320px two-up compact card layout.
 
 Status: approved by Luca on 2026-08-03 for Story 13.4 UI implementation.
 `07-story-13-4-action-hardening.html` is the binding implementation reference.
+
+## Desktop command-row approval — 2026-08-03
+
+Binding desktop direction: `08a-desktop-command-rows.html` — ranked full-width
+landscape rows (rank / cover / verdict + evidence / score factors / actions),
+with all three suggestions visible as one briefing. Desktop starts at 1024px;
+mobile remains the shipped two-up card grid without structural changes.
+
+### Final implementation approval — verbatim
+
+> Let's change the desktop layout to this: 08a-desktop-command-rows.html. Mobile
+> layout is left untouched.
+
+Status: approved by Luca on 2026-08-03. Direction A is the only retained
+desktop artifact; discarded alternatives are intentionally not committed.
