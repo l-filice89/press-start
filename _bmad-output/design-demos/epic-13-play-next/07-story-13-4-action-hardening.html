@@ -12,11 +12,12 @@ ASSUMPTIONS / ITERATION SOURCE
 - Failure uses the existing global error toast and preserves the complete Play Next slate.
 - Success uses the existing Shelf card/state language; selected Playing card receives route-arrival focus.
 - State switcher and captions are mock-only review chrome, never production UI.
-Alignment pass 2026-08-03: values re-copied from the shipped app + binding 05 mock —
-web/tokens.css (tokens, glow-ring), web/index.css (focus floor), web/shell/header.css,
-web/shelf/card.css via 05 (22px owned badge, rounded cover, flag offsets),
-web/play-next/play-next.css (page header, card content, tune modal). Font paths fixed:
-static @fontsource Orbitron/Rajdhani (the variable packages are not installed).
+Alignment pass 2026-08-03 (2): re-matched to the SHIPPED app, not the earlier mock series —
+web/index.css (13px body, button font-ui, focus floor), web/tokens.css,
+web/play-next/play-next.css + SuggestionCard.tsx (44px owned toggle at space-2, flag offsets,
+reason/mode inherit body size), web/components/toast.css (bottom-center cyan toast, z-toast),
+web/shelf/card.css + state-pill.css (success view: vertical card, card--playing magenta bloom,
+compact PLAYING pill, 22px shelf owned chip). Shelf filter row / header search elided as mock chrome.
 -->
 <style>
 @font-face{font-family:Orbitron;src:url('../../../node_modules/@fontsource/orbitron/files/orbitron-latin-700-normal.woff2')}
@@ -28,18 +29,20 @@ static @fontsource Orbitron/Rajdhani (the variable packages are not installed).
 	--color-border-hairline:#163043;--color-border-soft:#12283a;
 	--color-text-primary:#eafaff;--color-text-secondary:#8fb0c4;--color-text-muted:#6b8ba0;
 	--color-accent-electric:#12b3ff;--color-accent-glow:#35e0ff;
+	--color-heat-magenta:#ff2e88;--color-heat-magenta-ink:#ff8bc2;
 	--color-state-dormant:#3d5566;--color-warn-amber:#ffb254;
-	--space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:24px;
+	--space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:24px;--space-6:32px;
 	--radius-sm:8px;--radius-md:12px;--radius-lg:18px;--radius-pill:999px;
 	--font-display:"Orbitron",system-ui,sans-serif;--font-ui:"Rajdhani",system-ui,sans-serif;
 	--font-body:"Inter",system-ui,sans-serif;--font-mono:"JetBrains",ui-monospace,monospace;
-	--glow-ring:0 0 28px rgba(53,224,255,.18);
-	--hit-target:44px;--z-header:10;--z-overlay:40;
+	--glow-ring:0 0 28px rgba(53,224,255,.18);--glow-playing:0 0 26px rgba(255,46,136,.3);
+	--hit-target:44px;--z-header:10;--z-overlay:40;--z-toast:50;
 }
 :focus-visible{outline:2px solid var(--color-accent-electric);outline-offset:2px}
 *{box-sizing:border-box}
-body{margin:0;min-height:100vh;background:var(--color-void);color:var(--color-text-primary);font:15px/1.5 var(--font-body);background-image:linear-gradient(rgba(18,179,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(18,179,255,.025) 1px,transparent 1px);background-size:32px 32px}
-button{cursor:pointer}
+body{margin:0;min-height:100vh;background:var(--color-void);color:var(--color-text-primary);font:400 13px/1.5 var(--font-body);background-image:linear-gradient(rgba(18,179,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(18,179,255,.025) 1px,transparent 1px);background-size:32px 32px}
+h1,h2{margin:0;font-family:var(--font-display);font-weight:700;line-height:1.15}
+button{font-family:var(--font-ui);color:inherit;cursor:pointer}
 .app-header{position:sticky;top:0;z-index:var(--z-header);display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-4);padding:var(--space-3) var(--space-4);background:rgba(5,9,15,.82);backdrop-filter:blur(8px);border-bottom:1px solid var(--color-border-hairline)}
 .wordmark{font:900 18px var(--font-display);letter-spacing:.08em}.wordmark b{color:var(--color-accent-electric)}
 .destination-toggle{display:flex;flex:0 0 auto;gap:2px;padding:2px;background:var(--color-surface-raised);border:1px solid var(--color-border-hairline);border-radius:var(--radius-pill)}
@@ -53,44 +56,57 @@ main{max-width:1120px;margin:auto;padding:var(--space-5) var(--space-4) 56px}
 .mock-state{min-height:var(--hit-target);padding:var(--space-2) var(--space-3);border:1px solid transparent;border-radius:var(--radius-pill);background:transparent;color:var(--color-text-secondary);font:700 12px var(--font-ui);letter-spacing:.08em}
 .mock-state[aria-pressed="true"]{border-color:var(--color-accent-glow);background:rgba(53,224,255,.14);color:var(--color-text-primary)}
 .play-next__header{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-4);margin-bottom:var(--space-5)}
-.play-next__header h1{margin:0;font-family:var(--font-display);font-size:clamp(1.6rem,4vw,2.4rem);letter-spacing:.08em}
-.play-next__applied{display:block;color:var(--color-text-muted);font:10px var(--font-mono);letter-spacing:.12em}
-.play-next__mode{display:inline-flex;margin-top:var(--space-2);color:var(--color-accent-electric);font:700 15px var(--font-ui);letter-spacing:.1em}
+.play-next__header h1{font-size:clamp(1.6rem,4vw,2.4rem);letter-spacing:.08em}
+.play-next__applied{display:block;color:var(--color-text-muted);font:.65rem var(--font-mono);letter-spacing:.12em}
+.play-next__mode{display:inline-flex;margin-top:var(--space-2);color:var(--color-accent-electric);font-family:var(--font-ui);font-weight:700;letter-spacing:.1em}
 .play-next__controls{display:flex;max-width:520px;flex-direction:column;align-items:flex-end;gap:var(--space-2)}
 .play-next__controls p{margin:0;color:var(--color-text-secondary)}
 .command-row{display:flex;justify-content:flex-end;gap:var(--space-2)}
 .tune-trigger{display:inline-flex;align-items:center;gap:var(--space-2);min-height:var(--hit-target);padding:var(--space-2) var(--space-3);border:1px solid var(--color-border-hairline);border-radius:var(--radius-lg);background:var(--color-surface-raised);color:var(--color-text-primary);font:600 .9rem var(--font-ui)}
 .play-next__grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-4)}
-.card{display:flex;flex-direction:column;min-width:0;background:var(--color-surface);border:1px solid var(--color-border-soft);border-radius:var(--radius-md)}
-.card[hidden]{display:none}
-.card__cover{position:relative;aspect-ratio:3/4;background:var(--color-surface-raised);border-radius:calc(var(--radius-md) - 1px) calc(var(--radius-md) - 1px) 0 0;overflow:hidden}
+.card{display:flex;flex-direction:column;min-width:0;background:var(--color-surface);border:1px solid var(--color-border-soft);border-radius:var(--radius-md);overflow:hidden}
+.card__cover{position:relative;aspect-ratio:3/4;background:var(--color-surface-raised)}
 .card__cover-button{display:block;width:100%;height:100%;padding:0;border:0;background:none}
 .card__cover-fallback{display:grid;place-items:center;width:100%;height:100%;color:var(--color-state-dormant);font:700 2rem var(--font-display)}
-.card__owned-toggle{position:absolute;top:calc((var(--hit-target) - 22px)/2);right:calc((var(--hit-target) - 22px)/2);z-index:1;display:grid;place-items:center;width:22px;height:22px;padding:0;line-height:1;border:1px solid var(--color-border-hairline);border-radius:var(--radius-pill);background:rgba(5,9,15,.72);color:var(--color-text-muted);font-size:11px;backdrop-filter:blur(2px)}
+.card__owned-toggle{position:absolute;top:var(--space-2);right:var(--space-2);z-index:1;display:grid;place-items:center;width:var(--hit-target);height:var(--hit-target);padding:0;border:1px solid var(--color-border-hairline);border-radius:var(--radius-pill);background:rgba(5,9,15,.72);color:var(--color-text-muted)}
 .card__owned-toggle[aria-pressed="true"]{border-color:var(--color-accent-glow);color:var(--color-accent-glow)}
-.card__flags{position:absolute;top:var(--space-2);left:var(--space-2);right:calc((var(--hit-target) - 22px)/2 + 22px + var(--space-1));display:flex;flex-wrap:wrap;gap:var(--space-1);pointer-events:none}
-.card__flag{display:inline-flex;align-items:center;padding:2px var(--space-2);border-radius:var(--radius-pill);background:rgba(5,9,15,.72);color:var(--color-text-primary);font:10px/1.4 var(--font-mono);backdrop-filter:blur(2px)}
-.card__flag--ps-extra{color:var(--color-accent-glow);font-weight:600;letter-spacing:.04em}.card__flag--leaving{flex-basis:100%;max-width:fit-content;border:1px solid rgba(255,178,84,.4);color:var(--color-warn-amber);font-weight:600;letter-spacing:.04em}
+.card__flags{position:absolute;top:var(--space-2);left:var(--space-2);right:calc(var(--hit-target) + var(--space-3));display:flex;flex-wrap:wrap;gap:var(--space-1);pointer-events:none}
+.card__flag{display:inline-flex;align-items:center;padding:2px var(--space-2);border-radius:var(--radius-pill);background:rgba(5,9,15,.72);color:var(--color-text-primary);font:.625rem/1.4 var(--font-mono)}
+.card__flag--ps-extra{color:var(--color-accent-glow);font-weight:600}.card__flag--leaving{flex-basis:100%;max-width:fit-content;border:1px solid rgba(255,178,84,.4);color:var(--color-warn-amber);font-weight:600}
 .card__content{display:flex;flex:1;flex-direction:column;gap:var(--space-3);padding:var(--space-4)}
 .card__title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-3)}
-.card__title-row h2{min-width:0;margin:0;overflow:hidden;font:600 1rem var(--font-display);text-overflow:ellipsis;white-space:nowrap}
+.card__title-row h2{min-width:0;overflow:hidden;font-size:1rem;text-overflow:ellipsis;white-space:nowrap}
 .card__access{flex:none;padding:var(--space-1) var(--space-2);border:1px solid var(--color-border-hairline);border-radius:var(--radius-pill);color:var(--color-text-secondary);font:700 .7rem var(--font-ui);letter-spacing:.1em}
-.card__reason{margin:0;color:var(--color-accent-electric);font:700 15px var(--font-ui);letter-spacing:.1em}
+.card__reason{display:inline-flex;margin:0;color:var(--color-accent-electric);font-family:var(--font-ui);font-weight:700;letter-spacing:.1em}
 .card__facts{display:flex;flex-wrap:wrap;gap:var(--space-2);margin:0;padding:0;list-style:none}.card__facts li{padding:var(--space-1) var(--space-2);border-radius:var(--radius-pill);background:var(--color-surface-raised);color:var(--color-text-secondary);font:.68rem var(--font-mono)}
 .card__explanation{margin:0;color:var(--color-text-secondary)}
 .card__actions{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-2);margin-top:auto}.card__actions button{min-height:var(--hit-target);padding:var(--space-2);border:1px solid var(--color-accent-electric);border-radius:var(--radius-sm);background:transparent;color:var(--color-accent-electric);font-weight:700}.card__actions button:first-child{background:var(--color-accent-electric);color:var(--color-void)}
-.card__actions button:disabled{cursor:wait;opacity:.62}.card[aria-busy="true"]{border-color:var(--color-accent-electric);box-shadow:var(--glow-ring)}
-.toast{position:fixed;right:var(--space-4);bottom:var(--space-4);z-index:30;max-width:min(420px,calc(100vw - 24px));padding:var(--space-3) var(--space-4);border:1px solid #ff5577;border-radius:var(--radius-md);background:#230d17;color:#ffdbe4;font:600 14px var(--font-body);box-shadow:0 12px 36px rgba(0,0,0,.4)}.toast[hidden]{display:none}
-.shelf-success[hidden]{display:none}.shelf-success__head{display:flex;align-items:end;justify-content:space-between;gap:var(--space-4);margin-bottom:var(--space-5)}.shelf-success h1{margin:0;font:700 clamp(1.6rem,4vw,2.4rem) var(--font-display);letter-spacing:.08em}.shelf-success__filters{display:flex;gap:var(--space-2)}.shelf-success__filters button{min-height:var(--hit-target);padding:var(--space-2) var(--space-3);border:1px solid var(--color-border-hairline);border-radius:var(--radius-pill);background:var(--color-surface-raised);color:var(--color-text-secondary);font:700 13px var(--font-ui)}.shelf-card{display:grid;grid-template-columns:96px minmax(0,1fr);max-width:560px;min-height:144px;border:1px solid var(--color-accent-electric);border-radius:var(--radius-md);background:var(--color-surface);box-shadow:var(--glow-ring);outline:2px solid var(--color-accent-electric);outline-offset:3px}.shelf-card__cover{display:grid;place-items:center;background:var(--color-surface-raised);color:var(--color-state-dormant);font:700 2rem var(--font-display)}.shelf-card__body{padding:var(--space-4)}.shelf-card__body h2{margin:0 0 var(--space-2);font:600 1rem var(--font-display)}.status-pill{display:inline-flex;min-height:var(--hit-target);align-items:center;padding:var(--space-2) var(--space-3);border:1px solid #ff3ea5;border-radius:var(--radius-pill);background:rgba(255,62,165,.12);color:#ff71bc;font:700 13px var(--font-ui);letter-spacing:.08em}
-.shuffle-warning{max-width:520px;margin:0;padding:var(--space-2) var(--space-3);border:1px solid rgba(255,178,84,.4);border-radius:var(--radius-md);background:rgba(255,178,84,.06);color:var(--color-warn-amber);font:600 14px var(--font-ui);text-align:right}
+.card__actions button:disabled{cursor:wait;opacity:.55}.card[aria-busy="true"]{border-color:var(--color-accent-electric);box-shadow:var(--glow-ring)}
+.toast{position:fixed;left:50%;bottom:calc(var(--space-5) + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:var(--z-toast);display:flex;align-items:center;gap:var(--space-3);max-width:calc(100vw - var(--space-6));padding:var(--space-3) var(--space-4);background:var(--color-surface-raised);border:1px solid rgba(53,224,255,.35);border-radius:var(--radius-lg);box-shadow:var(--glow-ring);color:var(--color-text-primary);font:400 13px var(--font-body)}.toast[hidden]{display:none}
+.shelf-success[hidden]{display:none}
+.shelf-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:var(--space-4);margin-top:var(--space-3)}
+.shelf-card{display:flex;flex-direction:column;background:var(--color-surface);border:1px solid var(--color-border-soft);border-radius:var(--radius-md)}
+.shelf-card--playing{border-color:var(--color-heat-magenta);box-shadow:var(--glow-playing)}
+.shelf-card--playing:focus{outline:2px solid var(--color-accent-electric);outline-offset:2px}
+.shelf-card__cover{position:relative;display:grid;place-items:center;aspect-ratio:3/4;background:var(--color-surface-raised);border-radius:calc(var(--radius-md) - 1px) calc(var(--radius-md) - 1px) 0 0;overflow:hidden;color:var(--color-state-dormant);font:700 2rem var(--font-display)}
+.shelf-card__owned{position:absolute;top:calc((var(--hit-target) - 22px)/2);right:calc((var(--hit-target) - 22px)/2);display:grid;place-items:center;width:22px;height:22px;padding:0;line-height:1;border:1px solid var(--color-border-hairline);border-radius:var(--radius-pill);background:rgba(5,9,15,.72);color:var(--color-text-muted);font-size:11px;backdrop-filter:blur(2px)}
+.shelf-card__owned[aria-pressed="true"]{border-color:var(--color-accent-glow);color:var(--color-accent-glow)}
+.shelf-card__info{display:flex;flex-direction:column;gap:var(--space-1);min-height:132px;padding:var(--space-2) var(--space-3) var(--space-3)}
+.shelf-card__title{margin:0;font:600 12.5px var(--font-display);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.state-pill{display:inline-flex;align-items:center;align-self:flex-start;padding:2px var(--space-2);border-radius:var(--radius-pill);font:600 10px var(--font-display);letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
+.state-pill--playing{background:rgba(255,46,136,.16);color:var(--color-heat-magenta-ink)}
+.state-pill--not-started{background:rgba(61,85,102,.28);color:var(--color-text-secondary)}
+.shelf-card__chip{align-self:flex-start;padding:1px var(--space-2);border:1px solid var(--color-border-hairline);border-radius:var(--radius-pill);color:var(--color-text-muted);font:9px var(--font-mono);letter-spacing:.06em}
+.shuffle-warning{max-width:520px;margin:0;padding:var(--space-2) var(--space-3);border:1px solid rgba(255,178,84,.4);border-radius:var(--radius-md);background:rgba(255,178,84,.06);color:var(--color-warn-amber);font:600 .875rem var(--font-ui);text-align:right}
 .shuffle-warning[hidden]{display:none}
 .shuffle-button{display:inline-flex;align-items:center;justify-content:center;min-height:var(--hit-target);padding:var(--space-2) var(--space-3);border:1px solid var(--color-accent-electric);border-radius:var(--radius-lg);background:transparent;color:var(--color-accent-electric);font:700 .9rem var(--font-ui);letter-spacing:.08em}
 .shuffle-button:hover,.shuffle-button:focus-visible{background:rgba(18,179,255,.12)}
 .state-caption{margin:0;color:var(--color-text-muted);font:10px var(--font-mono);letter-spacing:.08em;text-align:right}
+.shelf-success .state-caption{margin-bottom:var(--space-2);text-align:left}
 .tune__backdrop{position:fixed;inset:0;z-index:var(--z-overlay);display:flex;align-items:center;justify-content:center;padding:var(--space-5);background:rgba(5,9,15,.7)}.tune__backdrop[hidden]{display:none}
 .tune{width:min(680px,100%);max-height:80vh;overflow-y:auto;padding:var(--space-4);border:1px solid var(--color-border-hairline);border-radius:var(--radius-lg);background:var(--color-surface-raised);box-shadow:var(--glow-ring)}
-.tune__head{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-4)}.tune__title{margin:0 0 var(--space-3);font:600 .9rem var(--font-display);letter-spacing:.08em;text-transform:uppercase}.tune__close{display:grid;place-items:center;width:var(--hit-target);height:var(--hit-target);padding:0;border:1px solid var(--color-border-hairline);border-radius:var(--radius-pill);background:transparent;color:var(--color-text-primary);font:20px/1 var(--font-ui)}
-.tune__draft{margin:0 0 var(--space-4);padding:var(--space-2) var(--space-3);border-left:2px solid var(--color-warn-amber);background:rgba(255,178,84,.06);color:var(--color-text-secondary);font-size:13px}.tune__draft strong{color:var(--color-warn-amber)}
+.tune__head{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-4)}.tune__title{margin:0 0 var(--space-3);font:600 .9rem var(--font-display);letter-spacing:.08em;text-transform:uppercase}.tune__close{display:grid;place-items:center;width:var(--hit-target);height:var(--hit-target);padding:0;border:1px solid var(--color-border-hairline);border-radius:var(--radius-pill);background:transparent;color:var(--color-text-primary);font:1.25rem var(--font-ui)}
+.tune__draft{margin:0 0 var(--space-4);padding:var(--space-2) var(--space-3);border-left:2px solid var(--color-warn-amber);background:rgba(255,178,84,.06);color:var(--color-text-secondary);font-size:.8125rem}.tune__draft strong{color:var(--color-warn-amber)}
 .tune__groups{display:grid;grid-template-columns:1fr 1fr;gap:0 var(--space-4)}.tune__group{display:flex;flex-wrap:wrap;gap:var(--space-2);min-inline-size:0;margin:0 0 var(--space-4);padding:0;border:0}.tune__group legend{margin-bottom:var(--space-1);padding:0;color:var(--color-text-secondary);font:.8rem var(--font-ui)}
 .tune__option{min-height:var(--hit-target);padding:var(--space-2) var(--space-3);border:1px solid var(--color-border-hairline);border-radius:var(--radius-pill);background:none;color:var(--color-text-primary);font:.9rem var(--font-ui)}.tune__option[aria-pressed="true"]{border-color:var(--color-accent-glow);background:rgba(53,224,255,.18)}
 .tune__wishlist{display:flex;align-items:center;gap:var(--space-2);min-height:var(--hit-target);margin-bottom:var(--space-3);font:.9rem var(--font-ui)}.tune__wishlist input{width:20px;height:20px;accent-color:var(--color-accent-electric)}.tune__wishlist small{color:var(--color-text-secondary)}
@@ -99,8 +115,8 @@ main{max-width:1120px;margin:auto;padding:var(--space-5) var(--space-4) 56px}
 	.app-header{gap:var(--space-2);padding:var(--space-3);background:var(--color-void);backdrop-filter:none}.destination-toggle{order:3;flex:1 0 100%}.destination-toggle__tab{flex:1;padding-inline:var(--space-1)}.app-header__readout{font-size:10px}
 	main{padding:var(--space-4) var(--space-3) 48px}.mock-bar{align-items:flex-start;flex-direction:column}.mock-bar__label{margin-top:var(--space-2)}.mock-bar__states{width:100%}.mock-state{flex:1;padding-inline:var(--space-2);font-size:10px}
 	.play-next__header{flex-direction:column}.play-next__controls{width:100%;max-width:none;align-items:flex-start}.command-row{width:100%}.command-row button{flex:1}.shuffle-warning{width:100%;max-width:none;text-align:left}.state-caption{text-align:left}.play-next__grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-2)}
-	.card__content{padding:var(--space-2) var(--space-3) var(--space-3)}.card__title-row{flex-direction:column;gap:var(--space-1)}.card__title-row h2{font-size:12.5px}.card__actions{grid-template-columns:1fr}
-	.toast{right:var(--space-3);bottom:var(--space-3)}.shelf-success__head{align-items:flex-start;flex-direction:column}.shelf-card{grid-template-columns:78px minmax(0,1fr);width:100%}
+	.card__content{padding:var(--space-2) var(--space-3) var(--space-3)}.card__title-row{flex-direction:column;gap:var(--space-1)}.card__title-row h2{font-size:.78rem}.card__actions{grid-template-columns:1fr}
+	.shelf-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-3)}.shelf-card__info{min-height:112px}
 	.tune__backdrop{align-items:flex-end;padding:0}.tune{width:100%;max-height:80vh;padding-bottom:calc(var(--space-4) + env(safe-area-inset-bottom,0px));border:0;border-top:1px solid var(--color-border-hairline);border-radius:var(--radius-lg) var(--radius-lg) 0 0;box-shadow:none}.tune__groups{grid-template-columns:1fr}
 }
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition-duration:.001ms!important}}
@@ -140,12 +156,19 @@ main{max-width:1120px;margin:auto;padding:var(--space-5) var(--space-4) 56px}
 			<article class="card" data-card="3"><div class="card__cover"><button class="card__cover-button" type="button" aria-label="Open details — Game title 03"><span class="card__cover-fallback" aria-hidden="true">▹</span></button><button class="card__owned-toggle" type="button" aria-pressed="true" aria-label="Owned — Game title 03"><span aria-hidden="true">◆</span></button><div class="card__flags"></div></div><div class="card__content"><div class="card__title-row"><h2>[GAME TITLE 03]</h2><span class="card__access">OWNED</span></div><p class="card__reason">WILDCARD</p><ul class="card__facts"><li>[KNOWN FACT]</li></ul><p class="card__explanation">A third unseen pick completes the normal three-card slate.</p><div class="card__actions"><button type="button">Play this</button><button type="button">Open details</button></div></div></article>
 		</div>
 	</section>
-	<section class="shelf-success" data-shelf-view hidden aria-labelledby="shelf-heading"><div class="shelf-success__head"><div><span class="play-next__applied">DESTINATION</span><h1 id="shelf-heading">SHELF</h1></div><div class="shelf-success__filters"><button type="button">FILTERS</button><button type="button">SEARCH</button></div></div><article class="shelf-card" tabindex="-1" aria-label="[GAME TITLE 01] — Playing"><div class="shelf-card__cover">▹</div><div class="shelf-card__body"><span class="play-next__applied">PLAYING TIER · ARRIVAL FOCUS</span><h2>[GAME TITLE 01]</h2><button class="status-pill" type="button">PLAYING</button></div></article></section>
+	<section class="shelf-success" data-shelf-view hidden aria-label="Shelf after Play this">
+		<p class="state-caption">DESTINATION · SHELF — FILTER ROW + HEADER SEARCH ELIDED (MOCK CHROME)</p>
+		<div class="shelf-grid">
+			<article class="shelf-card shelf-card--playing" tabindex="-1" aria-label="[GAME TITLE 01] — Playing"><div class="shelf-card__cover"><span aria-hidden="true">▹</span><button class="shelf-card__owned" type="button" aria-pressed="true" aria-label="Owned — Game title 01"><span aria-hidden="true">◆</span></button></div><div class="shelf-card__info"><p class="shelf-card__title">[GAME TITLE 01]</p><span class="state-pill state-pill--playing">Playing</span><p class="shelf-card__chip">OWNED</p></div></article>
+			<article class="shelf-card" aria-label="[GAME TITLE 04] — Not started"><div class="shelf-card__cover"><span aria-hidden="true">▹</span><button class="shelf-card__owned" type="button" aria-pressed="true" aria-label="Owned — Game title 04"><span aria-hidden="true">◆</span></button></div><div class="shelf-card__info"><p class="shelf-card__title">[GAME TITLE 04]</p><span class="state-pill state-pill--not-started">Not started</span><p class="shelf-card__chip">OWNED</p></div></article>
+			<article class="shelf-card" aria-label="[GAME TITLE 05] — Not started"><div class="shelf-card__cover"><span aria-hidden="true">▹</span><button class="shelf-card__owned" type="button" aria-pressed="false" aria-label="Owned — Game title 05"><span aria-hidden="true">◇</span></button></div><div class="shelf-card__info"><p class="shelf-card__title">[GAME TITLE 05]</p><span class="state-pill state-pill--not-started">Not started</span></div></article>
+		</div>
+	</section>
 </main>
 <div class="toast" role="alert" data-error-toast hidden>Couldn’t update [GAME TITLE 01]. Try again.</div>
 <div class="tune__backdrop" data-backdrop hidden><section class="tune" role="dialog" aria-modal="true" aria-labelledby="tune-title" tabindex="-1"><div class="tune__head"><h2 class="tune__title" id="tune-title">Tune the picks</h2><button class="tune__close" type="button" aria-label="Close Tune the picks">×</button></div><p class="tune__draft">Draft only — current picks stay put until <strong>SHOW ME 3</strong>.</p><div class="tune__groups"><fieldset class="tune__group"><legend>Genre — one or none</legend><button class="tune__option" type="button" aria-pressed="false">Familiar</button><button class="tune__option" type="button" aria-pressed="false">Different</button></fieldset><fieldset class="tune__group"><legend>Time — one or none</legend><button class="tune__option" type="button" aria-pressed="false">Quick win</button></fieldset><fieldset class="tune__group"><legend>Backlog age — one or none</legend><button class="tune__option" type="button" aria-pressed="false">Fresh</button><button class="tune__option" type="button" aria-pressed="false">Forgotten</button></fieldset><fieldset class="tune__group"><legend>Confidence — one or none</legend><button class="tune__option" type="button" aria-pressed="false">Safe bet</button><button class="tune__option" type="button" aria-pressed="false">Wildcard</button></fieldset><fieldset class="tune__group"><legend>Priority — one or none</legend><button class="tune__option" type="button" aria-pressed="false">Follow my list</button><button class="tune__option" type="button" aria-pressed="false">Last chance</button></fieldset><fieldset class="tune__group"><legend>Progress — one or none</legend><button class="tune__option" type="button" aria-pressed="false">Finish them</button></fieldset></div><label class="tune__wishlist"><input type="checkbox"> Include wishlist <small>DISCOVER access</small></label><button class="tune__show" type="button">SHOW ME 3</button></section></div>
 <script>
-const caption=document.querySelector('.state-caption');
+const caption=document.querySelector('[data-play-next-view] .state-caption');
 const stateButtons=[...document.querySelectorAll('[data-next-state]')];
 const playView=document.querySelector('[data-play-next-view]');
 const shelfView=document.querySelector('[data-shelf-view]');
@@ -169,7 +192,7 @@ function setState(state){
 	shelfView.hidden=!success;
 	if(success){shelfTab.setAttribute('aria-current','page');playTab.removeAttribute('aria-current')}else{playTab.setAttribute('aria-current','page');shelfTab.removeAttribute('aria-current')}
 	caption.textContent=state==='ready'?'READY · ALL CARD ACTIONS AVAILABLE':state==='starting'?'STARTING · ACTIVATED CARD ACTIONS LOCKED':state==='error'?'ERROR · EXISTING TOAST · FULL SLATE PRESERVED':'SUCCESS · PLAYING CARD FOCUSED ON SHELF';
-	if(success) shelfView.querySelector('.shelf-card').focus();
+	if(success) shelfView.querySelector('.shelf-card--playing').focus();
 	location.hash=state;
 }
 stateButtons.forEach(button=>button.addEventListener('click',()=>setState(button.dataset.nextState)));

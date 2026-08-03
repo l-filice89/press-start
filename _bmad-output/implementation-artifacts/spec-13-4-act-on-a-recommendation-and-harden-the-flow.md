@@ -2,7 +2,7 @@
 title: 'Story 13.4: Act on a recommendation and harden the flow'
 type: 'feature'
 created: '2026-08-03'
-status: 'blocked'
+status: 'ready-for-dev'
 review_loop_iteration: 0
 followup_review_recommended: false
 context:
@@ -55,7 +55,7 @@ warnings: [oversized]
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `_bmad-output/design-demos/epic-13-play-next/07-story-13-4-action-hardening.html` -- present ready, pending, failure-preserved, success-Shelf, desktop, and 320px states; record Luca approval.
+- [x] `_bmad-output/design-demos/epic-13-play-next/07-story-13-4-action-hardening.html` -- present ready, pending, failure-preserved, success-Shelf, desktop, and 320px states; record Luca approval.
 - [ ] `web/play-next/SuggestionCard.tsx`, `web/play-next/play-next.css` -- implement approved pending/action treatment without changing card hierarchy.
 - [ ] `web/play-next/PlayNextPage.tsx`, `web/shelf/Shelf.tsx` -- pass successful selection context through navigation and focus the settled Playing Shelf card without stealing focus on ordinary Shelf visits.
 - [ ] `web/play-next/PlayNextPage.test.tsx` -- pin single-write pending behavior, success navigation/focus intent, failure restoration, and full visit preservation.
@@ -83,7 +83,7 @@ Pending is local to the activated suggestion and uses existing visual language: 
 
 Successful navigation carries only the selected game ID as ephemeral route state. Shelf consumes it once after the invalidated query settles, focuses the matching Playing card/gridcell, and clears the intent. Normal Shelf navigation must never auto-focus a card.
 
-Placement mock: `_bmad-output/design-demos/epic-13-play-next/07-story-13-4-action-hardening.html`. Approval pending.
+Placement mock: `_bmad-output/design-demos/epic-13-play-next/07-story-13-4-action-hardening.html`. Luca applied final shipped-app alignment edits and approved the resulting UI on 2026-08-03; those edits are binding.
 
 ## Verification
 
@@ -96,6 +96,6 @@ Placement mock: `_bmad-output/design-demos/epic-13-play-next/07-story-13-4-actio
 
 ## Auto Run Result
 
-Status: blocked.
+Status: resumed.
 
-Blocking condition: Story 13.4 implementation-specific UI mock requires Luca approval before production UI changes.
+UI-MOCK-GATE: approved by Luca on 2026-08-03 after Luca's final shipped-app alignment edits. Production implementation may proceed.

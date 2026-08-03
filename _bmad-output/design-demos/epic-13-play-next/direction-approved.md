@@ -137,3 +137,15 @@ app-alignment edits are binding and the resulting Story 13.3 mock is approved.
 Status: approved by Luca on 2026-08-03 for Story 13.3 UI implementation.
 `06-story-13-3-shuffle-states.html`, including Luca's final alignment edits,
 is the binding placement and interaction reference.
+
+## Story 13.4 final mock approval — verbatim
+
+> I've applied some minor changes and approved the UI
+
+Luca's final shipped-app alignment edits are binding. Approved states: ready,
+`STARTING…`, existing error toast with full slate preserved, and successful
+Shelf arrival with the Playing card focused. Approved responsive reference:
+desktop three-card Play Next layout and 320px two-up compact card layout.
+
+Status: approved by Luca on 2026-08-03 for Story 13.4 UI implementation.
+`07-story-13-4-action-hardening.html` is the binding implementation reference.
