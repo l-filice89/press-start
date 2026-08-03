@@ -213,9 +213,7 @@ test('failed Play this preserves tuned exhausted visit and its next transition',
 	annotation: [{ type: 'skipNetworkMonitoring' }],
 }, async ({ page }) => {
 	const run = randomUUID().slice(0, 8);
-	// Two eligible baseline games plus these three produce one full and one
-	// exhausted slate while keeping the fixture deterministic.
-	const games = Array.from({ length: 3 }, (_, index) =>
+	const games = Array.from({ length: 5 }, (_, index) =>
 		createGame({
 			title: `Failure preserve ${index} ${run}`,
 			ttbStorySeconds: (index + 2) * 3600,
@@ -226,6 +224,21 @@ test('failed Play this preserves tuned exhausted visit and its next transition',
 	);
 	try {
 		await seedGames(games);
+		const gameIds = new Set(games.map((game) => game.id));
+		const shelfResponse = await page.request.get('/api/shelf?include=hidden');
+		expect(shelfResponse.ok()).toBe(true);
+		const shelf = (await shelfResponse.json()) as {
+			games: Array<{ id: string }>;
+		};
+		// The failure-state transition needs an exact exhausted pool. Isolate its
+		// real Worker snapshot from games temporarily owned by parallel specs.
+		await page.route(
+			(url) => url.pathname === '/api/shelf',
+			(route) =>
+				route.fulfill({
+					json: { games: shelf.games.filter((game) => gameIds.has(game.id)) },
+				}),
+		);
 		await page.setViewportSize({ width: 965, height: 900 });
 		await page.goto('/play-next');
 		const cards = page.locator('[data-play-next-game-id]');
@@ -295,8 +308,7 @@ test('Shuffle exhausts unseen picks, preserves warning through details, then res
 	page,
 }) => {
 	const run = randomUUID().slice(0, 8);
-	// Two eligible baseline games are always present, yielding five total.
-	const games = Array.from({ length: 3 }, (_, index) =>
+	const games = Array.from({ length: 5 }, (_, index) =>
 		createGame({
 			title: `Shuffle ${index} ${run}`,
 			genres: [`Shuffle Genre ${index} ${run}`],
@@ -307,6 +319,21 @@ test('Shuffle exhausts unseen picks, preserves warning through details, then res
 	);
 	try {
 		await seedGames(games);
+		const gameIds = new Set(games.map((game) => game.id));
+		const shelfResponse = await page.request.get('/api/shelf?include=hidden');
+		expect(shelfResponse.ok()).toBe(true);
+		const shelf = (await shelfResponse.json()) as {
+			games: Array<{ id: string }>;
+		};
+		// Other fully-parallel specs share the e2e user and D1. Preserve the real
+		// Worker response shape while isolating this exact five-game pool.
+		await page.route(
+			(url) => url.pathname === '/api/shelf',
+			(route) =>
+				route.fulfill({
+					json: { games: shelf.games.filter((game) => gameIds.has(game.id)) },
+				}),
+		);
 		await page.goto('/play-next');
 		const cards = page.locator('[data-play-next-game-id]');
 		const ids = () =>
@@ -371,8 +398,7 @@ test('zero unseen picks keep the slate and arm the next one-click reset', async 
 	page,
 }) => {
 	const run = randomUUID().slice(0, 8);
-	// Two eligible baseline games plus four seeded games yield two full slates.
-	const games = Array.from({ length: 4 }, (_, index) =>
+	const games = Array.from({ length: 6 }, (_, index) =>
 		createGame({
 			title: `Zero pool ${index} ${run}`,
 			criticScore: 90 - index,
@@ -382,6 +408,20 @@ test('zero unseen picks keep the slate and arm the next one-click reset', async 
 	);
 	try {
 		await seedGames(games);
+		const gameIds = new Set(games.map((game) => game.id));
+		const shelfResponse = await page.request.get('/api/shelf?include=hidden');
+		expect(shelfResponse.ok()).toBe(true);
+		const shelf = (await shelfResponse.json()) as {
+			games: Array<{ id: string }>;
+		};
+		// Pin two full slates without depending on rows owned by parallel specs.
+		await page.route(
+			(url) => url.pathname === '/api/shelf',
+			(route) =>
+				route.fulfill({
+					json: { games: shelf.games.filter((game) => gameIds.has(game.id)) },
+				}),
+		);
 		await page.goto('/play-next');
 		const cards = page.locator('[data-play-next-game-id]');
 		const ids = () =>
