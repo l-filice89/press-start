@@ -165,11 +165,11 @@ development_status:
   epic-12-retrospective: done # 2026-07-17 — epic-12-retro-2026-07-17.md; WCAG nudge + summary-metric copy shipped at the retro; merge + v2.2.0 = critical path
 
   # Epic 13: Choose What to Play Next — approved 2026-08-02 via Correct Course
-  epic-13: backlog
-  13-1-get-three-transparent-suggestions: backlog
-  13-2-tune-recommendations-intentionally: backlog
-  13-3-shuffle-without-repetition: backlog
-  13-4-act-on-a-recommendation-and-harden-flow: backlog
+  epic-13: done # 2026-08-03 — 4/4 stories; approved UI; adversarial + independent follow-ups complete; final browser gate 22/22
+  13-1-get-three-transparent-suggestions: done
+  13-2-tune-recommendations-intentionally: done
+  13-3-shuffle-without-repetition: done
+  13-4-act-on-a-recommendation-and-harden-flow: done
   epic-13-retrospective: optional
 
 action_items:

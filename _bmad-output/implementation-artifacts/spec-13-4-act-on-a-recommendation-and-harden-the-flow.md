@@ -2,8 +2,9 @@
 title: 'Story 13.4: Act on a recommendation and harden the flow'
 type: 'feature'
 created: '2026-08-03'
-status: 'in-review'
+status: 'done'
 baseline_revision: 'd6694f1b869dc83a5c491e5cc11805e28aecf946'
+final_revision: '3b94130bcb8f9c1ae4453d575cc0952750300560'
 review_loop_iteration: 2
 followup_review_recommended: false
 context:
