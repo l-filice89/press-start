@@ -432,4 +432,4 @@ action_items:
   - epic: 13
     action: "Push, open PR, merge through CI, publish v3.4.0, and verify Play Next in production"
     owner: "Luka8"
-    status: open
+    status: done # 2026-08-03: PR #46 merged; v3.4.0 published; deploy run 30830186170 green; production health/auth plus /play-next route and bundle markers verified
