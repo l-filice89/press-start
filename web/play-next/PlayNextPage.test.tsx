@@ -86,6 +86,12 @@ function renderPage(games?: ShelfGame[]) {
 	return { ...view, client };
 }
 
+function visibleGameIds(): string[] {
+	return screen
+		.getAllByRole('article')
+		.map((card) => card.getAttribute('data-play-next-game-id') ?? '');
+}
+
 afterEach(() => {
 	vi.restoreAllMocks();
 	vi.unstubAllGlobals();
@@ -321,6 +327,178 @@ describe('PlayNextPage', () => {
 				'3 suggestions ready.',
 			),
 		);
+	});
+
+	it('shuffles to unseen games, retains focus, and announces every result', async () => {
+		const user = userEvent.setup();
+		renderPage(Array.from({ length: 6 }, (_, index) => game(String(index))));
+		const before = visibleGameIds();
+		const shuffle = screen.getByRole('button', { name: 'SHUFFLE' });
+
+		await user.click(shuffle);
+
+		const after = visibleGameIds();
+		expect(after).toHaveLength(3);
+		expect(after).not.toEqual(before);
+		expect(after.every((id) => !before.includes(id))).toBe(true);
+		expect(shuffle).toHaveFocus();
+		await waitFor(() =>
+			expect(screen.getByTestId('live-region')).toHaveTextContent(
+				'3 suggestions ready.',
+			),
+		);
+	});
+
+	it('re-announces identical counts on consecutive completed shuffles', async () => {
+		const user = userEvent.setup();
+		renderPage(Array.from({ length: 9 }, (_, index) => game(String(index))));
+		const liveRegion = screen.getByTestId('live-region');
+		const messages: string[] = [];
+		const observer = new MutationObserver(() => {
+			if (liveRegion.textContent) messages.push(liveRegion.textContent);
+		});
+		observer.observe(liveRegion, { childList: true, subtree: true });
+		const shuffle = screen.getByRole('button', { name: 'SHUFFLE' });
+
+		await user.click(shuffle);
+		await waitFor(() =>
+			expect(
+				messages.filter((message) => message === '3 suggestions ready.'),
+			).toHaveLength(1),
+		);
+		await user.click(shuffle);
+		await waitFor(() =>
+			expect(
+				messages.filter((message) => message === '3 suggestions ready.'),
+			).toHaveLength(2),
+		);
+		observer.disconnect();
+	});
+
+	it('warns at near exhaustion and resets on the next single Shuffle', async () => {
+		const user = userEvent.setup();
+		renderPage(Array.from({ length: 5 }, (_, index) => game(String(index))));
+		const initial = visibleGameIds();
+		const shuffle = screen.getByRole('button', { name: 'SHUFFLE' });
+
+		await user.click(shuffle);
+
+		const exhausted = visibleGameIds();
+		expect(exhausted).toHaveLength(2);
+		expect(exhausted.every((id) => !initial.includes(id))).toBe(true);
+		expect(screen.getByRole('status')).toHaveTextContent(
+			'You’ve seen every other match. Next Shuffle starts a fresh pool.',
+		);
+
+		await user.click(shuffle);
+
+		const fresh = visibleGameIds();
+		expect(fresh).toHaveLength(3);
+		expect(fresh.every((id) => !exhausted.includes(id))).toBe(true);
+		expect(
+			screen.queryByText(
+				'You’ve seen every other match. Next Shuffle starts a fresh pool.',
+			),
+		).not.toBeInTheDocument();
+		expect(shuffle).toHaveFocus();
+	});
+
+	it('does not arm reset while Finish-capped unseen games remain', async () => {
+		const user = userEvent.setup();
+		renderPage([
+			game('plain-a'),
+			game('plain-b'),
+			...Array.from({ length: 4 }, (_, index) =>
+				game(`paused-${index}`, { playStatus: 'Paused' }),
+			),
+		]);
+		const shuffle = screen.getByRole('button', { name: 'SHUFFLE' });
+		const warning =
+			'You’ve seen every other match. Next Shuffle starts a fresh pool.';
+
+		await user.click(shuffle);
+		expect(visibleGameIds()).toHaveLength(1);
+		expect(screen.queryByText(warning)).not.toBeInTheDocument();
+
+		await user.click(shuffle);
+		expect(visibleGameIds()).toHaveLength(1);
+		expect(screen.queryByText(warning)).not.toBeInTheDocument();
+
+		await user.click(shuffle);
+		expect(visibleGameIds()).toHaveLength(1);
+		expect(screen.getByText(warning)).toBeInTheDocument();
+	});
+
+	it('unions a Tune result after Shuffle and clears the armed reset', async () => {
+		const user = userEvent.setup();
+		renderPage(Array.from({ length: 5 }, (_, index) => game(String(index))));
+		const shuffle = screen.getByRole('button', { name: 'SHUFFLE' });
+		const warning =
+			'You’ve seen every other match. Next Shuffle starts a fresh pool.';
+
+		await user.click(shuffle);
+		expect(screen.getByText(warning)).toBeInTheDocument();
+
+		await user.click(screen.getByRole('button', { name: 'Tune the picks' }));
+		await user.click(screen.getByRole('button', { name: 'SHOW ME 3' }));
+		expect(screen.queryByText(warning)).not.toBeInTheDocument();
+		const tuned = visibleGameIds();
+
+		await user.click(shuffle);
+		expect(visibleGameIds()).toEqual(tuned);
+		expect(screen.getByText(warning)).toBeInTheDocument();
+	});
+
+	it('keeps zero-result slate and shuffles with applied intent, not dismissed draft', async () => {
+		const user = userEvent.setup();
+		const derive = vi.spyOn(playNextCore, 'getPlayNextSuggestions');
+		renderPage([
+			game('quick-a', { ttbStorySeconds: 5 * 3600 }),
+			game('quick-b', { ttbStorySeconds: 6 * 3600 }),
+			game('quick-c', { ttbStorySeconds: 7 * 3600 }),
+		]);
+		await user.click(screen.getByRole('button', { name: 'Tune the picks' }));
+		await user.click(screen.getByRole('button', { name: 'Quick win' }));
+		await user.click(screen.getByRole('button', { name: 'SHOW ME 3' }));
+		const before = visibleGameIds();
+		await user.click(screen.getByRole('button', { name: /Tune the picks/ }));
+		await user.click(screen.getByRole('button', { name: 'Different' }));
+		await user.click(
+			screen.getByRole('button', { name: 'Close Tune the picks' }),
+		);
+
+		await user.click(screen.getByRole('button', { name: 'SHUFFLE' }));
+
+		expect(visibleGameIds()).toEqual(before);
+		expect(screen.getByRole('status')).toHaveTextContent(
+			'You’ve seen every other match. Next Shuffle starts a fresh pool.',
+		);
+		await waitFor(() =>
+			expect(screen.getByTestId('live-region')).toHaveTextContent(
+				'0 new suggestions ready. Current picks kept.',
+			),
+		);
+		const options = derive.mock.calls.at(-1)?.[1];
+		expect(options?.intent).toMatchObject({ time: 'Quick win', genre: null });
+		expect([
+			...((options?.excludedGameIds as ReadonlySet<string>) ?? []),
+		]).toEqual(expect.arrayContaining(before));
+	});
+
+	it('does not arm a fresh-pool reset for a small Tune result', async () => {
+		const user = userEvent.setup();
+		renderPage([game('quick', { ttbStorySeconds: 5 * 3600 })]);
+
+		await user.click(screen.getByRole('button', { name: 'Tune the picks' }));
+		await user.click(screen.getByRole('button', { name: 'Quick win' }));
+		await user.click(screen.getByRole('button', { name: 'SHOW ME 3' }));
+
+		expect(visibleGameIds()).toHaveLength(1);
+		expect(
+			screen.queryByText(
+				'You’ve seen every other match. Next Shuffle starts a fresh pool.',
+			),
+		).not.toBeInTheDocument();
 	});
 
 	it('preserves a dismissed draft and leaves applied readback unchanged', async () => {

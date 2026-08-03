@@ -17,12 +17,19 @@
 
 .play-next__controls {
 	display: flex;
+	max-width: 520px;
 	flex-direction: column;
 	align-items: flex-end;
 	gap: var(--space-2);
 }
 
-.play-next__controls p,
+.play-next__command-row {
+	display: flex;
+	justify-content: flex-end;
+	gap: var(--space-2);
+}
+
+.play-next__controls > p:not(.play-next__shuffle-warning),
 .play-next__notice {
 	margin: 0;
 	color: var(--color-text-secondary);
@@ -84,6 +91,43 @@
 	color: var(--color-void);
 	font-size: 0.8em;
 	font-weight: 700;
+}
+
+.play-next__shuffle {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-height: var(--hit-target);
+	padding: var(--space-2) var(--space-3);
+	border: 1px solid var(--color-accent-electric);
+	border-radius: var(--radius-lg);
+	background: transparent;
+	color: var(--color-accent-electric);
+	font: 700 0.9rem var(--font-ui);
+	letter-spacing: 0.08em;
+	transition: background var(--motion-fast) var(--ease-standard);
+}
+
+.play-next__shuffle:not(:disabled):hover,
+.play-next__shuffle:focus-visible {
+	background: color-mix(in srgb, var(--color-accent-electric) 12%, transparent);
+}
+
+.play-next__shuffle:disabled {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+
+.play-next__shuffle-warning {
+	max-width: 520px;
+	margin: 0;
+	padding: var(--space-2) var(--space-3);
+	border: 1px solid color-mix(in srgb, var(--color-warn-amber) 40%, transparent);
+	border-radius: var(--radius-md);
+	background: color-mix(in srgb, var(--color-warn-amber) 6%, transparent);
+	color: var(--color-warn-amber);
+	font: 600 0.875rem var(--font-ui);
+	text-align: right;
 }
 
 .play-next__grid {
@@ -442,7 +486,23 @@
 	}
 
 	.play-next__controls {
+		width: 100%;
+		max-width: none;
 		align-items: flex-start;
+	}
+
+	.play-next__command-row {
+		width: 100%;
+	}
+
+	.play-next__command-row button {
+		flex: 1;
+	}
+
+	.play-next__shuffle-warning {
+		width: 100%;
+		max-width: none;
+		text-align: left;
 	}
 
 	.play-next__grid {
@@ -484,5 +544,11 @@
 
 	.tune__groups {
 		grid-template-columns: 1fr;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.play-next__shuffle {
+		transition-duration: 0.001ms;
 	}
 }

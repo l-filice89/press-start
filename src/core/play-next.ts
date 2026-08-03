@@ -437,6 +437,7 @@ export function getPlayNextSuggestions(
 		visitSeed: string;
 		limit?: number;
 		intent?: PlayNextIntent;
+		excludedGameIds?: ReadonlySet<string>;
 	},
 ): PlayNextSuggestion[] {
 	const intent = options.intent ?? EMPTY_PLAY_NEXT_INTENT;
@@ -452,6 +453,7 @@ export function getPlayNextSuggestions(
 			.flatMap(normalizedGenres),
 	);
 	const ranked = uniqueGames
+		.filter((game) => !options.excludedGameIds?.has(game.id))
 		.filter((game) =>
 			isPlayNextEligible(game, options.referenceIso, intent.includeWishlist),
 		)

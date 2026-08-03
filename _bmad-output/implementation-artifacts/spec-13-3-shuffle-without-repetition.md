@@ -2,8 +2,8 @@
 title: 'Story 13.3: Shuffle without repetition'
 type: 'feature'
 created: '2026-08-02'
-status: 'ready-for-dev'
-baseline_revision: '2887719'
+status: 'in-review'
+baseline_revision: 'a43b585a55cd98bca55694bc60c0dd872944611e'
 review_loop_iteration: 0
 followup_review_recommended: true
 context:
@@ -53,11 +53,11 @@ warnings: [oversized]
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `src/core/play-next.ts`, `src/core/play-next.test.ts` -- add and hazard-test pure exclusion before UI work.
+- [x] `src/core/play-next.ts`, `src/core/play-next.test.ts` -- add and hazard-test pure exclusion before UI work.
 - [x] `_bmad-output/design-demos/epic-13-play-next/06-story-13-3-shuffle-states.html` -- present normal, exhausted, and reset-ready states and record Luca approval.
-- [ ] `web/play-next/PlayNextPage.tsx`, `web/play-next/play-next.css` -- implement approved visit state machine and responsive Shuffle surface.
-- [ ] `web/play-next/PlayNextPage.test.tsx` -- pin every state transition, repeated announcement, focus, preservation, and reset.
-- [ ] `playwright/e2e/epic13-play-next.spec.ts`, `playwright/COVERAGE.md` -- prove every visible criterion on real D1.
+- [x] `web/play-next/PlayNextPage.tsx`, `web/play-next/play-next.css` -- implement approved visit state machine and responsive Shuffle surface.
+- [x] `web/play-next/PlayNextPage.test.tsx` -- pin every state transition, repeated announcement, focus, preservation, and reset.
+- [x] `playwright/e2e/epic13-play-next.spec.ts`, `playwright/COVERAGE.md` -- prove every visible criterion on real D1.
 
 **Acceptance Criteria:**
 - Given applied intent and a different unapplied draft, when Shuffle runs, then only applied intent is used and every game shown earlier in the visit is excluded.
@@ -73,9 +73,23 @@ warnings: [oversized]
 
 ## Review Triage Log
 
+### 2026-08-03 — Review pass
+- intent_gap: 0
+- bad_spec: 0
+- patch: 6: (high 1, medium 3, low 2)
+- defer: 0
+- reject: 5: (medium 3, low 2)
+- addressed_findings:
+  - `[high]` `[patch]` Replaced result-count exhaustion inference with a one-result probe so Finish-capped unseen games are shown before history resets.
+  - `[medium]` `[patch]` Strengthened exclusion hazard assertions so leaking either excluded ID fails independently.
+  - `[medium]` `[patch]` Added Tune-after-Shuffle/reset-armed coverage proving Tune clears the warning and unions its displayed IDs into visit history.
+  - `[medium]` `[patch]` Extended browser evidence to compare Shuffle against initial and Tune-applied visit IDs and to assert full zero-pool slate sizes.
+  - `[low]` `[patch]` Corrected warning text-color specificity to preserve approved amber styling.
+  - `[low]` `[patch]` Prevented disabled Shuffle hover from receiving active styling.
+
 ## Design Notes
 
-`seenGameIds` contains every game actually displayed during the mounted destination visit, including initial, Tune-applied, shuffled, and fresh-pool slates. The exhausted/reset flag is armed after a one- or two-card replacement, or after a zero-unseen attempt that deliberately preserves the current slate. Fresh-pool selection uses an empty historical exclusion plus current visible IDs; afterward, seen state starts from only the newly displayed slate.
+`seenGameIds` contains every game actually displayed during the mounted destination visit, including initial, Tune-applied, shuffled, and fresh-pool slates. The exhausted/reset flag is armed after a one- or two-card replacement only when a one-result probe confirms no selectable unseen game remains, or after a zero-unseen attempt that deliberately preserves the current slate. Fresh-pool selection uses an empty historical exclusion plus current visible IDs; afterward, seen state starts from only the newly displayed slate.
 
 Near-exhausted and reset-ready are one state, not two steps. Once the smaller slate and warning appear, the very next single Shuffle click immediately generates the fresh-pool slate while excluding the cards currently visible.
 
@@ -95,8 +109,16 @@ Placement mock: `_bmad-output/design-demos/epic-13-play-next/06-story-13-3-shuff
 
 ## Auto Run Result
 
-Status: resumed
+Status: implementation and adversarial review complete.
 
-UI-MOCK-GATE: approved by Luca on 2026-08-03 after Luca's final alignment edits. Production implementation may proceed.
+Summary: Added pure candidate exclusion, visit-scoped seen/exhaustion state, one-click fresh-pool Shuffle, approved top command-row placement, exact warning, focus/live-region behavior, responsive layout, and reduced-motion handling.
 
-Prepared: ready-for-development Story 13.3 spec plus app-aligned interactive mock covering normal, near-exhausted/reset-armed, and fresh-pool-after-one-click states at desktop and 320px phone. Production code remains untouched.
+Files changed: core selector and hazard tests; Play Next state/UI/CSS and web tests; Epic 13 Playwright scenarios and coverage ledger; this execution record.
+
+Review: 6 patches applied, 0 new deferrals, 5 findings rejected. Existing shared-D1 cross-file isolation risk remains tracked from Story 13.1 and was not duplicated.
+
+Follow-up review recommendation: true. Review changed exhaustion semantics and broadened state-transition evidence.
+
+Verification: core 22/22; web 22/22; Epic 13 Playwright 9/9 on real local D1; full Vitest 79 files / 2169 tests; lint, typecheck, build, and `git diff --check` passed.
+
+Residual risk: when the entire eligible pool is already visible, fresh-pool selection cannot produce a different card without violating current-card exclusion; Shuffle honestly retains the slate and announces zero new suggestions.

@@ -565,4 +565,66 @@ describe('Play Next scoring and selection', () => {
 		expect(result).toHaveLength(3);
 		expect(result.every((item) => !item.closestMatch)).toBe(true);
 	});
+
+	it('excludes visit-seen ids without mutating candidates or the exclusion set', () => {
+		const input = ['a', 'b', 'c', 'd', 'e'].map((id) => game(id));
+		const snapshot = structuredClone(input);
+		const excluded = new Set(['a', 'c']);
+		const result = getPlayNextSuggestions(input, {
+			referenceIso: TODAY,
+			visitSeed: 'excluded',
+			excludedGameIds: excluded,
+		});
+		expect(result.map((item) => item.game.id)).not.toContain('a');
+		expect(result.map((item) => item.game.id)).not.toContain('c');
+		expect(result).toHaveLength(3);
+		expect(input).toEqual(snapshot);
+		expect([...excluded]).toEqual(['a', 'c']);
+	});
+
+	it('derives Familiar anchors from the full snapshot before exclusions', () => {
+		const result = getPlayNextSuggestions(
+			[
+				game('seen-anchor', { playStatus: 'Playing', genres: ['RPG'] }),
+				game('familiar', { genres: ['rpg'] }),
+				game('different', { genres: ['Action'] }),
+			],
+			{
+				referenceIso: TODAY,
+				visitSeed: 'full-anchor-hazard',
+				intent: { ...EMPTY_PLAY_NEXT_INTENT, genre: 'Familiar' },
+				excludedGameIds: new Set(['seen-anchor']),
+			},
+		);
+		expect(result[0]).toMatchObject({
+			game: { id: 'familiar' },
+			intentDistance: 0,
+		});
+		expect(result[1]).toMatchObject({
+			game: { id: 'different' },
+			intentDistance: 1,
+		});
+	});
+
+	it('keeps exclusion deterministic and applies the Finish cap afterward', () => {
+		const input = [
+			game('seen'),
+			game('paused-a', { playStatus: 'Paused' }),
+			game('paused-b', { playStatus: 'Paused' }),
+			game('plain-a'),
+			game('plain-b'),
+		];
+		const options = {
+			referenceIso: TODAY,
+			visitSeed: 'exclude-finish',
+			excludedGameIds: new Set(['seen']),
+		};
+		const once = getPlayNextSuggestions(input, options);
+		const twice = getPlayNextSuggestions([...input].reverse(), options);
+		expect(twice.map((item) => item.game.id)).toEqual(
+			once.map((item) => item.game.id),
+		);
+		expect(once.filter((item) => item.finishThem)).toHaveLength(1);
+		expect(once.map((item) => item.game.id)).not.toContain('seen');
+	});
 });

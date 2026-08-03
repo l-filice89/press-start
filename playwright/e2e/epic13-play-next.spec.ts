@@ -163,6 +163,205 @@ test('Play this marks the suggestion Playing and returns to Shelf', async ({
 	}
 });
 
+test('Shuffle exhausts unseen picks, preserves warning through details, then resets in one click', async ({
+	page,
+}) => {
+	const run = randomUUID().slice(0, 8);
+	// Two eligible baseline games are always present, yielding five total.
+	const games = Array.from({ length: 3 }, (_, index) =>
+		createGame({
+			title: `Shuffle ${index} ${run}`,
+			genres: [`Shuffle Genre ${index} ${run}`],
+			criticScore: 90 - index,
+			criticScoreCount: 50,
+			tracking: { boughtOn: `202${index}-01-01` },
+		}),
+	);
+	try {
+		await seedGames(games);
+		await page.goto('/play-next');
+		const cards = page.locator('[data-play-next-game-id]');
+		const ids = () =>
+			cards.evaluateAll((nodes) =>
+				nodes.map((node) => node.getAttribute('data-play-next-game-id')),
+			);
+		await expect(cards).toHaveCount(3);
+		const initial = await ids();
+		const shuffle = page.getByRole('button', { name: 'SHUFFLE', exact: true });
+		expect((await shuffle.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+
+		await shuffle.click();
+
+		await expect(cards).toHaveCount(2);
+		const exhausted = await ids();
+		expect(exhausted.every((id) => !initial.includes(id))).toBe(true);
+		const warning = page.getByText(
+			'You’ve seen every other match. Next Shuffle starts a fresh pool.',
+			{ exact: true },
+		);
+		await expect(warning).toBeVisible();
+		await expect(page.getByTestId('live-region')).toHaveText(
+			'2 suggestions ready.',
+		);
+		await expect(shuffle).toBeFocused();
+
+		await cards
+			.first()
+			.getByRole('button', { name: /Open details —/ })
+			.click();
+		await page
+			.getByRole('dialog')
+			.getByRole('button', { name: 'Close details' })
+			.click();
+		await expect(cards).toHaveCount(2);
+		expect(await ids()).toEqual(exhausted);
+		await expect(warning).toBeVisible();
+
+		await shuffle.click();
+
+		await expect(cards).toHaveCount(3);
+		const fresh = await ids();
+		expect(fresh.every((id) => !exhausted.includes(id))).toBe(true);
+		await expect(warning).toHaveCount(0);
+		await expect(shuffle).toBeFocused();
+
+		const visit = await page
+			.locator('.play-next')
+			.getAttribute('data-play-next-visit');
+		await page.getByRole('link', { name: 'SHELF' }).click();
+		await page.getByRole('link', { name: 'PLAY NEXT' }).click();
+		await expect(warning).toHaveCount(0);
+		expect(
+			await page.locator('.play-next').getAttribute('data-play-next-visit'),
+		).not.toBe(visit);
+	} finally {
+		await deleteGames(games.map((game) => game.id));
+	}
+});
+
+test('zero unseen picks keep the slate and arm the next one-click reset', async ({
+	page,
+}) => {
+	const run = randomUUID().slice(0, 8);
+	// Two eligible baseline games plus four seeded games yield two full slates.
+	const games = Array.from({ length: 4 }, (_, index) =>
+		createGame({
+			title: `Zero pool ${index} ${run}`,
+			criticScore: 90 - index,
+			criticScoreCount: 50,
+			tracking: { boughtOn: `202${index}-01-01` },
+		}),
+	);
+	try {
+		await seedGames(games);
+		await page.goto('/play-next');
+		const cards = page.locator('[data-play-next-game-id]');
+		const ids = () =>
+			cards.evaluateAll((nodes) =>
+				nodes.map((node) => node.getAttribute('data-play-next-game-id')),
+			);
+		const shuffle = page.getByRole('button', {
+			name: 'SHUFFLE',
+			exact: true,
+		});
+		const warning = page.getByText(
+			'You’ve seen every other match. Next Shuffle starts a fresh pool.',
+			{ exact: true },
+		);
+		await expect(cards).toHaveCount(3);
+		const initial = await ids();
+
+		await shuffle.click();
+		await expect(cards).toHaveCount(3);
+		const second = await ids();
+		expect(second.every((id) => !initial.includes(id))).toBe(true);
+		await expect(warning).toHaveCount(0);
+
+		await shuffle.click();
+		expect(await ids()).toEqual(second);
+		await expect(warning).toBeVisible();
+		await expect(page.getByTestId('live-region')).toHaveText(
+			'0 new suggestions ready. Current picks kept.',
+		);
+		await expect(shuffle).toBeFocused();
+
+		await shuffle.click();
+		const fresh = await ids();
+		expect(fresh.every((id) => !second.includes(id))).toBe(true);
+		await expect(warning).toHaveCount(0);
+	} finally {
+		await deleteGames(games.map((game) => game.id));
+	}
+});
+
+test('Shuffle uses applied Tune intent and ignores a dismissed draft', async ({
+	page,
+}) => {
+	const run = randomUUID().slice(0, 8);
+	const quick = Array.from({ length: 12 }, (_, index) =>
+		createGame({
+			title: `Applied Quick ${index} ${run}`,
+			genres: [`Quick ${index} ${run}`],
+			ttbStorySeconds: (index + 2) * 3600,
+			criticScore: 80 - index,
+			criticScoreCount: 40,
+			tracking: { boughtOn: `202${index % 6}-01-01` },
+		}),
+	);
+	const long = createGame({
+		title: `Dismissed Draft Long ${run}`,
+		genres: [`Long ${run}`],
+		ttbStorySeconds: 80 * 3600,
+		criticScore: 100,
+		criticScoreCount: 100,
+		tracking: { boughtOn: '2019-01-01' },
+	});
+	const games = [...quick, long];
+	try {
+		await seedGames(games);
+		await page.goto('/play-next');
+		const cards = page.locator('[data-play-next-game-id]');
+		const initial = await cards.evaluateAll((nodes) =>
+			nodes.map((node) => node.getAttribute('data-play-next-game-id')),
+		);
+		const trigger = page.locator('.tune-trigger');
+		await trigger.click();
+		await page.getByRole('button', { name: 'Quick win' }).click();
+		await page.getByRole('button', { name: 'SHOW ME 3' }).click();
+		const applied = await cards.evaluateAll((nodes) =>
+			nodes.map((node) => node.getAttribute('data-play-next-game-id')),
+		);
+		await trigger.click();
+		await page.getByRole('button', { name: 'Different' }).click();
+		await page.getByRole('button', { name: 'Close Tune the picks' }).click();
+
+		await page.getByRole('button', { name: 'SHUFFLE', exact: true }).click();
+
+		await expect(page.locator('.play-next__mode')).toHaveText('QUICK WIN');
+		await expect(cards).toHaveCount(3);
+		const shuffled = await cards.evaluateAll((nodes) =>
+			nodes.map((node) => ({
+				id: node.getAttribute('data-play-next-game-id'),
+				title: node.querySelector('h2')?.textContent ?? '',
+			})),
+		);
+		expect(
+			shuffled.every(
+				({ id }) => !initial.includes(id) && !applied.includes(id),
+			),
+		).toBe(true);
+		expect(
+			shuffled.every(({ title }) => title.startsWith('Applied Quick')),
+		).toBe(true);
+		await trigger.click();
+		await expect(
+			page.getByRole('button', { name: 'Different' }),
+		).toHaveAttribute('aria-pressed', 'true');
+	} finally {
+		await deleteGames(games.map((game) => game.id));
+	}
+});
+
 test('phone uses compact two-up covers and keeps every action at least 44px high', async ({
 	page,
 }) => {
@@ -170,7 +369,27 @@ test('phone uses compact two-up covers and keeps every action at least 44px high
 	try {
 		await seedGames(games);
 		await page.setViewportSize({ width: 320, height: 667 });
+		await page.emulateMedia({ reducedMotion: 'reduce' });
 		await page.goto('/play-next');
+		const shuffle = page.getByRole('button', { name: 'SHUFFLE', exact: true });
+		const tune = page.locator('.tune-trigger');
+		const [shuffleBox, tuneBox] = await Promise.all([
+			shuffle.boundingBox(),
+			tune.boundingBox(),
+		]);
+		expect(shuffleBox?.height).toBeGreaterThanOrEqual(44);
+		expect(tuneBox?.height).toBeGreaterThanOrEqual(44);
+		expect(Math.abs((shuffleBox?.y ?? 0) - (tuneBox?.y ?? 0))).toBeLessThan(2);
+		expect(
+			(shuffleBox?.x ?? 321) + (shuffleBox?.width ?? 0),
+		).toBeLessThanOrEqual(tuneBox?.x ?? 0);
+		const transitionMs = await shuffle.evaluate((node) => {
+			const duration = getComputedStyle(node).transitionDuration;
+			return duration.endsWith('ms')
+				? Number.parseFloat(duration)
+				: Number.parseFloat(duration) * 1000;
+		});
+		expect(transitionMs).toBeLessThanOrEqual(0.001);
 		const cards = page.locator('[data-play-next-game-id]');
 		await expect(cards).toHaveCount(3);
 		const boxes = await cards.evaluateAll((nodes) =>

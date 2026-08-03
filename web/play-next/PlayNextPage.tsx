@@ -28,9 +28,14 @@ export function PlayNextPage() {
 	const [activeIntent, setActiveIntent] = useState<PlayNextIntent>(() => ({
 		...EMPTY_PLAY_NEXT_INTENT,
 	}));
+	const [seenGameIds, setSeenGameIds] = useState<ReadonlySet<string>>(
+		() => new Set(),
+	);
+	const [resetArmed, setResetArmed] = useState(false);
 	const [tuneOpen, setTuneOpen] = useState(false);
 	const generationRef = useRef(0);
 	const headingRef = useRef<HTMLHeadingElement>(null);
+	const shuffleRef = useRef<HTMLButtonElement>(null);
 	const announce = useAnnounce();
 	const navigate = useNavigate();
 	const location = useLocation();
@@ -39,13 +44,13 @@ export function PlayNextPage() {
 	}, []);
 	useEffect(() => {
 		if (data && suggestions === null) {
+			const initial = getPlayNextSuggestions(data, {
+				referenceIso,
+				visitSeed,
+			});
 			setVisitGames(data);
-			setSuggestions(
-				getPlayNextSuggestions(data, {
-					referenceIso,
-					visitSeed,
-				}),
-			);
+			setSuggestions(initial);
+			setSeenGameIds(new Set(initial.map((item) => item.game.id)));
 		}
 	}, [data, referenceIso, suggestions, visitSeed]);
 	const activeLabels = useMemo(
@@ -65,12 +70,49 @@ export function PlayNextPage() {
 		});
 		setActiveIntent({ ...draftIntent });
 		setSuggestions(next);
+		setSeenGameIds((seen) => unionIds(seen, next));
+		setResetArmed(false);
 		setTuneOpen(false);
 		announce(
 			`${next.length} ${next.length === 1 ? 'suggestion' : 'suggestions'} ready.`,
 		);
 	};
 	const slate = suggestions ?? [];
+	const shuffle = () => {
+		if (!visitGames || slate.length === 0) return;
+		generationRef.current += 1;
+		const visibleIds = new Set(slate.map((item) => item.game.id));
+		const next = getPlayNextSuggestions(visitGames, {
+			referenceIso,
+			visitSeed: `${visitSeed}:shuffle:${generationRef.current}`,
+			intent: activeIntent,
+			excludedGameIds: resetArmed ? visibleIds : seenGameIds,
+		});
+		if (next.length === 0) {
+			setResetArmed(true);
+			announce('0 new suggestions ready. Current picks kept.');
+			shuffleRef.current?.focus();
+			return;
+		}
+		setSuggestions(next);
+		const nextSeen = resetArmed
+			? new Set(next.map((item) => item.game.id))
+			: unionIds(seenGameIds, next);
+		setSeenGameIds(nextSeen);
+		const hasFurtherUnseen =
+			getPlayNextSuggestions(visitGames, {
+				referenceIso,
+				visitSeed: `${visitSeed}:shuffle:${generationRef.current}:probe`,
+				limit: 1,
+				intent: activeIntent,
+				excludedGameIds: nextSeen,
+			}).length > 0;
+		setResetArmed(next.length < 3 && !hasFurtherUnseen);
+		announce(
+			`${next.length} ${next.length === 1 ? 'suggestion' : 'suggestions'} ready.`,
+		);
+		shuffleRef.current?.focus();
+	};
 	const suggestionsLoading = isPending || (!isError && suggestions === null);
 
 	return (
@@ -90,28 +132,44 @@ export function PlayNextPage() {
 					</span>
 				</div>
 				<div className="play-next__controls">
-					<button
-						type="button"
-						className="tune-trigger"
-						data-active={activeCount > 0 || undefined}
-						aria-haspopup="dialog"
-						aria-expanded={tuneOpen}
-						aria-controls="play-next-tune-dialog"
-						aria-label={
-							activeCount > 0
-								? `Tune the picks — ${activeCount} active`
-								: 'Tune the picks'
-						}
-						disabled={!visitGames}
-						onClick={() => setTuneOpen(true)}
-					>
-						TUNE THE PICKS
-						{activeCount > 0 && (
-							<span className="tune-trigger__count" aria-hidden="true">
-								{activeCount}
-							</span>
-						)}
-					</button>
+					<div className="play-next__command-row">
+						<button
+							ref={shuffleRef}
+							type="button"
+							className="play-next__shuffle"
+							disabled={!visitGames || slate.length === 0}
+							onClick={shuffle}
+						>
+							SHUFFLE
+						</button>
+						<button
+							type="button"
+							className="tune-trigger"
+							data-active={activeCount > 0 || undefined}
+							aria-haspopup="dialog"
+							aria-expanded={tuneOpen}
+							aria-controls="play-next-tune-dialog"
+							aria-label={
+								activeCount > 0
+									? `Tune the picks — ${activeCount} active`
+									: 'Tune the picks'
+							}
+							disabled={!visitGames}
+							onClick={() => setTuneOpen(true)}
+						>
+							TUNE THE PICKS
+							{activeCount > 0 && (
+								<span className="tune-trigger__count" aria-hidden="true">
+									{activeCount}
+								</span>
+							)}
+						</button>
+					</div>
+					{resetArmed && (
+						<p className="play-next__shuffle-warning" role="status">
+							You’ve seen every other match. Next Shuffle starts a fresh pool.
+						</p>
+					)}
 					<p>Three picks from your Shelf</p>
 				</div>
 			</header>
@@ -141,7 +199,7 @@ export function PlayNextPage() {
 				</div>
 			) : (
 				<>
-					{slate.length < 3 && (
+					{slate.length < 3 && !resetArmed && (
 						<p className="play-next__notice" role="status">
 							{`Only ${slate.length} ${slate.length === 1 ? 'suggestion fits' : 'suggestions fit'} the current eligibility rules.`}
 						</p>
@@ -166,6 +224,15 @@ export function PlayNextPage() {
 			)}
 		</section>
 	);
+}
+
+function unionIds(
+	seen: ReadonlySet<string>,
+	suggestions: readonly PlayNextSuggestion[],
+): ReadonlySet<string> {
+	const next = new Set(seen);
+	for (const suggestion of suggestions) next.add(suggestion.game.id);
+	return next;
 }
 
 /** Keep recommendation facts/reasons frozen to the visit snapshot. Only the

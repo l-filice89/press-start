@@ -503,3 +503,17 @@ Story 13.2 (Tune recommendations intentionally). Approved modal iteration:
 | 13.2g detail round-trip preserves draft, applied intent, slate, seed, and focus; a new destination visit resets them | browser Tune flow compares visit id, ordered card ids, applied readback, draft, focus, then leaves/re-enters Play Next and verifies reset |
 | 13.2h centered desktop modal / phone bottom sheet traps and restores focus, locks backdrop, dismisses, and keeps 44px targets | browser desktop geometry/focus-cycle assertions and phone disposition/target test; jsdom forward/reverse focus cycle, Escape, backdrop, scroll-lock, and restoration test |
 | 13.2i cards reuse 3:4 cover trigger/fallback, PS+/leaving flags, ownership diamond/source dialog, facts, and closest/access labels | browser card/Tune flow plus dedicated guarded ownership-source browser test and jsdom `PlayNextPage.test.tsx` › uses cover detail trigger… |
+
+Story 13.3 (Shuffle without repetition). Approved state mock:
+`_bmad-output/design-demos/epic-13-play-next/06-story-13-3-shuffle-states.html`.
+
+| AC | Coverage |
+|----|----------|
+| 13.3a Shuffle uses applied intent, ignores dismissed draft, and excludes every displayed visit ID | `epic13-play-next.spec.ts` › Shuffle uses applied Tune intent… compares Shuffle against both initial and Tune-applied IDs; jsdom applied/draft core-call assertion and core exclusion tests |
+| 13.3b normal Shuffle and fresh-pool reset never immediately repeat a current card | `epic13-play-next.spec.ts` › Shuffle exhausts unseen picks… compares ordered IDs across both transitions; core deterministic exclusion tests |
+| 13.3c one or two unseen matches render an honest smaller slate and exact warning | `epic13-play-next.spec.ts` › Shuffle exhausts unseen picks… asserts two cards, exact warning, and honest live count |
+| 13.3d zero unseen matches retain current cards, show the warning, and arm reset | `epic13-play-next.spec.ts` › zero unseen picks keep the slate…; jsdom `PlayNextPage.test.tsx` › keeps zero-result slate… |
+| 13.3e warning’s next single Shuffle resets old history while excluding current cards | `epic13-play-next.spec.ts` › Shuffle exhausts unseen picks… asserts one-click three-card reset disjoint from current exhausted slate |
+| 13.3f routed detail preserves slate/exhaustion/generation and destination remount resets visit state | `epic13-play-next.spec.ts` › Shuffle exhausts unseen picks… preserves two-card warning through detail, then verifies new visit and cleared warning after Shelf round-trip |
+| 13.3g every refresh announces honest count, focus returns to Shuffle, targets are ≥44px, and reduced motion is respected | browser exhaustion flow asserts counts/focus; phone layout test asserts same-row ≥44px commands and reduced transition; jsdom consecutive-identical-count mutation test pins re-announcement |
+| 13.3h implementation-specific state mock approved before production UI and every visible AC has Playwright evidence | Story spec records Luca’s 2026-08-03 approval; approved mock path above; this ledger maps every visible AC |
