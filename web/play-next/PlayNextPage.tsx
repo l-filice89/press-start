@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import type { PlayNextIntent, PlayNextSuggestion } from '../../src/core';
 import { EMPTY_PLAY_NEXT_INTENT, getPlayNextSuggestions } from '../../src/core';
@@ -33,6 +33,9 @@ export function PlayNextPage() {
 	);
 	const [resetArmed, setResetArmed] = useState(false);
 	const [tuneOpen, setTuneOpen] = useState(false);
+	const [pendingGameIds, setPendingGameIds] = useState<ReadonlySet<string>>(
+		() => new Set(),
+	);
 	const generationRef = useRef(0);
 	const headingRef = useRef<HTMLHeadingElement>(null);
 	const shuffleRef = useRef<HTMLButtonElement>(null);
@@ -114,6 +117,14 @@ export function PlayNextPage() {
 		shuffleRef.current?.focus();
 	};
 	const suggestionsLoading = isPending || (!isError && suggestions === null);
+	const setCardPending = useCallback((gameId: string, pending: boolean) => {
+		setPendingGameIds((current) => {
+			const next = new Set(current);
+			if (pending) next.add(gameId);
+			else next.delete(gameId);
+			return next;
+		});
+	}, []);
 
 	return (
 		<section
@@ -137,7 +148,9 @@ export function PlayNextPage() {
 							ref={shuffleRef}
 							type="button"
 							className="play-next__shuffle"
-							disabled={!visitGames || slate.length === 0}
+							disabled={
+								!visitGames || slate.length === 0 || pendingGameIds.size > 0
+							}
 							onClick={shuffle}
 						>
 							SHUFFLE
@@ -154,7 +167,7 @@ export function PlayNextPage() {
 									? `Tune the picks — ${activeCount} active`
 									: 'Tune the picks'
 							}
-							disabled={!visitGames}
+							disabled={!visitGames || pendingGameIds.size > 0}
 							onClick={() => setTuneOpen(true)}
 						>
 							TUNE THE PICKS
@@ -213,10 +226,15 @@ export function PlayNextPage() {
 									data?.find((game) => game.id === suggestion.game.id),
 								)}
 								referenceIso={referenceIso}
-								onPlayed={() => void navigate('/')}
+								onPlayed={() =>
+									void navigate('/', {
+										state: { playNextFocusGameId: suggestion.game.id },
+									})
+								}
 								onOpenDetails={() =>
 									void navigate(...toDetail(suggestion.game.id, location))
 								}
+								onPendingChange={setCardPending}
 							/>
 						))}
 					</div>

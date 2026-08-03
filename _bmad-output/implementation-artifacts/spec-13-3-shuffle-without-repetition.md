@@ -6,7 +6,7 @@ status: 'done'
 baseline_revision: 'a43b585a55cd98bca55694bc60c0dd872944611e'
 final_revision: '18302c4cc4b5b6ffcd7e16392ff612d1ed043fa4'
 review_loop_iteration: 0
-followup_review_recommended: true
+followup_review_recommended: false
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-13-context.md'
 warnings: [oversized]
@@ -74,6 +74,13 @@ warnings: [oversized]
 
 ## Review Triage Log
 
+### 2026-08-03 — Independent follow-up
+- patch: 0
+- defer: 0
+- reject: 1 (medium)
+- result: clean after triage. Suggested background-refetch Shuffle guard is unreachable because `isError` replaces the slate and command row with the error state; no activatable Shuffle remains in that render.
+- follow-up recommendation cleared.
+
 ### 2026-08-03 — Review pass
 - intent_gap: 0
 - bad_spec: 0
@@ -118,7 +125,7 @@ Files changed: core selector and hazard tests; Play Next state/UI/CSS and web te
 
 Review: 6 patches applied, 0 new deferrals, 5 findings rejected. Existing shared-D1 cross-file isolation risk remains tracked from Story 13.1 and was not duplicated.
 
-Follow-up review recommendation: true. Review changed exhaustion semantics and broadened state-transition evidence.
+Follow-up review recommendation: completed. Independent edge-case review found no actionable defect after triage.
 
 Verification: core 22/22; web 22/22; Epic 13 Playwright 9/9 on real local D1; full Vitest 79 files / 2169 tests; lint, typecheck, build, and `git diff --check` passed.
 

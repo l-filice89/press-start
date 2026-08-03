@@ -146,6 +146,11 @@
 	overflow: hidden;
 }
 
+.play-next-card[aria-busy="true"] {
+	border-color: var(--color-accent-electric);
+	box-shadow: var(--glow-ring);
+}
+
 .play-next-card__cover {
 	position: relative;
 	aspect-ratio: 3 / 4;
@@ -331,6 +336,11 @@
 .play-next-card__actions button:first-child {
 	background: var(--color-accent-electric);
 	color: var(--color-void);
+}
+
+.play-next-card__actions button:disabled {
+	cursor: wait;
+	opacity: 0.55;
 }
 
 .tune__backdrop {

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { PlayNextSuggestion } from '../../src/core';
 import type { ShelfGame } from '../shelf/api';
 import { formatLeavingDate, showLeaving } from '../shelf/leaving';
@@ -14,11 +14,13 @@ export function SuggestionCard({
 	referenceIso,
 	onOpenDetails,
 	onPlayed,
+	onPendingChange,
 }: {
 	suggestion: PlayNextSuggestion;
 	referenceIso: string;
 	onOpenDetails: () => void;
 	onPlayed: () => void;
+	onPendingChange: (gameId: string, pending: boolean) => void;
 }) {
 	const game = suggestion.game as ShelfGame;
 	const [failedCoverUrl, setFailedCoverUrl] = useState<string | null>(null);
@@ -30,6 +32,18 @@ export function SuggestionCard({
 		confirmSource,
 		cancelSource,
 	} = useTrackingMutations(game, { onStatusSuccess: onPlayed });
+	const playActionRef = useRef<HTMLButtonElement>(null);
+	const wasStatusPending = useRef(false);
+	useEffect(() => {
+		if (wasStatusPending.current && !statusPending) {
+			playActionRef.current?.focus();
+		}
+		wasStatusPending.current = statusPending;
+	}, [statusPending]);
+	useEffect(() => {
+		onPendingChange(game.id, statusPending);
+		return () => onPendingChange(game.id, false);
+	}, [game.id, onPendingChange, statusPending]);
 	const showCover = !!game.coverUrl && failedCoverUrl !== game.coverUrl;
 	const facts = [
 		game.genres[0] ? { key: 'genre', value: game.genres[0] } : null,
@@ -54,6 +68,7 @@ export function SuggestionCard({
 			<article
 				className="play-next-card"
 				data-play-next-game-id={game.id}
+				aria-busy={statusPending}
 				tabIndex={-1}
 			>
 				<div className="play-next-card__cover">
@@ -61,6 +76,7 @@ export function SuggestionCard({
 						type="button"
 						className="play-next-card__cover-button"
 						aria-label={`Open details — ${game.title}`}
+						disabled={statusPending}
 						onClick={onOpenDetails}
 					>
 						{showCover ? (
@@ -86,6 +102,7 @@ export function SuggestionCard({
 						className="play-next-card__owned-toggle"
 						aria-pressed={game.owned}
 						aria-label={`Owned — ${game.title}`}
+						disabled={statusPending}
 						onClick={() => setOwnership({ owned: !game.owned })}
 					>
 						<span aria-hidden="true">{game.owned ? '◆' : '◇'}</span>
@@ -140,11 +157,12 @@ export function SuggestionCard({
 					</ul>
 					<div className="play-next-card__actions">
 						<button
+							ref={playActionRef}
 							type="button"
 							disabled={statusPending}
 							onClick={() => selectStatus('Playing')}
 						>
-							Play this
+							{statusPending ? 'STARTING…' : 'Play this'}
 						</button>
 						<button
 							type="button"

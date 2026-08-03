@@ -517,3 +517,16 @@ Story 13.3 (Shuffle without repetition). Approved state mock:
 | 13.3f routed detail preserves slate/exhaustion/generation and destination remount resets visit state | `epic13-play-next.spec.ts` › Shuffle exhausts unseen picks… preserves two-card warning through detail, then verifies new visit and cleared warning after Shelf round-trip |
 | 13.3g every refresh announces honest count, focus returns to Shuffle, targets are ≥44px, and reduced motion is respected | browser exhaustion flow asserts counts/focus; phone layout test asserts same-row ≥44px commands and reduced transition; jsdom consecutive-identical-count mutation test pins re-announcement |
 | 13.3h implementation-specific state mock approved before production UI and every visible AC has Playwright evidence | Story spec records Luca’s 2026-08-03 approval; approved mock path above; this ledger maps every visible AC |
+
+Story 13.4 (Act on a recommendation and harden the flow). Approved action-state mock:
+`_bmad-output/design-demos/epic-13-play-next/07-story-13-4-action-hardening.html`.
+
+| AC | Coverage |
+|----|----------|
+| 13.4a rapid Play this activation makes exactly one shared lifecycle write, exposes `STARTING…`/`aria-busy`, and disables paired text actions | `epic13-play-next.spec.ts` › Play this marks… holds real PATCH pending, retries DOM activation, counts one request, and asserts semantic/disabled state; deferred jsdom test pins same seam |
+| 13.4b successful Playing write returns to Shelf, keeps existing toast, settles in Playing order, and focuses selected card once | `epic13-play-next.spec.ts` › Play this marks… asserts toast, selected Playing accessible name, first-tier position, and route-arrival focus; `Shelf.test.tsx` pins one-shot route-state consumption and ordinary-visit non-focus |
+| 13.4c failed write preserves tuned/exhausted visit, restores actions/focus, and leaves next deterministic transition intact | `epic13-play-next.spec.ts` › failed Play this preserves… intercepts PATCH 500 and compares URL, slate, warning, applied/draft intent, visit ID, focus, toast, and reset transition; jsdom mirrors deferred failure |
+| 13.4d desktop/320px retain approved controls, ≥44px targets, modal/bottom sheet, non-color state, grid/no overflow | Epic 13 phone grid test asserts two-up grid, same-row commands, every action ≥44px, reduced motion, and document width; Tune desktop/phone tests assert modal/sheet disposition and focus trap; pending browser flow asserts literal state text plus semantics |
+| 13.4e routed detail closes to originating recommendation without visit changes | `epic13-play-next.spec.ts` › Play Next shows three… and Shuffle exhausts unseen picks… assert exact slate/visit preservation and originating-card focus |
+| 13.4f existing Shelf lifecycle, filter, search, ordering, and focus remain unchanged | unchanged `epic2-tracking.spec.ts` and `epic3-filter.spec.ts` regression flows; focused Shelf web suites cover grid ordering/focus |
+| 13.4g implementation-specific mock approved before production UI and every visible AC has Playwright evidence | Story spec records Luca’s 2026-08-03 approval after final shipped-app alignment edits; approved mock path above; this ledger maps every visible AC |

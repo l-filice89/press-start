@@ -150,14 +150,140 @@ test('Play this marks the suggestion Playing and returns to Shelf', async ({
 	page,
 }) => {
 	const games = candidates(randomUUID().slice(0, 8));
+	let releaseWrite: () => void = () => {};
+	const writeGate = new Promise<void>((resolve) => {
+		releaseWrite = resolve;
+	});
+	let writeCount = 0;
 	try {
 		await seedGames(games);
+		await page.route('**/api/games/*/play-status', async (route) => {
+			writeCount += 1;
+			await writeGate;
+			await route.continue();
+		});
 		await page.goto('/play-next');
 		const card = page.locator('[data-play-next-game-id]').first();
 		const title = (await card.getByRole('heading').textContent()) ?? '';
+		const gameId = await card.getAttribute('data-play-next-game-id');
 		await card.getByRole('button', { name: 'Play this' }).click();
+		await expect(card).toHaveAttribute('aria-busy', 'true');
+		await expect(
+			card.getByRole('button', { name: 'STARTING…' }),
+		).toBeDisabled();
+		await expect(
+			card.getByRole('button', { name: 'Open details', exact: true }),
+		).toBeDisabled();
+		await card.getByRole('button', { name: 'STARTING…' }).evaluate((button) => {
+			(button as HTMLButtonElement).click();
+			(button as HTMLButtonElement).click();
+		});
+		expect(writeCount).toBe(1);
+		await expect(page).toHaveURL('/play-next');
+
+		releaseWrite();
 		await expect(page).toHaveURL('/');
 		await expect(page.getByTestId('toast')).toContainText(`${title} — Playing`);
+		const selected = page.locator(
+			`[role="gridcell"][data-game-id="${gameId}"]`,
+		);
+		await expect(selected).toHaveAccessibleName(`${title} — Playing`);
+		await expect(selected).toBeFocused();
+		const shelfOrder = await page.getByRole('gridcell').evaluateAll((nodes) =>
+			nodes.map((node) => ({
+				id: node.getAttribute('data-game-id'),
+				label: node.getAttribute('aria-label') ?? '',
+			})),
+		);
+		const selectedIndex = shelfOrder.findIndex(({ id }) => id === gameId);
+		expect(selectedIndex).toBeGreaterThanOrEqual(0);
+		expect(
+			shelfOrder
+				.slice(0, selectedIndex)
+				.every(({ label }) => label.endsWith('— Playing')),
+		).toBe(true);
+	} finally {
+		releaseWrite();
+		await deleteGames(games.map((game) => game.id));
+	}
+});
+
+test('failed Play this preserves tuned exhausted visit and its next transition', {
+	annotation: [{ type: 'skipNetworkMonitoring' }],
+}, async ({ page }) => {
+	const run = randomUUID().slice(0, 8);
+	// Two eligible baseline games plus these three produce one full and one
+	// exhausted slate while keeping the fixture deterministic.
+	const games = Array.from({ length: 3 }, (_, index) =>
+		createGame({
+			title: `Failure preserve ${index} ${run}`,
+			ttbStorySeconds: (index + 2) * 3600,
+			criticScore: 90 - index,
+			criticScoreCount: 50,
+			tracking: { boughtOn: `202${index}-01-01` },
+		}),
+	);
+	try {
+		await seedGames(games);
+		await page.goto('/play-next');
+		const cards = page.locator('[data-play-next-game-id]');
+		const ids = () =>
+			cards.evaluateAll((nodes) =>
+				nodes.map((node) => node.getAttribute('data-play-next-game-id')),
+			);
+		const trigger = page.locator('.tune-trigger');
+		await trigger.click();
+		await page.getByRole('button', { name: 'Quick win' }).click();
+		await page.getByRole('button', { name: 'SHOW ME 3' }).click();
+		await trigger.click();
+		await page.getByRole('button', { name: 'Different' }).click();
+		await page.getByRole('button', { name: 'Close Tune the picks' }).click();
+		const shuffle = page.getByRole('button', { name: 'SHUFFLE', exact: true });
+		await shuffle.click();
+		const warning = page.getByText(
+			'You’ve seen every other match. Next Shuffle starts a fresh pool.',
+			{ exact: true },
+		);
+		await expect(warning).toBeVisible();
+		const before = await ids();
+		const visit = await page
+			.locator('.play-next')
+			.getAttribute('data-play-next-visit');
+		const mode = await page.locator('.play-next__mode').textContent();
+		const card = cards.first();
+		const title = (await card.getByRole('heading').textContent()) ?? '';
+		const play = card.getByRole('button', { name: 'Play this' });
+		await page.route('**/api/games/*/play-status', async (route) => {
+			await route.fulfill({
+				status: 500,
+				contentType: 'application/json',
+				body: JSON.stringify({ error: 'forced e2e failure' }),
+			});
+		});
+
+		await play.click();
+
+		await expect(page).toHaveURL('/play-next');
+		await expect(page.getByTestId('toast')).toContainText(
+			`Couldn’t update ${title}. Try again.`,
+		);
+		expect(await ids()).toEqual(before);
+		await expect(warning).toBeVisible();
+		await expect(page.locator('.play-next__mode')).toHaveText(mode ?? '');
+		expect(
+			await page.locator('.play-next').getAttribute('data-play-next-visit'),
+		).toBe(visit);
+		await expect(play).toBeFocused();
+		await trigger.click();
+		await expect(
+			page.getByRole('button', { name: 'Different' }),
+		).toHaveAttribute('aria-pressed', 'true');
+		await page.getByRole('button', { name: 'Close Tune the picks' }).click();
+
+		await shuffle.click();
+		const after = await ids();
+		expect(after.length).toBeGreaterThan(0);
+		expect(after.every((id) => !before.includes(id))).toBe(true);
 	} finally {
 		await deleteGames(games.map((game) => game.id));
 	}
@@ -409,6 +535,23 @@ test('phone uses compact two-up covers and keeps every action at least 44px high
 			.boundingBox();
 		expect(navBox?.x ?? 321).toBeGreaterThanOrEqual(0);
 		expect((navBox?.x ?? 0) + (navBox?.width ?? 321)).toBeLessThanOrEqual(320);
+		for (const control of await page.locator('button:visible').all()) {
+			const box = await control.boundingBox();
+			expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+			expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+		}
+		expect(
+			await page.evaluate(
+				() =>
+					document.documentElement.scrollWidth <=
+					document.documentElement.clientWidth,
+			),
+		).toBe(true);
+		expect(
+			await page
+				.locator('.play-next__grid')
+				.evaluate((grid) => getComputedStyle(grid).display),
+		).toBe('grid');
 	} finally {
 		await deleteGames(games.map((game) => game.id));
 	}

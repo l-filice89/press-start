@@ -87,7 +87,10 @@ function mockFetch(games: ShelfGame[]) {
 function LocationProbe() {
 	const location = useLocation();
 	return (
-		<span data-testid="location">{`${location.pathname}${location.search}`}</span>
+		<>
+			<span data-testid="location">{`${location.pathname}${location.search}`}</span>
+			<span data-testid="location-state">{JSON.stringify(location.state)}</span>
+		</>
 	);
 }
 
@@ -97,7 +100,9 @@ function LocationProbe() {
  * tests drive the REAL intent path (`navigate` / `?q=`) instead of the deleted
  * window events, and the mount-race they existed to catch stays covered.
  */
-function renderShelf(initialEntry = '/') {
+function renderShelf(
+	initialEntry: string | { pathname: string; state: unknown } = '/',
+) {
 	const client = new QueryClient({
 		defaultOptions: { queries: { retry: false } },
 	});
@@ -148,6 +153,61 @@ describe('Shelf', () => {
 		expect(cards).toHaveLength(2);
 		expect(cards[0]).toHaveTextContent('Apex');
 		expect(cards[1]).toHaveTextContent('Bolt');
+	});
+
+	it('focuses a Play Next selection after it settles Playing and consumes the route intent once', async () => {
+		mockFetch([
+			card('selected', 'Selected', {
+				playStatus: 'Playing',
+				effectiveState: 'Playing',
+			}),
+			card('other', 'Other'),
+		]);
+		renderShelf({
+			pathname: '/',
+			state: { playNextFocusGameId: 'selected' },
+		});
+		const selected = await screen.findByRole('gridcell', {
+			name: 'Selected — Playing',
+		});
+		await waitFor(() => expect(selected).toHaveFocus());
+		await waitFor(() =>
+			expect(screen.getByTestId('location-state')).toHaveTextContent('null'),
+		);
+		const other = screen.getByRole('gridcell', {
+			name: 'Other — Not started',
+		});
+		other.focus();
+		await waitFor(() => expect(other).toHaveFocus());
+	});
+
+	it('does not auto-focus a Playing card on an ordinary Shelf visit', async () => {
+		mockFetch([
+			card('playing', 'Playing normally', {
+				playStatus: 'Playing',
+				effectiveState: 'Playing',
+			}),
+		]);
+		renderShelf();
+		const playing = await screen.findByRole('gridcell', {
+			name: 'Playing normally — Playing',
+		});
+		expect(playing).not.toHaveFocus();
+	});
+
+	it('consumes an invalid Play Next arrival without focusing a Shelf card', async () => {
+		mockFetch([card('other', 'Other')]);
+		renderShelf({
+			pathname: '/',
+			state: { playNextFocusGameId: 'missing' },
+		});
+		const other = await screen.findByRole('gridcell', {
+			name: 'Other — Not started',
+		});
+		await waitFor(() =>
+			expect(screen.getByTestId('location-state')).toHaveTextContent('null'),
+		);
+		expect(other).not.toHaveFocus();
 	});
 
 	it('is a focusable grid with arrow traversal in reading order', async () => {

@@ -2,8 +2,9 @@
 title: 'Story 13.4: Act on a recommendation and harden the flow'
 type: 'feature'
 created: '2026-08-03'
-status: 'ready-for-dev'
-review_loop_iteration: 0
+status: 'in-review'
+baseline_revision: 'd6694f1b869dc83a5c491e5cc11805e28aecf946'
+review_loop_iteration: 2
 followup_review_recommended: false
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-13-context.md'
@@ -56,11 +57,11 @@ warnings: [oversized]
 
 **Execution:**
 - [x] `_bmad-output/design-demos/epic-13-play-next/07-story-13-4-action-hardening.html` -- present ready, pending, failure-preserved, success-Shelf, desktop, and 320px states; record Luca approval.
-- [ ] `web/play-next/SuggestionCard.tsx`, `web/play-next/play-next.css` -- implement approved pending/action treatment without changing card hierarchy.
-- [ ] `web/play-next/PlayNextPage.tsx`, `web/shelf/Shelf.tsx` -- pass successful selection context through navigation and focus the settled Playing Shelf card without stealing focus on ordinary Shelf visits.
-- [ ] `web/play-next/PlayNextPage.test.tsx` -- pin single-write pending behavior, success navigation/focus intent, failure restoration, and full visit preservation.
-- [ ] `playwright/e2e/epic13-play-next.spec.ts`, `playwright/COVERAGE.md` -- prove success settlement, failure preservation, desktop/phone interaction, and every visible Story 13.4 criterion on real D1.
-- [ ] `playwright/e2e/epic2-tracking.spec.ts`, `playwright/e2e/epic3-filter.spec.ts` -- run unchanged Shelf lifecycle/filter flows as regression evidence; modify only if a real regression is found.
+- [x] `web/play-next/SuggestionCard.tsx`, `web/play-next/play-next.css` -- implement approved pending/action treatment without changing card hierarchy.
+- [x] `web/play-next/PlayNextPage.tsx`, `web/shelf/Shelf.tsx` -- pass successful selection context through navigation and focus the settled Playing Shelf card without stealing focus on ordinary Shelf visits.
+- [x] `web/play-next/PlayNextPage.test.tsx` -- pin single-write pending behavior, success navigation/focus intent, failure restoration, and full visit preservation.
+- [x] `playwright/e2e/epic13-play-next.spec.ts`, `playwright/COVERAGE.md` -- prove success settlement, failure preservation, desktop/phone interaction, and every visible Story 13.4 criterion on real D1.
+- [x] `playwright/e2e/epic2-tracking.spec.ts`, `playwright/e2e/epic3-filter.spec.ts` -- run unchanged Shelf lifecycle/filter flows as regression evidence; modify only if a real regression is found.
 
 **Acceptance Criteria:**
 - Given an eligible suggestion, when `Play this` is activated rapidly, then exactly one existing lifecycle write runs, the activated action reads `STARTING…`, its paired text action is unavailable, and semantic pending/disabled state is exposed.
@@ -75,7 +76,30 @@ warnings: [oversized]
 
 ## Review Triage Log
 
+### 2026-08-03 — Adversarial and edge-case pass
+- intent_gap: 0
+- bad_spec: 0
+- patch: 8 (high 1, medium 6, low 1)
+- defer: 0
+- reject: 6 (medium 5, low 1)
+- addressed_findings:
+  - Disabled cover-detail, ownership, Shuffle, and Tune escape paths while any recommendation write remains pending.
+  - Restored failed action focus and prevented delayed Shelf settlement from stealing user-moved focus.
+  - Consumed invalid or unsettled arrival intent after refetch settlement.
+  - Added invalid-arrival, pending-control, concurrent-card-write, non-empty transition, and full 44×44 assertions.
+  - Replaced the page's single pending ID with a set after independent follow-up found cross-card writes could settle out of order.
+- rejected_findings: native disabled behavior plus the existing module guard already enforce the one-write contract; refetch-failure navigation is outside the stated successful-refetch branch; deep progressive reveal uses the shared tested list primitive; run-unique real-D1 fixtures and serial epic gate cover current scope; Playing-tier assertion plus unchanged Shelf ordering regressions cover settlement order.
+
+### 2026-08-03 — Mandatory independent follow-up
+- patch: 1 (medium)
+- defer: 0
+- reject: 0
+- result: pending command lock now tracks every concurrent per-game write; focused regression added and passed.
+- follow-up recommendation cleared.
+
 ## Design Notes
+
+Oversized-story acceptance: keep Story 13.4 cohesive because its action, failure-preservation, route-focus, responsive, and Shelf-regression checks form one final end-to-end Epic 13 contract and splitting would separate implementation from its merge evidence. Elevated adversarial plus independent follow-up review is mandatory.
 
 The approved Story 13.2/13.3 artifacts supersede stale planning prose: on phone, `TUNE THE PICKS` remains a collapsed trigger opening the shared bottom-sheet modal, while the compact card grid remains two-up with actions stacked inside each card. Story 13.4 introduces no new layout direction.
 
@@ -96,6 +120,14 @@ Placement mock: `_bmad-output/design-demos/epic-13-play-next/07-story-13-4-actio
 
 ## Auto Run Result
 
-Status: resumed.
+Status: implementation, adversarial review, independent follow-up, and verification complete.
+
+Summary: Reused the shared Playing mutation; added approved local pending treatment; blocked slate-changing escapes until all writes settle; preserved the mounted visit and focus on failure; carried one-shot route focus to the settled Playing Shelf card without ordinary-visit or delayed focus theft; expanded real-D1 success/failure/responsive evidence.
+
+Review: parallel adversarial/edge pass applied 8 patches with no new deferrals. Mandatory independent follow-up found and fixed one cross-card pending-set race. Remaining findings were rejected with evidence in the triage log.
+
+Verification: focused web 59/59; Epic 13 browser 10/10; combined Epic 13 + unchanged Shelf lifecycle/filter browser gate 22/22; full Vitest 79 files / 2173 tests; lint, typecheck, build, and `git diff --check` passed.
+
+Post-epic temporal/resource sweep: visit seed, reference date, Tune/Shuffle history, and arrival focus remain mount/route scoped; no scheduler, provider, schema, persistence, or backend budget was added. One existing PATCH plus normal Shelf invalidation/refetch remains the action budget. Shared-D1 parallel-fixture harness risk was explicitly accepted and closed in the deferred ledger after serial combined-flow evidence.
 
 UI-MOCK-GATE: approved by Luca on 2026-08-03 after Luca's final shipped-app alignment edits. Production implementation may proceed.

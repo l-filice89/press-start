@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useLocation, useNavigate, useSearchParams } from 'react-router';
 import { EmptyState } from '../components/EmptyState';
 import { useAnnounce } from '../components/LiveRegion';
 import { SkeletonGrid } from '../components/Skeleton';
@@ -36,10 +36,33 @@ import './shelf.css';
  * it narrows within (the scope rule in FilteredShelf).
  */
 export function Shelf() {
-	const { data, isPending, isError } = useQuery({
+	const location = useLocation();
+	const navigate = useNavigate();
+	const { data, isPending, isError, isFetching } = useQuery({
 		queryKey: ['shelf'],
 		queryFn: ({ signal }) => fetchShelf(signal),
 	});
+	const arrivalState = location.state as {
+		playNextFocusGameId?: unknown;
+	} | null;
+	const arrivalFocusGameId =
+		typeof arrivalState?.playNextFocusGameId === 'string'
+			? arrivalState.playNextFocusGameId
+			: null;
+	const consumeArrivalFocus = useCallback(() => {
+		void navigate(`${location.pathname}${location.search}`, {
+			replace: true,
+			state: null,
+		});
+	}, [location.pathname, location.search, navigate]);
+	useEffect(() => {
+		if (!arrivalFocusGameId || isPending || isFetching) return;
+		const targetSettled = data?.some(
+			(game) =>
+				game.id === arrivalFocusGameId && game.effectiveState === 'Playing',
+		);
+		if (!targetSettled) consumeArrivalFocus();
+	}, [arrivalFocusGameId, consumeArrivalFocus, data, isFetching, isPending]);
 
 	if (isPending) {
 		return <SkeletonGrid label="Loading your shelf" />;
@@ -54,11 +77,25 @@ export function Shelf() {
 	if (data.length === 0) {
 		return <EmptyState variant="insert-games" />;
 	}
-	return <FilteredShelf games={data} />;
+	return (
+		<FilteredShelf
+			games={data}
+			arrivalFocusGameId={arrivalFocusGameId}
+			onArrivalFocusConsumed={consumeArrivalFocus}
+		/>
+	);
 }
 
 /** Filter state + the filter row, between the shelf query and the grid. */
-function FilteredShelf({ games }: { games: ShelfGame[] }) {
+function FilteredShelf({
+	games,
+	arrivalFocusGameId,
+	onArrivalFocusConsumed,
+}: {
+	games: ShelfGame[];
+	arrivalFocusGameId: string | null;
+	onArrivalFocusConsumed: () => void;
+}) {
 	const [filter, setFilter] = useState<ShelfFilter>(EMPTY_FILTER);
 	const announce = useAnnounce();
 
@@ -247,6 +284,8 @@ function FilteredShelf({ games }: { games: ShelfGame[] }) {
 					<ShelfGrid
 						games={visible}
 						resetKey={`${JSON.stringify(filter)}|${searchTerm}`}
+						arrivalFocusGameId={arrivalFocusGameId}
+						onArrivalFocusConsumed={onArrivalFocusConsumed}
 					/>
 				)}
 			</div>
@@ -284,10 +323,14 @@ export function chunkIntoRows<T>(items: T[], columnCount: number): T[][] {
 function ShelfGrid({
 	games,
 	resetKey,
+	arrivalFocusGameId,
+	onArrivalFocusConsumed,
 }: {
 	games: ShelfGame[];
 	/** Filter/search signature — a change resets the progressive window. */
 	resetKey?: string;
+	arrivalFocusGameId: string | null;
+	onArrivalFocusConsumed: () => void;
 }) {
 	// jsdom (tests) has no IntersectionObserver — render everything there so the
 	// full set is assertable; real browsers page it in on scroll.
@@ -304,6 +347,35 @@ function ShelfGrid({
 	const sentinelRef = useRef<HTMLDivElement | null>(null);
 	// Only steal focus after a keyboard move — never on mount or refetch.
 	const pendingFocus = useRef(false);
+	const arrivalFocusIndex = arrivalFocusGameId
+		? games.findIndex(
+				(game) =>
+					game.id === arrivalFocusGameId && game.effectiveState === 'Playing',
+			)
+		: -1;
+
+	useEffect(() => {
+		if (arrivalFocusIndex < 0) return;
+		if (supportsObserver && arrivalFocusIndex >= visible.length) {
+			progressive.revealThrough(arrivalFocusIndex);
+			return;
+		}
+		const target = cardRefs.current[arrivalFocusIndex];
+		if (!target) return;
+		if (document.activeElement !== document.body) {
+			onArrivalFocusConsumed();
+			return;
+		}
+		setFocusedIndex(arrivalFocusIndex);
+		target.focus();
+		onArrivalFocusConsumed();
+	}, [
+		arrivalFocusIndex,
+		onArrivalFocusConsumed,
+		progressive.revealThrough,
+		supportsObserver,
+		visible.length,
+	]);
 
 	// Opening a detail is a NAVIGATION (Story 7.2, AD-25) — `/game/:id` over THIS
 	// destination, carrying the live `?q=` so the grid behind the overlay stays

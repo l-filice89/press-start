@@ -16,6 +16,7 @@ import { FOCUSABLE_SELECTOR } from '../components/focusable';
 import { LiveRegionProvider } from '../components/LiveRegion';
 import { ToastHost } from '../components/Toast';
 import type { ShelfGame } from '../shelf/api';
+import { resetInFlightWrites } from '../shelf/useTrackingMutations';
 import { PlayNextPage } from './PlayNextPage';
 
 function game(id: string, overrides: Partial<ShelfGame> = {}): ShelfGame {
@@ -56,7 +57,12 @@ function game(id: string, overrides: Partial<ShelfGame> = {}): ShelfGame {
 
 function LocationProbe() {
 	const location = useLocation();
-	return <span data-testid="location">{location.pathname}</span>;
+	return (
+		<>
+			<span data-testid="location">{location.pathname}</span>
+			<span data-testid="location-state">{JSON.stringify(location.state)}</span>
+		</>
+	);
 }
 
 function renderPage(games?: ShelfGame[]) {
@@ -95,6 +101,7 @@ function visibleGameIds(): string[] {
 afterEach(() => {
 	vi.restoreAllMocks();
 	vi.unstubAllGlobals();
+	resetInFlightWrites();
 });
 
 describe('PlayNextPage', () => {
@@ -217,23 +224,55 @@ describe('PlayNextPage', () => {
 
 	it('Play this reuses status mutation and navigates to Shelf only on success', async () => {
 		const user = userEvent.setup();
-		const fetchMock = vi.fn(async (url: string) => ({
-			ok: true,
-			status: 200,
-			json: async () =>
-				url.includes('/api/shelf')
-					? {
-							games: [
-								game('a', { playStatus: 'Playing', effectiveState: 'Playing' }),
-							],
-						}
-					: { effectiveState: 'Playing' },
-		}));
+		let resolveWrite: (value: {
+			ok: boolean;
+			status: number;
+			json: () => Promise<{ effectiveState: string }>;
+		}) => void = () => undefined;
+		const write = new Promise<{
+			ok: boolean;
+			status: number;
+			json: () => Promise<{ effectiveState: string }>;
+		}>((resolve) => {
+			resolveWrite = resolve;
+		});
+		const fetchMock = vi.fn(() => write);
 		vi.stubGlobal('fetch', fetchMock);
 		renderPage([game('a')]);
-		await user.click(screen.getByRole('button', { name: 'Play this' }));
+		const card = screen.getByRole('article');
+		const play = within(card).getByRole('button', { name: 'Play this' });
+		await user.click(play);
+		expect(card).toHaveAttribute('aria-busy', 'true');
+		expect(
+			within(card).getByRole('button', { name: 'STARTING…' }),
+		).toBeDisabled();
+		expect(
+			within(card).getByRole('button', { name: /^Open details$/ }),
+		).toBeDisabled();
+		expect(
+			within(card).getByRole('button', { name: 'Open details — Game a' }),
+		).toBeDisabled();
+		expect(
+			within(card).getByRole('button', { name: 'Owned — Game a' }),
+		).toBeDisabled();
+		expect(screen.getByRole('button', { name: 'SHUFFLE' })).toBeDisabled();
+		expect(
+			screen.getByRole('button', { name: 'Tune the picks' }),
+		).toBeDisabled();
+		fireEvent.click(play);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+		expect(screen.getByTestId('location')).toHaveTextContent('/play-next');
+
+		resolveWrite({
+			ok: true,
+			status: 200,
+			json: async () => ({ effectiveState: 'Playing' }),
+		});
 		await screen.findByText('Shelf destination');
 		expect(screen.getByTestId('location')).toHaveTextContent('/');
+		expect(screen.getByTestId('location-state')).toHaveTextContent(
+			'"playNextFocusGameId":"a"',
+		);
 		expect(fetchMock).toHaveBeenCalledWith(
 			'/api/games/a/play-status',
 			expect.objectContaining({
@@ -245,22 +284,128 @@ describe('PlayNextPage', () => {
 
 	it('keeps slate visible when Play this fails', async () => {
 		const user = userEvent.setup();
+		let resolveWrite: (value: {
+			ok: boolean;
+			status: number;
+			json: () => Promise<Record<string, never>>;
+		}) => void = () => undefined;
+		const write = new Promise<{
+			ok: boolean;
+			status: number;
+			json: () => Promise<Record<string, never>>;
+		}>((resolve) => {
+			resolveWrite = resolve;
+		});
 		vi.stubGlobal(
 			'fetch',
-			vi.fn(async () => ({
-				ok: false,
-				status: 500,
-				json: async () => ({}),
-			})),
+			vi.fn(() => write),
 		);
-		renderPage([game('a')]);
-		const card = screen.getByRole('article');
-		await user.click(within(card).getByRole('button', { name: 'Play this' }));
+		renderPage(
+			Array.from({ length: 5 }, (_, index) =>
+				game(String(index), { ttbStorySeconds: (index + 2) * 3600 }),
+			),
+		);
+		await user.click(screen.getByRole('button', { name: 'Tune the picks' }));
+		await user.click(screen.getByRole('button', { name: 'Quick win' }));
+		await user.click(screen.getByRole('button', { name: 'SHOW ME 3' }));
+		await user.click(screen.getByRole('button', { name: /Tune the picks/ }));
+		await user.click(screen.getByRole('button', { name: 'Different' }));
+		await user.click(
+			screen.getByRole('button', { name: 'Close Tune the picks' }),
+		);
+		await user.click(screen.getByRole('button', { name: 'SHUFFLE' }));
+		const before = visibleGameIds();
+		const visit = screen
+			.getAllByRole('article')[0]
+			.closest('.play-next')
+			?.getAttribute('data-play-next-visit');
+		const warning =
+			'You’ve seen every other match. Next Shuffle starts a fresh pool.';
+		expect(screen.getByText(warning)).toBeInTheDocument();
+		const card = screen.getAllByRole('article')[0];
+		const title = within(card).getByRole('heading').textContent ?? '';
+		const play = within(card).getByRole('button', { name: 'Play this' });
+		await user.click(play);
+		screen.getAllByRole('article')[1]?.focus();
+		resolveWrite({
+			ok: false,
+			status: 500,
+			json: async () => ({}),
+		});
 		expect(
-			await screen.findByText('Couldn’t update Game a. Try again.'),
+			await screen.findByText(`Couldn’t update ${title}. Try again.`),
 		).toBeInTheDocument();
-		expect(screen.getByRole('article')).toBeInTheDocument();
+		expect(visibleGameIds()).toEqual(before);
+		expect(screen.getByText(warning)).toBeInTheDocument();
+		expect(
+			screen
+				.getAllByRole('article')[0]
+				.closest('.play-next')
+				?.getAttribute('data-play-next-visit'),
+		).toBe(visit);
+		expect(
+			screen.getByText('QUICK WIN', { selector: '.play-next__mode' }),
+		).toBeInTheDocument();
 		expect(screen.getByTestId('location')).toHaveTextContent('/play-next');
+		expect(play).toHaveFocus();
+		await user.click(screen.getByRole('button', { name: /Tune the picks/ }));
+		expect(screen.getByRole('button', { name: 'Different' })).toHaveAttribute(
+			'aria-pressed',
+			'true',
+		);
+		await user.click(
+			screen.getByRole('button', { name: 'Close Tune the picks' }),
+		);
+		await user.click(screen.getByRole('button', { name: 'SHUFFLE' }));
+		const after = visibleGameIds();
+		expect(after.length).toBeGreaterThan(0);
+		expect(after.every((id) => !before.includes(id))).toBe(true);
+	});
+
+	it('keeps page commands disabled until every card write settles', async () => {
+		const user = userEvent.setup();
+		type WriteResponse = {
+			ok: boolean;
+			status: number;
+			json: () => Promise<Record<string, never>>;
+		};
+		let resolveA: (value: WriteResponse) => void = () => undefined;
+		let resolveB: (value: WriteResponse) => void = () => undefined;
+		const writeA = new Promise<WriteResponse>((resolve) => {
+			resolveA = resolve;
+		});
+		const writeB = new Promise<WriteResponse>((resolve) => {
+			resolveB = resolve;
+		});
+		vi.stubGlobal(
+			'fetch',
+			vi.fn((url: string) => (url.includes('/a/') ? writeA : writeB)),
+		);
+		renderPage([game('a'), game('b')]);
+		const cardA = screen
+			.getByRole('heading', { name: 'Game a' })
+			.closest('article') as HTMLElement;
+		const cardB = screen
+			.getByRole('heading', { name: 'Game b' })
+			.closest('article') as HTMLElement;
+		await user.click(within(cardA).getByRole('button', { name: 'Play this' }));
+		await user.click(within(cardB).getByRole('button', { name: 'Play this' }));
+		const shuffle = screen.getByRole('button', { name: 'SHUFFLE' });
+		expect(shuffle).toBeDisabled();
+
+		resolveB({ ok: false, status: 500, json: async () => ({}) });
+		await waitFor(() =>
+			expect(
+				within(cardB).getByRole('button', { name: 'Play this' }),
+			).toBeEnabled(),
+		);
+		expect(
+			within(cardA).getByRole('button', { name: 'STARTING…' }),
+		).toBeDisabled();
+		expect(shuffle).toBeDisabled();
+
+		resolveA({ ok: false, status: 500, json: async () => ({}) });
+		await waitFor(() => expect(shuffle).toBeEnabled());
 	});
 
 	it('keeps draft edits separate, enforces one-or-none, and applies only on Show me 3', async () => {
