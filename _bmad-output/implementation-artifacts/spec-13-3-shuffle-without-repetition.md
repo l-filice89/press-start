@@ -2,8 +2,9 @@
 title: 'Story 13.3: Shuffle without repetition'
 type: 'feature'
 created: '2026-08-02'
-status: 'in-review'
+status: 'done'
 baseline_revision: 'a43b585a55cd98bca55694bc60c0dd872944611e'
+final_revision: '18302c4cc4b5b6ffcd7e16392ff612d1ed043fa4'
 review_loop_iteration: 0
 followup_review_recommended: true
 context:
