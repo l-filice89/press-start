@@ -126,3 +126,14 @@ Applied interpretation:
 - Phone keeps both commands together in one full-width, two-button row.
 
 Status: pending Luca's explicit approval of revised Story 13.3 placement.
+
+## Story 13.3 final mock approval — verbatim
+
+> I've made some small changes, but not Story 13.3 — Shuffle states is approved
+
+Recorded interpretation: `but not` is a typo for `but now`; Luca's small
+app-alignment edits are binding and the resulting Story 13.3 mock is approved.
+
+Status: approved by Luca on 2026-08-03 for Story 13.3 UI implementation.
+`06-story-13-3-shuffle-states.html`, including Luca's final alignment edits,
+is the binding placement and interaction reference.

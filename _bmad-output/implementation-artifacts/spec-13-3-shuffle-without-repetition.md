@@ -2,7 +2,7 @@
 title: 'Story 13.3: Shuffle without repetition'
 type: 'feature'
 created: '2026-08-02'
-status: 'blocked'
+status: 'ready-for-dev'
 baseline_revision: '2887719'
 review_loop_iteration: 0
 followup_review_recommended: true
@@ -54,7 +54,7 @@ warnings: [oversized]
 
 **Execution:**
 - [ ] `src/core/play-next.ts`, `src/core/play-next.test.ts` -- add and hazard-test pure exclusion before UI work.
-- [ ] `_bmad-output/design-demos/epic-13-play-next/06-story-13-3-shuffle-states.html` -- present normal, exhausted, and reset-ready states and record Luca approval.
+- [x] `_bmad-output/design-demos/epic-13-play-next/06-story-13-3-shuffle-states.html` -- present normal, exhausted, and reset-ready states and record Luca approval.
 - [ ] `web/play-next/PlayNextPage.tsx`, `web/play-next/play-next.css` -- implement approved visit state machine and responsive Shuffle surface.
 - [ ] `web/play-next/PlayNextPage.test.tsx` -- pin every state transition, repeated announcement, focus, preservation, and reset.
 - [ ] `playwright/e2e/epic13-play-next.spec.ts`, `playwright/COVERAGE.md` -- prove every visible criterion on real D1.
@@ -83,6 +83,8 @@ Exclusions are an optional core selection input and affect eligibility only afte
 
 Shuffle is a native button immediately left of `TUNE THE PICKS` in the top command row. Exhaustion warning is programmatic status text directly beneath that row and before the suggestion grid. On phone both commands share the full-width row with 44px targets. Motion changes use existing CSS transitions only and are disabled under `prefers-reduced-motion: reduce`.
 
+Placement mock: `_bmad-output/design-demos/epic-13-play-next/06-story-13-3-shuffle-states.html`. Luca made final app-alignment edits and approved the resulting mock on 2026-08-03. Approval phrase `but not ... is approved` is recorded as a typo for `but now ... is approved`; the final edited file is binding for implementation.
+
 ## Verification
 
 **Commands:**
@@ -93,8 +95,8 @@ Shuffle is a native button immediately left of `TUNE THE PICKS` in the top comma
 
 ## Auto Run Result
 
-Status: blocked
+Status: resumed
 
-Blocking condition: UI-MOCK-GATE — awaiting Luca's explicit approval of `_bmad-output/design-demos/epic-13-play-next/06-story-13-3-shuffle-states.html` before production UI or core implementation.
+UI-MOCK-GATE: approved by Luca on 2026-08-03 after Luca's final alignment edits. Production implementation may proceed.
 
 Prepared: ready-for-development Story 13.3 spec plus app-aligned interactive mock covering normal, near-exhausted/reset-armed, and fresh-pool-after-one-click states at desktop and 320px phone. Production code remains untouched.
