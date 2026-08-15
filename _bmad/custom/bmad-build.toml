@@ -1,4 +1,4 @@
-# Standing-rules include for bmad-quick-dev.
+# Standing-rules include for bmad-build.
 # From https://github.com/l-filice89/bmad-standing-rules — see its README.
 # Arrays append on merge: add project-specific facts below the file: entries.
 
