@@ -5,7 +5,7 @@ import {
 	type IgdbScoreFetch,
 	type IgdbSearch,
 } from '../providers';
-import { createDb } from '../repositories/db';
+import { createDb, type Db } from '../repositories/db';
 import {
 	addGame,
 	editReleaseDate,
@@ -15,7 +15,11 @@ import {
 	searchGamesForResolve,
 	todayForUser,
 } from '../services';
-import { getPsnRegion } from '../services/settings';
+import {
+	getIgdbPlatformIds,
+	getPlayStationPlatforms,
+	getPsnRegion,
+} from '../services/settings';
 import { type AuthVariables, requireAuth } from './auth';
 import { shelfGameSchema } from './shelf';
 
@@ -26,7 +30,10 @@ import { shelfGameSchema } from './shelf';
  * The provider mints/refreshes its own Twitch app token from id+secret (Epic 5
  * stable-auth) — no manual token rotation.
  */
-export function igdbFromEnv(rawEnv: Env): (IgdbSearch & IgdbScoreFetch) | null {
+export function igdbFromEnv(
+	rawEnv: Env,
+	platformIds?: readonly number[],
+): (IgdbSearch & IgdbScoreFetch) | null {
 	const env = rawEnv as Env & {
 		IGDB_CLIENT_ID?: string;
 		IGDB_CLIENT_SECRET?: string;
@@ -35,8 +42,20 @@ export function igdbFromEnv(rawEnv: Env): (IgdbSearch & IgdbScoreFetch) | null {
 		? createIgdbProvider({
 				clientId: env.IGDB_CLIENT_ID,
 				clientSecret: env.IGDB_CLIENT_SECRET,
+				platformIds,
 			})
 		: null;
+}
+
+async function interactiveIgdbForUser(
+	rawEnv: Env,
+	db: Db,
+	userId: string,
+): Promise<(IgdbSearch & IgdbScoreFetch) | null> {
+	return igdbFromEnv(
+		rawEnv,
+		getIgdbPlatformIds(await getPlayStationPlatforms(db, userId)),
+	);
 }
 
 /**
@@ -145,7 +164,11 @@ gamesRoute.get('/games/preview', requireAuth, async (c) => {
 		return c.json({ error: 'invalid title' }, 400);
 	}
 
-	const preview = await previewAddGame(igdbFromEnv(c.env), title);
+	const db = createDb(c.env.DB);
+	const preview = await previewAddGame(
+		await interactiveIgdbForUser(c.env, db, c.get('userId')),
+		title,
+	);
 	return c.json(previewResponseSchema.parse(preview), 200);
 });
 
@@ -170,7 +193,11 @@ gamesRoute.get('/games/search', requireAuth, async (c) => {
 	if (!title || title.length > 200) {
 		return c.json({ error: 'invalid title' }, 400);
 	}
-	const candidates = await searchGamesForResolve(igdbFromEnv(c.env), title);
+	const db = createDb(c.env.DB);
+	const candidates = await searchGamesForResolve(
+		await interactiveIgdbForUser(c.env, db, c.get('userId')),
+		title,
+	);
 	return c.json(searchResponseSchema.parse({ candidates }), 200);
 });
 

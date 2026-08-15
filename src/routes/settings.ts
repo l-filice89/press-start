@@ -5,10 +5,13 @@ import { getSetting, setSetting } from '../repositories';
 import { createDb } from '../repositories/db';
 import { isRegionRefreshing } from '../services/psn-lock';
 import {
+	getPlayStationPlatforms,
 	getPsnRegion,
 	getPsPlusRefreshedAt,
+	IGDB_PLATFORMS_SETTING_KEY,
 	isScoresRefreshFailed,
 	normalizePsnRegion,
+	PLAYSTATION_PLATFORMS,
 	PSN_REGION_SETTING_KEY,
 	TIMEZONE_SETTING_KEY,
 } from '../services/settings';
@@ -39,6 +42,7 @@ settingsRoute.get('/settings', requireAuth, async (c) => {
 	const region = await getPsnRegion(db, userId, c.env);
 	const [
 		timezone,
+		igdbPlatforms,
 		psPlusRefreshedAt,
 		stragglerCount,
 		psPlusClaimCount,
@@ -46,6 +50,7 @@ settingsRoute.get('/settings', requireAuth, async (c) => {
 		catalogRefreshing,
 	] = await Promise.all([
 		getSetting(db, userId, TIMEZONE_SETTING_KEY),
+		getPlayStationPlatforms(db, userId),
 		getPsPlusRefreshedAt(db, region ?? null),
 		countStragglers(db, userId),
 		countMembershipClaims(db, userId),
@@ -55,6 +60,7 @@ settingsRoute.get('/settings', requireAuth, async (c) => {
 	return c.json(
 		{
 			timezone: timezone ?? null,
+			igdbPlatforms,
 			psPlusRefreshedAt,
 			// A guard-triggered refresh is in flight for this region (8.4) — the
 			// as-of readout suffixes "updating…". No failure flag exists any more:
@@ -71,6 +77,32 @@ settingsRoute.get('/settings', requireAuth, async (c) => {
 		},
 		200,
 	);
+});
+
+const playStationPlatformSchema = z.enum(
+	Object.keys(PLAYSTATION_PLATFORMS) as [
+		keyof typeof PLAYSTATION_PLATFORMS,
+		...(keyof typeof PLAYSTATION_PLATFORMS)[],
+	],
+);
+const igdbPlatformsBodySchema = z
+	.object({ platforms: z.array(playStationPlatformSchema).min(1) })
+	.refine(({ platforms }) => new Set(platforms).size === platforms.length);
+
+settingsRoute.put('/settings/igdb-platforms', requireAuth, async (c) => {
+	const body = igdbPlatformsBodySchema.safeParse(
+		await c.req.json().catch(() => null),
+	);
+	if (!body.success) {
+		return c.json({ error: 'invalid platforms' }, 400);
+	}
+	await setSetting(
+		createDb(c.env.DB),
+		c.get('userId'),
+		IGDB_PLATFORMS_SETTING_KEY,
+		JSON.stringify(body.data.platforms),
+	);
+	return c.json({ platforms: body.data.platforms }, 200);
 });
 
 // "I cancelled PS+" (Story 6.4 AC4): un-own every `owned_via='membership'` row,

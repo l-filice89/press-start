@@ -12,7 +12,11 @@ import { SettingsPanel } from './SettingsPanel';
  * credentialed or FAB-shaped renders at all.
  */
 
-function mockFetch(settings: { region?: string; psPlusClaimCount?: number }) {
+function mockFetch(settings: {
+	region?: string;
+	psPlusClaimCount?: number;
+	igdbPlatforms?: string[];
+}) {
 	const fetchMock = vi.fn(
 		async (_url: string | URL | Request, _init?: RequestInit) => ({
 			ok: true,
@@ -35,7 +39,7 @@ function renderPanel(onClose = vi.fn()) {
 			</ToastHost>
 		</QueryClientProvider>,
 	);
-	return { onClose };
+	return { client, onClose };
 }
 
 afterEach(() => {
@@ -54,11 +58,175 @@ describe('SettingsPanel', () => {
 			screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent),
 		).toEqual([
 			'PlayStation region',
+			'IGDB platforms',
 			'PlayStation Plus',
 			'Keep your own copy',
 			'About & Help',
 		]);
 		expect(screen.queryByText(/token/i)).toBeNull();
+	});
+
+	it('loads defaults, requires one platform, saves selection, and invalidates searches', async () => {
+		let saved: string[] | undefined;
+		const fetchMock = vi.fn(
+			async (url: string | URL | Request, init?: RequestInit) => {
+				if (String(url).includes('/api/settings/igdb-platforms')) {
+					saved = (JSON.parse(init?.body as string) as { platforms: string[] })
+						.platforms;
+					return {
+						ok: true,
+						status: 200,
+						json: async () => ({ platforms: saved }),
+					};
+				}
+				return {
+					ok: true,
+					status: 200,
+					json: async () => ({ timezone: null, igdbPlatforms: saved }),
+				};
+			},
+		);
+		vi.stubGlobal('fetch', fetchMock);
+		const { client } = renderPanel();
+		const invalidate = vi.spyOn(client, 'invalidateQueries');
+
+		for (const label of ['PS1', 'PS2', 'PS3', 'PS4', 'PS5']) {
+			await waitFor(() =>
+				expect(screen.getByRole('checkbox', { name: label })).toBeChecked(),
+			);
+		}
+		for (const label of ['PSP', 'PS Vita', 'PSVR 1', 'PSVR 2']) {
+			expect(screen.getByRole('checkbox', { name: label })).not.toBeChecked();
+		}
+
+		for (const label of ['PS1', 'PS2', 'PS3', 'PS4', 'PS5']) {
+			await userEvent.click(screen.getByRole('checkbox', { name: label }));
+		}
+		expect(screen.getByTestId('save-igdb-platforms')).toBeDisabled();
+		expect(screen.getByTestId('igdb-platforms-feedback')).toHaveTextContent(
+			'Select at least one platform.',
+		);
+
+		await userEvent.click(screen.getByRole('checkbox', { name: 'PSVR 2' }));
+		await userEvent.click(screen.getByTestId('save-igdb-platforms'));
+		await waitFor(() =>
+			expect(screen.getByTestId('igdb-platforms-feedback')).toHaveTextContent(
+				'Platforms saved.',
+			),
+		);
+		expect(saved).toEqual(['PSVR2']);
+		expect(invalidate).toHaveBeenCalledWith({ queryKey: ['add-preview'] });
+		expect(invalidate).toHaveBeenCalledWith({ queryKey: ['igdb-search'] });
+		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+		expect(screen.getByRole('checkbox', { name: 'PSVR 2' })).toBeChecked();
+		expect(screen.getByTestId('save-igdb-platforms')).toBeDisabled();
+	});
+
+	it('hydrates a saved non-default selection and disables editing before load', async () => {
+		let finishLoad: ((value: unknown) => void) | undefined;
+		const pendingLoad = new Promise((resolve) => {
+			finishLoad = resolve;
+		});
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => pendingLoad),
+		);
+		renderPanel();
+
+		expect(
+			screen.getByRole('group', { name: /Limit new IGDB/ }),
+		).toBeDisabled();
+		expect(screen.getByTestId('save-igdb-platforms')).toBeDisabled();
+		finishLoad?.({
+			ok: true,
+			status: 200,
+			json: async () => ({
+				timezone: null,
+				igdbPlatforms: ['PS4', 'PSVita'],
+			}),
+		});
+
+		await waitFor(() =>
+			expect(screen.getByRole('checkbox', { name: 'PS4' })).toBeChecked(),
+		);
+		expect(screen.getByRole('checkbox', { name: 'PS Vita' })).toBeChecked();
+		expect(screen.getByRole('checkbox', { name: 'PS5' })).not.toBeChecked();
+		expect(screen.getByTestId('save-igdb-platforms')).toBeDisabled();
+	});
+
+	it('keeps unsaved platform edits through a background settings refetch', async () => {
+		let serverPlatforms = ['PS1', 'PS2', 'PS3', 'PS4', 'PS5'];
+		const fetchMock = vi.fn(async () => ({
+			ok: true,
+			status: 200,
+			json: async () => ({ timezone: null, igdbPlatforms: serverPlatforms }),
+		}));
+		vi.stubGlobal('fetch', fetchMock);
+		const { client } = renderPanel();
+		await waitFor(() =>
+			expect(screen.getByRole('checkbox', { name: 'PS1' })).toBeChecked(),
+		);
+
+		await userEvent.click(screen.getByRole('checkbox', { name: 'PS1' }));
+		serverPlatforms = ['PS5'];
+		await client.invalidateQueries({ queryKey: ['settings'] });
+		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+		expect(screen.getByRole('checkbox', { name: 'PS1' })).not.toBeChecked();
+		expect(screen.getByRole('checkbox', { name: 'PS2' })).toBeChecked();
+		expect(screen.getByTestId('save-igdb-platforms')).toBeEnabled();
+	});
+
+	it('disables the group while saving and preserves a failed selection for retry', async () => {
+		let finishSave: ((value: unknown) => void) | undefined;
+		let putCount = 0;
+		const fetchMock = vi.fn(async (url: string | URL | Request) => {
+			if (String(url).includes('/api/settings/igdb-platforms')) {
+				putCount += 1;
+				if (putCount === 1) {
+					return new Promise((resolve) => {
+						finishSave = resolve;
+					});
+				}
+				return {
+					ok: true,
+					status: 200,
+					json: async () => ({
+						platforms: ['PS1', 'PS2', 'PS3', 'PS4', 'PS5', 'PSVR2'],
+					}),
+				};
+			}
+			return { ok: true, status: 200, json: async () => ({ timezone: null }) };
+		});
+		vi.stubGlobal('fetch', fetchMock);
+		renderPanel();
+		const psvr2 = screen.getByRole('checkbox', { name: 'PSVR 2' });
+		await waitFor(() => expect(psvr2).toBeEnabled());
+		await userEvent.click(psvr2);
+		await userEvent.click(screen.getByTestId('save-igdb-platforms'));
+		expect(
+			screen.getByRole('group', { name: /Limit new IGDB/ }),
+		).toBeDisabled();
+
+		finishSave?.({
+			ok: false,
+			status: 503,
+			json: async () => ({ error: 'unavailable' }),
+		});
+		await waitFor(() =>
+			expect(screen.getByTestId('igdb-platforms-feedback')).toHaveTextContent(
+				'Saving failed — try again.',
+			),
+		);
+		expect(psvr2).toBeChecked();
+		expect(screen.getByTestId('save-igdb-platforms')).toBeEnabled();
+
+		await userEvent.click(screen.getByTestId('save-igdb-platforms'));
+		await waitFor(() =>
+			expect(screen.getByTestId('igdb-platforms-feedback')).toHaveTextContent(
+				'Platforms saved.',
+			),
+		);
+		expect(putCount).toBe(2);
 	});
 
 	it('has no backfill panel — the credentialed surface is severed (Epic 11, 11.1)', async () => {

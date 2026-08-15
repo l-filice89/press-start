@@ -18,6 +18,69 @@ import type { Db } from '../repositories/db';
 
 export const TIMEZONE_SETTING_KEY = 'timezone';
 
+export const IGDB_PLATFORMS_SETTING_KEY = 'igdb_platforms';
+export const PLAYSTATION_PLATFORMS = {
+	PS1: 7,
+	PS2: 8,
+	PS3: 9,
+	PS4: 48,
+	PS5: 167,
+	PSP: 38,
+	PSVita: 46,
+	PSVR: 165,
+	PSVR2: 390,
+} as const;
+export type PlayStationPlatform = keyof typeof PLAYSTATION_PLATFORMS;
+export const DEFAULT_PLAYSTATION_PLATFORMS: PlayStationPlatform[] = [
+	'PS1',
+	'PS2',
+	'PS3',
+	'PS4',
+	'PS5',
+];
+
+function parsePlayStationPlatforms(
+	raw: string | undefined,
+): PlayStationPlatform[] | null {
+	if (!raw) return null;
+	try {
+		const parsed: unknown = JSON.parse(raw);
+		if (
+			!Array.isArray(parsed) ||
+			parsed.length === 0 ||
+			new Set(parsed).size !== parsed.length ||
+			!parsed.every(
+				(value): value is PlayStationPlatform =>
+					typeof value === 'string' &&
+					Object.hasOwn(PLAYSTATION_PLATFORMS, value),
+			)
+		) {
+			return null;
+		}
+		return parsed;
+	} catch {
+		return null;
+	}
+}
+
+/** Corrupt or absent values fail open to the five default console generations. */
+export async function getPlayStationPlatforms(
+	db: Db,
+	userId: string,
+): Promise<PlayStationPlatform[]> {
+	return (
+		parsePlayStationPlatforms(
+			await getSetting(db, userId, IGDB_PLATFORMS_SETTING_KEY),
+		) ?? [...DEFAULT_PLAYSTATION_PLATFORMS]
+	);
+}
+
+export function getIgdbPlatformIds(
+	platforms: readonly PlayStationPlatform[],
+): number[] {
+	return platforms.map((platform) => PLAYSTATION_PLATFORMS[platform]);
+}
+
 /** Today's date (YYYY-MM-DD) in this user's timezone; UTC when unset. */
 export async function todayForUser(db: Db, userId: string): Promise<string> {
 	return todayInZone(await getUserTimeZone(db, userId), new Date());

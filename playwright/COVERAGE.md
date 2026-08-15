@@ -558,3 +558,12 @@ Play Next compact command rows (`spec-play-next-compact-command-rows.md`):
 | 694px retains portrait cards; 695px through 1023px uses 36px rank, 88px cover, combined evidence/factors, and 150px actions; 1024px restores full 08a rails | `epic13-play-next.spec.ts` › compact command rows span 695 through 1023 before full desktop rows |
 | Compact rows contain long titles, keep every row clear of its action rail, separate in-cover PS+/ownership controls, expose Leaving, preserve ≥44px targets, and avoid page overflow | `epic13-play-next.spec.ts` › compact command rows span 695 through 1023 before full desktop rows |
 | Details, Tune closest-match, ownership, and Playing success/failure retain behavior and focus/visit semantics at compact width | compact-width `epic13-play-next.spec.ts` detail, Tune, ownership, Play this success, and failed Play this flows |
+
+IGDB PlayStation platform filter (`spec-igdb-playstation-platform-filter.md`):
+
+| AC | Coverage |
+|----|----------|
+| Default and saved platform selections constrain interactive add-preview, rematch, and straggler IGDB searches per user | provider query-body hazard tests in `src/providers/igdb.test.ts`; default mapping, validation, persistence, inherited-key/corrupt fallback, auth, and isolation in `test/integration/settings.test.ts`; both interactive route entrypoints pinned by `src/routes/games-platforms.test.ts` |
+| Saving clears stale add-preview and IGDB-search caches | `web/settings/SettingsPanel.test.tsx` › loads defaults, requires one platform, saves selection, and invalidates searches |
+| Scheduled by-ID score/TTB refreshes remain unfiltered | `src/providers/igdb.test.ts` › never applies the interactive platform constraint to by-id refreshes |
+| Phone/desktop Settings selection saves and persists without modal regressions | `playwright/e2e/epic4-settings.spec.ts` › IGDB platform selection saves and persists when Settings reopens + › phone Settings saves platforms without horizontal overflow; existing Settings journeys remain regression coverage |

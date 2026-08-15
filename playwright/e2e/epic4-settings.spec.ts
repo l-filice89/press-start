@@ -25,6 +25,7 @@ test('Settings renders NO credential surface — the token section is gone (Epic
 	// new section cannot sneak a credential field in unnoticed.
 	await expect(panel.getByRole('heading', { level: 3 })).toHaveText([
 		'PlayStation region',
+		'IGDB platforms',
 		'PlayStation Plus',
 		'Keep your own copy',
 		'About & Help',
@@ -36,6 +37,80 @@ test('Settings renders NO credential surface — the token section is gone (Epic
 	await expect(page.getByTestId('attention-banner-expired-token')).toHaveCount(
 		0,
 	);
+});
+
+test('IGDB platform selection saves and persists when Settings reopens', async ({
+	page,
+}) => {
+	await page.goto('/');
+	await page.getByRole('button', { name: 'Settings' }).click();
+	let panel = page.getByTestId('settings-panel');
+	let psvr2 = panel.getByRole('checkbox', { name: 'PSVR 2' });
+	// Keep reruns deterministic when the local E2E D1 retains this serial user's
+	// prior save.
+	if (await psvr2.isChecked()) {
+		await psvr2.uncheck();
+		await panel.getByTestId('save-igdb-platforms').click();
+		await expect(panel.getByTestId('igdb-platforms-feedback')).toHaveText(
+			'Platforms saved.',
+		);
+		await panel.getByRole('button', { name: 'Close' }).click();
+		await page.getByRole('button', { name: 'Settings' }).click();
+		panel = page.getByTestId('settings-panel');
+		psvr2 = panel.getByRole('checkbox', { name: 'PSVR 2' });
+	}
+	await expect(psvr2).not.toBeChecked();
+	await psvr2.check();
+	await panel.getByTestId('save-igdb-platforms').click();
+	await expect(panel.getByTestId('igdb-platforms-feedback')).toHaveText(
+		'Platforms saved.',
+	);
+	await panel.getByRole('button', { name: 'Close' }).click();
+	await page.getByRole('button', { name: 'Settings' }).click();
+	await expect(
+		page
+			.getByTestId('settings-panel')
+			.getByRole('checkbox', { name: 'PSVR 2' }),
+	).toBeChecked();
+});
+
+test('phone Settings saves platforms without horizontal overflow', async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 320, height: 720 });
+	await page.goto('/');
+	await page.getByRole('button', { name: 'Settings' }).click();
+	let panel = page.getByTestId('settings-panel');
+	let psp = panel.getByRole('checkbox', { name: 'PSP', exact: true });
+	if (await psp.isChecked()) {
+		await psp.uncheck();
+		await panel.getByTestId('save-igdb-platforms').click();
+		await expect(panel.getByTestId('igdb-platforms-feedback')).toHaveText(
+			'Platforms saved.',
+		);
+		await panel.getByRole('button', { name: 'Close' }).click();
+		await page.getByRole('button', { name: 'Settings' }).click();
+		panel = page.getByTestId('settings-panel');
+		psp = panel.getByRole('checkbox', { name: 'PSP', exact: true });
+	}
+	await expect(psp).not.toBeChecked();
+	await psp.check();
+	await panel.getByTestId('save-igdb-platforms').click();
+	await expect(panel.getByTestId('igdb-platforms-feedback')).toHaveText(
+		'Platforms saved.',
+	);
+	await panel.getByRole('button', { name: 'Close' }).click();
+	await page.getByRole('button', { name: 'Settings' }).click();
+	await expect(
+		page
+			.getByTestId('settings-panel')
+			.getByRole('checkbox', { name: 'PSP', exact: true }),
+	).toBeChecked();
+	expect(
+		await page.evaluate(
+			() => document.documentElement.scrollWidth <= window.innerWidth,
+		),
+	).toBe(true);
 });
 
 test('no destination renders a Chores FAB; Settings owns CSV export', async ({

@@ -1,6 +1,26 @@
 import { z } from 'zod';
 import { callApi } from '../shelf/api';
 
+export const playStationPlatformSchema = z.enum([
+	'PS1',
+	'PS2',
+	'PS3',
+	'PS4',
+	'PS5',
+	'PSP',
+	'PSVita',
+	'PSVR',
+	'PSVR2',
+]);
+export type PlayStationPlatform = z.infer<typeof playStationPlatformSchema>;
+export const DEFAULT_PLAYSTATION_PLATFORMS: PlayStationPlatform[] = [
+	'PS1',
+	'PS2',
+	'PS3',
+	'PS4',
+	'PS5',
+];
+
 /**
  * Client contract for `/api/settings` (Story 4.1). Mirrors the server shape
  * rather than importing across the SPA/Worker program boundary (same policy
@@ -10,6 +30,9 @@ import { callApi } from '../shelf/api';
 
 export const settingsSchema = z.object({
 	timezone: z.string().nullable(),
+	igdbPlatforms: z
+		.array(playStationPlatformSchema)
+		.default(DEFAULT_PLAYSTATION_PLATFORMS),
 	// Story 8.4: a PS+ catalog refresh is running for the user's region right
 	// now — feeds the header readout's "updating…" suffix. Defaulted: a
 	// deploy-skewed/cached response without the field must not reject the whole
@@ -56,5 +79,15 @@ export async function savePsnRegion(region: string): Promise<void> {
 		method: 'PUT',
 		headers: { 'content-type': 'application/json' },
 		body: JSON.stringify({ region }),
+	});
+}
+
+export async function saveIgdbPlatforms(
+	platforms: PlayStationPlatform[],
+): Promise<void> {
+	await callApi('/api/settings/igdb-platforms', {
+		method: 'PUT',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ platforms }),
 	});
 }

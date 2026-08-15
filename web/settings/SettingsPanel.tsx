@@ -4,8 +4,26 @@ import { createPortal } from 'react-dom';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useToast } from '../components/Toast';
 import { useModalTrap } from '../components/useModalTrap';
-import { cancelPsPlus, fetchSettings, savePsnRegion } from './api';
+import {
+	cancelPsPlus,
+	fetchSettings,
+	type PlayStationPlatform,
+	saveIgdbPlatforms,
+	savePsnRegion,
+} from './api';
 import './settings-panel.css';
+
+const PLATFORM_OPTIONS: { value: PlayStationPlatform; label: string }[] = [
+	{ value: 'PS1', label: 'PS1' },
+	{ value: 'PS2', label: 'PS2' },
+	{ value: 'PS3', label: 'PS3' },
+	{ value: 'PS4', label: 'PS4' },
+	{ value: 'PS5', label: 'PS5' },
+	{ value: 'PSP', label: 'PSP' },
+	{ value: 'PSVita', label: 'PS Vita' },
+	{ value: 'PSVR', label: 'PSVR 1' },
+	{ value: 'PSVR2', label: 'PSVR 2' },
+];
 
 /**
  * The Settings surface (Story 4.1, stripped of the PSN credential surface by
@@ -41,6 +59,33 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 	const trimmedRegion = region.trim().toLowerCase();
 	// Mirrors the server guard — a disabled button beats a 400 round-trip.
 	const regionValid = /^[a-z]{2}(-[a-z]{2,4})?-[a-z]{2}$/.test(trimmedRegion);
+
+	const [platforms, setPlatforms] = useState<PlayStationPlatform[]>([]);
+	const [platformsDirty, setPlatformsDirty] = useState(false);
+	const platformsHydrated = useRef(false);
+	useEffect(() => {
+		if (settings && (!platformsHydrated.current || !platformsDirty)) {
+			setPlatforms(settings.igdbPlatforms);
+			platformsHydrated.current = true;
+		}
+	}, [settings, platformsDirty]);
+	const savePlatforms = useMutation({
+		mutationFn: saveIgdbPlatforms,
+		onSuccess: (_data, savedPlatforms) => {
+			queryClient.setQueryData(['settings'], (current: typeof settings) =>
+				current ? { ...current, igdbPlatforms: savedPlatforms } : current,
+			);
+			setPlatforms(savedPlatforms);
+			setPlatformsDirty(false);
+			queryClient.invalidateQueries({ queryKey: ['settings'] });
+			queryClient.invalidateQueries({ queryKey: ['add-preview'] });
+			queryClient.invalidateQueries({ queryKey: ['igdb-search'] });
+		},
+	});
+	const platformsChanged = settings
+		? platforms.length !== settings.igdbPlatforms.length ||
+			!platforms.every((platform) => settings.igdbPlatforms.includes(platform))
+		: false;
 
 	const exportCsv = useMutation({
 		mutationFn: async () => {
@@ -175,6 +220,60 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 						{!regionValid &&
 							region.trim() !== '' &&
 							'Use a language-country store locale, like en-us or en-gb.'}
+					</div>
+				</section>
+
+				<section className="settings-panel__section">
+					<h3 className="settings-panel__heading">IGDB platforms</h3>
+					<fieldset
+						className="settings-panel__platforms"
+						disabled={!settings || savePlatforms.isPending}
+					>
+						<legend>Limit new IGDB matches to releases on:</legend>
+						<div className="settings-panel__platform-options">
+							{PLATFORM_OPTIONS.map(({ value, label }) => (
+								<label key={value} className="settings-panel__platform-option">
+									<input
+										type="checkbox"
+										checked={platforms.includes(value)}
+										onChange={(event) => {
+											setPlatforms((current) =>
+												event.target.checked
+													? [...current, value]
+													: current.filter((item) => item !== value),
+											);
+											setPlatformsDirty(true);
+											savePlatforms.reset();
+										}}
+									/>
+									{label}
+								</label>
+							))}
+						</div>
+					</fieldset>
+					<button
+						type="button"
+						className="settings-panel__save tap-target"
+						data-testid="save-igdb-platforms"
+						disabled={
+							!settings ||
+							platforms.length === 0 ||
+							savePlatforms.isPending ||
+							!platformsChanged
+						}
+						onClick={() => savePlatforms.mutate(platforms)}
+					>
+						{savePlatforms.isPending ? 'Saving…' : 'Save platforms'}
+					</button>
+					<div
+						className="settings-panel__feedback"
+						role="status"
+						aria-live="polite"
+						data-testid="igdb-platforms-feedback"
+					>
+						{platforms.length === 0 && 'Select at least one platform.'}
+						{savePlatforms.isSuccess && 'Platforms saved.'}
+						{savePlatforms.isError && 'Saving failed — try again.'}
 					</div>
 				</section>
 

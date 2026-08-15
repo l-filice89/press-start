@@ -84,6 +84,31 @@
 	font-size: 0.875rem;
 }
 
+.settings-panel__platforms {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	color: var(--color-text-secondary);
+	font-size: 0.875rem;
+}
+
+.settings-panel__platform-options {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-1) var(--space-2);
+	margin-top: var(--space-2);
+}
+
+.settings-panel__platform-option {
+	display: inline-flex;
+	min-height: 44px;
+	align-items: center;
+	gap: var(--space-1);
+	padding-inline: var(--space-1);
+	color: var(--color-text-primary);
+	cursor: pointer;
+}
+
 .settings-panel__actions {
 	display: flex;
 	justify-content: flex-end;
