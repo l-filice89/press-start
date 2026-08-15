@@ -582,3 +582,7 @@ resolution: done 2026-07-16 (Story 10.2) — DECIDED: `first_seen_at` keeps its 
   summary: Fully parallel Playwright files share one user and whole-Shelf recommendation pool, so unrelated concurrent fixtures can influence ranking assertions.
   evidence: `playwright.config.ts` enables `fullyParallel` against one local D1 and one authenticated user; Story 13.1 uses dominant run-unique fixtures and passes its serial burn-in shape, but true cross-file isolation requires a harness-level per-worker user/database design.
   resolution: discarded (accepted) 2026-08-03 Epic 13 operator sweep — no observed product defect; Epic 13 uses run-unique dominant fixtures and its final real-D1 contract plus unchanged Shelf lifecycle/filter regressions pass 22/22 serially. Per-worker user/database isolation is a repository-wide harness redesign with no current failure trigger, so Epic 13 does not carry it forward.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-shelf-order-up-next-before-paused.md`
+  summary: Epic 1 shelf Playwright tests depend on shared baseline rows and fail intermittently when run fully parallel with other state-mutating files.
+  evidence: The combined Epic 1/Epic 3 run passed 8/12 while four Epic 1 tests observed zero baseline cards; both changed ordering flows passed together with one worker, isolating this as pre-existing shared-fixture interference rather than the shelf-order change.

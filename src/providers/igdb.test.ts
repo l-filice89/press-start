@@ -93,6 +93,14 @@ const provider = () =>
 		minIntervalMs: 0,
 	});
 
+const platformProvider = () =>
+	createIgdbProvider({
+		clientId: 'cid',
+		clientSecret: 'secret',
+		minIntervalMs: 0,
+		platformIds: [48, 167],
+	});
+
 beforeEach(() => __resetIgdbTokenCache());
 afterEach(() => vi.unstubAllGlobals());
 
@@ -184,6 +192,16 @@ describe('createIgdbProvider query (PV-2 game_type filter)', () => {
 		expect(body).not.toContain('category');
 	});
 
+	it('adds selected PlayStation ids to the same interactive search clause', async () => {
+		const m = stubFetch({ games: () => jsonResponse([HADES]) });
+		await platformProvider().searchCandidate('Hades');
+		const gamesCall = m.mock.calls.find((c) => !isTokenUrl(c[0]));
+		const body = String((gamesCall?.[1] as RequestInit).body);
+		expect(body).toContain(
+			'where game_type = (0,2,3,4,6,8,9,10,11) & platforms = (48,167);',
+		);
+	});
+
 	it('requests the four score fields on the SAME games call (VR-5: no second adapter)', async () => {
 		const m = stubFetch({ games: () => jsonResponse([HADES]) });
 		await provider().enrich('Hades');
@@ -218,6 +236,15 @@ describe('createIgdbProvider.fetchScoresByIds (Story 10.1 refresh fetch)', () =>
 		expect(body).toContain('first_release_date');
 		// A refresh must not re-filter by game_type: an anchored id is trusted.
 		expect(body).not.toContain('game_type');
+	});
+
+	it('never applies the interactive platform constraint to by-id refreshes', async () => {
+		const m = stubFetch({ games: () => jsonResponse([HADES]) });
+		await platformProvider().fetchScoresByIds(['113112']);
+		const body = String(
+			(m.mock.calls.find((c) => !isTokenUrl(c[0]))?.[1] as RequestInit).body,
+		);
+		expect(body).not.toContain('platforms');
 	});
 
 	it('drops non-numeric ids instead of interpolating them into the query', async () => {
@@ -272,6 +299,22 @@ describe('createIgdbProvider.fetchTimeToBeatByIds (Story 10.3)', () => {
 		const body = String((ttbCalls[0]?.[1] as RequestInit).body);
 		expect(body).toContain('where game_id = (159119,42);');
 		expect(body).toContain('fields game_id, normally, completely, count;');
+	});
+
+	it('never applies the interactive platform constraint to by-id TTB refreshes', async () => {
+		const m = stubFetch({
+			games: () => jsonResponse([]),
+			ttb: () => jsonResponse([]),
+		});
+		await platformProvider().fetchTimeToBeatByIds(['159119']);
+		const body = String(
+			(
+				m.mock.calls.find((c) =>
+					String(c[0]).includes('game_time_to_beats'),
+				)?.[1] as RequestInit
+			).body,
+		);
+		expect(body).not.toContain('platforms');
 	});
 
 	it('drops non-numeric ids before interpolation (same guard as scores)', async () => {

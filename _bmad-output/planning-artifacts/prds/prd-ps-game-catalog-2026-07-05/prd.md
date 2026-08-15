@@ -80,7 +80,7 @@ One screen answers "what's my gaming life right now?" — the landing page is th
 ### Default view
 
 - **FR-17** — Shows every game whose effective state is a live play status; **`Story completed`, `Platinum achieved`, and `Dropped` games are hidden by default** — the default shelf is the backlog view, the full record is one pill away.
-- **FR-18** — Default ordering: `Playing` → `Paused` → `Up next` → `Not started`; **owned before wishlisted, then alphabetical by name, within each group** (ownership tier added 2026-07-09, Luca — surfaces ready-to-start games).
+- **FR-18** — Default ordering: `Playing` → `Up next` → `Paused` → `Not started`; **owned before wishlisted, then alphabetical by name, within each group** (ownership tier added 2026-07-09, Luca — surfaces ready-to-start games).
 - **FR-19** — **Infinite scroll**, with an always-visible **name search bar**. Search is a lookup, not a view: it matches against the entire library, ignoring active filters and hidden states — "did I ever finish that?" must always answer.
 
 ### Filters

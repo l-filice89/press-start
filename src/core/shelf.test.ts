@@ -39,8 +39,11 @@ describe('orderShelf', () => {
 		return { effectiveState, owned, title };
 	}
 
-	it('orders Playing→Paused→Up next→Not started regardless of ownership', () => {
+	it('orders Playing→Up next→Paused→Not started, then unchanged hidden states', () => {
 		const ordered = orderShelf([
+			entry('Dropped', 'g', true),
+			entry('Platinum achieved', 'f', true),
+			entry('Story completed', 'e', true),
 			entry('Not started', 'a', true),
 			entry('Up next', 'b', false),
 			entry('Playing', 'c', false),
@@ -48,9 +51,12 @@ describe('orderShelf', () => {
 		]);
 		expect(ordered.map((e) => e.effectiveState)).toEqual([
 			'Playing',
-			'Paused',
 			'Up next',
+			'Paused',
 			'Not started',
+			'Story completed',
+			'Platinum achieved',
+			'Dropped',
 		]);
 	});
 

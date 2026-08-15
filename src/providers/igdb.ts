@@ -108,6 +108,8 @@ export interface IgdbConfig {
 	clientSecret: string;
 	/** Min ms between calls (IGDB allows ~4 req/s). Default 260. */
 	minIntervalMs?: number;
+	/** Optional released-on constraint for interactive title searches only. */
+	platformIds?: readonly number[];
 }
 
 interface IgdbGame {
@@ -345,8 +347,11 @@ export function createIgdbProvider(
 		// exact, unambiguous title) — strip them same as quotes/backslashes.
 		const query = title.replace(/["\\™®©]/g, ' ').trim();
 		if (!query) return [];
+		const platformClause = config.platformIds?.length
+			? ` & platforms = (${config.platformIds.join(',')})`
+			: '';
 		return queryGames(
-			`search "${query}"; fields ${GAME_FIELDS}; where game_type = (0,2,3,4,6,8,9,10,11); limit 50;`,
+			`search "${query}"; fields ${GAME_FIELDS}; where game_type = (0,2,3,4,6,8,9,10,11)${platformClause}; limit 50;`,
 		);
 	}
 

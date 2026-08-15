@@ -116,11 +116,11 @@ test('default shelf hides finished states and orders by state → owned → alph
 			page.getByTestId('shelf-card').filter({ hasText: dropped.title }),
 		).toHaveCount(0);
 
-		// Playing → Paused → Up next → Not started(owned, alpha) → Not started(unowned)
+		// Playing → Up next → Paused → Not started(owned, alpha) → Not started(unowned)
 		const expected = [
 			'Baseline Alpha',
-			paused.title,
 			'Baseline Beta',
+			paused.title,
 			'Baseline Gamma',
 			notStartedM.title, // "Order Mid" < "Order Zeta": alpha beats insertion order
 			notStartedZ.title,

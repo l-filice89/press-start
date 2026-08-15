@@ -19,7 +19,10 @@ import {
 import { createDb } from '../../src/repositories/db';
 import { user } from '../../src/schema';
 import {
+	DEFAULT_PLAYSTATION_PLATFORMS,
+	getIgdbPlatformIds,
 	getPsnRegion,
+	IGDB_PLATFORMS_SETTING_KEY,
 	PSN_REGION_SETTING_KEY,
 } from '../../src/services/settings';
 import { appFetch, establishSession, TEST_EMAIL } from './session';
@@ -90,6 +93,7 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 			await (await appFetch('/api/settings', { headers: { cookie } })).json(),
 		).toEqual({
 			timezone: 'Europe/Berlin',
+			igdbPlatforms: DEFAULT_PLAYSTATION_PLATFORMS,
 			// Story 8.4: the failure banner died — the field is the region's
 			// "refresh in flight" readout now.
 			catalogRefreshing: false,
@@ -101,6 +105,78 @@ describe('settings + timezone stamping (integration, real workerd + local D1)', 
 			// seeds (and persists) the test env's `PSN_REGION` var.
 			region: 'it-it',
 		});
+	});
+
+	it('IGDB platforms default, validate, persist per user, and recover from corrupt storage', async () => {
+		expect(getIgdbPlatformIds(DEFAULT_PLAYSTATION_PLATFORMS)).toEqual([
+			7, 8, 9, 48, 167,
+		]);
+		expect(
+			await (await appFetch('/api/settings', { headers: { cookie } })).json(),
+		).toMatchObject({ igdbPlatforms: DEFAULT_PLAYSTATION_PLATFORMS });
+
+		const saved = await appFetch('/api/settings/igdb-platforms', {
+			method: 'PUT',
+			headers: { 'content-type': 'application/json', cookie },
+			body: JSON.stringify({ platforms: ['PS4', 'PS5', 'PSVR2'] }),
+		});
+		expect(saved.status).toBe(200);
+		expect(await saved.json()).toEqual({
+			platforms: ['PS4', 'PS5', 'PSVR2'],
+		});
+		expect(await getSetting(db(), userId, IGDB_PLATFORMS_SETTING_KEY)).toBe(
+			'["PS4","PS5","PSVR2"]',
+		);
+
+		for (const platforms of [[], ['PS5', 'PS5'], ['PS6'], 'PS5', null]) {
+			const rejected = await appFetch('/api/settings/igdb-platforms', {
+				method: 'PUT',
+				headers: { 'content-type': 'application/json', cookie },
+				body: JSON.stringify({ platforms }),
+			});
+			expect(rejected.status).toBe(400);
+			expect(await rejected.json()).toEqual({ error: 'invalid platforms' });
+		}
+		for (const body of ['{bad json', undefined]) {
+			const rejected = await appFetch('/api/settings/igdb-platforms', {
+				method: 'PUT',
+				headers: { 'content-type': 'application/json', cookie },
+				...(body === undefined ? {} : { body }),
+			});
+			expect(rejected.status).toBe(400);
+			expect(await rejected.json()).toEqual({ error: 'invalid platforms' });
+		}
+		expect(await getSetting(db(), userId, IGDB_PLATFORMS_SETTING_KEY)).toBe(
+			'["PS4","PS5","PSVR2"]',
+		);
+
+		const secondCookie = await establishSession(
+			'platform-settings-user@press-start.test',
+		);
+		expect(
+			await (
+				await appFetch('/api/settings', { headers: { cookie: secondCookie } })
+			).json(),
+		).toMatchObject({ igdbPlatforms: DEFAULT_PLAYSTATION_PLATFORMS });
+
+		await setSetting(db(), userId, IGDB_PLATFORMS_SETTING_KEY, '{bad json');
+		expect(
+			await (await appFetch('/api/settings', { headers: { cookie } })).json(),
+		).toMatchObject({ igdbPlatforms: DEFAULT_PLAYSTATION_PLATFORMS });
+		await setSetting(db(), userId, IGDB_PLATFORMS_SETTING_KEY, '["toString"]');
+		expect(
+			await (await appFetch('/api/settings', { headers: { cookie } })).json(),
+		).toMatchObject({ igdbPlatforms: DEFAULT_PLAYSTATION_PLATFORMS });
+
+		expect(
+			(
+				await appFetch('/api/settings/igdb-platforms', {
+					method: 'PUT',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ platforms: ['PS5'] }),
+				})
+			).status,
+		).toBe(401);
 	});
 
 	it('PSN region: GET reports the effective value, PUT normalizes + persists, bad value 400', async () => {

@@ -26,7 +26,7 @@ A **vision to realize**: Luca wants a personal web app that replaces his Notion 
 
 - **CAP-2 — The Shelf & detail view**
   - **intent:** One dark, slick, cover-forward landing page answers "what's my gaming life right now?", with minimal cards that flip into a full editable detail view (status, milestones, lifecycle dates, genres, ownership, and a "View on PS Store" link for wishlisted games).
-  - **success:** The default shelf shows the live-status backlog ordered `Playing` → `Paused` → `Up next` → `Not started` (alphabetical within each group), with `Story completed` / `Platinum achieved` / `Dropped` hidden one pill away; logging a milestone requires a confirmation modal.
+  - **success:** The default shelf shows the live-status backlog ordered `Playing` → `Up next` → `Paused` → `Not started` (owned before wishlisted, then alphabetical within each group), with `Story completed` / `Platinum achieved` / `Dropped` hidden one pill away; logging a milestone requires a confirmation modal.
 
 - **CAP-3 — Filter & search**
   - **intent:** Filter the library by State, Genre, and Flags with **OR-within-group, AND-across-group** semantics plus completed/platinum/dropped reveal pills, alongside an always-visible name-search bar.

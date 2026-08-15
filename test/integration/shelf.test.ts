@@ -107,14 +107,14 @@ describe('read-only shelf (integration, real workerd + local D1)', () => {
 		await addGame(userB, 'Apex', { playStatus: 'Paused', owned: false });
 	});
 
-	it('orders the default shelf Playing→Paused→Up next→Not started, alpha within group', async () => {
+	it('orders the default shelf Playing→Up next→Paused→Not started, alpha within group', async () => {
 		const shelf = await getShelf(db(), userA);
 		expect(shelf.map((g) => g.title)).toEqual([
 			'Apex', // Playing
 			'Replaying', // Playing
 			'Zephyr', // Playing
-			'Mist', // Paused
 			'Nova', // Up next
+			'Mist', // Paused
 			'Bolt', // Not started
 		]);
 	});
@@ -158,8 +158,8 @@ describe('read-only shelf (integration, real workerd + local D1)', () => {
 			'Apex', // Playing
 			'Replaying', // Playing
 			'Zephyr', // Playing
-			'Mist', // Paused
 			'Nova', // Up next
+			'Mist', // Paused
 			'Bolt', // Not started
 			'Done Game', // Story completed — hidden states rank after live ones
 			'Dropped Game', // Dropped ranks last

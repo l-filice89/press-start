@@ -178,7 +178,7 @@ export async function getGameById(
 }
 
 /**
- * The backlog shelf: ordered Playing→Paused→Up next→Not started (revealed
+ * The backlog shelf: ordered Playing→Up next→Paused→Not started (revealed
  * states after), owned before un-owned, alphabetical within each group — the
  * whole sorted set materialized here (AD-7), never a SQL `ORDER BY
  * play_status`. By default only live-play-status games (Completed/Platinum/

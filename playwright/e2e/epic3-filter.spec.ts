@@ -174,18 +174,28 @@ test('a filtered view keeps state → owned → alpha ordering (FR-18 amendment)
 		title: `Tier C Paused ${run}`,
 		tracking: { playStatus: 'Paused' },
 	});
+	const upNextOwned = createGame({
+		title: `Tier D Up Next ${run}`,
+		tracking: { playStatus: 'Up next' },
+	});
 	try {
-		await seedGames([wishlisted, owned, pausedOwned]);
+		await seedGames([wishlisted, owned, pausedOwned, upNextOwned]);
 		await page.goto('/');
 		await expect(cardFor(page, owned)).toBeVisible();
 
 		await page.getByTestId('filter-state').click();
 		await page.getByRole('menuitemcheckbox', { name: 'Playing' }).click();
+		await page.getByRole('menuitemcheckbox', { name: 'Up next' }).click();
 		await page.getByRole('menuitemcheckbox', { name: 'Paused' }).click();
 		await page.keyboard.press('Escape');
 		await loadAllPages(page);
 
-		const titles = [wishlisted.title, owned.title, pausedOwned.title];
+		const titles = [
+			wishlisted.title,
+			owned.title,
+			pausedOwned.title,
+			upNextOwned.title,
+		];
 		const labels = await page
 			.getByTestId('shelf-card')
 			.evaluateAll((cells) =>
@@ -194,11 +204,21 @@ test('a filtered view keeps state → owned → alpha ordering (FR-18 amendment)
 		const order = labels
 			.map((l) => titles.find((t) => l.startsWith(`${t} —`)))
 			.filter((t): t is string => t !== undefined);
-		// Playing before Paused (state priority), owned before wishlisted inside
-		// Playing (ownership tier beats alpha).
-		expect(order).toEqual([owned.title, wishlisted.title, pausedOwned.title]);
+		// Playing before Up next before Paused (state priority), owned before
+		// wishlisted inside Playing (ownership tier beats alpha).
+		expect(order).toEqual([
+			owned.title,
+			wishlisted.title,
+			upNextOwned.title,
+			pausedOwned.title,
+		]);
 	} finally {
-		await deleteGames([wishlisted.id, owned.id, pausedOwned.id]);
+		await deleteGames([
+			wishlisted.id,
+			owned.id,
+			pausedOwned.id,
+			upNextOwned.id,
+		]);
 	}
 });
 

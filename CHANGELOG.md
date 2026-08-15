@@ -4,6 +4,22 @@ All notable changes to PRESS START are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/); this project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.0] — 2026-08-15
+
+Let each user limit interactive IGDB title matches to releases on selected
+PlayStation platforms.
+
+### Added
+- **IGDB platform selection.** Settings now lets each user choose one or more
+  of PS1–PS5, PSP, PS Vita, PSVR 1, and PSVR 2; PS1–PS5 are selected by
+  default.
+
+### Changed
+- **Platform-filtered matching.** Add preview, rematch, and straggler searches
+  now use the saved platform selection. Cached searches refresh immediately;
+  existing library rows and scheduled score, time-to-beat, and release-date
+  updates remain unchanged.
+
 ## [3.4.0] — 2026-08-03
 
 Turn Shelf data into an immediate, transparent answer to “what should I play

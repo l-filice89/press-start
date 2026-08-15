@@ -27,7 +27,7 @@ it, or `skipped` with the reason. Epic 2 rows land with story 2.5.3.
 | 1.5h prefers-reduced-motion | `epic2-detail.spec.ts` › reduced motion swaps the flip entry for a cross-fade (closed by story 2.5.3) |
 | 1.5i always-on focus outline | `epic1-shelf.spec.ts` › keyboard-focused card shows a focus outline (keyboard modality; mouse-focus outline behavior not separately pinned) |
 | 1.7a card content (cover/title/pill/owned/flags; genres desktop-only) | `epic1-shelf.spec.ts` › shelf renders card content (title/state/OWNED/cover-fallback/PS+ flag; release + milestone flags jsdom-pinned in `Card.test.tsx`); genres delta in `epic1-responsive.spec.ts` |
-| 1.7b default visible set + ordering (state → owned → alpha) | `epic1-shelf.spec.ts` › default shelf hides finished states and orders by state → owned → alpha |
+| 1.7b default visible set + ordering (Playing → Up next → Paused → Not started; owned → alpha within state) | `epic1-shelf.spec.ts` › default shelf hides finished states and orders by state → owned → alpha |
 | 1.7c progressive render / infinite scroll | `epic1-shelf.spec.ts` › infinite scroll reveals the next page (first fold = PAGE_SIZE + one growth event; full-set exhaustion exercised by loadAllPages in the ordering test) |
 | 1.7d whole-library search ignoring filters/hidden states | `epic1-shelf.spec.ts` › whole-library search matches games hidden from the shelf, NO MATCH otherwise — REDESIGNED 2026-07-12: with no filter a bare search reaches the whole library (hidden included) and surfaces the game IN THE GRID (scope rule) with a `search-scope` caption stating the reach; gibberish → NO MATCH. Opening a searched game is now a card click (`epic6.spec.ts` › searching an existing game … the card opens detail) |
 | 1.7e skeleton first load + INSERT GAMES empty state | `epic1-shelf.spec.ts` › first load shows skeletons; › empty library shows INSERT GAMES |
@@ -71,7 +71,7 @@ Epic 1's deferred 1.5h (prefers-reduced-motion) is closed by
 | 3.1b OR within a group, AND across groups | `epic3-filter.spec.ts` › genre filter ORs within the group and ANDs against the state group |
 | 3.1c nothing selected → default set; any selection → exactly those states | `epic3-filter.spec.ts` › state filter shows exactly the selected states, highlights, and restores the default set |
 | 3.1d active filter entry visually highlighted | `epic3-filter.spec.ts` › state filter… (data-active trigger + aria-checked row asserted) |
-| 3.1 FR-18 ordering holds in filtered views | `epic3-filter.spec.ts` › a filtered view keeps state → owned → alpha ordering |
+| 3.1 FR-18 ordering holds in filtered views (Up next before Paused) | `epic3-filter.spec.ts` › a filtered view keeps state → owned → alpha ordering |
 | 3.1 search scope rule (SUPERSEDES the old "search ignores filters" isolation, redesign 2026-07-12) | `epic3-filter.spec.ts` › search scope rule: a bare search reaches the whole library; an active filter narrows within it (both directions; jsdom-pinned in `Shelf.test.tsx` › scope rule: no filter reveals a hidden game by name; an active filter suppresses it) |
 | 3.2a Flag pills Owned/Wishlisted/Released/Playable now, each its own AND group | `epic3-reveal.spec.ts` › flag pills are their own AND groups (Wishlisted + State AND asserted; all four pills' pressed state pinned in jsdom `FilterRow.test.tsx`) |
 | 3.2b reveal pill shows its hidden state (semantics amended by 3.5 — exclusive view) | superseded by 3.5a — `epic3-reveal.spec.ts` › a reveal pill is an exclusive view (all three pills pinned in jsdom + `filters.test.ts`) |
@@ -558,3 +558,12 @@ Play Next compact command rows (`spec-play-next-compact-command-rows.md`):
 | 694px retains portrait cards; 695px through 1023px uses 36px rank, 88px cover, combined evidence/factors, and 150px actions; 1024px restores full 08a rails | `epic13-play-next.spec.ts` › compact command rows span 695 through 1023 before full desktop rows |
 | Compact rows contain long titles, keep every row clear of its action rail, separate in-cover PS+/ownership controls, expose Leaving, preserve ≥44px targets, and avoid page overflow | `epic13-play-next.spec.ts` › compact command rows span 695 through 1023 before full desktop rows |
 | Details, Tune closest-match, ownership, and Playing success/failure retain behavior and focus/visit semantics at compact width | compact-width `epic13-play-next.spec.ts` detail, Tune, ownership, Play this success, and failed Play this flows |
+
+IGDB PlayStation platform filter (`spec-igdb-playstation-platform-filter.md`):
+
+| AC | Coverage |
+|----|----------|
+| Default and saved platform selections constrain interactive add-preview, rematch, and straggler IGDB searches per user | provider query-body hazard tests in `src/providers/igdb.test.ts`; default mapping, validation, persistence, inherited-key/corrupt fallback, auth, and isolation in `test/integration/settings.test.ts`; both interactive route entrypoints pinned by `src/routes/games-platforms.test.ts` |
+| Saving clears stale add-preview and IGDB-search caches | `web/settings/SettingsPanel.test.tsx` › loads defaults, requires one platform, saves selection, and invalidates searches |
+| Scheduled by-ID score/TTB refreshes remain unfiltered | `src/providers/igdb.test.ts` › never applies the interactive platform constraint to by-id refreshes |
+| Phone/desktop Settings selection saves and persists without modal regressions | `playwright/e2e/epic4-settings.spec.ts` › IGDB platform selection saves and persists when Settings reopens + › phone Settings saves platforms without horizontal overflow; existing Settings journeys remain regression coverage |

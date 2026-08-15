@@ -9,14 +9,14 @@ import type { EffectiveState } from './types';
 
 /**
  * Shelf state priority (FR-17/18): live play statuses first, in
- * Playing→Paused→Up next→Not started priority. The backlog-hidden states rank
+ * Playing→Up next→Paused→Not started priority. The backlog-hidden states rank
  * after every live one — they only appear when a reveal filter (Story 3.2)
  * asks for the unfiltered ordering — milestones grouped before `Dropped`.
  */
 export const SHELF_STATE_ORDER: readonly EffectiveState[] = [
 	'Playing',
-	'Paused',
 	'Up next',
+	'Paused',
 	'Not started',
 	'Story completed',
 	'Platinum achieved',

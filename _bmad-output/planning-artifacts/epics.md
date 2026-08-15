@@ -55,7 +55,7 @@ This document provides the complete epic and story breakdown for ps-game-catalog
 - **FR-15** — Cards are minimal by default: cover art, name, genre tags, owned indicator, flag icons for PS+ Extra and release state.
 - **FR-16** — Clicking a card flips it into the full editable detail view: play status, milestones (with confirm modal), lifecycle dates, genres, ownership flag + type, and — for wishlisted games — a "View on PS Store" link (product URL when known, store search-by-title fallback).
 - **FR-17** — Default view shows every game whose effective state is a live play status; `Story completed`, `Platinum achieved`, and `Dropped` are hidden by default (the default shelf is the backlog view).
-- **FR-18** — Default ordering: `Playing` → `Paused` → `Up next` → `Not started`; owned before wishlisted, then alphabetical by name, within each group (ownership tier added 2026-07-09).
+- **FR-18** — Default ordering: `Playing` → `Up next` → `Paused` → `Not started`; owned before wishlisted, then alphabetical by name, within each group (ownership tier added 2026-07-09).
 - **FR-19** — Infinite scroll with an always-visible name search bar. Search matches the entire library, ignoring active filters and hidden states.
 
 **The Shelf — filters (§3)**
@@ -251,7 +251,7 @@ Each FR is assigned a **primary** epic; FRs that genuinely span epics list each 
 - **FR-15** — E1: minimal card display (cover, name, genres, owned, flags).
 - **FR-16** — E2: card flip → editable detail view + "View on PS Store" for wishlisted.
 - **FR-17** — E1: default backlog view (Completed/Platinum/Dropped hidden).
-- **FR-18** — E1: default ordering Playing→Paused→Up next→Not started, alpha within.
+- **FR-18** — E1: default ordering Playing→Up next→Paused→Not started, owned before wishlisted, then alphabetical within each group.
 - **FR-19** — E1: infinite scroll + always-visible search-as-lookup.
 - **FR-20** — E3: filter semantics (OR-within / AND-across groups).
 - **FR-21** — E3: state-group selection rule (default set vs exactly-selected).
@@ -603,7 +603,7 @@ So that "what's my gaming life right now?" and "did I ever finish that?" are ans
 **Given** the default view with no filters active
 **When** the shelf renders
 **Then** only live-play-status games show (Completed/Platinum/Dropped hidden)
-**And** they are ordered Playing→Paused→Up next→Not started, owned-then-alphabetical within each group (FR-17, FR-18, FR-4 hide)
+**And** they are ordered Playing→Up next→Paused→Not started, owned-then-alphabetical within each group (FR-17, FR-18, FR-4 hide)
 
 **Given** a large library
 **When** I scroll
