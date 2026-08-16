@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { BASELINE_GAMES, d1Query } from '../support/helpers/d1';
 import { expect, test } from '../support/merged-fixtures';
-import { E2E_EMAIL, MAGIC_LINK_RE, SERVER_LOG } from '../support/server';
+import { E2E_EMAIL, SERVER_LOG } from '../support/server';
 
 /**
  * The full user journey through the browser (Epic 2.5 TR-1, AC5): open app →
@@ -17,12 +17,18 @@ test.use({ storageState: { cookies: [], origins: [] } });
 
 const readLog = () => readFileSync(SERVER_LOG, 'utf8');
 
-/** First magic-link URL appearing in the server log after char `offset`. */
-function linkAfter(offset: number): string | undefined {
+/** Requested user's magic-link URL appearing after char `offset`. */
+function linkAfter(offset: number, requestedEmail: string): string | undefined {
 	const tail = readLog().slice(offset);
-	return [...tail.matchAll(new RegExp(MAGIC_LINK_RE.source, 'g'))].map(
-		(m) => m[1],
-	)[0];
+	const escapedEmail = requestedEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	return [
+		...tail.matchAll(
+			new RegExp(
+				`\\[auth\\] magic link for ${escapedEmail}: (\\S+)\\r?\\n`,
+				'g',
+			),
+		),
+	].map((match) => match[1])[0];
 }
 
 test('signs in via the console-captured magic link and sees the seeded shelf', async ({
@@ -44,7 +50,7 @@ test('signs in via the console-captured magic link and sees the seeded shelf', a
 
 	let link: string | undefined;
 	await expect
-		.poll(() => (link = linkAfter(offset)), {
+		.poll(() => (link = linkAfter(offset, E2E_EMAIL)), {
 			message: 'magic link in server log (console email provider)',
 			timeout: 15_000,
 		})
@@ -75,8 +81,17 @@ test('baseline fixture is exact — reset leaves no residue from prior runs', as
 		"SELECT COUNT(*) AS n FROM game WHERE title LIKE 'Baseline %';",
 	);
 	expect(games[0]?.n).toBe(BASELINE_GAMES.length);
-	const users = await d1Query<{ n: number }>('SELECT COUNT(*) AS n FROM user;');
+	// Account-deletion specs create run-owned users in parallel. Ignore only
+	// that explicit fixture namespace; any other residue still breaks this exact
+	// reset invariant.
+	const users = await d1Query<{ n: number }>(
+		"SELECT COUNT(*) AS n FROM user WHERE email NOT LIKE 'account-deletion-%@press-start.local';",
+	);
 	expect(users[0]?.n).toBe(1);
+	const baselineUser = await d1Query<{ n: number }>(
+		`SELECT COUNT(*) AS n FROM user WHERE email = '${E2E_EMAIL}';`,
+	);
+	expect(baselineUser[0]?.n).toBe(1);
 });
 
 /**

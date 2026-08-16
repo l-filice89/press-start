@@ -14,14 +14,16 @@
  */
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { APIError } from 'better-auth/api';
+import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { magicLink } from 'better-auth/plugins/magic-link';
 import {
+	ACCOUNT_DELETION_TTL_MINUTES,
 	createEmailProvider,
 	type EmailProvider,
 	MAGIC_LINK_TTL_MINUTES,
 } from '../providers/email';
 import { createDb } from '../repositories/db';
+import { deleteUserCascade } from '../repositories/users';
 import * as schema from '../schema';
 
 export interface CreateAuthOptions {
@@ -50,6 +52,7 @@ export function createAuth(env: Env, options: CreateAuthOptions) {
 	}
 
 	const emailProvider = options.emailProvider ?? createEmailProvider(env);
+	let deletionEmailError: unknown;
 
 	return betterAuth({
 		baseURL: options.baseURL,
@@ -61,6 +64,15 @@ export function createAuth(env: Env, options: CreateAuthOptions) {
 			schema,
 		}),
 		telemetry: { enabled: false },
+		hooks: {
+			after: createAuthMiddleware(async (ctx) => {
+				if (ctx.path === '/delete-user' && deletionEmailError) {
+					throw new APIError('INTERNAL_SERVER_ERROR', {
+						message: 'Failed to send account-deletion email',
+					});
+				}
+			}),
+		},
 		// In-code burst damping (8.2 review): better-auth's built-in limiter on a
 		// module-scope in-memory store — per-isolate best-effort, NO D1 writes
 		// (AD-29/AD-32: a D1-metered limiter hands an attacker a write per hit).
@@ -142,6 +154,28 @@ export function createAuth(env: Env, options: CreateAuthOptions) {
 			accountLinking: {
 				enabled: true,
 				trustedProviders: [],
+			},
+		},
+		user: {
+			deleteUser: {
+				enabled: true,
+				deleteTokenExpiresIn: ACCOUNT_DELETION_TTL_MINUTES * 60,
+				// better-auth otherwise deletes sessions/accounts before the user;
+				// one FK-cascading statement keeps every private row intact if it fails.
+				beforeDelete: async ({ id }) => {
+					await deleteUserCascade(createDb(env.DB), id);
+				},
+				sendDeleteAccountVerification: async ({ user, url }) => {
+					deletionEmailError = undefined;
+					try {
+						await emailProvider.sendAccountDeletionEmail({
+							to: user.email,
+							url,
+						});
+					} catch (error) {
+						deletionEmailError = error;
+					}
+				},
 			},
 		},
 		plugins: [

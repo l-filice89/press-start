@@ -559,6 +559,16 @@ Play Next compact command rows (`spec-play-next-compact-command-rows.md`):
 | Compact rows contain long titles, keep every row clear of its action rail, separate in-cover PS+/ownership controls, expose Leaving, preserve ≥44px targets, and avoid page overflow | `epic13-play-next.spec.ts` › compact command rows span 695 through 1023 before full desktop rows |
 | Details, Tune closest-match, ownership, and Playing success/failure retain behavior and focus/visit semantics at compact width | compact-width `epic13-play-next.spec.ts` detail, Tune, ownership, Play this success, and failed Play this flows |
 
+Permanent account deletion (`spec-permanent-account-deletion.md`):
+
+| AC | Coverage |
+|----|----------|
+| Account placement renders on phone and desktop without overflow or undersized action | `account-deletion.spec.ts` › desktop/phone verifies an emailed deletion link… |
+| Cancel dismissal paths request and delete nothing, restore focus, and keep Settings inert while open | `SettingsPanel.test.tsx` › cancels account deletion by button, Escape, or backdrop… |
+| Confirmed request sends one email and preserves account until link verification | `account-deletion.spec.ts` browser journey; `SettingsPanel.test.tsx` single-flight/sent/error contracts; `auth.test.ts` pre-link database preservation |
+| Verified callback deletes private rows/all DB sessions, preserves shared/other-user facts, clears caller state, and shows focused Login | `account-deletion.spec.ts` desktop/phone journey plus `auth.test.ts` cascade/session/tenant hazard test |
+| Invalid, expired, wrong-user, replayed, email-send, and deletion-write failures preserve standing data | `auth.test.ts` › refuses expired, wrong-user, and replayed… + › preserves private data when email delivery or deletion write fails |
+
 IGDB PlayStation platform filter (`spec-igdb-playstation-platform-filter.md`):
 
 | AC | Coverage |

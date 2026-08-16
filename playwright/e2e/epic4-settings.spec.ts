@@ -29,6 +29,7 @@ test('Settings renders NO credential surface — the token section is gone (Epic
 		'PlayStation Plus',
 		'Keep your own copy',
 		'About & Help',
+		'Delete your account',
 	]);
 	await expect(panel.getByText(/token/i)).toHaveCount(0);
 	await expect(panel.locator('textarea')).toHaveCount(0);

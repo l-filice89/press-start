@@ -170,3 +170,15 @@
 	opacity: 0.6;
 	cursor: default;
 }
+
+.settings-panel__delete {
+	width: 100%;
+	padding: var(--space-2) var(--space-3);
+	border: 1px solid var(--color-danger-red);
+	border-radius: var(--radius-sm);
+	background: none;
+	color: var(--color-text-primary);
+	font-family: var(--font-ui);
+	font-weight: 700;
+	cursor: pointer;
+}

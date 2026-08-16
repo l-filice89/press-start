@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ToastHost } from '../components/Toast';
@@ -62,6 +62,7 @@ describe('SettingsPanel', () => {
 			'PlayStation Plus',
 			'Keep your own copy',
 			'About & Help',
+			'Delete your account',
 		]);
 		expect(screen.queryByText(/token/i)).toBeNull();
 	});
@@ -254,6 +255,159 @@ describe('SettingsPanel', () => {
 
 		expect(screen.getByText(/About & Help/)).toBeInTheDocument();
 		expect(screen.queryByTestId('settings-sign-out')).not.toBeInTheDocument();
+	});
+
+	it('cancels account deletion by button, Escape, or backdrop without requesting and restores focus', async () => {
+		const fetchMock = mockFetch({});
+		renderPanel();
+		const deleteButton = screen.getByRole('button', { name: 'Delete account' });
+
+		for (const dismiss of ['button', 'escape', 'backdrop']) {
+			await userEvent.click(deleteButton);
+			expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus();
+			expect(screen.getByTestId('settings-panel')).toHaveProperty(
+				'inert',
+				true,
+			);
+			if (dismiss === 'button') {
+				await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+			} else if (dismiss === 'escape') {
+				await userEvent.keyboard('{Escape}');
+			} else {
+				await userEvent.click(screen.getByTestId('confirm-backdrop'));
+			}
+			await waitFor(() => expect(deleteButton, dismiss).toHaveFocus());
+		}
+
+		expect(
+			fetchMock.mock.calls.some(([url]) =>
+				String(url).includes('/api/auth/delete-user'),
+			),
+		).toBe(false);
+	});
+
+	it('requests one deletion email, keeps account pending verification, and announces success', async () => {
+		let finishRequest: ((value: unknown) => void) | undefined;
+		const fetchMock = vi.fn(
+			async (url: string | URL | Request, _init?: RequestInit) => {
+				if (String(url).includes('/api/auth/delete-user')) {
+					return new Promise((resolve) => {
+						finishRequest = resolve;
+					});
+				}
+				return {
+					ok: true,
+					status: 200,
+					json: async () => ({ timezone: null }),
+				};
+			},
+		);
+		vi.stubGlobal('fetch', fetchMock);
+		renderPanel();
+
+		await userEvent.click(
+			screen.getByRole('button', { name: 'Delete account' }),
+		);
+		const confirm = screen.getByRole('button', {
+			name: 'Email deletion link',
+		});
+		fireEvent.click(confirm);
+		fireEvent.click(confirm);
+		expect(screen.getByRole('button', { name: 'Sending…' })).toBeDisabled();
+		const cancel = screen.getByRole('button', { name: 'Cancel' });
+		expect(cancel).toHaveAttribute('aria-disabled', 'true');
+		expect(cancel).not.toBeDisabled();
+		await userEvent.keyboard('{Escape}');
+		expect(
+			screen.getByRole('dialog', { name: 'Permanently delete your account?' }),
+		).toBeInTheDocument();
+		fireEvent.mouseDown(screen.getByTestId('confirm-backdrop'));
+		expect(
+			screen.getByRole('dialog', { name: 'Permanently delete your account?' }),
+		).toBeInTheDocument();
+		expect(screen.getByTestId('settings-panel')).toHaveProperty('inert', true);
+		expect(
+			fetchMock.mock.calls.filter(([url]) =>
+				String(url).includes('/api/auth/delete-user'),
+			),
+		).toHaveLength(1);
+		const deletionCall = fetchMock.mock.calls.find(([url]) =>
+			String(url).includes('/api/auth/delete-user'),
+		);
+		expect(deletionCall?.[1]).toMatchObject({ method: 'POST' });
+		expect(JSON.parse(deletionCall?.[1]?.body as string)).toEqual({
+			callbackURL: '/',
+		});
+
+		finishRequest?.({
+			ok: true,
+			status: 200,
+			json: async () => ({
+				success: true,
+				message: 'Verification email sent',
+			}),
+		});
+		await waitFor(() =>
+			expect(
+				screen.getByText(/Your account remains until you open/),
+			).toBeInTheDocument(),
+		);
+		await waitFor(() =>
+			expect(
+				screen.getByRole('button', { name: 'Delete account' }),
+			).toHaveFocus(),
+		);
+	});
+
+	it('keeps deletion confirmation open and offers retry when email sending fails', async () => {
+		let attempts = 0;
+		const fetchMock = vi.fn(async (url: string | URL | Request) => {
+			if (String(url).includes('/api/auth/delete-user')) {
+				attempts += 1;
+				return attempts === 1
+					? {
+							ok: false,
+							status: 503,
+							json: async () => ({ error: 'email unavailable' }),
+						}
+					: {
+							ok: true,
+							status: 200,
+							json: async () => ({ message: 'Verification email sent' }),
+						};
+			}
+			return {
+				ok: true,
+				status: 200,
+				json: async () => ({ timezone: null }),
+			};
+		});
+		vi.stubGlobal('fetch', fetchMock);
+		renderPanel();
+
+		await userEvent.click(
+			screen.getByRole('button', { name: 'Delete account' }),
+		);
+		await userEvent.click(
+			screen.getByRole('button', { name: 'Email deletion link' }),
+		);
+		await waitFor(() =>
+			expect(
+				screen.getByText('Couldn’t send the deletion email. Try again.'),
+			).toHaveAttribute('role', 'status'),
+		);
+		expect(
+			screen.getByRole('button', { name: 'Email deletion link' }),
+		).toBeEnabled();
+		await userEvent.click(
+			screen.getByRole('button', { name: 'Email deletion link' }),
+		);
+		await waitFor(() =>
+			expect(
+				screen.getByText(/Your account remains until/),
+			).toBeInTheDocument(),
+		);
+		expect(attempts).toBe(2);
 	});
 
 	it('cancel PS+ is inert with no claims (Story 6.4 AC4)', async () => {

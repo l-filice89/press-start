@@ -4,6 +4,29 @@ All notable changes to PRESS START are recorded here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/); this project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.6.0] — 2026-08-16
+
+Let every user permanently remove their Press Start account and user-owned
+library/settings data.
+
+### Added
+- **Permanent account deletion.** Settings now provides an accessible,
+  confirmation-gated account action with an export-first warning. A short-lived
+  email link proves control of the account email and must be opened while signed
+  in to the same account; failed or cancelled requests preserve the account.
+
+### Security
+- **Atomic private-data cleanup.** Verified deletion removes the user identity,
+  linked accounts, all database sessions, library tracking, and settings in one
+  cascading write while preserving shared catalog facts and other users.
+- **Session and cache cleanup.** The deleting browser returns to Login with its
+  query and ETag caches cleared. Other-device database session rows are deleted
+  immediately; effective access through the existing signed session-cookie
+  cache can remain valid for at most five minutes.
+- **Single-use verification.** Deletion links expire after five minutes, are
+  bound to the requesting user, require a valid same-user session, and cannot be
+  replayed or used across accounts.
+
 ## [3.5.0] — 2026-08-15
 
 Let each user limit interactive IGDB title matches to releases on selected

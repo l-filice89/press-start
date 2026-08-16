@@ -15,6 +15,7 @@ import {
 	appFetch,
 	BASE,
 	establishSession,
+	requestAccountDeletion,
 	requestMagicLink,
 	TEST_EMAIL,
 } from './session';
@@ -199,6 +200,296 @@ describe('magic-link auth & user scoping (integration, real workerd + local D1)'
 			'user',
 			'verification',
 		]);
+	});
+});
+
+describe('permanent account deletion (verified better-auth flow)', () => {
+	beforeAll(async () => {
+		await applyD1Migrations(env.DB, inject('migrations'));
+	});
+
+	async function userIdFor(cookie: string) {
+		const response = await appFetch('/api/me', { headers: { cookie } });
+		expect(response.status).toBe(200);
+		return (await response.json<{ id: string }>()).id;
+	}
+
+	async function followDeletionLink(url: string, cookie: string) {
+		return createAuth(env, { baseURL: BASE }).handler(
+			new Request(url, { headers: { cookie, Origin: BASE } }),
+		);
+	}
+
+	it('keeps data before verification, then deletes only private rows and every database session', async () => {
+		const email = 'delete-owner@press-start.test';
+		const otherEmail = 'delete-neighbor@press-start.test';
+		const cookie = await establishSession(email);
+		const secondCookie = await establishSession(email);
+		const otherCookie = await establishSession(otherEmail);
+		const userId = await userIdFor(cookie);
+		const otherUserId = await userIdFor(otherCookie);
+		const db = createDb(env.DB);
+		const sharedGame = await insertGame(db, {
+			title: 'Deletion Shared Fact',
+			titleNormalized: 'deletion shared fact',
+		});
+		await upsertTracking(db, userId, sharedGame.id, {
+			owned: true,
+			playStatus: 'Playing',
+		});
+		await upsertTracking(db, otherUserId, sharedGame.id, {
+			owned: true,
+			playStatus: 'Paused',
+		});
+		await env.DB.prepare(
+			'INSERT INTO setting (user_id, key, value) VALUES (?, ?, ?)',
+		)
+			.bind(userId, 'deletion-test', 'private')
+			.run();
+		await env.DB.prepare(
+			`INSERT INTO account
+			 (id, account_id, provider_id, user_id, created_at, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?)`,
+		)
+			.bind(
+				'deletion-account-row',
+				'deletion-provider-id',
+				'google',
+				userId,
+				Date.now(),
+				Date.now(),
+			)
+			.run();
+
+		const requestedAt = Date.now();
+		const { response, deletionSent } = await requestAccountDeletion(cookie);
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({
+			success: true,
+			message: 'Verification email sent',
+		});
+		expect(deletionSent).toHaveLength(1);
+		expect(deletionSent[0].to).toBe(email);
+		expect(deletionSent[0].url).toContain(
+			'/api/auth/delete-user/callback?token=',
+		);
+		const deletionToken = await env.DB.prepare(
+			"SELECT expires_at FROM verification WHERE value = ? AND identifier LIKE 'delete-account-%'",
+		)
+			.bind(userId)
+			.first<{ expires_at: number }>();
+		expect(deletionToken).not.toBeNull();
+		expect(
+			(deletionToken as { expires_at: number }).expires_at - requestedAt,
+		).toBeGreaterThanOrEqual(295_000);
+		expect(
+			(deletionToken as { expires_at: number }).expires_at - requestedAt,
+		).toBeLessThanOrEqual(305_000);
+		for (const table of [
+			'user',
+			'account',
+			'session',
+			'game_tracking',
+			'setting',
+		]) {
+			const before = await env.DB.prepare(
+				`SELECT 1 FROM ${table} WHERE ${table === 'user' ? 'id' : 'user_id'} = ?`,
+			)
+				.bind(userId)
+				.all();
+			expect(before.results.length).toBeGreaterThan(0);
+		}
+
+		const callback = await followDeletionLink(deletionSent[0].url, cookie);
+		expect(callback.status).toBe(302);
+		expect(callback.headers.get('location')).toBe('/');
+		expect(callback.headers.getSetCookie().join(';')).toContain(
+			'better-auth.session_token=',
+		);
+		for (const table of [
+			'user',
+			'account',
+			'session',
+			'game_tracking',
+			'setting',
+		]) {
+			const after = await env.DB.prepare(
+				`SELECT 1 FROM ${table} WHERE ${table === 'user' ? 'id' : 'user_id'} = ?`,
+			)
+				.bind(userId)
+				.all();
+			expect(after.results).toHaveLength(0);
+		}
+		const game = await env.DB.prepare('SELECT id FROM game WHERE id = ?')
+			.bind(sharedGame.id)
+			.all();
+		expect(game.results).toHaveLength(1);
+		const neighbor = await env.DB.prepare('SELECT id FROM user WHERE id = ?')
+			.bind(otherUserId)
+			.all();
+		expect(neighbor.results).toHaveLength(1);
+		const neighborTracking = await env.DB.prepare(
+			'SELECT game_id FROM game_tracking WHERE user_id = ? AND game_id = ?',
+		)
+			.bind(otherUserId, sharedGame.id)
+			.all();
+		expect(neighborTracking.results).toHaveLength(1);
+		for (const oldCookie of [cookie, secondCookie]) {
+			const staleSession = await appFetch('/api/me', {
+				headers: { cookie: oldCookie },
+			});
+			// Signed cookie cache may remain authoritative for at most 300 seconds;
+			// the database session rows above are gone immediately.
+			expect([200, 401]).toContain(staleSession.status);
+		}
+	});
+
+	it('refuses expired, wrong-user, and replayed deletion tokens without cross-user deletion', async () => {
+		const victimCookie = await establishSession(
+			'delete-bypass@press-start.test',
+		);
+		const attackerCookie = await establishSession(
+			'delete-attacker@press-start.test',
+		);
+		const victimId = await userIdFor(victimCookie);
+		const attackerId = await userIdFor(attackerCookie);
+
+		const expired = await requestAccountDeletion(victimCookie);
+		await env.DB.prepare(
+			"UPDATE verification SET expires_at = 0 WHERE value = ? AND identifier LIKE 'delete-account-%'",
+		)
+			.bind(victimId)
+			.run();
+		expect(
+			(await followDeletionLink(expired.deletionSent[0].url, victimCookie))
+				.status,
+		).toBe(404);
+
+		const wrongUser = await requestAccountDeletion(victimCookie);
+		expect(
+			(await followDeletionLink(wrongUser.deletionSent[0].url, attackerCookie))
+				.status,
+		).toBe(404);
+		for (const id of [victimId, attackerId]) {
+			const row = await env.DB.prepare('SELECT id FROM user WHERE id = ?')
+				.bind(id)
+				.all();
+			expect(row.results).toHaveLength(1);
+		}
+
+		const valid = await requestAccountDeletion(victimCookie);
+		expect(
+			(await followDeletionLink(valid.deletionSent[0].url, victimCookie))
+				.status,
+		).toBe(302);
+		expect(
+			(await followDeletionLink(valid.deletionSent[0].url, victimCookie))
+				.status,
+		).toBe(404);
+		const attacker = await env.DB.prepare('SELECT id FROM user WHERE id = ?')
+			.bind(attackerId)
+			.all();
+		expect(attacker.results).toHaveLength(1);
+	});
+
+	it('preserves private data when email delivery or the deletion write fails', async () => {
+		const email = 'delete-failure@press-start.test';
+		const cookie = await establishSession(email);
+		const userId = await userIdFor(cookie);
+		let rejectNextEmail = true;
+		const provider = {
+			async sendMagicLinkEmail() {},
+			async sendAccountDeletionEmail() {
+				if (rejectNextEmail) {
+					rejectNextEmail = false;
+					throw new Error('captured email outage');
+				}
+			},
+		};
+		const auth = createAuth(env, { baseURL: BASE, emailProvider: provider });
+		const deletionRequest = () =>
+			auth.handler(
+				new Request(`${BASE}/api/auth/delete-user`, {
+					method: 'POST',
+					headers: {
+						cookie,
+						Origin: BASE,
+						'Content-Type': 'application/json',
+					},
+					body: JSON.stringify({ callbackURL: '/' }),
+				}),
+			);
+		const failedSend = await deletionRequest();
+		expect(failedSend.status).toBe(500);
+		expect(
+			(
+				await env.DB.prepare('SELECT id FROM user WHERE id = ?')
+					.bind(userId)
+					.all()
+			).results,
+		).toHaveLength(1);
+		expect((await deletionRequest()).status).toBe(200);
+
+		const db = createDb(env.DB);
+		const privateGame = await insertGame(db, {
+			title: 'Deletion Failure Private Tracking',
+			titleNormalized: 'deletion failure private tracking',
+		});
+		await upsertTracking(db, userId, privateGame.id, {
+			owned: true,
+			playStatus: 'Playing',
+		});
+		await env.DB.prepare(
+			'INSERT INTO setting (user_id, key, value) VALUES (?, ?, ?)',
+		)
+			.bind(userId, 'deletion-failure-setting', 'survives')
+			.run();
+		await env.DB.prepare(
+			`INSERT INTO account
+			 (id, account_id, provider_id, user_id, created_at, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?)`,
+		)
+			.bind(
+				'deletion-failure-account',
+				'deletion-failure-provider',
+				'google',
+				userId,
+				Date.now(),
+				Date.now(),
+			)
+			.run();
+
+		const requested = await requestAccountDeletion(cookie);
+		await env.DB.prepare(
+			`CREATE TRIGGER deletion_failure_test BEFORE DELETE ON user
+			 BEGIN SELECT RAISE(ABORT, 'captured deletion failure'); END`,
+		).run();
+		try {
+			const failedDelete = await followDeletionLink(
+				requested.deletionSent[0].url,
+				cookie,
+			);
+			expect(failedDelete.status).toBe(500);
+		} finally {
+			await env.DB.prepare('DROP TRIGGER deletion_failure_test').run();
+		}
+		for (const table of [
+			'user',
+			'session',
+			'account',
+			'game_tracking',
+			'setting',
+		]) {
+			const rows = await env.DB.prepare(
+				`SELECT 1 FROM ${table} WHERE ${table === 'user' ? 'id' : 'user_id'} = ?`,
+			)
+				.bind(userId)
+				.all();
+			expect(
+				rows.results.length,
+				`${table} survives failed deletion`,
+			).toBeGreaterThan(0);
+		}
 	});
 });
 
