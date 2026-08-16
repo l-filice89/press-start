@@ -12,22 +12,34 @@ import './confirm-dialog.css';
  */
 export function ConfirmDialog({
 	title,
+	description,
+	status,
 	confirmLabel = 'Confirm',
+	confirmDisabled = false,
+	dismissDisabled = false,
 	onConfirm,
 	onCancel,
 }: {
 	title: string;
+	description?: string;
+	status?: string;
 	confirmLabel?: string;
+	confirmDisabled?: boolean;
+	dismissDisabled?: boolean;
 	onConfirm: () => void;
 	onCancel: () => void;
 }) {
 	const dialogRef = useRef<HTMLDivElement>(null);
 	const cancelRef = useRef<HTMLButtonElement>(null);
 	const titleId = useId();
+	const descriptionId = useId();
 
 	// Shared modal scaffold (Story 3.5): Cancel takes focus on open (the
 	// destructive-lite default); Escape resolves to onCancel from anywhere.
-	const onKeyDown = useModalTrap(dialogRef, onCancel, {
+	const dismiss = () => {
+		if (!dismissDisabled) onCancel();
+	};
+	const onKeyDown = useModalTrap(dialogRef, dismiss, {
 		initialFocusRef: cancelRef,
 	});
 
@@ -41,7 +53,7 @@ export function ConfirmDialog({
 			onMouseDown={(e) => {
 				// A press on the dim area (not the dialog) dismisses without writing,
 				// and stops focus from silently landing behind an `aria-modal` dialog.
-				if (e.target === e.currentTarget) onCancel();
+				if (e.target === e.currentTarget) dismiss();
 			}}
 		>
 			{/* tabIndex={-1} makes the dialog root click-focusable: a press on the
@@ -52,6 +64,7 @@ export function ConfirmDialog({
 				role="dialog"
 				aria-modal="true"
 				aria-labelledby={titleId}
+				aria-describedby={description ? descriptionId : undefined}
 				tabIndex={-1}
 				className="confirm-dialog"
 				onKeyDown={onKeyDown}
@@ -59,18 +72,34 @@ export function ConfirmDialog({
 				<p id={titleId} className="confirm-dialog__title">
 					{title}
 				</p>
+				{description && (
+					<p id={descriptionId} className="confirm-dialog__description">
+						{description}
+					</p>
+				)}
+				{status && (
+					<p
+						className="confirm-dialog__status"
+						role="status"
+						aria-live="polite"
+					>
+						{status}
+					</p>
+				)}
 				<div className="confirm-dialog__actions">
 					<button
 						ref={cancelRef}
 						type="button"
 						className="confirm-dialog__cancel tap-target"
-						onClick={onCancel}
+						aria-disabled={dismissDisabled}
+						onClick={dismiss}
 					>
 						Cancel
 					</button>
 					<button
 						type="button"
 						className="confirm-dialog__confirm tap-target"
+						disabled={confirmDisabled}
 						onClick={onConfirm}
 					>
 						{confirmLabel}

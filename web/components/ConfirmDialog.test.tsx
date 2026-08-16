@@ -15,6 +15,7 @@ function renderDialog() {
 	render(
 		<ConfirmDialog
 			title="Log Platinum achieved for Bloodborne? This is permanent."
+			description="Permanent milestone confirmation."
 			onConfirm={onConfirm}
 			onCancel={onCancel}
 		/>,
@@ -29,6 +30,9 @@ describe('ConfirmDialog', () => {
 			name: 'Log Platinum achieved for Bloodborne? This is permanent.',
 		});
 		expect(dialog).toHaveAttribute('aria-modal', 'true');
+		expect(dialog).toHaveAccessibleDescription(
+			'Permanent milestone confirmation.',
+		);
 		expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus();
 	});
 

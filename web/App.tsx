@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 // v8 ships one package: `react-router` (declarative/library mode — no Vite
 // plugin, no framework mode). `react-router-dom` does not exist any more.
@@ -16,6 +17,14 @@ import { AppShell } from './shell/AppShell';
  */
 function App() {
 	const { data: session, isPending } = authClient.useSession();
+	const queryClient = useQueryClient();
+
+	useEffect(() => {
+		if (!isPending && !session) {
+			queryClient.clear();
+			clearEtagCache();
+		}
+	}, [isPending, queryClient, session]);
 
 	if (isPending) {
 		return (

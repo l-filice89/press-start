@@ -28,6 +28,13 @@
 	font-family: var(--font-ui);
 }
 
+.confirm-dialog__description,
+.confirm-dialog__status {
+	margin: 0 0 var(--space-3);
+	color: var(--color-text-secondary);
+	font-size: 0.875rem;
+}
+
 .confirm-dialog__actions {
 	display: flex;
 	justify-content: flex-end;
@@ -41,6 +48,12 @@
 	font: inherit;
 	font-family: var(--font-ui);
 	cursor: pointer;
+}
+
+.confirm-dialog__cancel[aria-disabled="true"],
+.confirm-dialog__confirm:disabled {
+	opacity: 0.6;
+	cursor: default;
 }
 
 .confirm-dialog__cancel {

@@ -12,8 +12,14 @@ export interface MagicLinkEmail {
 	url: string;
 }
 
+export interface AccountDeletionEmail {
+	to: string;
+	url: string;
+}
+
 export interface EmailProvider {
 	sendMagicLinkEmail(email: MagicLinkEmail): Promise<void>;
+	sendAccountDeletionEmail(email: AccountDeletionEmail): Promise<void>;
 }
 
 /**
@@ -22,6 +28,7 @@ export interface EmailProvider {
  * email copy below — they can't drift apart.
  */
 export const MAGIC_LINK_TTL_MINUTES = 5;
+export const ACCOUNT_DELETION_TTL_MINUTES = 5;
 
 const RESEND_ENDPOINT = 'https://api.resend.com/emails';
 const RESEND_TIMEOUT_MS = 10_000;
@@ -56,6 +63,27 @@ export function createResendEmailProvider(
 				);
 			}
 		},
+		async sendAccountDeletionEmail({ to, url }) {
+			const response = await fetch(RESEND_ENDPOINT, {
+				method: 'POST',
+				headers: {
+					Authorization: `Bearer ${apiKey}`,
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({
+					from,
+					to: [to],
+					subject: 'PRESS START — confirm account deletion',
+					text: `Follow this link to permanently delete your Press Start account and private library data:\n\n${url}\n\nThe link expires in ${ACCOUNT_DELETION_TTL_MINUTES} minutes. If you didn't request it, ignore this email and your account will remain unchanged.`,
+				}),
+				signal: AbortSignal.timeout(RESEND_TIMEOUT_MS),
+			});
+			if (!response.ok) {
+				throw new Error(
+					`Resend rejected the account-deletion email: ${response.status} ${await response.text()}`,
+				);
+			}
+		},
 	};
 }
 
@@ -63,6 +91,9 @@ export function createConsoleEmailProvider(): EmailProvider {
 	return {
 		async sendMagicLinkEmail({ to, url }) {
 			console.log(`[auth] magic link for ${to}: ${url}`);
+		},
+		async sendAccountDeletionEmail({ to, url }) {
+			console.log(`[auth] account deletion link for ${to}: ${url}`);
 		},
 	};
 }

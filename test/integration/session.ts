@@ -4,7 +4,11 @@ import {
 	waitOnExecutionContext,
 } from 'cloudflare:test';
 import { expect } from 'vitest';
-import type { EmailProvider, MagicLinkEmail } from '../../src/providers/email';
+import type {
+	AccountDeletionEmail,
+	EmailProvider,
+	MagicLinkEmail,
+} from '../../src/providers/email';
 import { createAuth } from '../../src/services/auth';
 import worker from '../../worker/index';
 
@@ -20,12 +24,16 @@ export const TEST_EMAIL = 'owner@press-start.test';
 
 export function capturingEmailProvider() {
 	const sent: MagicLinkEmail[] = [];
+	const deletionSent: AccountDeletionEmail[] = [];
 	const provider: EmailProvider = {
 		async sendMagicLinkEmail(email) {
 			sent.push(email);
 		},
+		async sendAccountDeletionEmail(email) {
+			deletionSent.push(email);
+		},
 	};
-	return { sent, provider };
+	return { sent, deletionSent, provider };
 }
 
 /** Drive a request through the real Worker (routes + SPA fallback). */
@@ -52,6 +60,24 @@ export async function requestMagicLink(email: string) {
 		}),
 	);
 	return { response, sent };
+}
+
+/** Request better-auth's verified account-deletion link for one session. */
+export async function requestAccountDeletion(cookie: string) {
+	const { deletionSent, provider } = capturingEmailProvider();
+	const auth = createAuth(env, { baseURL: BASE, emailProvider: provider });
+	const response = await auth.handler(
+		new Request(`${BASE}/api/auth/delete-user`, {
+			method: 'POST',
+			headers: {
+				cookie,
+				'Content-Type': 'application/json',
+				Origin: BASE,
+			},
+			body: JSON.stringify({ callbackURL: '/' }),
+		}),
+	);
+	return { response, deletionSent };
 }
 
 /** Follow a captured magic-link URL; returns the session cookie pair. */

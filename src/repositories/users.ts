@@ -41,3 +41,8 @@ export async function deleteExpiredVerifications(db: Db, now: Date) {
 	// lte: a row expiring at the exact sweep instant is expired.
 	await db.delete(verification).where(lte(verification.expiresAt, now));
 }
+
+/** Delete one user and every user-owned FK cascade in one atomic statement. */
+export async function deleteUserCascade(db: Db, userId: string) {
+	await db.delete(user).where(eq(user.id, userId));
+}

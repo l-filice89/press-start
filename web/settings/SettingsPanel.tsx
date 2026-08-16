@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useToast } from '../components/Toast';
 import { useModalTrap } from '../components/useModalTrap';
+import { callApi } from '../shelf/api';
 import {
 	cancelPsPlus,
 	fetchSettings,
@@ -135,6 +136,38 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 	// claims. The button is inert with no claims; the confirm names the count.
 	const claimCount = settings?.psPlusClaimCount ?? 0;
 	const [confirmingCancel, setConfirmingCancel] = useState(false);
+	const [confirmingDeletion, setConfirmingDeletion] = useState(false);
+	const [deletionEmailSent, setDeletionEmailSent] = useState(false);
+	const deleteButtonRef = useRef<HTMLButtonElement>(null);
+	const deletionRequestRef = useRef(false);
+	const restoreDeleteFocusRef = useRef(false);
+	const requestDeletion = useMutation({
+		mutationFn: () =>
+			callApi('/api/auth/delete-user', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ callbackURL: '/' }),
+			}),
+		onSuccess: () => {
+			restoreDeleteFocusRef.current = true;
+			setConfirmingDeletion(false);
+			setDeletionEmailSent(true);
+		},
+		onSettled: () => {
+			deletionRequestRef.current = false;
+		},
+	});
+	const requestDeletionEmail = () => {
+		if (deletionRequestRef.current) return;
+		deletionRequestRef.current = true;
+		setDeletionEmailSent(false);
+		requestDeletion.mutate();
+	};
+	const cancelDeletion = () => {
+		requestDeletion.reset();
+		restoreDeleteFocusRef.current = true;
+		setConfirmingDeletion(false);
+	};
 	const cancelClaims = useMutation({
 		mutationFn: cancelPsPlus,
 		onSuccess: () => {
@@ -152,9 +185,18 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 
 	const onKeyDown = useModalTrap(dialogRef, closePanel, {
 		// The count-confirm stacks on top: hand Escape to it (Story 3.5 rule).
-		enabled: !confirmingCancel,
+		enabled: !confirmingCancel && !confirmingDeletion,
 		initialFocusRef: inputRef,
 	});
+	useEffect(() => {
+		if (!confirmingDeletion && restoreDeleteFocusRef.current) {
+			restoreDeleteFocusRef.current = false;
+			if (dialogRef.current) dialogRef.current.inert = false;
+			// Backdrop dismissal starts on mousedown; restore after the remaining
+			// pointer events so their default focus move cannot land on <body>.
+			setTimeout(() => deleteButtonRef.current?.focus(), 0);
+		}
+	}, [confirmingDeletion]);
 
 	return createPortal(
 		// biome-ignore lint/a11y/noStaticElementInteractions: the backdrop is a dismiss surface, not a control — Escape and the Close button are the accessible paths; this only mirrors them for pointer users.
@@ -327,6 +369,34 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 					</p>
 				</section>
 
+				<section className="settings-panel__section settings-panel__account">
+					<p className="settings-panel__eyebrow">ACCOUNT</p>
+					<h3 className="settings-panel__heading">Delete your account</h3>
+					<p className="settings-panel__status">
+						Permanently deletes your private library and settings. Export your
+						CSV first if you want to keep a copy. This cannot be undone.
+					</p>
+					<button
+						ref={deleteButtonRef}
+						type="button"
+						className="settings-panel__delete tap-target"
+						onClick={() => {
+							requestDeletion.reset();
+							setConfirmingDeletion(true);
+						}}
+					>
+						Delete account
+					</button>
+					<p
+						className="settings-panel__feedback"
+						role="status"
+						aria-live="polite"
+					>
+						{deletionEmailSent &&
+							'Check your email. Your account remains until you open the deletion link.'}
+					</p>
+				</section>
+
 				<div className="settings-panel__actions">
 					<button
 						type="button"
@@ -346,6 +416,26 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
 					confirmLabel="Un-own claims"
 					onConfirm={() => cancelClaims.mutate()}
 					onCancel={() => setConfirmingCancel(false)}
+				/>
+			)}
+			{confirmingDeletion && (
+				<ConfirmDialog
+					title="Permanently delete your account?"
+					description="Opening the emailed link deletes your account and private library. This cannot be undone."
+					status={
+						requestDeletion.isError
+							? 'Couldn’t send the deletion email. Try again.'
+							: requestDeletion.isPending
+								? 'Sending deletion email…'
+								: undefined
+					}
+					confirmLabel={
+						requestDeletion.isPending ? 'Sending…' : 'Email deletion link'
+					}
+					confirmDisabled={requestDeletion.isPending}
+					dismissDisabled={requestDeletion.isPending}
+					onConfirm={requestDeletionEmail}
+					onCancel={cancelDeletion}
 				/>
 			)}
 		</div>,
