@@ -47,12 +47,12 @@ export default defineConfig({
 		// ponytail: chromium only — single-user personal app; add firefox/webkit if cross-browser bugs ever show up
 		{
 			name: 'chromium',
+			dependencies: ['catalog'],
 			testIgnore: /(account-deletion|epic7-catalog)\.spec\.ts/,
 			use: { ...devices['Desktop Chrome'] },
 		},
 		{
 			name: 'catalog',
-			dependencies: ['chromium'],
 			testMatch: /epic7-catalog\.spec\.ts/,
 			use: { ...devices['Desktop Chrome'] },
 		},
