@@ -45,6 +45,17 @@ export default defineConfig({
 	},
 	projects: [
 		// ponytail: chromium only — single-user personal app; add firefox/webkit if cross-browser bugs ever show up
-		{ name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+		{
+			name: 'chromium',
+			testIgnore: /account-deletion\.spec\.ts/,
+			use: { ...devices['Desktop Chrome'] },
+		},
+		{
+			name: 'account-deletion',
+			dependencies: ['chromium'],
+			retries: 0,
+			testMatch: /account-deletion\.spec\.ts/,
+			use: { ...devices['Desktop Chrome'] },
+		},
 	],
 });
