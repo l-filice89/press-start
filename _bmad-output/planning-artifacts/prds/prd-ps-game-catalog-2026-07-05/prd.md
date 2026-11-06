@@ -2,24 +2,25 @@
 title: PS Game Catalog PRD
 status: final
 created: 2026-07-05
-updated: 2026-08-02
+updated: 2026-11-07
+baseline: '3.6.0'
 ---
 
 # PS Game Catalog — Product Requirements Document
 
 ## 1. Vision & Success
 
-**ps-game-catalog** is a personal web app that replaces Luca's Notion database as the record of his PlayStation gaming life — owned, wanted, playing, finished. Notion only works as hard as Luca does; this is **a library that fills itself**†: append-only PS library sync, one name-search to add anything else, and PS+ Extra awareness on games he doesn't own.
+**PRESS START** replaces Luca's Notion record of his PlayStation gaming life: owned, wanted, playing, and finished. Seed the existing library once, then maintain it through manual additions and edits. Regional PS+ awareness, Stats, and explainable Play Next support purchase and play decisions.
 
-> † **Amended 2026-07-15 (Epic 11):** automated PS library sync removed for account safety — it authenticated as the user and risked a PSN ban. The library is **seeded once** (§4.1), then maintained by manual add-by-name (§4.4). Trust now rests on manual upkeep rather than auto-sync — an accepted trade (see `sprint-change-proposal-2026-07-15.md`). PS+ Extra awareness and name-search are unaffected.
+> Current baseline: package `3.6.0`. The [approved PSN Account Safety decision](../../sprint-change-proposal-2026-07-15.md) removed credentialed automation. Historical v1 milestones are not the current scope; retired IDs remain reserved. Amendment history remains in the append-only decision log.
 
-It is a single-user tool, reachable from the phone at the moment of discovery — that moment being the only one that counts for the wishlist. If it turns out well, it may be published someday; v1 builds nothing for that beyond not welding the door shut.
+Originally a personal tool, the app now supports open verified-email registration and private user-scoped libraries. Phone capture at the moment of discovery and cover-forward desktop browsing remain first-class.
 
-**Why build instead of adopt:** the existing trackers were considered and rejected — Backloggd and HowLongToBeat don't sync a PlayStation library (Infinite Backlog is the lone exception), and none of them knows what's in PS+ Extra. But the honest core is simpler: this is Luca's tool, with all the bells and whistles he desires. For a personal project that isn't a rationalization — it's the requirement.
+**Why build instead of adopt:** Luca wants a tool tailored to his gaming record and regional PS+ awareness. Trust in its data matters more than automatic completeness; manual upkeep is the accepted safety trade-off.
 
 **The one metric that matters:** the Notion database gets archived and never reopened. That happens when:
 
-1. The library can be trusted — every owned game is present without manual entry ("bought and forgot" becomes impossible).
+1. The seeded library is trustworthy and deliberate manual additions keep new purchases and wishlist discoveries current; no automatic purchase detection is promised.
 2. Logging a status change takes seconds, not a Notion-editing session.
 3. The wishlist gets consulted before purchases — including the "already in PS+ Extra" check.
 4. Filtering the backlog beats what Notion's views offered.
@@ -36,9 +37,9 @@ Everything the UI shows and filters derives from this model. The governing princ
 `Not started` · `Up next` · `Playing` · `Paused` · `Dropped`
 
 - **FR-1** — One per game. Defaults to `Not started`.
-- **FR-2** — May be **null** once a completion milestone exists (and only then). Logging a **platinum** auto-clears the status to null; a **story completion** leaves the status untouched — play usually continues toward the platinum, so the game stays on the shelf (amended 2026-07-09; was: any milestone auto-clears). The user may also clear it manually (replay ends, etc.). A replay sets it back to `Playing`.
+- **FR-2** — May be **null** once a completion milestone exists (and only then). Logging a **platinum** auto-clears the status to null; a **story completion** leaves the status untouched — play usually continues toward the platinum, so the game stays on the shelf. The user may also clear it manually (replay ends, etc.). A replay sets it back to `Playing`.
 - **FR-3** — **Invariant: every game always has a play status or at least one completion milestone.** The detail view refuses any edit that would leave neither (clearing the last milestone requires setting a play status first).
-- **FR-4** — `Dropped` games are hidden from the default shelf, reachable via the `Dropped` reveal pill, which shows **only** `Dropped` games (exclusive view, §3; amended 2026-07-10 — was: revealed games ORed into the default set, which pushed them behind the FR-18 order + infinite scroll).
+- **FR-4** — `Dropped` games are hidden from the default shelf, reachable via the `Dropped` reveal pill, which shows **only** `Dropped` games (exclusive view, §3).
 
 ### Completion milestones (dates, not statuses)
 
@@ -54,13 +55,13 @@ effective state = play status, if set
                   else "Story completed",  if completed_on
 ```
 
-**FR-8** — Shelf ordering, card labels, and filter pills all operate on effective state, never on raw play status. A platinumed game never matches the "Playing" pill; a replayed game shows "Playing" while its completion dates stand untouched.
+**FR-8** — Shelf ordering, labels, and filters use effective state. Platinum logging clears status, so the game leaves the default Shelf; a later replay can explicitly restore `Playing` while milestone dates remain unchanged.
 
 ### Ownership
 
-- **FR-9** — `Owned` is a flag, not a status, and it means **purchased**. ~~It is set by the PS library sync (source of truth for digital)~~ **or manually in the detail view** (physical discs, which the PS API cannot see). *(Sync-set clause removed 2026-07-15, Epic 11 — ownership is now seed- or manually-set only.)* PS library entries that are **membership-sourced** (PS+ claims — the export's `membership` field) never set it: availability is not ownership (§6), and in the real export the majority of entries are claims, not purchases.
-- **FR-10** — Sync may set `Owned` to true on any existing game — including ones added by hand or by name — and never sets it false; nothing unsets it except the user.
-- **FR-11** — Ownership type (`digital` / `physical`) is inferred — sync-sourced games are digital, manually flagged ones default to physical — and editable in the detail view.
+- **FR-9** — `Owned` includes purchased and membership-acquired games. Seed or deliberate user edits establish ownership; `owned_via` distinguishes `purchase` from `membership`, separate from format. Opening a store/Claim link never proves acquisition. Claims never stamp `bought_on`. Cancelling membership un-owns membership rows while preserving purchases and recorded history.
+- **FR-10 [RETIRED]** — Automatic sync ownership changes were withdrawn with FR-33..37. Preserve this ID; deliberate ownership editing remains FR-9.
+- **FR-11** — Ownership format is `digital` or `physical`, independent of acquisition source. PS-export games default digital; manual ownership defaults physical when no format is supplied. Format is editable in detail.
 
 ### Derived states (never stored, never user-set)
 
@@ -80,8 +81,8 @@ One screen answers "what's my gaming life right now?" — the landing page is th
 ### Default view
 
 - **FR-17** — Shows every game whose effective state is a live play status; **`Story completed`, `Platinum achieved`, and `Dropped` games are hidden by default** — the default shelf is the backlog view, the full record is one pill away.
-- **FR-18** — Default ordering: `Playing` → `Up next` → `Paused` → `Not started`; **owned before wishlisted, then alphabetical by name, within each group** (ownership tier added 2026-07-09, Luca — surfaces ready-to-start games).
-- **FR-19** — **Infinite scroll**, with an always-visible **name search bar**. Search is a lookup, not a view: it matches against the entire library, ignoring active filters and hidden states — "did I ever finish that?" must always answer.
+- **FR-18** — Default ordering: `Playing` → `Up next` → `Paused` → `Not started`; **owned before wishlisted, then alphabetical by name, within each group**.
+- **FR-19** — Infinite scroll and persistent Shelf title search. Without active filters, search includes the entire library and hidden states. With active filters, search narrows within them; visible scope text distinguishes the cases. Confirmed by Luca 2026-11-07.
 
 ### Filters
 
@@ -90,50 +91,50 @@ One screen answers "what's my gaming life right now?" — the landing page is th
 | Group | UI | Members |
 |---|---|---|
 | State | Multiselect dropdown | `Not started`, `Up next`, `Playing`, `Paused` (live statuses only) |
-| State reveals | Individual pills, **own group** (amended 2026-07-10; was: extended the state group additively) | `Story completed`, `Platinum achieved`, `Dropped` — OR among themselves; any selection **replaces the State group entirely** (state selections clear) and shows only the matching hidden games; Genre and Flags still AND |
+| State reveals | Individual pills, **own group** | `Story completed`, `Platinum achieved`, `Dropped` — OR among themselves; any selection **replaces the State group entirely** (state selections clear) and shows only the matching hidden games; Genre and Flags still AND |
 | Genre | Multiselect dropdown | All genres in the vocabulary |
-| Flags | Individual pills, **each its own group (AND)** | `Owned`, `Wishlisted`, `Released`, `Playable now` |
-| Time to beat *(v1.x, VR-9 — added 2026-07-16)* | Band pills + story/100% toggle | `≤25h`, `25–50h`, `50–75h`, `75–100h`, `>100h`, `Unknown` — OR among themselves; a game missing the selected metric matches only `Unknown` |
+| Flags | Individual pills, **each its own group (AND)** | `Owned`, `Wishlisted`, `Released`, `Playable now`, `PS+`, `Leaving soon` when applicable |
+| Time to beat (VR-9) | Band choices + story/100% selector | `≤25h`, `25–50h`, `50–75h`, `75–100h`, `>100h`, `Unknown` — OR within group; missing selected metric matches only Unknown |
 
-**FR-21** — Selection rules (amended 2026-07-10): with nothing selected in State or Reveals, the shelf shows the default visible set (all live statuses, FR-17). A State-dropdown selection shows **exactly** the selected live states. A reveal-pill selection is an **exclusive view**: only games in the selected hidden state(s), the State group cleared — "Completed games only" is a one-pill view that hides everything else. State dropdown and reveal pills are mutually exclusive; activating one clears the other.
+**FR-21** — Selection rules: with nothing selected in State or Reveals, the shelf shows the default visible set (all live statuses, FR-17). A State-dropdown selection shows **exactly** the selected live states. A reveal-pill selection is an **exclusive view**: only games in the selected hidden state(s), the State group cleared — "Completed games only" is a one-pill view that hides everything else. State dropdown and reveal pills are mutually exclusive; activating one clears the other.
 
 **FR-22** — Active pills are visually highlighted (toggle-on state).
 
 ### Genre vocabulary
 
-- **FR-23** — **Single source: the third-party games DB** (IGDB/RAWG — architecture picks). Notion's genre column is dropped at import; the seed importer re-tags all games via external lookup, so the vocabulary is consistent from day one and stays consistent as games are added.
+- **FR-23** — Library genre vocabulary originates in IGDB. Notion Category is dropped at import; unmatched games await enrichment rather than receiving invented genres. PS-store catalog facets are a separate vocabulary.
 - **FR-24** — Adding a game whose genres don't exist yet auto-creates the genre rows.
 - **FR-25** — Genres are editable per-game in the detail view (fix a bad auto-fill); a merge/rename tool is not v1.
 
 ## 4. Getting Games In
 
-Three doors into the library. All of them record lifecycle dates silently (§4.5), and none of them ever modifies user-entered data.
+The library is seeded once, then maintained through add-by-name and user-initiated Catalog Add. Ingest preserves existing user-entered tracking data; deliberate edits are separate actions.
 
 ### 4.1 Seed import (one-time)
 
-- **FR-26** — Imports the Notion CSV export and the PS library export, then enriches **every** game from the third-party games DB (cover, genres, release date) — genres come exclusively from there (§3). **Membership-sourced PS entries (PS+ claims) are excluded** — they neither create games nor set `Owned` (FR-9); the import summary reports how many were skipped.
+- **FR-26** — Import Notion and PS-library CSVs and enrich catalog facts through IGDB. Purchases and membership claims create owned records with acquisition source distinguished; only WEBMAF companion apps are excluded and counted. This follows the 2026-07-11 ownership amendment in [addendum](addendum.md#ownership-rationale).
 - **FR-27** — **Title reconciliation** joins the two sources and the external DB: comparison is case-insensitive after stripping trademark glyphs (`™`, `®`), leading articles ("The …"), edition suffixes, and normalizing whitespace. PS4/PS5 duplicates collapse to one PS5 entry.
-- **FR-28** — The import lands everything it can and **lists stragglers visibly in the UI** — unmatched or ambiguous titles are resolved by manual search from the app, no interactive import session. Resolving a straggler **carries its Notion data** (status, dates, owned flag) onto the matched game.
-- **FR-29** — **A manual match is permanent:** resolving a straggler stores the external-ID/title-alias link, so subsequent PS syncs recognize the game and never re-add it as a duplicate.
+- **FR-28** — Import everything resolvable and expose unmatched/ambiguous rows in the in-app stragglers list. Unmatched owned PS games may remain as unenriched games. Manual resolution carries Notion status, dates, and ownership onto the match; no guessing or interactive seed-import UI.
+- **FR-29** — A resolved manual match stores its external-ID link permanently for subsequent matching and duplicate prevention.
 - **FR-30** — **Notion status mapping** onto the new model: `Completed` → status null + `completed_on` (from *Date finished*); `Up next!` → `Up next`; `Not released` → `Not started` (the release date carries that fact); `Not started`, `Playing`, `Paused` map 1:1. *Date started* → `started_on`. The *Rating* column is **not** imported (personal ratings are a non-goal, §6). Any row the mapping can't place — an unknown status value, or `Completed` without a *Date finished* — goes to the stragglers list instead of guessing.
 - **FR-31** — The CSV's **`Owned` column is honored**: `Owned: Yes` games import as owned (ownership type physical by default, editable — these are exactly the discs and delisted titles the PS export won't contain), never as wishlisted.
 - **FR-32** — **No fabricated history:** the import stamps only the dates it actually knows (*Date started*, *Date finished*); `bought_on` and `wishlisted_on` remain null for imported games.
 
-### 4.2 PS library sync
+### 4.2 PS library sync [RETIRED]
 
-> **RESCINDED 2026-07-15 (Epic 11, PSN Account Safety):** the credentialed PS library sync (FR-33–FR-37) is removed — it authenticates as the user and risks a PSN account ban. New purchases are added via §4.4 add-by-name (manual). The one-time seed (§4.1) remains the library's origin. Rationale: `sprint-change-proposal-2026-07-15.md`.
+> FR-33..37 remain retired under the [approved 2026-07-15 safety decision](../../sprint-change-proposal-2026-07-15.md). Seed import remains; new games and ownership changes require deliberate user actions.
 
-- **FR-33** — Triggered by a **button**. **Append-only applies to user-entered data:** sync may create games (defaults: `Owned`, digital, `Not started`) and may flip `Owned` to true on existing games of any origin (stamping `bought_on`, ownership type digital); it never deletes a game, never sets `Owned` false, and never touches status, milestones, dates, or genres. **Purchase-sourced entries only:** membership-sourced entries (PS+ claims, FR-9) are skipped — never created, never flipped to `Owned` — and a claim that matches an already-tracked game leaves it untouched.
-- **FR-34** — Matching order: stored external-ID/alias links first, then normalized title. PS4/PS5 collapse applies. A title-matched game that already carries a *different* external-ID link is flagged in the sync summary's needs-attention list rather than silently merged (two distinct games can normalize to the same name).
-- **FR-35** — Cover art and the PS Store product URL are captured at sync time and persisted — nothing is fetched on page render (NFR-3).
-- **FR-36** — Auth is a stored PlayStation credential, editable from the UI; on auth failure the app surfaces the refresh instructions and does not retry. (v1: `pdccws_p` cookie. **Resolved 2026-07-13 by S-1 / DW-10 → moving to NPSSO bearer in Epic 9 story 9.1b**, since trophies require it and it also serves the library sync; the credential and its refresh live entirely inside `PsnProvider`, AR-5.) **Superseded 2026-07-15 (Epic 11):** no stored PS credential — the app makes no credentialed PSN call. The only PSN traffic left is the anonymous PS+ catalog fetch (§4.3), which carries no account identity.
-- **FR-37** — Every sync ends with a **visible summary**: games added, `Owned` flips, membership-sourced entries skipped (FR-33), and anything needing attention (failed external lookups).
+- **FR-33 [RETIRED]** — Button-triggered library sync removed; no replacement automated ownership writer.
+- **FR-34 [RETIRED]** — Sync conflict handling removed with sync; shared identity and normalization rules remain architecture constraints for active import/add paths.
+- **FR-35 [RETIRED]** — Sync-time metadata capture removed; active ingest/add still persists facts before rendering under NFR-3.
+- **FR-36 [RETIRED]** — PSN credential storage and refresh UI removed. Runtime PSN traffic is anonymous store browsing only; no NPSSO/cookie exchange.
+- **FR-37 [RETIRED]** — Library sync summary removed with the operation.
 
 ### 4.3 PS+ Extra check
 
-- **FR-38** — Sets/clears the PS+ Extra flag on **tracked, non-owned games only**. Catalog games are never auto-added to the library; a refresh updates flags in both directions (games leave the catalog too). The catalog is **per-region** — the check runs against the user's account region. The flag is ignored and hidden from the moment a game becomes owned.
-- **FR-39** — Triggered by a **button and a scheduled job** aligned to Sony's predictable monthly catalog update. (The scheduled job must fit the stateless free-tier constraint — architecture concern.) *Amended 2026-07-17 (Epic 8, `sprint-change-proposal-2026-07-17-epic8-capacity.md`): in multi-user the refresh becomes per-region and cron-driven, plus a stale-snapshot sign-in guard; the manual button is removed (single-user keeps it until story 8.4 lands).*
-- **FR-40** — The shelf shows a **"PS+ catalog as of {date}"** timestamp, and a failed scheduled refresh surfaces a notice on next app open — NFR-4's "failures surface" bar holds even when nobody is watching the run. *Amended 2026-07-17 (Epic 8): in multi-user, failed scheduled refreshes surface via the as-of timestamp plus a "catalog updating…" notice when a refresh is in flight — not attention banners; recovery is automatic (story 8.4) and no user action exists.*
+- **FR-38** — Derive membership from the shared snapshot for the user's region, in both directions as catalog membership changes. Hide the PS+ indicator on owned games. Catalog availability never auto-adds a library record; regional departure history survives snapshot pruning.
+- **FR-39** — Automatic per-region scheduled rotation and stale-snapshot recovery populate the catalog; no manual refresh button or route. Scheduling, quarantine, locking, and budget rules belong to architecture AD-28/31/32.
+- **FR-40** — Show the last successful PS+ catalog timestamp and an updating state during refresh. Failed refreshes retain stored data and stale timestamp with operational logging; no user-action failure banner is required for this automatically recovered path.
 
 ### 4.4 Add-by-name
 
@@ -141,11 +142,11 @@ Three doors into the library. All of them record lifecycle dates silently (§4.5
 - **FR-42** — The search also matches the **existing library**: picking a game already tracked opens its detail view instead of creating a duplicate.
 - **FR-43** — Defaults on save: not owned (= wishlisted, `wishlisted_on` recorded), status `Not started`. The "saw a game on my phone" moment: open app, type name, pick, save — seconds.
 
-### 4.5 Lifecycle dates (v1 collects, later versions consume)
+### 4.5 Lifecycle dates
 
-**FR-44** — Auto-recorded on every transition, never asked for: `wishlisted_on` (added while not owned), `bought_on` (owned flips true — via sync or manual flag), `started_on` (first transition to `Playing`), `completed_on` and `platinum_on` (§2 milestones). Seed-imported games only get the dates the CSV actually knows (FR-32). These can't be reconstructed later; capturing them is a v1 requirement even though nothing consumes them yet.
+**FR-44** — Capture `wishlisted_on` on non-owned add, `bought_on` on purchase acquisition only, `started_on` on first transition to Playing without a completion milestone, and completion/platinum dates on milestone logging. Membership claims never stamp purchase dates. Seed uses only known source dates (FR-32). These dates now feed Stats.
 
-**FR-45** — **All lifecycle dates are write-once through automatic flows** — the first value stands, milestones-style: no sync, status change, or re-transition ever overwrites a recorded date (re-flagging `Owned` or re-entering the wishlist writes nothing). Like milestones (FR-6), they remain manually editable in the detail view — corrections are deliberate, overwrites are never automatic. `started_on` is written only while no completion milestone exists; replays never write it.
+**FR-45** — **All lifecycle dates are write-once through automatic flows** — the first value stands, milestones-style: no import, status change, or re-transition ever overwrites a recorded date (re-flagging `Owned` or re-entering the wishlist writes nothing). Like milestones (FR-6), they remain manually editable in the detail view — corrections are deliberate, overwrites are never automatic. `started_on` is written only while no completion milestone exists; replays never write it.
 
 ## 5. Platform, Auth & Quality Bars
 
@@ -155,8 +156,8 @@ Three doors into the library. All of them record lifecycle dates silently (§4.5
 
 ### Auth & the multi-user seam
 
-- **FR-47** — **better-auth with magic link** for v1; **Google OAuth is v1.x, owned by Epic 8 story B1a** (added alongside magic link; the `AUTH_ALLOWED_EMAIL` gate still applies to the callback — dropping that gate is B1b, a separate and demand-driven decision).
-- **FR-48** — Single user in practice, but all user-entered tracking data (status, milestones, dates, ownership overrides) is **scoped to a user id from day one**. No sharing, roles, or tenant isolation is built — the door to publishing is left unwelded, nothing more.
+- **FR-47** — better-auth magic link plus Google OAuth when configured. Registration is open; email control must be proven on creation and account linking. No password, admission list, roles, or sharing.
+- **FR-48** — Every user-entered tracking record and setting is user-scoped. Shared catalog facts remain shared; PS+ membership/departure answers derive using the user's region. Separate tenant infrastructure is not required.
 
 ### Hosting & data
 
@@ -165,37 +166,37 @@ Three doors into the library. All of them record lifecycle dates silently (§4.5
 
 ### Quality bars
 
-- **NFR-3** — **Nothing external on render:** covers and store links are served from persisted data; third-party APIs are hit only at import, sync, refresh, or add time.
-- **NFR-4** — **Failures surface, never silently retry:** an expired PlayStation session cookie shows the refresh instructions (FR-36); a failed external lookup lands the game in the stragglers list.
+- **NFR-3** — Metadata read paths use persisted facts and make no external provider lookup. Images may load from persisted cover URLs; discovery, import, and scheduled refresh perform provider I/O.
+- **NFR-4** — Failures preserve standing data and surface appropriately: lookup/enrichment failures remain resolvable; score-refresh failures show a notice; PS+ uses FR-40's passive timestamp/log posture. Bounded scheduled recovery is permitted; no credential-denial retry exists because credentialed PSN operations are removed.
 - **NFR-5** — **Play Next is local and explainable:** recommendation derivation uses existing application data and deterministic client-side rules. No LLM, machine learning, external recommendation service, or persistent recommendation-preference/history data.
-- **FR-49** — **CSV export in v1:** the full library — games, statuses, milestones, lifecycle dates, genres, ownership — downloadable as CSV. Cheap insurance for data that can't be reconstructed; the DB provider's backups are not the only copy.
+- **FR-49** — **CSV export:** the full library — games, statuses, milestones, lifecycle dates, genres, ownership — downloadable as CSV. Cheap insurance for data that can't be reconstructed; the DB provider's backups are not the only copy.
 
-## 6. Later & Out of Scope
+## 6. Delivered Extensions & Remaining Scope
 
-**v1 assumes a PS+ Extra subscription** (Luca's current tier). The tier setting below generalizes this later.
+Extra is the supported catalog tier. Selectable subscription tiers remain future scope.
 
-### v1.x — enriches a working app (next, not now)
+### Delivered enrichment
 
-- ~~Trophy sync from PSN: completion % and a PSNProfiles-style letter grade (computable client-side once counts are synced).~~ **Removed 2026-07-15 (Epic 11):** trophy sync withdrawn (account-ban risk); completion/platinum tracked manually via milestones (§2). Safe revival only via the PSNProfiles model — a burner account reading the public profile, never the main credential.
-- Critic and user scores from games-DB sources, stored and refreshed on a schedule.
-- **Time to beat** — hours to finish the story and hours to 100%, shown next to the scores. Source: IGDB `/game_time_to_beats`, keyed by the `igdbId` already stored (open-q #6); HowLongToBeat is the fallback only if IGDB coverage is thin. Same stored-and-scheduled-refresh discipline as the scores. *(Not personal playtime tracking — that stays Future.)* A **shelf filter over these hours** (five bands + `Unknown`, story/100% toggle — see the §3 filters table) is VR-9 / Epic 12, added 2026-07-16.
-- "Leaving PS+ Extra soon" warnings for backlog games.
-- Google sign-in.
+- **Trophy automation withdrawn:** credentialed trophy retrieval/backfill and its display/schema were removed by Epic 11. Manual completion/platinum milestones remain supported. No credentialed revival path is authorized.
+- **VR-5 — Reception:** persist IGDB critic/user scores with their counts; render stored facts and refresh in the background. Missing scores remain absent. Omitted or failed provider rows preserve standing values; valid explicit clears follow the provider field contract.
+- **VR-8/VR-9 — Time to beat:** distinct IGDB story/100% estimates with submission count; store seconds, display hours. Never substitute one metric for the other or invent missing estimates. Shelf filtering follows FR-20. The existing scheduled refresh also updates release dates; explicit withdrawals return to TBA, omitted/failed rows retain standing dates.
+- **VR-6 — Departure warnings:** anonymous regional sweep of tracked catalog products; eligible non-owned games show known leaving dates and Leaving soon filtering. Valid staying/null replies clear a prior date; failed replies retain prior data. No auto-added library games.
+- Google sign-in is delivered under FR-47.
 
-### Post-v1.0.0 — Browse the PS+ catalog & add (Epic 7)
+### Catalog browse & add (Epic 7, delivered)
 
-Not in the v1 milestone. Epic 5 flags catalog membership on games *already tracked*; this turns the **whole** per-region catalog into a browsable destination. Depends on the §4.4 add-by-name path (Epic 6). Does **not** violate the auto-add non-goal below — adds are user-initiated.
+The Catalog is a browsable regional dataset. Adds are user-initiated through FR-41/43; availability alone never creates tracking records.
 
 - **FR-50** — The full per-region PS+ catalog is stored as a **first-class dataset** in its own table (not `game`/`game_tracking` rows — the no-auto-add non-goal holds), populated and pruned to a faithful snapshot by the §4.3 monthly refresh. **Tier-aware** (`Extra` now; `Premium` layers on via the subscription-settings item below) with no migration rewrite.
 - **FR-51** — A **catalog destination** renders the stored catalog in a shelf-style, paged grid with a **genre filter and name search**, marking games already in the library (FR-42 dedup parity). Covers/genres come from the PS-store payload (NFR-3: stored, not fetched on render).
 - **FR-52** — Adding a catalog game promotes it into the library via the §4.4 add preview (IGDB enrichment on demand, saves as wishlisted — FR-41/43); catalog membership immediately lights its PS+ flag. A **"Claim now"** deep-link opens the PS Store product page for the region so the user adds it to their PlayStation account themselves — **no direct in-app claim** (an undocumented authenticated write against the user's real account; out of scope).
 
-### Post-v1 — Choose what to play next (Epic 13)
+### Choose what to play next (Epic 13, delivered)
 
-Play Next is a standalone, transparent alternative to Flow 3's manual Shelf filtering. It uses only facts already present in the Shelf payload and never changes the manual flow.
+Play Next is a standalone, transparent alternative to manual Shelf filtering (§3). It uses only facts already present in the Shelf payload and never changes the manual flow.
 
-- **FR-53** — A standalone **Play Next** destination immediately presents three suggestions on every visit, with no required input. Current manual Shelf filtering remains unchanged.
-- **FR-54** — A candidate must have no known future release date and must not be `Playing`, `Platinum`, or `Dropped`. Known released and unknown/TBA release dates are eligible. Owned and currently playable PS+ games are eligible. `Paused` and story-completed-but-not-platinumed games are eligible as **Finish them** candidates.
+- **FR-53** — A standalone Play Next destination immediately presents up to three suggestions on each visit, with no required input. A small eligible pool produces an honest smaller slate or empty state; manual Shelf filtering is unchanged.
+- **FR-54** — A candidate must have no known future release date and must not be `Playing`, `Platinum`, or `Dropped`. Known released and unknown/TBA release dates are eligible. Owned games and currently playable PS+ games are eligible. `Paused` and story-completed-but-not-platinumed games are eligible as **Finish them** candidates.
 - **FR-55** — Missing enrichment never makes an otherwise eligible game ineligible. Missing facts contribute no score and produce no unsupported explanation.
 - **FR-56** — Ranking is additive and inspectable: intent match, ownership/playability, `Up next` priority, PS+ departure urgency, backlog age, genre familiarity/variety, time-to-beat fit, confidence, and Finish them progress.
 - **FR-57** — User may select at most one tag per intent group. Active groups form desired conjunctive match. Groups cover Genre, Length, Shelf age, Confidence, Priority, and Progress.
@@ -206,29 +207,29 @@ Play Next is a standalone, transparent alternative to Flow 3's manual Shelf filt
 - **FR-62** — **Shuffle** uses applied intent and excludes every game already shown during the visit. If only one or two unseen matches remain, it shows the smaller slate and warns that the next Shuffle refreshes the pool. Pool reset still excludes currently visible games. Visit state is not persisted after leaving Play Next.
 - **FR-63** — User can **Open details** without losing Play Next visit state or choose **Play this**, which uses existing lifecycle behavior to set `Playing` and returns to Shelf.
 
+### Stats & account controls (delivered)
+
+| ID | Requirement | Detailed contract |
+|---|---|---|
+| FR-64 | Stats shows all-time tracked/owned/completed/platinum recap, selected-year lifecycle totals, monthly activity, and genre breakdown from the user's library; invalid/missing dates invent no history. | [Experience spine](../../ux-designs/ux-ps-game-catalog-2026-07-05/EXPERIENCE.md) |
+| FR-65 | Per-user nonempty PlayStation platform selection limits interactive external title searches; default PS1–PS5, optional PSP/PS Vita/PSVR 1/PSVR 2. Existing rows and scheduled by-ID refresh remain unfiltered. | [Platform contract](../../../implementation-artifacts/spec-igdb-playstation-platform-filter.md) |
+| FR-66 | Confirmed, email-verified permanent account deletion removes private data/session rows, retains shared facts/other users, clears caller caches, and preserves data on invalid links or failures; five-minute verification and signed-cookie-cache limits apply. | [Deletion contract](../../../implementation-artifacts/spec-permanent-account-deletion.md) |
+
 ### Future — earns its way in later
 
-- **PS+ subscription settings:** the user declares whether they have PS+ and the tier — *Essential* (no catalog: invite to sync / highlight when the three monthly games change), *Extra* (the default behavior v1 implements), *Premium* (Extra plus the premium-bracket catalog). Feeds the tier-aware catalog (FR-50).
-- Stats and dashboards over the lifecycle-date history.
+- **PS+ subscription tiers:** selectable Essential/Premium behavior remains future. Extra is the supported catalog tier; a tier-capable schema alone does not deliver tier selection.
 - Sale detection + notifications for wishlisted games (mechanism sketch in the addendum).
-- Possibly **personal** playtime tracking (hours *Luca* put in — distinct from the v1.x time-to-beat estimate above) and other platforms.
+- Personal playtime tracking remains future; non-PlayStation tracking stays outside current scope.
 
 ### Non-goals
 
-- Multi-user support and public release — out for now, door open (§5 seam is the entire investment).
+- Roles, sharing, or separate tenant infrastructure; open registration/private multi-user libraries are delivered under FR-47/48.
 - Non-PlayStation platforms.
 - Auto-adding PS+ catalog games to the library — availability is not ownership; catalog games leave.
 - Automating anything Sony's API can't give reliably.
-- **No gamification, ever** — XP, streaks, badges. The field tried it; it incentivized logging games nobody played.
-- **No personal ratings** — the Notion `Rating` column is not imported and no rating field exists. (External critic/community scores remain a v1.x feature; that's different data.)
+- **No gamification, ever** — XP, streaks, or reward badges. Factual completion indicators remain milestones.
+- **No personal ratings** — Notion Rating is not imported and no personal rating field exists. External reception scores are distinct delivered data.
 
-## 7. Open Questions
+## 7. Resolved Technical Choices
 
-All architecture-time decisions; none block this PRD.
-
-1. **Database** — free-tier candidates: Turso/libSQL, Cloudflare D1, Neon/Supabase Postgres, **Convex** (reactive backend-as-a-service; reputation for friendly pricing — evaluate alongside the SQL options). Re-verify free tiers at decision time.
-2. **PS auth** — ~~can the NPSSO-token path (psn-api's auth) replace or complement the fragile `pdccws_p` cookie for library and catalog queries?~~ **RESOLVED by spike S-1, 2026-07-13** (`implementation-artifacts/deferred-work.md` DW-10): NPSSO *replaces* the cookie. The bearer serves `getPurchasedGameList` (library) and the trophy endpoints; the cookie serves neither trophies (401) nor durably. The full swap is Epic 9 story 9.1b.
-3. **Games DB** — IGDB vs RAWG for add-by-name search, genres, covers, release dates.
-4. **Scheduled job** — mechanism for the monthly PS+ Extra refresh within the stateless free tier (e.g. Cloudflare Cron Triggers).
-5. **Score source** (v1.x concern) — **RESOLVED (2026-07-13): IGDB.** `aggregated_rating` (critic) and `rating` (user) come from the `/games` endpoint the `IgdbProvider` already calls — no second adapter, no new credentials. OpenCritic is the fallback if coverage proves thin on real titles; RAWG is out.
-6. **Time-to-beat source** (v1.x concern) — **RESOLVED (2026-07-13): IGDB.** `/game_time_to_beats` returns `normally` / `completely` / `count` keyed by `game_id`, which joins on the `igdbId` already stored — same provider, same credentials, **no fuzzy title matching**. HowLongToBeat is the fallback only if IGDB coverage proves thin: its endpoint is unofficial (breaks on their rebuilds) and it has no shared id, so it would match on title. Open until the coverage check in Epic 10 Story 10.3's first task.
+Architecture owns the implementation decisions: Cloudflare Worker/D1/Cron, IGDB for metadata/scores/time-to-beat, and anonymous-only PS Store access. Credentialed PSN auth is retired. Exact invariants and current delivery workflow live in the [architecture spine](../../architecture/architecture-ps-game-catalog-2026-07-05/ARCHITECTURE-SPINE.md); provider alternatives are not unresolved implementation invitations.

@@ -586,3 +586,21 @@ resolution: done 2026-07-16 (Story 10.2) — DECIDED: `first_seen_at` keeps its 
 - source_spec: `_bmad-output/implementation-artifacts/spec-shelf-order-up-next-before-paused.md`
   summary: Epic 1 shelf Playwright tests depend on shared baseline rows and fail intermittently when run fully parallel with other state-mutating files.
   evidence: The combined Epic 1/Epic 3 run passed 8/12 while four Epic 1 tests observed zero baseline cards; both changed ordering flows passed together with one worker, isolating this as pre-existing shared-fixture interference rather than the shelf-order change.
+
+### DW-15: AD-31 activity and stale-guard triggers are narrower than approved
+
+origin: spec/code reconciliation, 2026-11-07; architecture AD-31 adopted 2026-07-17
+location: src/routes/shelf.ts:100-147; src/routes/settings.ts:160; architecture AD-6/31
+reason: The approved target covers authenticated activity, session establishment, and region changes. Baseline 3.6.0 only touches activity and runs stale recovery on Shelf GET, including its 304 path; region save explicitly defers to the next Shelf GET. Catalog-only or Stats-only activity can therefore leave activity/freshness bookkeeping behind the target.
+status: open
+decision: Preserve the approved requirement; this documentation repair records the gap without changing runtime behavior. A future change must cover the broader triggers or explicitly renegotiate AD-31.
+acceptance: Authenticated activity/session/region changes reach the agreed bookkeeping/guard path; daily attempt limits, three-failure quarantine, region locking and background-only provider calls remain intact. Tests cover Catalog/Stats-only activity, region change, and conditional Shelf reads.
+
+### DW-16: AD-31 idle-region data cleanup is not implemented
+
+origin: spec/code reconciliation, 2026-11-07; architecture AD-31 adopted 2026-07-17
+location: src/services/psplus.ts:332-361; architecture AD-30/31
+reason: The approved full-idle-cycle cleanup calls for deleting idle snapshot/genre/departure datasets while preserving region state and rebuilding on revival. Current cron selection only skips regions idle over 60 days; no idle-dataset deletion path implements that target. Ordinary membership prune still correctly retains departure history.
+status: open
+decision: Preserve the approved cleanup target and track its missing implementation; no deletion or policy change occurs during documentation repair.
+acceptance: Cleanup applies only after the agreed complete idle cycle, preserves region-state records and other regions/tiers, and revival repopulates the region safely. Tests distinguish idle cleanup from ordinary membership prune and verify departure-ledger behavior in both paths.

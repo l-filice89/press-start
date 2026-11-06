@@ -2,7 +2,7 @@
 name: PRESS START
 description: Arcade-neon personal game shelf. Dark-only, cover-forward, glance-and-go. Electric cyan does the work; hot magenta is reserved for what you're playing right now.
 status: final
-updated: 2026-08-01
+updated: 2026-11-07
 colors:
   bg-void: '#05090f'
   surface: '#0b1622'
@@ -53,7 +53,7 @@ components:
   settings-backup: 'Peer Settings section with full-width outlined Export CSV action.'
   attention-banner: 'Under-header notice zone for needs-action items.'
   toast: 'Transient bottom confirmation, auto-dismiss.'
-  summary-modal: 'Post-op readout (sync/import/PS+).'
+  summary-modal: 'Readout for supported user-triggered batch operations.'
   confirm-modal: 'Milestone fat-finger gate.'
   popover: 'Inline status + milestone menu off the pill.'
   detail-panel: 'Flip-then-grow editable detail.'
@@ -65,7 +65,7 @@ components:
 
 # PRESS START — Design Spine
 
-> Visual identity for a single-user, installable PWA that replaces a Notion game-tracking database. Dark-only by deliberate choice (the owner lives in dark mode; the reference is dark). Paired with `EXPERIENCE.md`. Both spines win on conflict with any mock. Mockups referenced inline live in `mockups/`.
+> Visual identity for a personal, installable PWA with separate accounts that replaces a Notion game-tracking database. Dark-only by deliberate choice (the owner lives in dark mode; the reference is dark). Paired with `EXPERIENCE.md`. Both spines win on conflict with any mock. Mockups referenced inline live in `mockups/`.
 
 ## Brand & Style
 
@@ -77,7 +77,7 @@ Voice is confident and a little playful, but **personality is dialled light** �
 
 **Name & wordmark.** The product is **PRESS START**, set in Orbitron 900 with a neon glow and a blinking cursor. Tagline: **"Want it! Own it! Beat it!"** (JetBrains Mono, tracked) — the game lifecycle in three beats, mapping 1:1 onto the state model (wishlisted → owned → completed).
 
-**Legal constraint (hard rule):** never use "PlayStation"/Sony marks in the app's own branding or chrome — the wordmark carries no "PlayStation Library" subtitle. "PlayStation" may appear only as descriptive/nominative text (e.g. "sync your PlayStation library" in Settings help), never as identity.
+**Legal constraint (hard rule):** never use "PlayStation"/Sony marks in the app's own branding or chrome — the wordmark carries no "PlayStation Library" subtitle. "PlayStation" may appear only as descriptive/nominative text (e.g. "browse the PlayStation Plus catalog" in Settings help), never as identity.
 
 → Wordmark lockup: `mockups/wordmark-lockup.html`
 
@@ -92,27 +92,11 @@ Dark-only. One near-black void, layered surfaces, cool near-white text, and a di
 - **Heat magenta `#ff2e88`** (`#ff8bc2` as ink on dark) is the **reserved second neon** — rare by design, spent only on the **Playing** state (usually 1–3 games) so active games burn like embers in a cool library. Never used for common flags; flooding it would kill its meaning.
 - **Milestone silver `#d6e6f5`** — earned completion (Story completed / Platinum). A trophy gets its own metal.
 - **Semantic status:** Playing = magenta; Up next = cyan/electric; Paused = steel (`#8fb0c4`); Not started = dormant grey (`#3d5566`); Dropped = dim grey; Completed/Platinum = silver.
-- **System:** warn/attention (stragglers) = amber `#ffb254`; expired-cookie = magenta; success (toast) = green `#8fe6a8`.
+- **System:** warn/attention (stragglers) = amber `#ffb254`; success (toast) = green `#8fe6a8`.
 
 Avoid: a second saturated hue competing with magenta; magenta on anything but Playing; flat non-glowing fills for interactive neon.
 
 → Palette in situ ("Neon Grid"): `mockups/palette-neon-grid.html`
-
-## Play Next — Epic 13 addition
-
-`/play-next` uses existing dark arcade shell and adds no new brand color. Electric cyan remains interaction/focus treatment; heat magenta remains reserved for `Playing` only.
-
-- Page heading: `WHAT NEXT?`.
-- Desktop: controls above three equal cards; Shuffle below.
-- Phone: three compact vertical cards; controls inside collapsible `TUNE THE PICKS`; no carousel.
-- Each card shows cover, title, one primary reason tag, optional `Available now` or `Discover` access tag, known facts, one plain explanation, optional `Closest match`, `Play this`, and `Open details`.
-- Intent controls use fieldsets and `aria-pressed`; `Include wishlist` is a checkbox. Minimum target size is 44×44. State is never color-only.
-- Draft changes preserve current cards. `Show me 3` applies them and is disabled when draft equals active intent. `Surprise me` clears tuning and generates immediately. Shuffle uses active intent, including Surprise me.
-- Refresh keeps focus stable, announces new result count through a live region, and respects reduced motion.
-- `Open details` preserves slate and visit state. `Play this` uses existing mutation feedback; success returns to Shelf, failure stays and toasts.
-- Near exhaustion shows one or two cards plus: `You’ve seen every other match. Next Shuffle starts a fresh pool.`
-
-**UI-MOCK-GATE:** every Epic 13 story that changes UI requires an implementation-specific mock and Luca's recorded approval immediately before UI code. This section defines behavior and visual constraints, not final composition.
 
 ## Typography
 
@@ -129,7 +113,7 @@ Four faces, split by job — **stylize the chrome, keep the data plain.**
 
 Scale: 4 / 8 / 12 / 16 / 24 / 32. Tight gaps between related elements (cover → name → pill), larger gaps between surfaces.
 
-The shelf is a **cover-forward responsive grid**: 3-up on the phone frame, auto-fill (~150px min) on desktop, infinite scroll. Covers are 3:4. The **Catalog** reuses that grid exactly (2-up on phone), so the two destinations read as one product. Every action surfaces *over* the active destination — modals, popovers, sheets. *(Amended 2026-07-14: "one screen holds everything" no longer holds — there are two destinations, switched by the header toggle. The over-the-surface posture is what survives.)*
+The shelf is a **cover-forward responsive grid**: 2-up on the phone frame, auto-fill (~150px min) on desktop, infinite scroll. Covers are 3:4. The **Catalog** reuses that grid exactly (2-up on phone), so the two destinations read as one product. The header exposes four destinations: Shelf, Play Next, Catalog, Stats. Detail, Settings, and action dialogs surface over the active destination.
 
 ## Elevation & Depth
 
@@ -150,21 +134,38 @@ Covers follow their container corners. Two filter-pill *shapes* encode behavior:
 - **Status pill** — shows *effective state* (FR-8). Tap → **popover** with the 5 play statuses (instant) + 2 milestone rows (confirm-gated). Milestone achievement also paints a permanent silver badge on the cover, independent of play status.
 - **Filter pills** — solid cyan (glow when active, FR-22) = narrow; dashed silver = reveal (Completed/Platinum/Dropped). → `mockups/filter-row-wireframe.html`
 - **Settings backup** — a normal peer section after PlayStation Plus and before About & Help: `DATA BACKUP`, `Keep your own copy`, explanatory copy, and one full-width cyan-outlined `Export CSV` button. Pending label: `Exporting…`; failures use the standard toast. No FAB shell remains. → `_bmad-output/design-demos/export-settings/A-standard-section.html`
-- **Attention banner** — full-width notice under the header; amber (stragglers), magenta (expired cookie), steel (failed refresh).
+- **Attention banner** — full-width notice under the header; amber for actionable stragglers; other actionable failures use their owning feature contract. Automatic PS+ refresh failures have no banner.
 - **Toast** — `surface-raised`, cyan-edged, bottom, auto-dismiss; UNDO variant for reversible risky actions. → `mockups/state-feedback-board.html`
 - **Summary / confirm modals** — `surface-raised`, glow-ring; confirm modal uses silver for milestone gravity.
 - **Detail panel** — flip-then-grow; centered ~760px on desktop, full-screen on mobile.
-- **Search bar** — persistent, pill-shaped, cyan-edged with a focus glow; bottom-pinned on mobile, header-left on desktop. The hero find-or-add surface; results dropdown lists library matches + the `＋ Add` row.
+- **Search bar** — persistent, pill-shaped, cyan-edged with a focus glow; bottom-pinned on mobile, header-left on desktop. The hero find-or-add surface; results narrow the grid, with a pinned Shelf-only `＋ Add` action for every non-empty term. Hidden on Play Next and Stats.
 - **Popover** — `surface-raised` with glow-ring, anchored to the tapped status pill (flips above/below to stay on-screen); holds the status radio list + the two milestone rows.
-- **Destination toggle** — header segmented control, `SHELF | CATALOG | STATS` (Orbitron 600, uppercase, tracked). Active segment is a **solid electric fill with dark ink** and a cyan halo; inactive is muted text on `surface-raised`. Pill-shaped (`999px`), matching the filter/status pill family. Desktop: inline beside the wordmark. Phone: full-width on its own row under the wordmark.
+- **Destination toggle** — header segmented control, `SHELF | PLAY NEXT | CATALOG | STATS` (Orbitron 600, uppercase, tracked). Active segment is a **solid electric fill with dark ink** and a cyan halo; inactive is muted text on `surface-raised`. Pill-shaped (`999px`), matching the filter/status pill family. Desktop: inline beside the wordmark. Phone: full-width on its own row under the wordmark.
 - **Stats overview** — `CABINET SCORE` title, four all-time recap cards, and one native year select. Phone source/focus order is title → recap → `CURRENT ROUND`; desktop places the select beside the title and spans the recap below without duplicating controls.
 - **Catalog card** — the shelf card's chrome, minus everything that implies ownership. Cover art, `◈ PS+` flag top-left, title below (Orbitron, ellipsis). **No status pill, no owned toggle, no magenta bloom, no flip.** The bottom overlay carries one of three states:
   - **Not tracked** — **`＋ Add`** (solid electric fill, dark ink) beside **`Claim now`** (hairline outline, cyan ink).
-  - **Tracked, not owned** (a wishlist entry that is also Playable-now) — an **`In library`** marker in `{colors.accent-electric}` (cyan = interactive family, "it's on your shelf") **with `Claim now` still live**, because a game added from the catalog isn't claimed to the PlayStation account yet.
-  - **Owned** — an **`Owned`** marker in `{colors.milestone-silver}` and **no actions**. Silver keeps its established meaning — earned/yours — and its absence of a CTA *is* the message. (Owned covers both a purchase and a PS+ claim a sync has seen; the app never guesses a claim succeeded.)
+  - **Tracked, not owned** (a wishlist entry that is also Playable-now when released) — an **`In library`** marker in `{colors.accent-electric}` (cyan = interactive family, "it's on your shelf") **with `Claim now` still live**, because a game added from the catalog isn't claimed to the PlayStation account yet.
+  - **Owned** — an **`Owned`** marker in `{colors.milestone-silver}` and **no actions**. Silver keeps its established meaning — earned/yours — and its absence of a CTA *is* the message. (Owned covers both a purchase and a manually recorded PS+ claim; the app never guesses a claim succeeded.)
 
   Never a magenta accent here: magenta is reserved for Playing, which is a shelf state.
 - **Skeleton** — cover-shaped shimmer (`surface` → lighter sweep) on first load.
+
+### Play Next
+
+`/play-next` uses existing dark arcade shell and adds no new brand color. Electric cyan remains interaction/focus treatment; heat magenta remains reserved for `Playing` only.
+
+- Page heading: `WHAT NEXT?`.
+- Three suggestions retain slate order across layouts: portrait-card grid below 695px; compact ranked command rows at 695–1023px; full five-column command rows at ≥1024px. Phone tuning stays inside collapsible `TUNE THE PICKS`; no carousel.
+- Approved placement: [compact rows](../../../implementation-artifacts/spec-play-next-compact-command-rows.md) and [desktop rows](../../../implementation-artifacts/spec-play-next-desktop-command-rows.md). These supersede the equal-card desktop composition.
+- Each card shows cover, title, one primary reason tag, optional `Available now` or `Discover` access tag, known facts, one plain explanation, optional `Closest match`, `Play this`, and `Open details`.
+- Intent controls use fieldsets and `aria-pressed`; `Include wishlist` is a checkbox. Minimum target size is 44×44. State is never color-only.
+- Draft changes preserve current cards. `Show me 3` applies them and is disabled when draft equals active intent. `Surprise me` clears tuning and generates immediately. Shuffle uses active intent, including Surprise me.
+- Refresh keeps focus stable, announces new result count through a live region, and respects reduced motion.
+- `Open details` preserves slate and visit state. `Play this` uses existing mutation feedback; success returns to Shelf, failure stays and toasts.
+- Near exhaustion shows one or two cards plus: `You’ve seen every other match. Next Shuffle starts a fresh pool.`
+
+**UI-MOCK-GATE:** every Epic 13 story that changes UI requires an implementation-specific mock and Luca's recorded approval immediately before UI code. This section defines behavior and visual constraints, not final composition.
+
 
 ## Do's and Don'ts
 

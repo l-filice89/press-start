@@ -1,7 +1,7 @@
 ---
 project_name: 'ps-game-catalog'
 user_name: 'Luca'
-date: '2026-08-02'
+date: '2026-11-07'
 sections_completed:
   ['technology_stack', 'architecture_seams', 'data_contracts', 'providers', 'testing', 'workflow', 'critical_rules']
 status: 'complete'
@@ -53,7 +53,8 @@ The two `.bmad-loop/runs/**` spine copies are stale worktree snapshots — ignor
 - **PSN is anonymous-only** (Epic 11): `src/providers/psn.ts` calls the public store (persisted GraphQL, pinned hashes, region via `x-psn-store-locale-override`). No credential of any kind — the auth path is deleted and the guard test bans its identifiers. Do not re-add one.
 - Degenerate responses fail closed: HTTP 200 + null grid/GraphQL errors throws `PsnStoreRejectionError`; empty catalog never prunes (AD-27); build hazard fixtures from CAPTURED payloads (`test/fixtures/psn/`), never hand-written.
 - IGDB (Twitch OAuth2): filter on `game_type`, **not** `category` (retired field — string tests pass, live calls silently return zero). Degrades to name-only adds when creds absent; tests force that mode.
-- Free-tier budgets are enumerated arithmetic (AD-32): 50 subrequests/invocation counts D1 binding calls too — batch writes, never per-row loops on data-scaled paths.
+- Free-tier budgets require enumerated arithmetic (AD-32): count external fetches, D1 binding calls, middleware reads, and row reads/writes against their respective limits. The spine's capacity figures are adopted planning estimates, not a live provider-limit guarantee. Batch writes rather than per-row loops on data-scaled paths.
+- Interactive IGDB title searches use the user's nonempty PlayStation platform selection; defaults are PS1–PS5. Selection means released-on, not backward compatibility; existing library rows and scheduled by-ID refreshes stay unfiltered. Exact contract: `_bmad-output/implementation-artifacts/spec-igdb-playstation-platform-filter.md`.
 
 ## Testing Rules
 
@@ -78,12 +79,14 @@ The two `.bmad-loop/runs/**` spine copies are stale worktree snapshots — ignor
 ## Critical Don't-Miss Rules
 
 - Never join the two datasets on raw title strings — always `normalizeTitle`.
-- Never let any ingest overwrite user-entered tracking state (AD-10: append-only; sync may create games and flip `owned` false→true, nothing else).
+- Never let ingest/refresh overwrite user-entered tracking state (AD-10). Credentialed sync is retired. Deliberate edits, discard/revive, membership cancellation, and verified account deletion have separate user-authorized write paths.
 - Never store derived state (Released/Wishlisted/Playable-now — AD-8); compute in `core/`.
 - Never navigate outside react-router / use `window` CustomEvents for cross-tree state (AD-25).
 - Never make Play Next eligibility or scoring inside React components, persist its visit state, or fetch a second recommendation dataset (AD-34).
 - Never commit the D1 file or secrets; secrets ride Wrangler/CI, `.dev.vars` locally.
-- Failures surface to the user (stragglers, banners) — no silent retries (AD-14).
+- Failure visibility follows AD-14/31: actionable lookup failures remain in stragglers; score refresh retains its notice; automatic PS+ recovery uses logs and the as-of/updating readout. Scheduled recovery is bounded, not prohibited.
+- Shelf search spans all games, including hidden states, without active filters; active filters scope the search. Each flag is its own AND condition; State/Genre/Time choices OR within groups. This is the confirmed contract, not unconditional filter bypass.
+- Account deletion follows `_bmad-output/implementation-artifacts/spec-permanent-account-deletion.md`: confirmation plus same-user emailed verification, atomic private-data cleanup, shared facts retained, caller caches cleared; signed-cookie-cache revocation remains bounded by five minutes.
 
 ---
 
@@ -93,4 +96,4 @@ The two `.bmad-loop/runs/**` spine copies are stale worktree snapshots — ignor
 
 **For Humans:** keep lean; update when the stack or an AD changes; drop rules that become obvious.
 
-Last Updated: 2026-08-02
+Last Updated: 2026-11-07
